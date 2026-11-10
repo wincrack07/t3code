@@ -74,10 +74,23 @@ describe("thread columns", () => {
     store.navigate(ref("a"));
     store.open(ref("b"));
     store.open(ref("c"));
+    store.closeMissing(ref("c"));
+    expect(useThreadColumnsStore.getState().columns).toHaveLength(3);
+    store.closeMissing(ref("a", "remote"));
+    expect(useThreadColumnsStore.getState().columns).toHaveLength(3);
+    store.closeMissing(ref("a"));
+    expect(useThreadColumnsStore.getState().columns.map((column) => column.id)).toEqual([
+      "local:b",
+      "local:c",
+    ]);
+    store.open(ref("a"));
+    store.activate("local:c");
+    store.closeMissing(ref("a"));
     store.close("local:c");
     expect(useThreadColumnsStore.getState().activeId).toBe("local:b");
     store.close("local:a");
     expect(useThreadColumnsStore.getState().activeId).toBe("local:b");
+    store.closeMissing(ref("b"));
     store.close("local:b");
     expect(useThreadColumnsStore.getState().columns).toHaveLength(1);
     store.open(ref("c"));

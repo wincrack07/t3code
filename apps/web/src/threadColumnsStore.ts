@@ -3,7 +3,10 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "./rightPanelLayout";
 import { resolveStorage } from "./lib/storage";
+
+export const MAX_THREAD_COLUMNS = 3;
 
 export interface ThreadColumn {
   id: string;
@@ -20,6 +23,7 @@ interface ColumnStore extends ColumnLayout {
   move: (id: string, targetId: string, side: "left" | "right") => void;
   activate: (id: string) => void;
   close: (id: string) => void;
+  closeMissing: (ref: ScopedThreadRef) => void;
   resize: (id: string, width: number) => void;
 }
 const empty: ColumnLayout = { columns: [], activeId: null };
@@ -52,7 +56,7 @@ export function readColumnLayout(value: unknown): ColumnLayout {
     )
       continue;
     columns.push({ id: candidate.id, threadRef: ref, width: candidate.width });
-    if (columns.length === 3) break;
+    if (columns.length === MAX_THREAD_COLUMNS) break;
   }
   const activeId =
     "activeId" in value && columns.some((column) => column.id === value.activeId)
@@ -83,7 +87,7 @@ export const useThreadColumnsStore = create<ColumnStore>()(
         set((state) => {
           const existing = state.columns.find((column) => sameThread(column.threadRef, ref));
           if (existing) return state.activeId === existing.id ? state : { activeId: existing.id };
-          if (state.columns.length >= 3) return state;
+          if (state.columns.length >= MAX_THREAD_COLUMNS) return state;
           const id = scopedThreadKey(ref);
           const anchor = state.columns.findIndex(
             (column) => column.id === (targetId ?? state.activeId),
@@ -127,6 +131,13 @@ export const useThreadColumnsStore = create<ColumnStore>()(
                 : state.activeId,
           };
         }),
+      closeMissing: (ref) =>
+        set((state) => {
+          if (state.columns.length <= 1) return state;
+          const missing = state.columns.find((column) => sameThread(column.threadRef, ref));
+          if (!missing || missing.id === state.activeId) return state;
+          return { columns: state.columns.filter((column) => column.id !== missing.id) };
+        }),
       resize: (id, width) =>
         set((state) =>
           !Number.isFinite(width) || width <= 0
@@ -157,4 +168,14 @@ export function openThreadInSplit(
   useThreadColumnsStore.getState().open(ref, targetId, side);
   const state = useThreadColumnsStore.getState();
   return state.columns.find((column) => column.id === state.activeId)?.threadRef ?? ref;
+}
+
+export function threadSplitMenuState(ref: ScopedThreadRef) {
+  const { columns } = useThreadColumnsStore.getState();
+  return {
+    narrow:
+      typeof window === "undefined" ||
+      window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches,
+    onlyColumn: columns.length === 1 && columns.some((column) => sameThread(column.threadRef, ref)),
+  };
 }

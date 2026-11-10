@@ -3,13 +3,19 @@ import { useNavigate } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
+import { cn } from "../lib/utils";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useResizeDrag } from "../hooks/useResizeDrag";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import { useQuietThreadShell } from "../state/entities";
-import { useThreadColumnsStore, openThreadInSplit, type ThreadColumn } from "../threadColumnsStore";
+import {
+  useThreadColumnsStore,
+  openThreadInSplit,
+  MAX_THREAD_COLUMNS,
+  type ThreadColumn,
+} from "../threadColumnsStore";
 import { buildThreadRouteParams, type ThreadRouteTarget } from "../threadRoutes";
 import {
   threadContextDropTargetProps,
@@ -149,27 +155,33 @@ function Column({
     >
       {multiple ? (
         <div
-          className={`flex h-8 shrink-0 items-center gap-2 border-b px-2 ${active ? "bg-accent" : "bg-muted/30"}`}
+          className={cn(
+            "flex h-8 shrink-0 items-center gap-2 border-b px-2",
+            active ? "bg-accent" : "bg-muted/30",
+          )}
         >
-          <button
-            type="button"
-            className="min-w-0 flex-1 cursor-grab truncate text-left text-xs active:cursor-grabbing"
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData(THREAD_COLUMN_DRAG_TYPE, column.id);
-              const host = event.currentTarget.closest<HTMLElement>("[data-thread-columns]");
-              if (host) host.dataset.columnReordering = "true";
-            }}
-            onDragEnd={(event) => {
-              const host = event.currentTarget.closest<HTMLElement>("[data-thread-columns]");
-              if (host) delete host.dataset.columnReordering;
-              endThreadContextDrag();
-            }}
-            onClick={activate}
-          >
-            {title}
-          </button>
+          <div className="min-w-0 flex-1">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="max-w-full"
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData(THREAD_COLUMN_DRAG_TYPE, column.id);
+                const host = event.currentTarget.closest<HTMLElement>("[data-thread-columns]");
+                if (host) host.dataset.columnReordering = "true";
+              }}
+              onDragEnd={(event) => {
+                const host = event.currentTarget.closest<HTMLElement>("[data-thread-columns]");
+                if (host) delete host.dataset.columnReordering;
+                endThreadContextDrag();
+              }}
+              onClick={activate}
+            >
+              <span className="truncate">{title}</span>
+            </Button>
+          </div>
           <Button
             data-close-column
             variant="ghost"
@@ -198,7 +210,7 @@ function Column({
       >
         {full ? (
           <span className="absolute inset-x-0 top-1/2 text-center text-xs group-data-[column-reordering=true]/columns:hidden">
-            3 column limit · Drop an open thread to focus it
+            {MAX_THREAD_COLUMNS} column limit · Drop an open thread to focus it
           </span>
         ) : null}
       </div>
@@ -256,7 +268,7 @@ export function ThreadColumns({
           <Column
             key={column.id}
             column={column}
-            full={layout.columns.length === 3}
+            full={layout.columns.length === MAX_THREAD_COLUMNS}
             narrow={narrow || target.kind === "draft"}
             target={
               target.kind === "draft" &&
