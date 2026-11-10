@@ -3,6 +3,7 @@ import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled"
 
 export type ThreadActionMenuId =
   | "find"
+  | "open-in-split"
   | "new-thread-on-branch"
   | "filter-by-project"
   | "turn-into-project"
@@ -70,6 +71,7 @@ export function buildDraftActionMenuItems(options: {
 export interface ThreadActionMenuState {
   readonly canOperate: boolean;
   readonly canFind?: boolean;
+  readonly split?: { readonly narrow: boolean; readonly onlyColumn: boolean };
   readonly branch: string | null;
   readonly projectFilter: {
     readonly label: string;
@@ -101,6 +103,7 @@ export interface ThreadActionMenuState {
 export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean {
   return ![
     "find",
+    "open-in-split",
     "new-thread-on-branch",
     "project-settings",
     "mark-unread",
@@ -128,6 +131,9 @@ export function buildThreadActionMenuItems(
             icon: "message-square-plus",
           },
         ]
+      : []),
+    ...(state.split && !state.split.narrow && !state.split.onlyColumn
+      ? [{ id: "open-in-split" as const, label: "Open in split", icon: "columns-2" }]
       : []),
     ...(state.supports.pinning
       ? [

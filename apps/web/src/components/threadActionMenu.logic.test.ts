@@ -65,6 +65,31 @@ describe("buildThreadActionMenuItems", () => {
     },
   );
 
+  it.each([
+    { narrow: false, onlyColumn: false, shown: true },
+    { narrow: true, onlyColumn: false, shown: false },
+    { narrow: false, onlyColumn: true, shown: false },
+    { narrow: true, onlyColumn: true, shown: false },
+  ])("offers split navigation when appropriate: %j", ({ narrow, onlyColumn, shown }) => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      canOperate: false,
+      canFind: true,
+      branch: "main",
+      split: { narrow, onlyColumn },
+    });
+    const split = items.find((item) => item.id === "open-in-split");
+    expect(split !== undefined).toBe(shown);
+    if (shown) {
+      expect(items.slice(0, 3).map((item) => item.id)).toEqual([
+        "find",
+        "new-thread-on-branch",
+        "open-in-split",
+      ]);
+      expect(split?.disabled).not.toBe(true);
+    }
+  });
+
   it("disables archive and turning into a project while the thread is running", () => {
     const items = buildThreadActionMenuItems({
       ...baseState,

@@ -1,3 +1,5 @@
+import { openThreadInSplit, threadSplitMenuState } from "../threadColumnsStore";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
@@ -134,6 +136,7 @@ export function useThreadActionMenu(input: {
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
+        split: threadSplitMenuState(threadRef),
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         canFind: onFind !== undefined,
         branch: thread.branch ?? null,
@@ -190,6 +193,12 @@ export function useThreadActionMenu(input: {
         }
       };
       switch (action) {
+        case "open-in-split":
+          await router.navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(openThreadInSplit(threadRef)),
+          });
+          return;
         case "find":
           onFind?.(threadRef);
           return;

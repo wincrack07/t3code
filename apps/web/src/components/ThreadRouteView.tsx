@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { useThreadColumnsStore } from "../threadColumnsStore";
 import ChatView from "./ChatView";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { SidebarInset } from "./ui/sidebar";
@@ -34,9 +35,13 @@ import {
 export function ThreadRouteView({
   target,
   background = false,
+  column = false,
+  inactive = false,
 }: {
   target: ThreadRouteTarget;
   background?: boolean;
+  column?: boolean;
+  inactive?: boolean;
 }) {
   const navigate = useNavigate();
   const draftId = target.kind === "draft" ? target.draftId : null;
@@ -113,13 +118,14 @@ export function ThreadRouteView({
   const renderState = resolveThreadRouteRenderState({
     bootstrapComplete,
     serverThreadExists: serverThreadShell !== null,
-    serverThreadDeleted: serverThreadShell?.deletedAt != null,
+    serverThreadDeleted:
+      serverThreadShell?.deletedAt != null || serverThreadShell?.archivedAt != null,
     unlistedThreadDetail,
     draftThreadExists: draftThread !== null,
   });
   const environmentHasAnyThreads = environmentThreadRefs.length > 0 || environmentHasDraftThreads;
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home once a server thread is confirmed missing
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home and prunes inactive columns once a live snapshot confirms a thread is missing
   useEffect(() => {
     if (target.kind !== "server" || !bootstrapComplete) {
       return;
@@ -127,11 +133,21 @@ export function ThreadRouteView({
     if (renderState === "missing") {
       const { clearPendingFileDropsForThread } = useSidebarPendingFileDropStore.getState();
       clearPendingFileDropsForThread(target.threadRef);
-      if (environmentHasAnyThreads && !background) {
+      if (column && inactive) useThreadColumnsStore.getState().closeMissing(target.threadRef);
+      if (environmentHasAnyThreads && !background && !inactive) {
         void navigate({ to: "/", replace: true });
       }
     }
-  }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
+  }, [
+    background,
+    column,
+    inactive,
+    bootstrapComplete,
+    environmentHasAnyThreads,
+    navigate,
+    renderState,
+    target,
+  ]);
 
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
@@ -199,7 +215,23 @@ export function ThreadRouteView({
         environmentId={target.threadRef.environmentId}
         threadId={target.threadRef.threadId}
         routeKind="server"
+        {...(inactive ? { embedded: true as const } : {})}
       />
+    );
+  }
+
+  if (column) {
+    return (
+      <BackgroundThreadContext value={background || inactive}>
+        {view ??
+          (renderState === "loading" && redirect === null ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              Waiting for this environment to connect. This column will stay open until its thread
+              can be checked.
+            </p>
+          ) : null)}
+        {background || inactive ? null : redirect}
+      </BackgroundThreadContext>
     );
   }
 

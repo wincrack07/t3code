@@ -62,19 +62,24 @@ export function useThreadContextDragGhost(): ThreadContextDragGhost | null {
 
 let overTarget: HTMLElement | null = null;
 
-function findDropTarget(point: { x: number; y: number }): HTMLElement | null {
-  return (
+function findThreadContextDropTarget(point: { x: number; y: number }): HTMLElement | null {
+  const target =
     document
       .elementFromPoint(point.x, point.y)
-      ?.closest<HTMLElement>(`[${DROP_TARGET_ATTRIBUTE}]`) ?? null
-  );
+      ?.closest<HTMLElement>(`[${DROP_TARGET_ATTRIBUTE}]`) ?? null;
+  if (target?.hasAttribute("data-thread-column-id")) {
+    const bounds = target.getBoundingClientRect();
+    const side = point.x < bounds.left + bounds.width / 2 ? "left" : "right";
+    if (target.dataset.threadSplitSide !== side) target.dataset.threadSplitSide = side;
+  }
+  return target;
 }
 
 export function moveThreadContextDrag(
   point: { x: number; y: number },
   label: { title: string; count: number },
 ) {
-  const target = findDropTarget(point);
+  const target = findThreadContextDropTarget(point);
   if (target !== overTarget) {
     overTarget?.removeAttribute(DROP_OVER_ATTRIBUTE);
     target?.setAttribute(DROP_OVER_ATTRIBUTE, "true");
@@ -93,7 +98,7 @@ export function dropThreadContext(
   point: { x: number; y: number },
   threads: ReadonlyArray<ScopedThreadRef>,
 ): boolean {
-  const target = findDropTarget(point);
+  const target = findThreadContextDropTarget(point);
   if (!target || threads.length === 0) return false;
   target.dispatchEvent(new CustomEvent(THREAD_CONTEXT_DROP_EVENT, { detail: threads }));
   return true;
@@ -101,4 +106,17 @@ export function dropThreadContext(
 
 export function threadContextDropTargetProps() {
   return { [DROP_TARGET_ATTRIBUTE]: "true" } as const;
+}
+
+export const THREAD_COLUMN_DRAG_TYPE = "application/x-t3-thread-column";
+
+export function previewThreadColumnDrop(point: { x: number; y: number }, target: HTMLElement) {
+  const bounds = target.getBoundingClientRect();
+  const side = point.x < bounds.left + bounds.width / 2 ? "left" : "right";
+  if (target.dataset.threadSplitSide !== side) target.dataset.threadSplitSide = side;
+  if (target !== overTarget) {
+    overTarget?.removeAttribute(DROP_OVER_ATTRIBUTE);
+    target?.setAttribute(DROP_OVER_ATTRIBUTE, "true");
+    overTarget = target;
+  }
 }

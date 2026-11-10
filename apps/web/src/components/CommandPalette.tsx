@@ -1,3 +1,5 @@
+import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import { openThreadInSplit } from "../threadColumnsStore";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
@@ -1337,6 +1339,36 @@ function OpenCommandPaletteDialog(props: {
       run: async () => {
         openThreadFind(activeThreadKey);
       },
+    });
+  }
+
+  if (paletteRouteTarget?.kind === "server") {
+    actionItems.push({
+      kind: "submenu",
+      value: "action:open-thread-in-split",
+      title: "Open thread in split…",
+      addonIcon: <TextSearchIcon className={ADDON_ICON_CLASS} />,
+      searchTerms: ["split", "columns", "side by side"],
+      icon: <TextSearchIcon className={ITEM_ICON_CLASS} />,
+      groups: [
+        {
+          value: "split-threads",
+          label: "Threads",
+          items: allThreadItems.map((item) => ({
+            ...item,
+            run: async () => {
+              const ref = parseScopedThreadKey(item.value.slice("thread:".length));
+              if (ref) {
+                const splitRef = openThreadInSplit(ref);
+                await navigate({
+                  to: "/$environmentId/$threadId",
+                  params: buildThreadRouteParams(splitRef),
+                });
+              }
+            },
+          })),
+        },
+      ],
     });
   }
 

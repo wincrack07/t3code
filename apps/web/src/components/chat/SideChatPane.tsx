@@ -14,6 +14,7 @@ import {
 import { Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useThreadColumnsStore, openThreadInSplit } from "../../threadColumnsStore";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { ComposerHandleContext } from "../../composerHandleContext";
 import { useClientSettings } from "../../hooks/useSettings";
@@ -41,10 +42,20 @@ export default function SideChatPane(props: {
 }) {
   const { parentRef, threadId } = props;
   const threadRef = scopeThreadRef(parentRef.environmentId, threadId);
+  const openInColumn = useThreadColumnsStore((state) =>
+    state.columns.some(
+      (column) =>
+        column.threadRef.environmentId === threadRef.environmentId &&
+        column.threadRef.threadId === threadId,
+    ),
+  );
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the parent panel as host in the panel store
   useEffect(
-    () => hostRightPanel(scopeThreadRef(parentRef.environmentId, threadId), parentRef),
-    [parentRef, threadId],
+    () =>
+      openInColumn
+        ? undefined
+        : hostRightPanel(scopeThreadRef(parentRef.environmentId, threadId), parentRef),
+    [openInColumn, parentRef, threadId],
   );
   const shell = useQuietThreadShell(threadRef);
   const parent = useQuietThreadShell(parentRef);
@@ -162,7 +173,11 @@ export default function SideChatPane(props: {
           <XIcon />
         </Button>
       </div>
-      {shell === null ? (
+      {openInColumn ? (
+        <Button variant="ghost" onClick={() => openThreadInSplit(threadRef)}>
+          Focus open column
+        </Button>
+      ) : shell === null ? (
         snapshotLoaded ? (
           <p className="p-3 text-xs text-muted-foreground">This side chat was deleted.</p>
         ) : null

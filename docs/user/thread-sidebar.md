@@ -57,6 +57,21 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## View threads side by side
+
+On web and desktop, drag a thread from the sidebar onto the conversation area to
+open it in another column. The highlighted left or right half places the new
+column on that side. Drag a column title to reorder columns using the same zones. Dropping onto the composer still adds a thread reference.
+You can also choose **Open in split** from a sidebar thread's menu, or **Open thread
+in split…** from the command palette and pick a thread.
+
+You can open up to three columns. At the limit, drop zones show a limit notice:
+new threads stay closed, open threads gain focus, and column reordering still works. Click or focus a column to make it active;
+navigation, shortcuts, the terminal, and the right panel follow that column.
+Drag a divider to resize, or focus it and use the arrow keys. Closing a column keeps
+the thread; closing the active column activates a neighbor. Narrow windows show
+only the active column and restore the other columns when widened.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.
