@@ -1,3 +1,4 @@
+import { readHtmlRenderPrompt } from "./htmlRender.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -131,4 +132,18 @@ describe("htmlRenderFromToolItem", () => {
       expect(htmlRenderFromToolItem({ toolName, output })).toEqual(reference);
     }
   });
+});
+
+it("accepts only bounded nonempty prompt requests", () => {
+  expect(readHtmlRenderPrompt({ type: "t3-html-render-prompt", text: "Refresh the chart" })).toBe(
+    "Refresh the chart",
+  );
+  for (const value of [
+    null,
+    {},
+    { type: "other", text: "Hi" },
+    { type: "t3-html-render-prompt", text: " " },
+    { type: "t3-html-render-prompt", text: "x".repeat(32_001) },
+  ])
+    expect(readHtmlRenderPrompt(value)).toBeUndefined();
 });

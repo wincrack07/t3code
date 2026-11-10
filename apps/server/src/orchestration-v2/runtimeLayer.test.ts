@@ -1,3 +1,5 @@
+import * as HtmlRender from "../htmlRender/HtmlRender.ts";
+import * as PreviewBrowser from "../preview/PreviewBrowser.ts";
 import { PullRequestProviderError } from "@t3tools/source-control-core/server/PullRequestProvider";
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
@@ -2531,6 +2533,63 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.equal(retriedCreate.sequence, firstCreate.sequence);
       assert.lengthOf(retriedCreate.storedEvents, 1);
 
+      yield* Effect.gen(function* () {
+        const htmlRender = yield* HtmlRender.HtmlRender;
+        const store = yield* ProjectionStore.ProjectionStoreV2;
+        const refs = [];
+        for (const text of ["Ready", "Done"]) {
+          const reference = yield* htmlRender.publish({
+            threadId,
+            pin: "progress",
+            html: `<p>${text}</p>`,
+            title: text,
+            height: 200,
+          });
+          refs.push(reference);
+          const { pin: _pin, ...snapshot } = reference;
+          const expected = [{ ...snapshot, id: "progress" }];
+          assert.deepEqual(
+            (yield* orchestrator.getThreadProjection(threadId)).thread.pinnedHtmlCards,
+            expected,
+          );
+          assert.deepEqual(
+            (yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards,
+            expected,
+          );
+          assert.deepEqual(
+            (yield* store.getShellSnapshot()).threads.find((thread) => thread.id === threadId)
+              ?.pinnedHtmlCards,
+            expected,
+          );
+        }
+        assert.notEqual(refs[0]?.attachmentId, refs[1]?.attachmentId);
+        yield* htmlRender.publish({
+          threadId,
+          pin: "progress",
+          unpin: true,
+          html: "<p>Done</p>",
+          title: "Done",
+          height: 200,
+        });
+        assert.deepEqual((yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards, []);
+      }).pipe(
+        Effect.provide(
+          HtmlRender.layer.pipe(
+            Layer.provide(McpProviderSessions.layer),
+            Layer.provide(layerServerConfig),
+            Layer.provide(layerPlatformTest),
+            Layer.provide(
+              Layer.succeed(
+                PreviewBrowser.PreviewBrowser,
+                PreviewBrowser.PreviewBrowser.of({
+                  installed: Effect.succeedNone,
+                  executable: Effect.die("No browser needed for publishing."),
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
       yield* orchestrator.dispatch({
         type: "thread.metadata.update",
         commandId: CommandId.make("runtime-layer-lifecycle-metadata"),

@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { View } from "react-native";
 
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -34,6 +34,7 @@ export function AttachmentDocumentBody(props: {
   readonly name: string;
   readonly environmentId: EnvironmentId | null;
   readonly htmlRender: boolean;
+  readonly threadId?: ThreadId | undefined;
   readonly nativeViewer: "pending" | "open" | "unavailable" | null;
   readonly nativeError: string | null;
   readonly onOpenNative: () => void;
@@ -90,7 +91,15 @@ export function AttachmentDocumentBody(props: {
   }
   if (document.kind === "html") {
     return props.htmlRender ? (
-      <HtmlRenderWebView key={document.uri} uri={document.uri} title={props.name} nested={false} />
+      <HtmlRenderWebView
+        key={document.uri}
+        uri={document.uri}
+        title={props.name}
+        nested={false}
+        {...(props.environmentId && props.threadId
+          ? { thread: { environmentId: props.environmentId, threadId: props.threadId } }
+          : {})}
+      />
     ) : (
       <WorkspaceFileWebPreview uri={document.uri} />
     );

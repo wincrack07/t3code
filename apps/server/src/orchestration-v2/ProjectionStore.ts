@@ -1627,6 +1627,7 @@ export function threadShellFromProjection(
     branch: projection.thread.branch,
     worktreePath: projection.thread.worktreePath,
     pullRequests: threadPullRequestsOf(projection.thread),
+    pinnedHtmlCards: projection.thread.pinnedHtmlCards ?? [],
     ...(projection.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: projection.thread.linkedPullRequest }),
@@ -1908,6 +1909,7 @@ function shellFromState(input: {
     branch: input.state.thread.branch,
     worktreePath: input.state.thread.worktreePath,
     pullRequests: threadPullRequestsOf(input.state.thread),
+    pinnedHtmlCards: input.state.thread.pinnedHtmlCards ?? [],
     ...(input.state.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: input.state.thread.linkedPullRequest }),

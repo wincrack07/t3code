@@ -1,3 +1,4 @@
+import { htmlRenderReferencesEqual, type HtmlRenderReference } from "@t3tools/shared/htmlRender";
 import {
   parseScopedThreadKey,
   scopedThreadKey,
@@ -13,6 +14,7 @@ import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { ChatFileAttachment } from "./types";
 
 const RIGHT_PANEL_KINDS = [
+  "html-card",
   "diff",
   "files",
   "file",
@@ -35,6 +37,7 @@ export interface DeviceTabTarget {
 }
 
 export type RightPanelSurface =
+  | { id: `html-card:${string}`; kind: "html-card"; card: HtmlRenderReference }
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
   | { id: "device" | `device:${string}`; kind: "device"; target?: DeviceTabTarget; title?: string }
@@ -93,6 +96,7 @@ export interface ThreadRightPanelState {
   activeSurfaceId: string | null;
   surfaces: RightPanelSurface[];
   dismissedDeviceSurfaceIds?: string[];
+  knownHtmlCardIds?: string[];
   maximized?: true;
   proactiveDiffTurnId?: RunId;
 }
@@ -123,8 +127,13 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
+    kind: Exclude<RightPanelKind, "html-card" | "file" | "terminal" | "pull-request" | "side-chat">,
   ) => void;
+  reconcileHtmlCards: (
+    ref: ScopedThreadRef,
+    cards: readonly (HtmlRenderReference & { id: string })[],
+  ) => void;
+  openHtmlCard: (ref: ScopedThreadRef, card: HtmlRenderReference & { id: string }) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
@@ -185,7 +194,7 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
+    kind: Exclude<RightPanelKind, "html-card" | "file" | "terminal" | "pull-request" | "side-chat">,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -208,7 +217,10 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "side-chat">,
+  kind: Exclude<
+    RightPanelKind,
+    "html-card" | "file" | "preview" | "terminal" | "pull-request" | "side-chat"
+  >,
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":
@@ -318,6 +330,7 @@ const updateThreadStateMap = (
     next.activeSurfaceId === null &&
     next.surfaces.length === 0 &&
     !next.dismissedDeviceSurfaceIds?.length &&
+    !next.knownHtmlCardIds?.length &&
     next.proactiveDiffTurnId === undefined
   ) {
     if (!(threadKey in byThreadKey)) return byThreadKey;
@@ -586,6 +599,13 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                   isOpen,
                   surfaces,
                   activeSurfaceId,
+                  ...(Array.isArray(validThreadState?.knownHtmlCardIds)
+                    ? {
+                        knownHtmlCardIds: validThreadState.knownHtmlCardIds.filter(
+                          (id): id is string => typeof id === "string",
+                        ),
+                      }
+                    : {}),
                   ...(typeof validThreadState?.proactiveDiffTurnId === "string"
                     ? { proactiveDiffTurnId: RunId.make(validThreadState.proactiveDiffTurnId) }
                     : {}),
@@ -719,6 +739,19 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               existing ?? surface,
             );
           }),
+        ),
+      reconcileHtmlCards: (ref, cards) => {
+        const state = get();
+        const key = scopedThreadKey(ref);
+        const current = state.byThreadKey[key] ?? EMPTY_THREAD_STATE;
+        const next = reconcileHtmlCards(current, cards);
+        if (next !== current) set(automaticUpdate(state, key, () => next));
+      },
+      openHtmlCard: (ref, card) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, { id: `html-card:${card.id}`, kind: "html-card", card }),
+          ),
         ),
       openSideChat: (ref, threadId) =>
         set((state) =>
@@ -1255,4 +1288,44 @@ export function selectSelectedRightPanelSurface(
 ): RightPanelSurface | null {
   const state = selectThreadRightPanelState(byThreadKey, ref);
   return state.surfaces.find((surface) => surface.id === state.activeSurfaceId) ?? null;
+}
+
+export function reconcileHtmlCards(
+  current: ThreadRightPanelState,
+  cards: readonly (HtmlRenderReference & { id: string })[],
+): ThreadRightPanelState {
+  const known = current.knownHtmlCardIds ?? [];
+  const byId = new Map(cards.map((card) => [`html-card:${card.id}`, card]));
+  const surfaces = current.surfaces.flatMap<RightPanelSurface>((surface) => {
+    if (surface.kind !== "html-card") return [surface];
+    const card = byId.get(surface.id);
+    return card
+      ? [htmlRenderReferencesEqual(surface.card, card) ? surface : { ...surface, card }]
+      : [];
+  });
+  for (const card of cards) {
+    if (
+      !known.includes(card.id) &&
+      !surfaces.some((surface) => surface.id === `html-card:${card.id}`)
+    )
+      surfaces.push({ id: `html-card:${card.id}`, kind: "html-card", card });
+  }
+  if (
+    surfaces.length === current.surfaces.length &&
+    surfaces.every((surface, index) => surface === current.surfaces[index]) &&
+    known.length === cards.length &&
+    known.every((id, index) => id === cards[index]?.id)
+  )
+    return current;
+  const activeSurfaceId = surfaces.some((surface) => surface.id === current.activeSurfaceId)
+    ? current.activeSurfaceId
+    : (surfaces[0]?.id ?? null);
+  return {
+    ...current,
+    surfaces,
+    activeSurfaceId,
+    knownHtmlCardIds: cards.map((card) => card.id),
+    isOpen:
+      surfaces.length > current.surfaces.length ? true : current.isOpen && surfaces.length > 0,
+  };
 }

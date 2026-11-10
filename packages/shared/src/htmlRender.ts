@@ -15,10 +15,11 @@ export const HTML_RENDER_MAX_FIT_HEIGHT = 20_000;
 export const HTML_RENDER_MAX_TITLE_LENGTH = 200;
 
 export interface HtmlRenderReference {
+  readonly pin?: string;
   readonly attachmentId: string;
   readonly title: string;
   readonly height: number;
-  readonly heights?: ReadonlyArray<readonly [width: number, height: number]>;
+  readonly heights?: ReadonlyArray<readonly [width: number, height: number]> | undefined;
 }
 
 export const HTML_RENDER_MEASURE_WIDTHS = [320, 375, 430, 520, 640, 728, 860, 1000, 1144] as const;
@@ -49,7 +50,7 @@ function readMeasuredHeights(value: unknown) {
 
 export function readHtmlRenderReference(value: unknown): HtmlRenderReference | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { attachmentId, title, height, heights } = value as Record<string, unknown>;
+  const { attachmentId, title, height, heights, pin } = value as Record<string, unknown>;
   if (
     typeof attachmentId !== "string" ||
     attachmentId.length === 0 ||
@@ -62,6 +63,7 @@ export function readHtmlRenderReference(value: unknown): HtmlRenderReference | u
   }
   const measured = readMeasuredHeights(heights);
   return {
+    ...(typeof pin === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(pin) ? { pin } : {}),
     attachmentId,
     title: title.trim().slice(0, HTML_RENDER_MAX_TITLE_LENGTH) || "HTML",
     height: clampHtmlRenderHeight(height),
@@ -71,6 +73,7 @@ export function readHtmlRenderReference(value: unknown): HtmlRenderReference | u
 
 export function htmlRenderReferencesEqual(left: HtmlRenderReference, right: HtmlRenderReference) {
   return (
+    left.pin === right.pin &&
     left.attachmentId === right.attachmentId &&
     left.title === right.title &&
     left.height === right.height &&
@@ -431,4 +434,15 @@ export function injectHtmlRenderBootstrap(html: string): string {
     return `${html.slice(0, at)}<head>${markup}</head>${html.slice(at)}`;
   }
   return `<!doctype html><head>${markup}</head>${html}`;
+}
+
+export function readHtmlRenderPrompt(data: unknown): string | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const message = data as Record<string, unknown>;
+  return message.type === "t3-html-render-prompt" &&
+    typeof message.text === "string" &&
+    message.text.trim().length > 0 &&
+    message.text.length <= 32_000
+    ? message.text
+    : undefined;
 }

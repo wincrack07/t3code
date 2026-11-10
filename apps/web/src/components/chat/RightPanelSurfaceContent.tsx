@@ -1,3 +1,4 @@
+import { HtmlRenderFrame } from "./HtmlRenderFrame";
 import type {
   EditorId,
   EnvironmentId,
@@ -83,6 +84,17 @@ export function RightPanelSurfaceContent(props: {
   const { surface, threadRef, visible, onCloseSurface } = props;
   if (surface === null) return null;
   switch (surface.kind) {
+    case "html-card":
+      return (
+        <div className="h-full overflow-auto">
+          <HtmlRenderFrame
+            key={surface.card.attachmentId}
+            environmentId={props.environmentId}
+            threadRef={props.threadRef}
+            htmlRender={surface.card}
+          />
+        </div>
+      );
     case "preview":
       return (
         <Suspense fallback={null}>

@@ -1,3 +1,5 @@
+import { HtmlRenderPromptContext } from "../chat/HtmlRenderPromptContext";
+import { isConfirmDialogActive, requestConfirmDialog } from "~/confirmDialog";
 import { useAtomValue } from "@effect/atom-react";
 import {
   type KeybindingCommand,
@@ -12,6 +14,7 @@ import {
   htmlRenderThemeFragment,
   htmlRenderThemeMessage,
   htmlRenderResult,
+  readHtmlRenderPrompt,
   readHtmlRenderContentHeight,
   readHtmlRenderImageRequest,
   readHtmlRenderKeyDown,
@@ -23,6 +26,7 @@ import {
   normalizeEventKey,
 } from "@t3tools/shared/keybindings";
 import {
+  useContext,
   lazy,
   Suspense,
   useEffect,
@@ -185,6 +189,7 @@ export function HtmlRenderDocument(props: {
   readonly onFullscreenChange?: ((fullscreen: boolean) => void) | undefined;
 }) {
   const theme = useHtmlRenderTheme();
+  const sendPrompt = useContext(HtmlRenderPromptContext);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [src] = useState(() => `${props.src.split("#", 1)[0]}${htmlRenderThemeFragment(theme)}`);
   const [loaded, setLoaded] = useState(false);
@@ -278,6 +283,18 @@ export function HtmlRenderDocument(props: {
   // focus by script, so this blocks opens on load, though not a page that waits for the
   // reader's next input.
   const onFrameMessage = useEffectEvent((frame: HTMLIFrameElement, event: MessageEvent) => {
+    const prompt = readHtmlRenderPrompt(event.data);
+    if (prompt !== undefined) {
+      if (sendPrompt && !isConfirmDialogActive())
+        void (async () => {
+          if (
+            (await requestConfirmDialog(`Send this message from ${props.title}?\n${prompt}`)) ===
+            true
+          )
+            await sendPrompt(prompt);
+        })().catch((cause: unknown) => console.error(cause));
+      return;
+    }
     const height = readHtmlRenderContentHeight(event.data);
     if (height !== undefined) {
       props.onContentHeight?.(height);

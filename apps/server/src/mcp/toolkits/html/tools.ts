@@ -76,10 +76,12 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
 
 // This affects only the caller's thread, not its workspace, so read-only sandboxes and plan mode may use it.
 const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
-  description: `Show a finished HTML page (chart, diagram, mockup) inline in this thread, above your final reply. Do not announce or restate the page. Frame fits height to ${HTML_RENDER_MAX_FIT_HEIGHT}px. On mobile, content past the given height scrolls. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
+  description: `Use pin with a short stable id to keep a card beside this thread; render with the same pin to update it. Set unpin:true with that id to remove it (pass the page again). Cards may request a confirmed prompt via parent.postMessage({type:"t3-html-render-prompt",text:"..."}, "*"). Show a finished HTML page (chart, diagram, mockup) inline in this thread, above your final reply. Do not announce or restate the page. Frame fits height to ${HTML_RENDER_MAX_FIT_HEIGHT}px. On mobile, content past the given height scrolls. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
   parameters: Schema.Struct({
     path: Schema.optional(HtmlPath),
     html: Schema.optional(Html),
+    pin: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,64}$/))),
+    unpin: Schema.optional(Schema.Boolean),
     title: Schema.String.check(
       Schema.isMinLength(1),
       Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH),
@@ -90,6 +92,7 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
   }),
   success: Schema.Struct({
     htmlRender: Schema.Struct({
+      pin: Schema.optional(Schema.String),
       attachmentId: Schema.String,
       title: Schema.String,
       height: Schema.Number,

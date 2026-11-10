@@ -121,6 +121,9 @@ export async function reopenClosedView(
   )
     return false;
   switch (surface.kind) {
+    case "html-card":
+      panels.openHtmlCard(ref, { ...surface.card, id: surface.id.slice("html-card:".length) });
+      break;
     case "preview":
       if (surface.resourceId !== null) return false;
       panels.openBrowser(ref, null);

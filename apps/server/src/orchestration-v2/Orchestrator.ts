@@ -4060,6 +4060,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                   };
           return {
             ...thread,
+            ...(command.htmlCard === undefined
+              ? {}
+              : {
+                  pinnedHtmlCards: [
+                    ...(thread.pinnedHtmlCards ?? []).filter(
+                      (card) => card.id !== command.htmlCard?.id,
+                    ),
+                    ...(command.htmlCard.card === null ? [] : [command.htmlCard.card]),
+                  ],
+                }),
             ...(command.title === undefined ? {} : { title: command.title }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
             ...(command.limitRecovery !== undefined &&

@@ -72,9 +72,21 @@ const handlers = {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const { thread } = yield* McpInvocationContext.requireThreadScope(scope, "html_render");
       const htmlRender = yield* HtmlRender.HtmlRender;
+      if (input.unpin && !input.pin)
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: "unpin requires pin.",
+        });
       const source = yield* pageSource(input);
       const reference = yield* htmlRender
-        .publish({ ...source, threadId: thread.threadId, title: input.title, height: input.height })
+        .publish({
+          ...source,
+          threadId: thread.threadId,
+          title: input.title,
+          height: input.height,
+          pin: input.pin,
+          unpin: input.unpin,
+        })
         .pipe(Effect.mapError(toFailure));
       return {
         htmlRender: reference,

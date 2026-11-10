@@ -1,3 +1,4 @@
+import { HtmlRenderPromptContext } from "./chat/HtmlRenderPromptContext";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -1020,6 +1021,13 @@ export default function ChatView(props: ChatViewProps) {
   if (anchorRunSettled) {
     setTimelineAnchor({ threadKey: activeThreadKey, messageId: null });
   }
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reconciles persisted thread cards into the local panel tabs
+  useEffect(() => {
+    if (activeThreadRef)
+      useRightPanelStore
+        .getState()
+        .reconcileHtmlCards(activeThreadRef, serverThread?.pinnedHtmlCards ?? []);
+  }, [activeThreadRef, serverThread?.pinnedHtmlCards]);
   const activeRightPanelKind = useRightPanelStore((state) =>
     selectActiveRightPanel(state.byThreadKey, activeThreadRef),
   );
@@ -3993,7 +4001,7 @@ export default function ChatView(props: ChatViewProps) {
       cwd={activeWorkspaceRoot}
       checkpoints={serverProjection?.checkpoints}
     >
-      {content}
+      <HtmlRenderPromptContext value={sendAppMessageStable}>{content}</HtmlRenderPromptContext>
     </FileMetadataThreadProvider>
   );
 }
