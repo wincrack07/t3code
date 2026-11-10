@@ -6,6 +6,7 @@ import type {
   EnvironmentId,
   EnvironmentMachineKind,
   PullRequestContextMetadata,
+  SavedPrompt,
   ScopedThreadRef,
   ServerProviderSkill,
   ServerProviderSlashCommand,
@@ -76,6 +77,13 @@ export type ComposerCommandItem =
     }
   | {
       readonly id: string;
+      readonly type: "saved-prompt";
+      readonly savedPrompt: SavedPrompt;
+      readonly label: string;
+      readonly description: string;
+    }
+  | {
+      readonly id: string;
       readonly type: "model";
       readonly option: ModelOption;
       readonly label: string;
@@ -129,6 +137,8 @@ function itemIcon(item: ComposerCommandItem): AppSymbolName | null {
     case "path":
     case "model":
       return null;
+    case "saved-prompt":
+      return "doc.text";
     case "thread":
       return "text.bubble";
     case "environment":

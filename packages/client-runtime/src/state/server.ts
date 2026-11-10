@@ -1619,6 +1619,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:list-text-generator-models",
       tag: WS_METHODS.serverListTextGeneratorModels,
     }),
+    polishPrompt: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:server:polish-prompt",
+      tag: WS_METHODS.serverPolishPrompt,
+    }),
     retryResourceTelemetry: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:retry-resource-telemetry",
       tag: WS_METHODS.serverRetryResourceTelemetry,

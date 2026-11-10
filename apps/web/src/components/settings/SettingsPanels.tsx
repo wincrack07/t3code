@@ -62,6 +62,7 @@ import { scopedIdleCompaction } from "./scopedSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
+import { SavedPromptsRow } from "./SavedPromptsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
@@ -1057,6 +1058,7 @@ export function ChatSettingsPanel() {
   ] as const;
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
+  const { scope } = useSettingsScope();
 
   return (
     <SettingsPageContainer>
@@ -1161,6 +1163,12 @@ export function ChatSettingsPanel() {
           />
         </AdvancedSettings>
       </SettingsSection>
+
+      {scope.kind === "project" || scope.kind === "checkout" ? null : (
+        <SettingsSection id="saved-prompts-section" title="Saved prompts">
+          <SavedPromptsRow />
+        </SettingsSection>
+      )}
 
       <SettingsSection id="follow-ups" title="Follow-ups">
         <SettingsRow

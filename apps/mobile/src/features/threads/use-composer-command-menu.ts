@@ -2,6 +2,7 @@ import * as Dialog from "../../components/ui/Dialog";
 import type {
   EnvironmentId,
   ProjectId,
+  SavedPrompt,
   ServerProvider,
   ThreadId,
   ThreadPullRequestLink,
@@ -16,6 +17,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 const EMPTY_THREAD_SHELLS: ReadonlyArray<EnvironmentThreadShell> = [];
 const EMPTY_ENVIRONMENTS: ReadonlyArray<ComposerEnvironmentCandidate> = [];
 const NO_LINKED_ENVIRONMENTS: ReadonlyMap<EnvironmentId, string> = new Map();
+const NO_SAVED_PROMPTS: ReadonlyArray<SavedPrompt> = [];
 import { COMPOSER_CONTEXT_MAX_RECORDS } from "@t3tools/contracts";
 import {
   formatComposerContextReference,
@@ -111,6 +113,7 @@ export function buildComposerSlashCommandItems(input: {
   /** T3's `/clear` replaces the provider's, which would clear a session T3 still treats as live. */
   readonly offersFreshSession?: boolean;
   readonly offersSideChat?: boolean;
+  readonly offersPolish?: boolean;
   readonly selectedProviderStatus: Pick<ServerProvider, "driver" | "slashCommands"> | null;
 }): ComposerCommandItem[] {
   const query = input.query.toLowerCase();
@@ -125,6 +128,16 @@ export function buildComposerSlashCommandItems(input: {
         },
       ]
     : [];
+
+  if (input.offersPolish && "polish".includes(query)) {
+    items.push({
+      id: "cmd:polish",
+      type: "slash-command",
+      command: "polish",
+      label: "/polish",
+      description: "Rewrite this draft to be clearer",
+    });
+  }
 
   // Providers expand commands only at the start of a message. T3 commands
   // change local state and do not have this restriction, except `/clear`.
@@ -236,6 +249,8 @@ export function resolveComposerCommandSelection(input: {
     replacement = `/${item.command} `;
   } else if (item.type === "provider-slash-command") {
     replacement = `/${item.command.name} `;
+  } else if (item.type === "saved-prompt") {
+    replacement = item.savedPrompt.prompt;
   } else if (item.type === "model") {
     replacement = `${formatComposerModelMention(item.option.selection.instanceId, item.option.selection.model)} `;
   }
@@ -265,6 +280,8 @@ export function useComposerCommandMenu({
   modelProviders,
   onFreshSession,
   offersSideChat = false,
+  savedPrompts = NO_SAVED_PROMPTS,
+  onPolish,
 }: {
   readonly draftMessage: string;
   readonly ownerKey: string | null;
@@ -290,6 +307,9 @@ export function useComposerCommandMenu({
   /** Arms a fresh session for the next message; absent where `/clear` is unavailable. */
   readonly onFreshSession?: () => void;
   readonly offersSideChat?: boolean;
+  readonly savedPrompts?: ReadonlyArray<SavedPrompt>;
+  /** Rewrites the given draft text; absent where `/polish` is unavailable. */
+  readonly onPolish?: (draft: string) => void;
 }) {
   const [localSelection, setLocalSelection] = useState(() => ({
     ownerKey,
@@ -395,6 +415,7 @@ export function useComposerCommandMenu({
         offersUsageLimits,
         offersFreshSession: onFreshSession !== undefined,
         offersSideChat,
+        offersPolish: onPolish !== undefined,
         selectedProviderStatus: selectedProviderStatus
           ? {
               ...selectedProviderStatus,
@@ -416,7 +437,17 @@ export function useComposerCommandMenu({
           description: skill.shortDescription ?? skill.description ?? "",
         }));
 
-      return [...commandItems, ...skillItems];
+      const savedPromptItems = savedPrompts
+        .filter((savedPrompt) => savedPrompt.name.toLowerCase().includes(q))
+        .map((savedPrompt) => ({
+          id: `saved-prompt:${savedPrompt.id}`,
+          type: "saved-prompt" as const,
+          savedPrompt,
+          label: savedPrompt.name,
+          description: savedPrompt.prompt.trim().split("\n", 1)[0] ?? "",
+        }));
+
+      return [...commandItems, ...skillItems, ...savedPromptItems];
     }
 
     if (trigger.kind === "skill") {
@@ -637,6 +668,13 @@ export function useComposerCommandMenu({
       setSelection({ start: cleared.cursor, end: cleared.cursor });
       onChangeDraftMessage(cleared.text);
       onFreshSession();
+      return;
+    }
+    if (item.type === "slash-command" && item.command === "polish" && onPolish) {
+      const cleared = replaceTextRange(draftMessage, trigger.rangeStart, trigger.rangeEnd, "");
+      setSelection({ start: cleared.cursor, end: cleared.cursor });
+      onChangeDraftMessage(cleared.text);
+      onPolish(cleared.text);
       return;
     }
     if (

@@ -9,7 +9,7 @@ import { scoreProviderSkill } from "../../providerSkillSearch";
 
 type SlashSearchItem = Extract<
   ComposerCommandItem,
-  { type: "slash-command" | "provider-slash-command" | "skill" }
+  { type: "slash-command" | "provider-slash-command" | "skill" | "saved-prompt" }
 >;
 
 /** Provider commands, `/side`, `/btw` and `/clear` work only at the message start. */
@@ -23,6 +23,7 @@ export function slashCommandItemsForPromptPosition(
   return items.filter(
     (item) =>
       item.type === "skill" ||
+      item.type === "saved-prompt" ||
       (item.type === "slash-command" &&
         item.command !== "side" &&
         item.command !== "btw" &&
@@ -44,7 +45,11 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
   }
 
   const primaryValue =
-    item.type === "slash-command" ? item.command.toLowerCase() : item.command.name.toLowerCase();
+    item.type === "slash-command"
+      ? item.command.toLowerCase()
+      : item.type === "saved-prompt"
+        ? item.savedPrompt.name.toLowerCase()
+        : item.command.name.toLowerCase();
   const description = item.description.toLowerCase();
 
   const scores = [
@@ -56,7 +61,7 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
       boundaryBase: 4,
       includesBase: 6,
       fuzzyBase: 100,
-      boundaryMarkers: ["-", "_", "/"],
+      boundaryMarkers: ["-", "_", "/", " "],
     }),
     scoreQueryMatch({
       value: description,
@@ -106,7 +111,9 @@ export function searchSlashCommandItems(
             ? `0\u0000${item.command}`
             : item.type === "provider-slash-command"
               ? `1\u0000${item.command.name}\u0000${item.provider}`
-              : `2\u0000${item.skill.name}\u0000${item.provider}`,
+              : item.type === "saved-prompt"
+                ? `3\u0000${item.savedPrompt.name}\u0000${item.savedPrompt.id}`
+                : `2\u0000${item.skill.name}\u0000${item.provider}`,
       },
       Number.POSITIVE_INFINITY,
     );

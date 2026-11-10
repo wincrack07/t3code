@@ -101,6 +101,7 @@ import { compactEditorInsets } from "./compactEditorInsets";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { ComposerPopoverAnchor } from "./ComposerPopoverAnchor";
 import { ComposerQueuedEditAttachments } from "./ComposerQueuedEdit";
+import { usePromptPolish } from "./use-prompt-polish";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import type { ComposerEnvironmentCandidate } from "@t3tools/client-runtime/composerThreadItems";
 import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
@@ -545,6 +546,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     undefined,
     props.selectedThread.projectId,
   );
+  const promptPolish = usePromptPolish({
+    environmentId: props.environmentId,
+    projectId: props.selectedThread.projectId,
+    draftKey: composerDraftKey,
+    onChangeDraftMessage: props.onChangeDraftMessage,
+  });
   const composerMenu = useComposerCommandMenu({
     draftMessage: draftMessage,
     ownerKey: composerDraftKey,
@@ -568,6 +575,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       usageLimitsOffered && draftAttachments.length === 0 ? openUsageLimits : undefined,
     modelOptions: mentionModelOptions,
     modelProviders: props.serverConfig?.providers,
+    savedPrompts: props.serverConfig?.settings.savedPrompts,
+    ...(promptPolish.available ? { onPolish: (draft) => void promptPolish.polish(draft) } : {}),
     ...(props.onFreshSession === undefined ? {} : { onFreshSession: props.onFreshSession }),
     offersSideChat: props.offersSideChat === true,
   });

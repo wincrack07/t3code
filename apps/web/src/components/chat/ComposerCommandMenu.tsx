@@ -11,12 +11,14 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   type PullRequestContextMetadata,
+  type SavedPrompt,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
 import {
   BlocksIcon,
+  BookmarkIcon,
   FolderIcon,
   MessagesSquareIcon,
   PackageIcon,
@@ -66,6 +68,13 @@ export type ComposerCommandItem =
       type: "skill";
       provider: ProviderDriverKind;
       skill: ServerProviderSkill;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
+      type: "saved-prompt";
+      savedPrompt: SavedPrompt;
       label: string;
       description: string;
     }
@@ -224,6 +233,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           kind={props.item.pathKind}
           theme={props.resolvedTheme}
         />
+      ) : null}
+      {props.item.type === "saved-prompt" ? (
+        <BookmarkIcon aria-hidden="true" className="size-4 shrink-0 text-secondary-label" />
       ) : null}
       {props.item.type === "thread" ? (
         <MessagesSquareIcon aria-hidden="true" className="size-4 shrink-0 text-secondary-label" />

@@ -720,6 +720,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
   },
   {
+    id: "saved-prompts",
+    title: "Saved prompts",
+    to: "/settings/chat",
+    searchTerms: ["prompt library templates snippets presets reusable slash menu insert"],
+    environmentOnly: true,
+    scope: "environment-defaults",
+  },
+  {
     id: "send-shortcut",
     title: "Send shortcut",
     to: "/settings/chat",

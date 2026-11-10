@@ -186,6 +186,17 @@ describe("serverSettings helpers", () => {
     ).toEqual([]);
   });
 
+  it("replaces the saved prompt list, so a removed prompt stays removed", () => {
+    const first = { id: "a", name: "Review", prompt: "Review my changes." };
+    const second = { id: "b", name: "Plan", prompt: "Plan this first." };
+    const both = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      savedPrompts: [first, second],
+    });
+    expect(applyServerSettingsPatch(both, { savedPrompts: [second] }).savedPrompts).toEqual([
+      second,
+    ]);
+  });
+
   it("preserves other projects' actions when overriding, clearing, or resetting one project", () => {
     const firstProject = { id: ProjectId.make("first-project"), scripts: [] };
     const secondProject = { id: ProjectId.make("second-project"), scripts: [] };

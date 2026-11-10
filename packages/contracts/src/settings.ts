@@ -126,6 +126,18 @@ export type SnoozePresetSetting = typeof SnoozePresetSetting.Type;
 export const SnoozePresetSettings = Schema.Array(SnoozePresetSetting).check(
   Schema.isMaxLength(MAX_SNOOZE_PRESETS),
 );
+export const MAX_SAVED_PROMPTS = 100;
+export const MAX_SAVED_PROMPT_NAME_LENGTH = 64;
+export const MAX_SAVED_PROMPT_LENGTH = 20_000;
+export const SavedPrompt = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(MAX_SAVED_PROMPT_NAME_LENGTH)),
+  prompt: Schema.String.check(Schema.isMaxLength(MAX_SAVED_PROMPT_LENGTH)),
+});
+export type SavedPrompt = typeof SavedPrompt.Type;
+// Settings travel to every client on each change, so the list is bounded.
+export const SavedPrompts = Schema.Array(SavedPrompt).check(Schema.isMaxLength(MAX_SAVED_PROMPTS));
+
 export const DEFAULT_SNOOZE_PRESETS: ReadonlyArray<SnoozePresetSetting> = [
   { kind: "after", minutes: 60 },
   { kind: "after", minutes: 180 },
@@ -1424,6 +1436,7 @@ export const ServerSettings = Schema.Struct({
   snoozePresets: SnoozePresetSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SNOOZE_PRESETS)),
   ),
+  savedPrompts: SavedPrompts.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /** Clients hide threads with these tags while `hideTaggedThreads` is on. Bad entries drop alone, so a hand edit cannot reset settings. */
   hiddenThreadTags: Schema.Array(Schema.Unknown).pipe(
     Schema.decodeTo(
@@ -1858,6 +1871,7 @@ export const ServerSettingsPatch = Schema.Struct({
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),
+  savedPrompts: Schema.optionalKey(SavedPrompts),
   hiddenThreadTags: Schema.optionalKey(Schema.Array(Schema.String)),
   hideTaggedThreads: Schema.optionalKey(Schema.Boolean),
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),

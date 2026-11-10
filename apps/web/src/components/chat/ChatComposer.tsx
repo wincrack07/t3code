@@ -264,6 +264,7 @@ import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnaps
 import { useComposerProviderModel } from "./useComposerProviderModel";
 import { useComposerImageGroups } from "./useComposerImageGroups";
 import { useComposerStash } from "./useComposerStash";
+import { usePromptPolish } from "./usePromptPolish";
 import { useComposerContextImport } from "./useComposerContextImport";
 import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
 import {
@@ -1092,6 +1093,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerPreviewAnnotations.length === 0 &&
     composerReviewComments.length === 0;
   const linkedEnvironments = useLinkedEnvironments(environmentId);
+  const promptPolish = usePromptPolish({
+    environmentId,
+    projectId: activeProjectId,
+    promptRef,
+    replaceDraft: (expected, next) =>
+      promptRef.current === expected &&
+      applyPromptReplacementStable(0, expected.length, next, { expectedText: expected }),
+  });
   const {
     items: composerMenuItems,
     isLoading: isComposerMenuLoading,
@@ -1108,11 +1117,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     sideChatAvailable: props.sideChatAvailable === true,
     sideChatDisabledReason: props.sideChatDisabledReason ?? null,
     freshSessionAvailable: props.onFreshSession !== undefined,
+    promptPolishAvailable: promptPolish.available,
     compactSlashCommandAvailable,
     selectedProvider,
     selectedProviderSkills,
     selectedProviderSlashCommands,
     showSkillsInSlashMenu: settings.showSkillsInSlashMenu,
+    savedPrompts: settings.savedPrompts,
     workspaceSkillsScanning,
     questionAttachmentTarget,
     modelMentions: { instanceEntries: providerInstanceEntries, modelOptionsByInstance },
@@ -1894,6 +1905,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         }
         return;
       }
+      if (item.command === "polish") {
+        const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
+          expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+        });
+        if (applied) {
+          setComposerHighlightedItemId(null);
+          void promptPolish.polish();
+        }
+        return;
+      }
       if (item.command === "side" || item.command === "btw") {
         if (props.sideChatDisabledReason) return;
         const applied = applyPromptReplacement(
@@ -1946,6 +1967,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       if (applied) {
         setComposerHighlightedItemId(null);
       }
+      return;
+    }
+    if (item.type === "saved-prompt") {
+      const applied = applyPromptReplacement(
+        trigger.rangeStart,
+        trigger.rangeEnd,
+        item.savedPrompt.prompt,
+        { expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd) },
+      );
+      if (applied) setComposerHighlightedItemId(null);
       return;
     }
     if (item.type === "pull-request") {

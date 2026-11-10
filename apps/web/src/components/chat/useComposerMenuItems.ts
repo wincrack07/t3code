@@ -10,6 +10,7 @@ import type {
   ProviderDriverKind,
   ProviderInstanceId,
   PullRequestListInput,
+  SavedPrompt,
   ServerProvider,
   ThreadId,
   ThreadPullRequestLink,
@@ -70,11 +71,13 @@ export function useComposerMenuItems({
   sideChatAvailable,
   sideChatDisabledReason,
   freshSessionAvailable,
+  promptPolishAvailable,
   compactSlashCommandAvailable,
   selectedProvider,
   selectedProviderSkills,
   selectedProviderSlashCommands,
   showSkillsInSlashMenu,
+  savedPrompts,
   workspaceSkillsScanning,
   questionAttachmentTarget,
   modelMentions,
@@ -90,11 +93,13 @@ export function useComposerMenuItems({
   readonly sideChatAvailable: boolean;
   readonly sideChatDisabledReason: string | null;
   readonly freshSessionAvailable: boolean;
+  readonly promptPolishAvailable: boolean;
   readonly compactSlashCommandAvailable: boolean;
   readonly selectedProvider: ProviderDriverKind;
   readonly selectedProviderSkills: ServerProvider["skills"];
   readonly selectedProviderSlashCommands: ServerProvider["slashCommands"];
   readonly showSkillsInSlashMenu: boolean;
+  readonly savedPrompts: ReadonlyArray<SavedPrompt>;
   readonly workspaceSkillsScanning: boolean;
   readonly questionAttachmentTarget: DraftId | null;
   readonly modelMentions: {
@@ -267,6 +272,17 @@ export function useComposerMenuItems({
               },
             ] as const)
           : []),
+        ...(promptPolishAvailable
+          ? ([
+              {
+                id: "slash:polish",
+                type: "slash-command",
+                command: "polish",
+                label: "/polish",
+                description: "Rewrite this draft to be clearer",
+              },
+            ] as const)
+          : []),
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const slashMenuSkills = getProviderSkillsForSlashMenu(
         selectedProviderSkills,
@@ -301,8 +317,20 @@ export function useComposerMenuItems({
           (item.command.name !== "compact" || compactSlashCommandAvailable) &&
           (item.command.name !== "clear" || !freshSessionAvailable),
       );
+      const savedPromptItems = savedPrompts.map((savedPrompt) => ({
+        id: `saved-prompt:${savedPrompt.id}`,
+        type: "saved-prompt" as const,
+        savedPrompt,
+        label: savedPrompt.name,
+        description: savedPrompt.prompt.trim().split("\n", 1)[0] ?? "",
+      }));
       const slashCommandItems = slashCommandItemsForPromptPosition(
-        [...builtInSlashCommandItems, ...visibleProviderSlashCommandItems, ...skillItems],
+        [
+          ...builtInSlashCommandItems,
+          ...visibleProviderSlashCommandItems,
+          ...skillItems,
+          ...savedPromptItems,
+        ],
         composerTrigger.rangeStart === 0,
       );
       return searchSlashCommandItems(slashCommandItems, query);
