@@ -34,9 +34,13 @@ import {
 export function ThreadRouteView({
   target,
   background = false,
+  column = false,
+  inactive = false,
 }: {
   target: ThreadRouteTarget;
   background?: boolean;
+  column?: boolean;
+  inactive?: boolean;
 }) {
   const navigate = useNavigate();
   const draftId = target.kind === "draft" ? target.draftId : null;
@@ -127,11 +131,19 @@ export function ThreadRouteView({
     if (renderState === "missing") {
       const { clearPendingFileDropsForThread } = useSidebarPendingFileDropStore.getState();
       clearPendingFileDropsForThread(target.threadRef);
-      if (environmentHasAnyThreads && !background) {
+      if (environmentHasAnyThreads && !background && !inactive) {
         void navigate({ to: "/", replace: true });
       }
     }
-  }, [background, bootstrapComplete, environmentHasAnyThreads, navigate, renderState, target]);
+  }, [
+    background,
+    inactive,
+    bootstrapComplete,
+    environmentHasAnyThreads,
+    navigate,
+    renderState,
+    target,
+  ]);
 
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
@@ -199,7 +211,17 @@ export function ThreadRouteView({
         environmentId={target.threadRef.environmentId}
         threadId={target.threadRef.threadId}
         routeKind="server"
+        {...(inactive ? { embedded: true as const } : {})}
       />
+    );
+  }
+
+  if (column) {
+    return (
+      <BackgroundThreadContext value={background || inactive}>
+        {view}
+        {background || inactive ? null : redirect}
+      </BackgroundThreadContext>
     );
   }
 
