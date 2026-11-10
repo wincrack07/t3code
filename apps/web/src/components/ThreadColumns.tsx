@@ -244,7 +244,9 @@ export function ThreadColumns({
       if (routeRef) useThreadColumnsStore.getState().navigate(routeRef);
       return;
     }
-    const active = layout.columns.find((column) => column.id === layout.activeId);
+    // Effect replay can still hold the render from before the URL reconciled the store.
+    const current = useThreadColumnsStore.getState();
+    const active = current.columns.find((column) => column.id === current.activeId);
     if (
       active &&
       (routeRef === null || scopedThreadKey(active.threadRef) !== scopedThreadKey(routeRef))
@@ -254,6 +256,7 @@ export function ThreadColumns({
         params: buildThreadRouteParams(active.threadRef),
       });
     }
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- column changes trigger reverse sync, but effect replay must read the current store rather than the render snapshot
   }, [background, layout.activeId, layout.columns, navigate, routeKey, routeRef]);
   if (target.kind === "draft" && routeRef === null) {
     return <ThreadRouteView target={target} background={background} />;

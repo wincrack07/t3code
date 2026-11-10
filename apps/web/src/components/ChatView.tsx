@@ -150,7 +150,7 @@ import { copyThreadReference } from "../lib/copyThreadReference";
 import { subscribeSnapShotComposerFocus } from "../lib/desktopSnapShot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { FileMetadataThreadProvider } from "../hooks/FileMetadataThreadProvider";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import { useRightPanelSheet } from "../hooks/useRightPanelSheet";
 import { PopoverCreateHandle } from "./ui/popover";
 import {
   selectActiveRightPanel,
@@ -686,9 +686,9 @@ export default function ChatView(props: ChatViewProps) {
     window.addEventListener("dragend", clearWorkspaceFileDrag);
     return () => window.removeEventListener("dragend", clearWorkspaceFileDrag);
   }, [isWorkspaceFileDragActive]);
-  const prefersPlanSidebarSheet = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
   const isMobileViewport = useMediaQuery("max-sm");
   const [workspaceLayoutElement, setWorkspaceLayoutElement] = useState<HTMLDivElement | null>(null);
+  const prefersPlanSidebarSheet = useRightPanelSheet(workspaceLayoutElement);
   const threadPanelPopoverAnchorRef = useRef<HTMLElement | null>(null);
   const [terminalUiLaunchContext, setTerminalUiLaunchContext] =
     useState<TerminalLaunchContext | null>(null);
@@ -3283,6 +3283,7 @@ export default function ChatView(props: ChatViewProps) {
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
+          rightPanelOpen && !shouldUsePlanSidebarSheet && !rightPanelMaximized && "min-w-90",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
         data-chat-column

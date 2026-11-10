@@ -1,3 +1,4 @@
+import { RIGHT_PANEL_MIN_WIDTH, CHAT_MIN_WIDTH } from "../rightPanelLayout";
 import { useState } from "react";
 
 import { type ResizableWidthHandlers, useResizableWidth } from "./useResizableWidth";
@@ -11,10 +12,7 @@ export interface PreviewPanelInlineSize {
 }
 
 const PREVIEW_PANEL_WIDTH_STORAGE_KEY = "t3code:preview-panel-width";
-const PREVIEW_PANEL_MIN_WIDTH = 360;
 const PREVIEW_PANEL_MAX_WIDTH_FRACTION = 0.7;
-/** Below this, the sibling chat column's composer overflows. */
-const SIBLING_COLUMN_MIN_WIDTH = 360;
 const PREVIEW_PANEL_DEFAULT_WIDTH = 540;
 
 export function usePreviewPanelInlineSize(
@@ -33,7 +31,7 @@ export function usePreviewPanelInlineSize(
   const { width, handlers } = useResizableWidth({
     storageKey: options.widthStorageKey ?? PREVIEW_PANEL_WIDTH_STORAGE_KEY,
     defaultWidth: options.defaultWidth ?? PREVIEW_PANEL_DEFAULT_WIDTH,
-    minWidth: PREVIEW_PANEL_MIN_WIDTH,
+    minWidth: RIGHT_PANEL_MIN_WIDTH,
     maxWidth,
     edge: "left",
   });
@@ -68,7 +66,7 @@ export function usePreviewPanelInlineSize(
 function getPreviewPanelMaxWidth(viewportWidth: number, containerWidth?: number): number {
   const fractionCap = Math.floor(viewportWidth * PREVIEW_PANEL_MAX_WIDTH_FRACTION);
   const containerCap =
-    containerWidth === undefined ? Infinity : Math.floor(containerWidth) - SIBLING_COLUMN_MIN_WIDTH;
+    containerWidth === undefined ? Infinity : Math.floor(containerWidth) - CHAT_MIN_WIDTH;
   // Keep max >= min; an inverted clamp would overwrite the saved width on drag end.
-  return Math.max(PREVIEW_PANEL_MIN_WIDTH, Math.min(fractionCap, containerCap));
+  return Math.max(RIGHT_PANEL_MIN_WIDTH, Math.min(fractionCap, containerCap));
 }
