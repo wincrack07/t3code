@@ -1,3 +1,4 @@
+import * as Orchestrator from "../../orchestration-v2/Orchestrator.ts";
 import * as AssetSigner from "../../assets/AssetSigner.ts";
 import * as DocumentText from "../../provider/DocumentText.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -274,6 +275,20 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     expect(
       htmlRenderFromToolItem({ toolName: "mcp__t3-code__html_render", output: result.content }),
     ).toEqual(reference);
+    const unpinned = yield* server
+      .callTool({
+        name: "html_render",
+        arguments: { pin: "missing-card", unpin: true },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(unpinned.isError).not.toBe(true);
+    expect(unpinned.structuredContent).toEqual({ unpinned: "missing-card" });
+    expect(
+      htmlRenderFromToolItem({ toolName: "html_render", output: unpinned.structuredContent }),
+    ).toBeUndefined();
     // Only a full-access thread may have the server read a file for it.
     const byPath = (name: string, caller: McpInvocationContext.McpInvocationScope) =>
       server
@@ -295,6 +310,14 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
   }).pipe(
     Effect.provide(
       McpHttpServer.layerHtmlToolkit.pipe(
+        Layer.provide(
+          Layer.mock(Orchestrator.OrchestratorV2)({
+            getThreadProjection: (id) =>
+              Effect.succeed(
+                McpToolAccessTestkit.idleThreadProjection(McpToolAccessTestkit.liveThreadShell(id)),
+              ),
+          }),
+        ),
         Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
         Layer.provide(McpProviderSessions.layer),
         Layer.provide(PreviewBrowser.layer),

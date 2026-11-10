@@ -244,6 +244,7 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
     <View className="flex-1 bg-sheet">
       <AppBar title={params.name} subtitle={subtitle} onBack={handleBack} menus={[fileMenu]} />
       <AttachmentDocumentBody
+        threadId={params.threadId ? ThreadId.make(params.threadId) : undefined}
         document={document}
         name={params.name}
         environmentId={environmentId}

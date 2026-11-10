@@ -39,6 +39,10 @@ describe("V2 client presentation", () => {
       },
     };
     const active = presentThreadShell(environmentId, running);
+    expect(active).not.toHaveProperty("pinnedHtmlCards");
+    expect(
+      presentThreadShell(environmentId, { ...running, pinnedHtmlCards: [] }),
+    ).not.toHaveProperty("pinnedHtmlCards");
     expect(active.hasPendingUserInput).toBe(true);
     expect(isThreadWorking(active)).toBe(false);
     expect(canSnooze(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(true);

@@ -1,10 +1,11 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { useClosedViewStore } from "./closedViewStore";
 import { reopenClosedView } from "./reopenClosedView";
 import {
+  reconcileHtmlCards,
   hostRightPanel,
   migratePersistedRightPanelState,
   pullRequestSurface,
@@ -1238,4 +1239,27 @@ describe("rightPanelStore", () => {
     expect(surfaceIds()).toEqual(["browser:tab-a", "terminal:term-1", "diff", "browser:tab-b"]);
     expect(store.getUserActionRevision(refA)).toBe(revision);
   });
+});
+
+it("reconciles cards in place, preserves focus and respects local close until explicitly reopened", () => {
+  const first = { id: "progress", attachmentId: "v1", title: "Progress", height: 200 };
+  const initial = {
+    isOpen: true,
+    activeSurfaceId: "diff",
+    surfaces: [{ id: "diff", kind: "diff" } as const],
+  };
+  const pinned = reconcileHtmlCards(initial, [first]);
+  expect(pinned.activeSurfaceId).toBe("diff");
+  expect(reconcileHtmlCards(pinned, [{ ...first }])).toBe(pinned);
+  const updated = reconcileHtmlCards(pinned, [{ ...first, attachmentId: "v2" }]);
+  expect(updated.surfaces.map((surface) => surface.id)).toEqual(["diff", "html-card:progress"]);
+  expect(updated.surfaces[1]).toMatchObject({ card: { attachmentId: "v2" } });
+  expect(updated.activeSurfaceId).toBe("diff");
+  const closed = { ...updated, surfaces: updated.surfaces.slice(0, 1) };
+  expect(reconcileHtmlCards(closed, [first]).surfaces).toEqual(initial.surfaces);
+  const restored = migratePersistedRightPanelState({
+    byThreadKey: { [scopedThreadKey(refA)]: closed },
+  }).byThreadKey[scopedThreadKey(refA)]!;
+  expect(reconcileHtmlCards(restored, [first]).surfaces).toEqual(initial.surfaces);
+  expect(reconcileHtmlCards(updated, []).surfaces).toEqual(initial.surfaces);
 });

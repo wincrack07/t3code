@@ -1,7 +1,13 @@
+import { CommandId, MessageId } from "@t3tools/contracts";
+import * as Dialog from "../../components/ui/Dialog";
+import { enqueueThreadOutboxMessage } from "../../state/thread-outbox";
+import { uuidv4 } from "../../lib/uuid";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
+  htmlRenderPromptExcerpt,
+  readHtmlRenderPrompt,
   htmlRenderFileName,
   htmlRenderFrameHeight,
   htmlRenderThemeFragment,
@@ -77,6 +83,7 @@ export function HtmlRenderWebView(props: {
   readonly uri: string;
   readonly title: string;
   readonly nested: boolean;
+  readonly thread?: { environmentId: EnvironmentId; threadId: ThreadId };
   readonly onLoadError?: () => void;
 }) {
   const theme = useHtmlRenderTheme();
@@ -86,6 +93,7 @@ export function HtmlRenderWebView(props: {
   const [overflow, setOverflow] = useState(NO_OVERFLOW);
   const webView = useRef<WebView<object>>(null);
   const crashes = useRef(0);
+  const confirming = useRef(false);
   const shownTheme = useRef<HtmlRenderTheme | null>(null);
   const source = { uri: props.uri + htmlRenderThemeFragment(initialTheme) };
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- posts theme changes into the already loaded WebView
@@ -151,15 +159,56 @@ export function HtmlRenderWebView(props: {
         onHttpError={props.onLoadError}
         onContentProcessDidTerminate={restart}
         onRenderProcessGone={restart}
-        {...(props.nested
-          ? {
-              injectedJavaScript: OVERFLOW_SCRIPT,
-              onMessage: (event: WebViewMessageEvent) => {
-                const next = readOverflowMessage(event.nativeEvent.data);
-                if (next !== null) setOverflow(next);
+        injectedJavaScript={`window.addEventListener("message", function(event) { if(event.source === window && event.data && event.data.type === "t3-html-render-prompt") window.ReactNativeWebView.postMessage(JSON.stringify(event.data)); });${props.nested ? OVERFLOW_SCRIPT : "true;"}`}
+        onMessage={(event: WebViewMessageEvent) => {
+          const next = readOverflowMessage(event.nativeEvent.data);
+          if (next !== null) setOverflow(next);
+          let data: unknown;
+          try {
+            data = JSON.parse(event.nativeEvent.data);
+          } catch {
+            return;
+          }
+          const text = readHtmlRenderPrompt(data);
+          const thread = props.thread;
+          if (!text || !thread || confirming.current) return;
+          confirming.current = true;
+          Dialog.alert(
+            `Send this message from ${props.title}?`,
+            htmlRenderPromptExcerpt(text),
+            [
+              {
+                text: "Cancel",
+                style: "cancel",
+                onPress: () => {
+                  confirming.current = false;
+                },
               },
-            }
-          : {})}
+              {
+                text: "Send",
+                onPress: () => {
+                  void enqueueThreadOutboxMessage({
+                    ...thread,
+                    messageId: MessageId.make(uuidv4()),
+                    commandId: CommandId.make(uuidv4()),
+                    text,
+                    attachments: [],
+                    dispatchMode: "queue",
+                    createdAt: new Date().toISOString(),
+                  }).finally(() => {
+                    confirming.current = false;
+                  });
+                },
+              },
+            ],
+            {
+              cancelable: true,
+              onDismiss: () => {
+                confirming.current = false;
+              },
+            },
+          );
+        }}
       />
       {loaded ? null : (
         <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
@@ -218,6 +267,7 @@ export function ThreadHtmlRender(props: {
             uri={uri}
             title={title}
             nested
+            thread={{ environmentId: props.environmentId, threadId: props.threadId }}
             onLoadError={handleLoadError}
           />
         ) : failed || asset._tag === "Failure" ? (

@@ -1,3 +1,5 @@
+import { readThreadShell } from "~/state/entities";
+import { useRightPanelStore } from "~/rightPanelStore";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import {
   HTML_RENDER_COLUMN_WIDTH,
@@ -79,6 +81,27 @@ export function HtmlRenderFrame(props: {
             onFullscreenChange={onFullscreenChange}
           />
           <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
+            {props.htmlRender.pin && props.threadRef ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  if (props.threadRef && props.htmlRender.pin) {
+                    const card = readThreadShell(props.threadRef)?.pinnedHtmlCards?.find(
+                      (card) => card.id === props.htmlRender.pin,
+                    );
+                    useRightPanelStore
+                      .getState()
+                      .openHtmlCard(
+                        props.threadRef,
+                        card ?? { ...props.htmlRender, id: props.htmlRender.pin },
+                      );
+                  }
+                }}
+              >
+                Open card
+              </Button>
+            ) : null}
             <Tooltip>
               <TooltipTrigger
                 render={

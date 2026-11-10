@@ -1,3 +1,5 @@
+import * as HtmlRender from "../htmlRender/HtmlRender.ts";
+import * as PreviewBrowser from "../preview/PreviewBrowser.ts";
 import { PullRequestProviderError } from "@t3tools/source-control-core/server/PullRequestProvider";
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
@@ -37,6 +39,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -2530,7 +2533,90 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       const retriedCreate = yield* orchestrator.dispatch(create);
       assert.equal(retriedCreate.sequence, firstCreate.sequence);
       assert.lengthOf(retriedCreate.storedEvents, 1);
+      assert.notProperty(
+        (yield* orchestrator.getShellSnapshot()).threads.find((thread) => thread.id === threadId),
+        "pinnedHtmlCards",
+      );
 
+      yield* Effect.gen(function* () {
+        const htmlRender = yield* HtmlRender.HtmlRender;
+        const store = yield* ProjectionStore.ProjectionStoreV2;
+        const refs = [];
+        for (const text of ["Ready", "Done"]) {
+          const reference = yield* htmlRender.publish({
+            threadId,
+            pin: "progress",
+            html: `<p>${text}</p>`,
+            title: text,
+            height: 200,
+          });
+          refs.push(reference);
+          const { pin: _pin, ...snapshot } = reference;
+          const expected = [{ ...snapshot, id: "progress" }];
+          assert.deepEqual(
+            (yield* orchestrator.getThreadProjection(threadId)).thread.pinnedHtmlCards,
+            expected,
+          );
+          assert.deepEqual(
+            (yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards,
+            expected,
+          );
+          assert.deepEqual(
+            (yield* store.getShellSnapshot()).threads.find((thread) => thread.id === threadId)
+              ?.pinnedHtmlCards,
+            expected,
+          );
+        }
+        assert.notEqual(refs[0]?.attachmentId, refs[1]?.attachmentId);
+        const fileSystem = yield* FileSystem.FileSystem;
+        const config = yield* ServerConfig.ServerConfig;
+        const attachments = yield* fileSystem.readDirectory(config.attachmentsDir);
+        yield* htmlRender.unpin({ threadId, pin: "progress" });
+        assert.deepEqual((yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards, []);
+        const unpinnedShell = (yield* store.getShellSnapshot()).threads.find(
+          (thread) => thread.id === threadId,
+        );
+        assert.notProperty(unpinnedShell, "pinnedHtmlCards");
+        const afterUnpin = yield* orchestrator.getThreadProjection(threadId);
+        assert.notProperty(
+          ProjectionStore.threadShellFromProjection(afterUnpin),
+          "pinnedHtmlCards",
+        );
+        yield* htmlRender.unpin({ threadId, pin: "progress" });
+        assert.deepEqual(yield* orchestrator.getThreadProjection(threadId), afterUnpin);
+        assert.deepEqual(yield* fileSystem.readDirectory(config.attachmentsDir), attachments);
+        for (let index = 0; index < 9; index++) {
+          yield* htmlRender.publish({
+            threadId,
+            pin: `card-${index}`,
+            html: "<p>Card</p>",
+            title: "Card",
+            height: 200,
+          });
+        }
+        const capped = yield* store.getThreadProjection(threadId);
+        assert.deepEqual(
+          capped.thread.pinnedHtmlCards?.map((card) => card.id),
+          Array.from({ length: 8 }, (_, index) => `card-${index + 1}`),
+        );
+      }).pipe(
+        Effect.provide(
+          HtmlRender.layer.pipe(
+            Layer.provide(McpProviderSessions.layer),
+            Layer.provideMerge(layerServerConfig),
+            Layer.provideMerge(layerPlatformTest),
+            Layer.provide(
+              Layer.succeed(
+                PreviewBrowser.PreviewBrowser,
+                PreviewBrowser.PreviewBrowser.of({
+                  installed: Effect.succeedNone,
+                  executable: Effect.die("No browser needed for publishing."),
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
       yield* orchestrator.dispatch({
         type: "thread.metadata.update",
         commandId: CommandId.make("runtime-layer-lifecycle-metadata"),

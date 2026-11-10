@@ -1,4 +1,4 @@
-import type { ThreadId } from "@t3tools/contracts";
+import { CommandId, type ThreadId } from "@t3tools/contracts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { isNetworkPath } from "@t3tools/shared/path";
@@ -18,6 +18,8 @@ import {
   T3_CODE_LIGHT_THEME_COLORS,
   type ThemeAppearance,
 } from "@t3tools/shared/themePalettes";
+import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -152,6 +154,7 @@ export class HtmlRender extends Context.Service<
         readonly threadId: ThreadId;
         readonly title: string;
         readonly height: number;
+        readonly pin?: string | undefined;
       },
     ) => Effect.Effect<
       HtmlRenderReference,
@@ -160,6 +163,10 @@ export class HtmlRender extends Context.Service<
       | HtmlRenderPrepareError
       | HtmlRenderStoreError
     >;
+    readonly unpin: (input: {
+      readonly threadId: ThreadId;
+      readonly pin: string;
+    }) => Effect.Effect<void, HtmlRenderStoreError>;
     readonly preview: (
       input: HtmlRenderSource & {
         readonly width?: number | undefined;
@@ -372,6 +379,7 @@ const make = Effect.gen(function* () {
   const isServerInternalPath = yield* makeIsServerInternalPath;
   const previewBrowser = yield* PreviewBrowser.PreviewBrowser;
   const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+  const orchestrator = yield* Effect.serviceOption(Orchestrator.OrchestratorV2);
   const services = yield* Effect.context<
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
   >();
@@ -503,6 +511,7 @@ const make = Effect.gen(function* () {
       readonly threadId: ThreadId;
       readonly title: string;
       readonly height: number;
+      readonly pin?: string | undefined;
     },
   ) {
     const source = yield* readSource(input);
@@ -520,6 +529,7 @@ const make = Effect.gen(function* () {
       return yield* new HtmlRenderStoreError({ cause: new Error("Invalid thread id.") });
     }
     const baseReference: HtmlRenderReference = {
+      ...(input.pin === undefined ? {} : { pin: input.pin }),
       attachmentId,
       title: input.title.trim().slice(0, HTML_RENDER_MAX_TITLE_LENGTH) || "HTML",
       height: clampHtmlRenderHeight(input.height),
@@ -544,7 +554,31 @@ const make = Effect.gen(function* () {
             },
             reference,
           )
-          .pipe(Effect.as(reference));
+          .pipe(
+            Effect.andThen(
+              input.pin === undefined
+                ? Effect.void
+                : Effect.gen(function* () {
+                    if (Option.isNone(orchestrator))
+                      return yield* new HtmlRenderStoreError({
+                        cause: new Error("Thread persistence unavailable."),
+                      });
+                    const { pin: _pin, ...card } = reference;
+                    yield* orchestrator.value
+                      .dispatch({
+                        type: "thread.metadata.update",
+                        commandId: CommandId.make(`html-card:${attachmentId}`),
+                        threadId: input.threadId,
+                        htmlCard: {
+                          id: input.pin!,
+                          card: { ...card, id: input.pin! },
+                        },
+                      })
+                      .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));
+                  }),
+            ),
+            Effect.as(reference),
+          );
       }),
       // An interrupted publish must leave neither an attachment nor a recoverable reference.
       Effect.onError(() =>
@@ -557,6 +591,28 @@ const make = Effect.gen(function* () {
         ),
       ),
     );
+  });
+
+  const unpin = Effect.fn("HtmlRender.unpin")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly pin: string;
+  }) {
+    if (Option.isNone(orchestrator))
+      return yield* new HtmlRenderStoreError({
+        cause: new Error("Thread persistence unavailable."),
+      });
+    const projection = yield* orchestrator.value
+      .getThreadProjection(input.threadId)
+      .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));
+    if (!projection.thread.pinnedHtmlCards?.some((card) => card.id === input.pin)) return;
+    yield* orchestrator.value
+      .dispatch({
+        type: "thread.metadata.update",
+        commandId: CommandId.make(SecureRandom.uuidV4Unsafe()),
+        threadId: input.threadId,
+        htmlCard: { id: input.pin, card: null },
+      })
+      .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));
   });
 
   const preview = Effect.fn("HtmlRender.preview")(function* (
@@ -596,7 +652,7 @@ const make = Effect.gen(function* () {
     } satisfies HtmlPreview;
   });
 
-  return HtmlRender.of({ prepare, publish, preview });
+  return HtmlRender.of({ prepare, publish, unpin, preview });
 });
 
 export const layer = Layer.effect(HtmlRender, make);
