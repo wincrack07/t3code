@@ -1,0 +1,66 @@
+name: Fork macOS DMG
+
+# Fork-only: builds an unsigned Apple Silicon DMG of this branch on a GitHub
+# macOS runner and uploads it as a run artifact. It has no update feed, so an
+# installed copy is never replaced by an upstream release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: Version baked into the app. A -nightly.<date>.<n> suffix names it "T3 Code (Nightly)".
+        required: true
+        default: 0.1.9-nightly.20261110.9001
+
+permissions:
+  contents: read
+
+jobs:
+  dmg:
+    name: Build unsigned arm64 DMG
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      # checkout's credential cleanup runs submodule foreach, which fails on the
+      # orphaned gitlinks in the vendored .repos tree.
+      - name: Checkout
+        shell: bash
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install
+
+      - name: Build DMG
+        env:
+          BUILD_VERSION: ${{ inputs.build_version }}
+          T3CODE_DESKTOP_SIGNED: "false"
+        run: |
+          set -euo pipefail
+          unset GITHUB_REPOSITORY T3CODE_DESKTOP_UPDATE_REPOSITORY
+          node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64 --build-version "$BUILD_VERSION" --verbose
+
+      - name: Checksum
+        run: shasum -a 256 release/*.dmg
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: t3-code-fork-macos-arm64
+          path: release/*.dmg
+          if-no-files-found: error
+          retention-days: 7
