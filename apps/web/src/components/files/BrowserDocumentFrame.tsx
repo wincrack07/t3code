@@ -14,6 +14,7 @@ import {
   htmlRenderThemeFragment,
   htmlRenderThemeMessage,
   htmlRenderResult,
+  htmlRenderPromptExcerpt,
   readHtmlRenderPrompt,
   readHtmlRenderContentHeight,
   readHtmlRenderImageRequest,
@@ -288,8 +289,9 @@ export function HtmlRenderDocument(props: {
       if (sendPrompt && !isConfirmDialogActive())
         void (async () => {
           if (
-            (await requestConfirmDialog(`Send this message from ${props.title}?\n${prompt}`)) ===
-            true
+            (await requestConfirmDialog(
+              `Send this message from ${props.title}?\n${htmlRenderPromptExcerpt(prompt)}`,
+            )) === true
           )
             await sendPrompt(prompt);
         })().catch((cause: unknown) => console.error(cause));

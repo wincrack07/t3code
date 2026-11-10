@@ -39,6 +39,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -2532,6 +2533,10 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       const retriedCreate = yield* orchestrator.dispatch(create);
       assert.equal(retriedCreate.sequence, firstCreate.sequence);
       assert.lengthOf(retriedCreate.storedEvents, 1);
+      assert.notProperty(
+        (yield* orchestrator.getShellSnapshot()).threads.find((thread) => thread.id === threadId),
+        "pinnedHtmlCards",
+      );
 
       yield* Effect.gen(function* () {
         const htmlRender = yield* HtmlRender.HtmlRender;
@@ -2563,21 +2568,43 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           );
         }
         assert.notEqual(refs[0]?.attachmentId, refs[1]?.attachmentId);
-        yield* htmlRender.publish({
-          threadId,
-          pin: "progress",
-          unpin: true,
-          html: "<p>Done</p>",
-          title: "Done",
-          height: 200,
-        });
+        const fileSystem = yield* FileSystem.FileSystem;
+        const config = yield* ServerConfig.ServerConfig;
+        const attachments = yield* fileSystem.readDirectory(config.attachmentsDir);
+        yield* htmlRender.unpin({ threadId, pin: "progress" });
         assert.deepEqual((yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards, []);
+        const unpinnedShell = (yield* store.getShellSnapshot()).threads.find(
+          (thread) => thread.id === threadId,
+        );
+        assert.notProperty(unpinnedShell, "pinnedHtmlCards");
+        const afterUnpin = yield* orchestrator.getThreadProjection(threadId);
+        assert.notProperty(
+          ProjectionStore.threadShellFromProjection(afterUnpin),
+          "pinnedHtmlCards",
+        );
+        yield* htmlRender.unpin({ threadId, pin: "progress" });
+        assert.deepEqual(yield* orchestrator.getThreadProjection(threadId), afterUnpin);
+        assert.deepEqual(yield* fileSystem.readDirectory(config.attachmentsDir), attachments);
+        for (let index = 0; index < 9; index++) {
+          yield* htmlRender.publish({
+            threadId,
+            pin: `card-${index}`,
+            html: "<p>Card</p>",
+            title: "Card",
+            height: 200,
+          });
+        }
+        const capped = yield* store.getThreadProjection(threadId);
+        assert.deepEqual(
+          capped.thread.pinnedHtmlCards?.map((card) => card.id),
+          Array.from({ length: 8 }, (_, index) => `card-${index + 1}`),
+        );
       }).pipe(
         Effect.provide(
           HtmlRender.layer.pipe(
             Layer.provide(McpProviderSessions.layer),
-            Layer.provide(layerServerConfig),
-            Layer.provide(layerPlatformTest),
+            Layer.provideMerge(layerServerConfig),
+            Layer.provideMerge(layerPlatformTest),
             Layer.provide(
               Layer.succeed(
                 PreviewBrowser.PreviewBrowser,

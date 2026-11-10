@@ -294,7 +294,7 @@ export function presentThreadShell(
     branch: thread.branch,
     worktreePath: thread.worktreePath,
     pullRequests: threadPullRequestsOf(thread),
-    pinnedHtmlCards: thread.pinnedHtmlCards ?? [],
+    ...(thread.pinnedHtmlCards?.length ? { pinnedHtmlCards: thread.pinnedHtmlCards } : {}),
     linkedPullRequest: thread.linkedPullRequest ?? null,
     branchPullRequest: thread.branchPullRequest ?? null,
     lineage: thread.lineage,

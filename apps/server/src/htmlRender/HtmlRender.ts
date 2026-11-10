@@ -19,6 +19,7 @@ import {
   type ThemeAppearance,
 } from "@t3tools/shared/themePalettes";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -154,7 +155,6 @@ export class HtmlRender extends Context.Service<
         readonly title: string;
         readonly height: number;
         readonly pin?: string | undefined;
-        readonly unpin?: boolean | undefined;
       },
     ) => Effect.Effect<
       HtmlRenderReference,
@@ -163,6 +163,10 @@ export class HtmlRender extends Context.Service<
       | HtmlRenderPrepareError
       | HtmlRenderStoreError
     >;
+    readonly unpin: (input: {
+      readonly threadId: ThreadId;
+      readonly pin: string;
+    }) => Effect.Effect<void, HtmlRenderStoreError>;
     readonly preview: (
       input: HtmlRenderSource & {
         readonly width?: number | undefined;
@@ -508,7 +512,6 @@ const make = Effect.gen(function* () {
       readonly title: string;
       readonly height: number;
       readonly pin?: string | undefined;
-      readonly unpin?: boolean | undefined;
     },
   ) {
     const source = yield* readSource(input);
@@ -568,7 +571,7 @@ const make = Effect.gen(function* () {
                         threadId: input.threadId,
                         htmlCard: {
                           id: input.pin!,
-                          card: input.unpin ? null : { ...card, id: input.pin! },
+                          card: { ...card, id: input.pin! },
                         },
                       })
                       .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));
@@ -588,6 +591,28 @@ const make = Effect.gen(function* () {
         ),
       ),
     );
+  });
+
+  const unpin = Effect.fn("HtmlRender.unpin")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly pin: string;
+  }) {
+    if (Option.isNone(orchestrator))
+      return yield* new HtmlRenderStoreError({
+        cause: new Error("Thread persistence unavailable."),
+      });
+    const projection = yield* orchestrator.value
+      .getThreadProjection(input.threadId)
+      .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));
+    if (!projection.thread.pinnedHtmlCards?.some((card) => card.id === input.pin)) return;
+    yield* orchestrator.value
+      .dispatch({
+        type: "thread.metadata.update",
+        commandId: CommandId.make(SecureRandom.uuidV4Unsafe()),
+        threadId: input.threadId,
+        htmlCard: { id: input.pin, card: null },
+      })
+      .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));
   });
 
   const preview = Effect.fn("HtmlRender.preview")(function* (
@@ -627,7 +652,7 @@ const make = Effect.gen(function* () {
     } satisfies HtmlPreview;
   });
 
-  return HtmlRender.of({ prepare, publish, preview });
+  return HtmlRender.of({ prepare, publish, unpin, preview });
 });
 
 export const layer = Layer.effect(HtmlRender, make);

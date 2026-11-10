@@ -333,3 +333,5 @@ export const RawEventId = makeEntityId("RawEventId");
 export type RawEventId = typeof RawEventId.Type;
 export const PlanId = makeEntityId("PlanId");
 export type PlanId = typeof PlanId.Type;
+
+export const HTML_RENDER_PIN_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;

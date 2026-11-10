@@ -8,6 +8,7 @@ import * as SchemaGetter from "effect/SchemaGetter";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import {
+  HTML_RENDER_PIN_ID_PATTERN,
   CheckpointId,
   CheckpointRef,
   CheckpointScopeId,
@@ -87,7 +88,7 @@ import {
 import { ThreadTokenUsageSnapshot } from "./providerRuntime.ts";
 
 const PinnedHtmlCard = Schema.Struct({
-  id: Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,64}$/)),
+  id: Schema.String.check(Schema.isPattern(HTML_RENDER_PIN_ID_PATTERN)),
   attachmentId: Schema.String,
   title: Schema.String,
   height: Schema.Number,

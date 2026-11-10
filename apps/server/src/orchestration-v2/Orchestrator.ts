@@ -4068,7 +4068,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                       (card) => card.id !== command.htmlCard?.id,
                     ),
                     ...(command.htmlCard.card === null ? [] : [command.htmlCard.card]),
-                  ],
+                  ].slice(-8),
                 }),
             ...(command.title === undefined ? {} : { title: command.title }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),

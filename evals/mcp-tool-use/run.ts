@@ -14,6 +14,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as PlatformNodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
+  HTML_RENDER_PIN_ID_PATTERN,
   ComposerContextRecord,
   DeviceOperationError,
   DeviceSummary,
@@ -1572,7 +1573,11 @@ export const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(fun
     if (found.length === 0) return toolResult(call.id, "No matching deferred tools found");
     return loadTools(tools, call.id, found);
   }
-  // T3 refuses a page call without exactly one source before any mocked result.
+  if (name === "html_render" && input.unpin === true) {
+    return typeof input.pin === "string" && HTML_RENDER_PIN_ID_PATTERN.test(input.pin)
+      ? toolResult(call.id, { unpinned: input.pin })
+      : failed("unpin requires pin.");
+  }
   const sources = [input.html, input.path].filter(
     (source) => source !== undefined && source !== null,
   );

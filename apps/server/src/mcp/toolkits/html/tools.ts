@@ -1,4 +1,4 @@
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import { HTML_RENDER_PIN_ID_PATTERN, OrchestratorMcpFailure } from "@t3tools/contracts";
 import {
   HTML_RENDER_COLUMN_WIDTH,
   HTML_RENDER_LAYOUT_GUIDE,
@@ -76,30 +76,37 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
 
 // This affects only the caller's thread, not its workspace, so read-only sandboxes and plan mode may use it.
 const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
-  description: `Use pin with a short stable id to keep a card beside this thread; render with the same pin to update it. Set unpin:true with that id to remove it (pass the page again). Cards may request a confirmed prompt via parent.postMessage({type:"t3-html-render-prompt",text:"..."}, "*"). Show a finished HTML page (chart, diagram, mockup) inline in this thread, above your final reply. Do not announce or restate the page. Frame fits height to ${HTML_RENDER_MAX_FIT_HEIGHT}px. On mobile, content past the given height scrolls. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
+  description: `Show a finished HTML page (chart, diagram, mockup) inline in this thread, above your final reply. Pin with a short stable id; reuse it to update the card beside this thread. Unpin with only pin and unpin:true, without a page. Cards can request a confirmed prompt via parent.postMessage({type:"t3-html-render-prompt",text:"..."}, "*"). Do not announce or restate the page. Frame fits height to ${HTML_RENDER_MAX_FIT_HEIGHT}px. On mobile, content past the given height scrolls. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
   parameters: Schema.Struct({
     path: Schema.optional(HtmlPath),
     html: Schema.optional(Html),
-    pin: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,64}$/))),
+    pin: Schema.optional(Schema.String.check(Schema.isPattern(HTML_RENDER_PIN_ID_PATTERN))),
     unpin: Schema.optional(Schema.Boolean),
-    title: Schema.String.check(
-      Schema.isMinLength(1),
-      Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH),
+    title: Schema.optional(
+      Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH),
+      ).annotate({ description: "Required when rendering; omit when unpinning." }),
     ),
-    height: Schema.Int.annotate({
-      description: `Frame height in CSS pixels, ${HTML_RENDER_MIN_HEIGHT} to ${HTML_RENDER_MAX_HEIGHT}. Use the contentHeight from html_preview.`,
-    }),
+    height: Schema.optional(
+      Schema.Int.annotate({
+        description: `Frame height in CSS pixels, ${HTML_RENDER_MIN_HEIGHT} to ${HTML_RENDER_MAX_HEIGHT}. Required when rendering. Use the contentHeight from html_preview.`,
+      }),
+    ),
   }),
-  success: Schema.Struct({
-    htmlRender: Schema.Struct({
-      pin: Schema.optional(Schema.String),
-      attachmentId: Schema.String,
-      title: Schema.String,
-      height: Schema.Number,
-      heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
+  success: Schema.Union([
+    Schema.Struct({
+      htmlRender: Schema.Struct({
+        pin: Schema.optional(Schema.String),
+        attachmentId: Schema.String,
+        title: Schema.String,
+        height: Schema.Number,
+        heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
+      }),
+      message: Schema.String,
     }),
-    message: Schema.String,
-  }),
+    Schema.Struct({ unpinned: Schema.String }),
+  ]),
   failure: OrchestratorMcpFailure,
   failureMode: "return",
   dependencies: [

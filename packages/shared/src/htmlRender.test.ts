@@ -1,4 +1,4 @@
-import { readHtmlRenderPrompt } from "./htmlRender.ts";
+import { htmlRenderPromptExcerpt, readHtmlRenderPrompt } from "./htmlRender.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -135,6 +135,12 @@ describe("htmlRenderFromToolItem", () => {
 });
 
 it("accepts only bounded nonempty prompt requests", () => {
+  const fullPrompt = "x".repeat(32_000);
+  expect(htmlRenderPromptExcerpt(fullPrompt)).toBe("x".repeat(500) + "…");
+  expect(readHtmlRenderPrompt({ type: "t3-html-render-prompt", text: fullPrompt })).toBe(
+    fullPrompt,
+  );
+  expect(htmlRenderPromptExcerpt("short")).toBe("short");
   expect(readHtmlRenderPrompt({ type: "t3-html-render-prompt", text: "Refresh the chart" })).toBe(
     "Refresh the chart",
   );

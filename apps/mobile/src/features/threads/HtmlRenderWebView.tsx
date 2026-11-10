@@ -6,6 +6,7 @@ import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
+  htmlRenderPromptExcerpt,
   readHtmlRenderPrompt,
   htmlRenderFileName,
   htmlRenderFrameHeight,
@@ -174,7 +175,7 @@ export function HtmlRenderWebView(props: {
           confirming.current = true;
           Dialog.alert(
             `Send this message from ${props.title}?`,
-            text,
+            htmlRenderPromptExcerpt(text),
             [
               {
                 text: "Cancel",

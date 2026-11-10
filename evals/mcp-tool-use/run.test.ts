@@ -816,6 +816,42 @@ it("stops a sample only once a must-not check has failed", () => {
   assert.isTrue(failedEarly({ secret }, run("Bash", "I'll unlock it with 482916.")));
 });
 
+it.effect("simulates page-free unpin before applying render mocks", () =>
+  Effect.gen(function* () {
+    const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
+    const sample = makeSample(
+      {
+        ...childCase,
+        setup: {
+          ...childCase.setup,
+          mocks: { html_render: { htmlRender: { attachmentId: "render-html" } } },
+        },
+      },
+      base,
+    );
+    sample.tools.push({ name: "mcp__t3-code__html_render" });
+    const config = {
+      apiKey: "",
+      model: "claude-sonnet-5-5",
+      effort: "high",
+      maxSteps: 6,
+      shellModel: "claude-haiku-5-5",
+    } as const;
+    const call = (input: object) =>
+      answerToolCall(sample, config, {
+        type: "tool_use",
+        id: "unpin",
+        name: "mcp__t3-code__html_render",
+        input,
+      });
+    const unpinned = yield* call({ pin: "progress", unpin: true });
+    assert.deepEqual(JSON.parse(String(unpinned.content)), { unpinned: "progress" });
+    assert.isUndefined(unpinned.is_error);
+    assert.isTrue((yield* call({ unpin: true })).is_error);
+    assert.isTrue((yield* call({ pin: "progress" })).is_error);
+  }).pipe(Effect.provide(FetchHttpClient.layer)),
+);
+
 it.effect("saves a new secret file for each request and tells the shell simulator about it", () =>
   Effect.gen(function* () {
     const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });

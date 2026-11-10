@@ -1,3 +1,4 @@
+import { HTML_RENDER_PIN_ID_PATTERN } from "@t3tools/contracts";
 import {
   T3_CODE_DARK_THEME_COLORS,
   T3_CODE_LIGHT_THEME_COLORS,
@@ -63,7 +64,7 @@ export function readHtmlRenderReference(value: unknown): HtmlRenderReference | u
   }
   const measured = readMeasuredHeights(heights);
   return {
-    ...(typeof pin === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(pin) ? { pin } : {}),
+    ...(typeof pin === "string" && HTML_RENDER_PIN_ID_PATTERN.test(pin) ? { pin } : {}),
     attachmentId,
     title: title.trim().slice(0, HTML_RENDER_MAX_TITLE_LENGTH) || "HTML",
     height: clampHtmlRenderHeight(height),
@@ -445,4 +446,8 @@ export function readHtmlRenderPrompt(data: unknown): string | undefined {
     message.text.length <= 32_000
     ? message.text
     : undefined;
+}
+
+export function htmlRenderPromptExcerpt(text: string): string {
+  return text.length > 500 ? text.slice(0, 500) + "…" : text;
 }
