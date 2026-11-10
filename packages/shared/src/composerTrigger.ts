@@ -170,6 +170,11 @@ export function replaceTextRange(
   return { text: nextText, cursor: safeStart + replacement.length };
 }
 
+/** Like other menu insertions, ends in a space so a trailing `$skill` or `@path` opens no menu. */
+export function savedPromptInsertion(prompt: string): string {
+  return /\s$/u.test(prompt) ? prompt : `${prompt} `;
+}
+
 /** `/clear` as the whole message arms a fresh session instead of sending. */
 export function isClearComposerCommand(text: string): boolean {
   return /^\/clear\s*$/i.test(text.trim());

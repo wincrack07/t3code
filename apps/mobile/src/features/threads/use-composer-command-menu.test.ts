@@ -88,6 +88,23 @@ describe("mobile slash commands", () => {
     ).toEqual({ text: "/plan ", cursor: 6 });
   });
 
+  it("inserts a saved prompt in place of its trigger, ending in a space", () => {
+    const select = (prompt: string) =>
+      resolveComposerCommandSelection({
+        draftMessage: "Then /rev",
+        trigger: { rangeStart: 5, rangeEnd: 9 },
+        item: {
+          id: "saved-prompt:a",
+          type: "saved-prompt",
+          savedPrompt: { id: "a", name: "Review", prompt },
+          label: "Review",
+          description: "",
+        },
+      });
+    expect(select("Use $review")).toEqual({ text: "Then Use $review ", cursor: 17 });
+    expect(select("Review this.\n")).toEqual({ text: "Then Review this.\n", cursor: 18 });
+  });
+
   it("offers T3's /clear in place of the provider's, only at the message start", () => {
     const claude = {
       driver: ProviderDriverKind.make("claudeAgent"),

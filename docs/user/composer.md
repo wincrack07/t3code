@@ -196,6 +196,22 @@ Stashes containing uploaded files must be restored in their original environment
 Those files are retained for 24 hours. After an upload expires, restore the prompt
 and use **Attach again** or remove the missing file before sending.
 
+## Saved prompts
+
+Keep prompts you send often in **Settings → Chat → Saved prompts** on web and
+desktop. Type `/` and part of a prompt's name to insert its text where you typed,
+on web, desktop, and mobile. Each environment keeps its own list; choose **All
+environments** at the top of Settings to change the list on every connected
+environment at once.
+
+## Polish a draft
+
+Pick `/polish` from the slash menu, at any point in your draft, to have the
+[text generation model](./text-generation.md) rewrite the whole draft as a clearer
+prompt before you send it. It keeps your language, file links, mentions, and
+skills. If you edit the draft while the rewrite runs, your edit wins. On web and
+desktop, **Undo** in the notice restores your original draft.
+
 ## Voice input on web and desktop
 
 Use the composer's microphone or `mod+shift+d` to dictate into your draft. Audio

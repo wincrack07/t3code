@@ -50,7 +50,7 @@ import * as Schema from "effect/Schema";
 import { formatComposerModelMention } from "@t3tools/client-runtime/composer-model-mentions";
 import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import { savedPromptInsertion, serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { splitTransferredFiles } from "./workspaceFileDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
@@ -1097,9 +1097,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentId,
     projectId: activeProjectId,
     promptRef,
-    replaceDraft: (expected, next) =>
-      promptRef.current === expected &&
-      applyPromptReplacementStable(0, expected.length, next, { expectedText: expected }),
   });
   const {
     items: composerMenuItems,
@@ -1911,7 +1908,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         });
         if (applied) {
           setComposerHighlightedItemId(null);
-          void promptPolish.polish();
+          void promptPolish.polish((expected, next) =>
+            applyPromptReplacementStable(0, promptRef.current.length, next, {
+              expectedText: expected,
+            }),
+          );
         }
         return;
       }
@@ -1970,12 +1971,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return;
     }
     if (item.type === "saved-prompt") {
-      const applied = applyPromptReplacement(
-        trigger.rangeStart,
+      const replacement = savedPromptInsertion(item.savedPrompt.prompt);
+      const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+        snapshot.value,
         trigger.rangeEnd,
-        item.savedPrompt.prompt,
-        { expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd) },
+        replacement,
       );
+      const applied = applyPromptReplacement(trigger.rangeStart, replacementRangeEnd, replacement, {
+        expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+      });
       if (applied) setComposerHighlightedItemId(null);
       return;
     }

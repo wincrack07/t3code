@@ -10,6 +10,7 @@ Write or run an eval when a change affects what a model sees or does: agent inst
 | [thread-titles](thread-titles/) | Whether generated thread titles name the right subject.                                              |
 | [pr-content](pr-content/)       | Whether PR generation describes the diff when project instructions try to redirect it.               |
 | [voice-cleanup](voice-cleanup/) | Whether optional dictation cleanup edits only the spoken text and preserves its meaning.             |
+| [prompt-polish](prompt-polish/) | Whether `/polish` clarifies a draft without changing its language, tokens, or asks, or answering it. |
 | [test-signal](test-signal/)     | Whether a cheap model running the test-signal check flags low-signal tests.                          |
 
 ## Run an eval

@@ -15,13 +15,13 @@ export function usePromptPolish(input: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly promptRef: RefObject<string>;
-  readonly replaceDraft: (expected: string, next: string) => boolean;
 }) {
-  const { environmentId, projectId, promptRef, replaceDraft } = input;
+  const { environmentId, projectId, promptRef } = input;
   const available = useAtomValue(serverEnvironment.polishPrompt.permissionAtom(environmentId));
   const run = useAtomCommand(serverEnvironment.polishPrompt, { reportFailure: false });
 
-  const polish = async () => {
+  /** `replaceDraft` swaps the whole draft only while it still reads `expected`. */
+  const polish = async (replaceDraft: (expected: string, next: string) => boolean) => {
     const original = promptRef.current;
     if (original.trim().length === 0) return;
     const toastId = toastManager.add({ type: "loading", title: "Polishing prompt..." });

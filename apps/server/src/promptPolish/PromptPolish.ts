@@ -9,6 +9,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
@@ -22,7 +23,9 @@ export class PromptPolish extends Context.Service<
   }
 >()("t3/promptPolish/PromptPolish") {}
 
-function buildPromptPolishPrompt(draft: string): string {
+const isTextGenerationError = Schema.is(TextGenerationError);
+
+export function buildPromptPolishPrompt(draft: string): string {
   return `${PROMPT_POLISH_INSTRUCTIONS}
 
 <draft>
@@ -55,7 +58,7 @@ const make = Effect.gen(function* () {
       },
       Effect.scoped,
       Effect.mapError((cause) =>
-        cause instanceof TextGenerationError
+        isTextGenerationError(cause)
           ? cause
           : new TextGenerationError({
               operation: "polishPrompt",

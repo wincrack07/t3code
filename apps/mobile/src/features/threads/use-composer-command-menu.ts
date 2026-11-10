@@ -34,6 +34,7 @@ import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
 import {
   detectComposerTrigger,
   replaceTextRange,
+  savedPromptInsertion,
   serializeComposerFileLink,
   type ComposerTrigger,
 } from "@t3tools/shared/composerTrigger";
@@ -250,7 +251,7 @@ export function resolveComposerCommandSelection(input: {
   } else if (item.type === "provider-slash-command") {
     replacement = `/${item.command.name} `;
   } else if (item.type === "saved-prompt") {
-    replacement = item.savedPrompt.prompt;
+    replacement = savedPromptInsertion(item.savedPrompt.prompt);
   } else if (item.type === "model") {
     replacement = `${formatComposerModelMention(item.option.selection.instanceId, item.option.selection.model)} `;
   }
