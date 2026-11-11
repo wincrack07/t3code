@@ -1019,6 +1019,31 @@ it.effect("launches a worktree request for Scratch at the root, in its own folde
   }).pipe(Effect.provide(harness.layer));
 });
 
+it.effect("never runs the setup script in a pull request review checkout", () => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    for (const [thread, worktreePath] of [
+      ["thread:launch:review", "/state/pr-review-checkouts/acme-app-7-abc1234"],
+      ["thread:launch:existing", "/repo-worktrees/feature"],
+    ] as const) {
+      const launched = yield* launches.launch(
+        launchInput({
+          command: `command:${thread}`,
+          thread,
+          message: "Review it",
+          workspace: { type: "existing_worktree", worktreePath },
+        }),
+      );
+      yield* preparationSettled(launched.threadId);
+    }
+    assert.deepEqual(
+      harness.runSetup.mock.calls.map((call) => call[0]?.worktreePath),
+      ["/repo-worktrees/feature"],
+    );
+  }).pipe(Effect.provide(harness.layer));
+});
+
 it.effect("stores a Scratch scheduled task at the root and keeps worktrees elsewhere", () => {
   const harness = scratchHarness();
   return Effect.gen(function* () {

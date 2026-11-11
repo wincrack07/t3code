@@ -346,6 +346,15 @@ import {
   ServerUpsertKeybindingResult,
 } from "./server.ts";
 import {
+  PrReviewConfig,
+  PrReviewError,
+  PrReviewRecord,
+  PrReviewRequestInput,
+  PrReviewRerunInput,
+  PrReviewSetPrivateKeyInput,
+  PrReviewState,
+} from "./prReview.ts";
+import {
   HostResourcesSnapshot,
   ResourceTelemetryHistory,
   ResourceTelemetryHistoryInput,
@@ -547,6 +556,11 @@ export const WS_METHODS = {
   serverListTextGeneratorModels: "server.listTextGeneratorModels",
   serverPolishPrompt: "server.polishPrompt",
   serverPrepareTriage: "server.prepareTriage",
+  prReviewsGetState: "prReviews.getState",
+  prReviewsUpdateConfig: "prReviews.updateConfig",
+  prReviewsSetPrivateKey: "prReviews.setPrivateKey",
+  prReviewsRequest: "prReviews.request",
+  prReviewsRerun: "prReviews.rerun",
   serverSignalProcess: "server.signalProcess",
   serverReportClientActivity: "server.reportClientActivity",
   serverGetUsageSummary: "server.getUsageSummary",
@@ -997,6 +1011,36 @@ const WsServerPolishPromptRpc = Rpc.make(WS_METHODS.serverPolishPrompt, {
   payload: PromptPolishInput,
   success: PromptPolishResult,
   error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+});
+
+const WsPrReviewsGetStateRpc = Rpc.make(WS_METHODS.prReviewsGetState, {
+  payload: Schema.Struct({}),
+  success: PrReviewState,
+  error: Schema.Union([PrReviewError, EnvironmentAuthorizationError]),
+});
+
+const WsPrReviewsUpdateConfigRpc = Rpc.make(WS_METHODS.prReviewsUpdateConfig, {
+  payload: PrReviewConfig,
+  success: PrReviewState,
+  error: Schema.Union([PrReviewError, EnvironmentAuthorizationError]),
+});
+
+const WsPrReviewsSetPrivateKeyRpc = Rpc.make(WS_METHODS.prReviewsSetPrivateKey, {
+  payload: PrReviewSetPrivateKeyInput,
+  success: PrReviewState,
+  error: Schema.Union([PrReviewError, EnvironmentAuthorizationError]),
+});
+
+const WsPrReviewsRequestRpc = Rpc.make(WS_METHODS.prReviewsRequest, {
+  payload: PrReviewRequestInput,
+  success: PrReviewRecord,
+  error: Schema.Union([PrReviewError, EnvironmentAuthorizationError]),
+});
+
+const WsPrReviewsRerunRpc = Rpc.make(WS_METHODS.prReviewsRerun, {
+  payload: PrReviewRerunInput,
+  success: PrReviewRecord,
+  error: Schema.Union([PrReviewError, EnvironmentAuthorizationError]),
 });
 
 const WsServerPrepareTriageRpc = Rpc.make(WS_METHODS.serverPrepareTriage, {
@@ -2141,6 +2185,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerListTextGeneratorModelsRpc,
   WsServerPolishPromptRpc,
   WsServerPrepareTriageRpc,
+  WsPrReviewsGetStateRpc,
+  WsPrReviewsUpdateConfigRpc,
+  WsPrReviewsSetPrivateKeyRpc,
+  WsPrReviewsRequestRpc,
+  WsPrReviewsRerunRpc,
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
