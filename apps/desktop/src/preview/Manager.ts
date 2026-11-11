@@ -2053,6 +2053,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const hardReload = (tabId: string) =>
     withWebContents("hardReload", tabId, (wc) => wc.reloadIgnoringCache());
 
+  const getTabSession = Effect.fn("PreviewManager.getTabSession")(function* (tabId: string) {
+    return (yield* requireWebContents(tabId)).session;
+  });
+
   const openDevTools = Effect.fn("PreviewManager.openDevTools")(function* (tabId: string) {
     const wc = yield* requireWebContents(tabId);
     if (wc.isDevToolsOpened()) {
@@ -3387,6 +3391,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     navigate,
     openPictureInPicture,
     openDevTools,
+    getTabSession,
     pickElement,
     updateAnnotationVoice,
     prepareWebview,
@@ -3609,6 +3614,7 @@ export class PreviewManager extends Context.Service<
     ) => Effect.Effect<void, PreviewManagerError>;
     readonly setShown: (tabId: string, shown: boolean) => Effect.Effect<void>;
     readonly openDevTools: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
+    readonly getTabSession: (tabId: string) => Effect.Effect<Session, PreviewManagerError>;
     readonly clearCookies: (
       partitions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, PreviewManagerError>;
@@ -3765,6 +3771,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     setAudioMuted: operations.setAudioMuted,
     setShown: operations.setShown,
     openDevTools: operations.openDevTools,
+    getTabSession: operations.getTabSession,
     clearCookies: Effect.fn("PreviewManager.clearCookies")(function* (partitions) {
       yield* browserSession
         .clearCookies(partitions)

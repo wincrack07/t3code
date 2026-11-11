@@ -1146,6 +1146,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "browser",
   },
   {
+    id: "browser-extension-list",
+    title: "Extensions",
+    to: "/settings/browser",
+    searchTerms: ["chrome extension add-on plugin 1password password manager unpacked"],
+  },
+  {
+    id: "browser-extension-web-store",
+    title: "Add from Chrome Web Store",
+    to: "/settings/browser",
+    searchTerms: ["chrome web store extension install"],
+  },
+  {
     id: "browser-default-profile",
     title: "Default browser profile",
     to: "/settings/browser",

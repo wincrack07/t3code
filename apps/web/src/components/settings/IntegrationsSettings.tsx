@@ -115,6 +115,7 @@ import {
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { AdvancedSettings } from "./AdvancedSettings";
+import { BrowserExtensionsSetting } from "./BrowserExtensionsSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { BrowserImportWizard, type WizardTarget } from "./BrowserImportWizard";
 import type { ImportOutcome } from "./browserImportWizard.logic";
@@ -1606,6 +1607,11 @@ export function BrowserSettingsPanel() {
             <BrowserAppearanceSetting disabled={desktopOnly} />
           </SettingsUnavailableGroup>
         </AdvancedSettings>
+      </SettingsSection>
+      <SettingsSection id="browser-extensions" title="Extensions">
+        <SettingsUnavailableGroup message={desktopOnlyMessage}>
+          <BrowserExtensionsSetting disabled={desktopOnly} />
+        </SettingsUnavailableGroup>
       </SettingsSection>
       <SettingsSection id="browser-recordings" title="Recordings">
         <SettingsUnavailableGroup message={desktopOnlyMessage}>

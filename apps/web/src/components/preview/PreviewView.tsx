@@ -478,6 +478,19 @@ export function PreviewView({
               .catch(() => undefined),
           openDevTools: desktopCall(previewBridge.openDevTools),
           toggleNativePictureInPicture: () => handleNativePictureInPicture(),
+          listExtensions: () => previewBridge?.listBrowserExtensions() ?? Promise.resolve([]),
+          openExtensionPopup: (extensionId) => {
+            if (!runtimeTabId) return;
+            void previewBridge
+              ?.openBrowserExtensionPopup(runtimeTabId, extensionId)
+              .catch((error: unknown) => {
+                toastManager.add({
+                  type: "error",
+                  title: "Unable to open the extension",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                });
+              });
+          },
         }
       : null;
 
