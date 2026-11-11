@@ -6,7 +6,7 @@ import type {
   KeepAwakeSession,
   KeepAwakeStatus,
 } from "@t3tools/contracts";
-import { CoffeeIcon } from "lucide-react";
+import { CoffeeIcon, SlashIcon } from "lucide-react";
 import { useState } from "react";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
@@ -17,6 +17,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Radio, RadioGroup } from "./ui/radio-group";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 
 function keepAwakeLabel(status: KeepAwakeStatus) {
   if (!status.supported) return "Not supported";
@@ -29,11 +30,9 @@ function keepAwakeLabel(status: KeepAwakeStatus) {
 
 export function KeepAwakeControl({
   environmentId: provided,
-  pill = false,
   settings = false,
 }: {
   environmentId?: EnvironmentId;
-  pill?: boolean;
   settings?: boolean;
 }) {
   const primary = usePrimaryEnvironmentId();
@@ -51,37 +50,66 @@ export function KeepAwakeControl({
     return (
       <section className="space-y-3">
         <h3 className="text-sm font-medium">Keep awake</h3>
-        {status ? (
+        {status && !status.supported ? (
+          <p className="text-sm text-muted-foreground">
+            Keep awake is not supported on this machine.
+          </p>
+        ) : status ? (
           <KeepAwakeForm status={status} disabled={!allowed} send={send} settings />
         ) : (
           <p>{query.error ?? "Connecting…"}</p>
         )}
       </section>
     );
+  if (status && !status.supported) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              aria-label="Keep awake is not supported on this machine"
+              className="relative inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground"
+            />
+          }
+        >
+          <CoffeeIcon className="size-4 opacity-50" />
+          <SlashIcon className="absolute size-4" aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipPopup>Keep awake is not supported on this machine</TooltipPopup>
+      </Tooltip>
+    );
+  }
+  const label = status ? keepAwakeLabel(status) : "Keep awake";
   return (
-    <Popover>
-      <PopoverTrigger
-        render={<Button variant="ghost" size={pill ? "sm" : "icon"} aria-label="Keep awake" />}
-      >
-        <span className={status?.active ? "relative text-primary" : "text-muted-foreground"}>
-          <CoffeeIcon className="size-4" />
-          {status?.active ? (
-            <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-primary" />
-          ) : null}
-        </span>
-        {pill ? (status ? keepAwakeLabel(status) : "Keep awake") : null}
-      </PopoverTrigger>
-      <PopoverPopup width="md" side="top">
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">Keep awake</h3>
-          {status ? (
-            <KeepAwakeForm status={status} disabled={!allowed} send={send} />
-          ) : (
-            <p>{query.error ?? "Connecting…"}</p>
-          )}
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <Tooltip>
+      <Popover>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={<Button variant="ghost" size="icon-sm" aria-label={`Keep awake: ${label}`} />}
+            />
+          }
+        >
+          <span className={status?.active ? "relative text-primary" : "text-muted-foreground"}>
+            <CoffeeIcon className="size-4" />
+            {status?.active ? (
+              <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-primary" />
+            ) : null}
+          </span>
+        </TooltipTrigger>
+        <PopoverPopup width="md" side="top">
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium">Keep awake</h3>
+            {status ? (
+              <KeepAwakeForm status={status} disabled={!allowed} send={send} />
+            ) : (
+              <p>{query.error ?? "Connecting…"}</p>
+            )}
+          </div>
+        </PopoverPopup>
+      </Popover>
+      <TooltipPopup>{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
