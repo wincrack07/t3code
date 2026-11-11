@@ -242,7 +242,11 @@ export function ThreadColumns({
     draftId ? (state.getDraftSession(draftId) ?? state.getPromotedDraftRedirect(draftId)) : null,
   );
   const routeRef = target.kind === "server" ? target.threadRef : draftRef;
-  const routeKey = target.kind === "server" ? scopedThreadKey(target.threadRef) : target.draftId;
+  // Automatic routing can move an unsent draft without changing its URL.
+  const routeKey =
+    target.kind === "server"
+      ? scopedThreadKey(target.threadRef)
+      : `${target.draftId}:${routeRef ? scopedThreadKey(routeRef) : ""}`;
   const lastRouteKey = useRef<string | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- synchronizes persisted column selection with external router navigation in both directions
   useLayoutEffect(() => {
