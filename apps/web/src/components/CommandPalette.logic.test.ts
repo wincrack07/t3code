@@ -10,6 +10,9 @@ import {
   buildLinkedThreadActionItems,
   filterPinnedBrowseEntries,
   filterCommandPaletteGroups,
+  filterCommandPaletteGroupsByKind,
+  cycleCommandPaletteFilter,
+  type CommandPaletteGroup,
   reduceCommandPaletteUiState,
   resolveAddProjectEntry,
   createCommandPaletteSearchState,
@@ -959,5 +962,57 @@ describe("newThreadNoProjectIndex", () => {
   it("keeps a pinned or current scratch project in its own place", () => {
     expect(newThreadNoProjectIndex([entry(false, true, true), entry()])).toBe(0);
     expect(newThreadNoProjectIndex([entry(true), entry(true, false, true), entry()])).toBe(1);
+  });
+});
+
+describe("filterCommandPaletteGroupsByKind", () => {
+  const item = (value: string) => ({
+    kind: "action" as const,
+    value,
+    searchTerms: [value],
+    title: value,
+    icon: null,
+    run: async () => {},
+  });
+  const group = (value: string): CommandPaletteGroup => ({
+    value,
+    label: value,
+    items: [item(`${value}:1`)],
+  });
+  const searched = [
+    group("actions"),
+    group("nested-search"),
+    group("threads-search"),
+    group("projects-search"),
+    group("settings-search"),
+    group("threads-messages"),
+  ];
+
+  it("keeps every group of the chosen kind and nothing else", () => {
+    const valuesFor = (filter: Parameters<typeof cycleCommandPaletteFilter>[0]) =>
+      filterCommandPaletteGroupsByKind({ groups: searched, filter }).map((g) => g.value);
+    expect(valuesFor("all")).toEqual(searched.map((g) => g.value));
+    expect(valuesFor("threads")).toEqual(["threads-search", "threads-messages"]);
+    expect(valuesFor("actions")).toEqual(["actions", "nested-search"]);
+    expect(valuesFor("projects")).toEqual(["projects-search"]);
+    expect(valuesFor("settings")).toEqual(["settings-search"]);
+  });
+
+  it("lists a kind the empty root view hides only from its browse group", () => {
+    const root = [group("actions"), group("recent-threads")];
+    const browseGroups = [group("projects-search"), { ...group("settings-search"), items: [] }];
+    const run = (filter: "threads" | "projects" | "settings") =>
+      filterCommandPaletteGroupsByKind({ groups: root, filter, browseGroups }).map((g) => g.value);
+    expect(run("threads")).toEqual(["recent-threads"]);
+    expect(run("projects")).toEqual(["projects-search"]);
+    expect(run("settings")).toEqual([]);
+    // A typed query with no project match must not fall back to every project.
+    expect(filterCommandPaletteGroupsByKind({ groups: root, filter: "projects" })).toEqual([]);
+  });
+
+  it("cycles filters in both directions and wraps", () => {
+    expect(cycleCommandPaletteFilter("all", -1)).toBe("settings");
+    expect(cycleCommandPaletteFilter("settings", 1)).toBe("all");
+    expect(cycleCommandPaletteFilter("all", 1)).toBe("threads");
   });
 });

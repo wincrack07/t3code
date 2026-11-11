@@ -87,6 +87,42 @@ describe("theme files", () => {
         expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5);
       }
       expect(contrastRatio(colors.accentForeground, colors.accent)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(colors.messageActionForeground, colors.messageAction),
+      ).toBeGreaterThanOrEqual(4.5);
+      for (const [foreground, background] of [
+        [colors.placeholder, colors.surfaceRaised],
+        [colors.mutedForeground, colors.accentSurface],
+        [colors.secondaryForeground, colors.secondary],
+        [colors.sidebarMutedForeground, colors.sidebarRowSelected],
+      ] as const) {
+        expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+      }
+      // The Claude app's chrome is neutral grey and its accent blue; orange is only its brand mark.
+      for (const role of [
+        "canvas",
+        "surface",
+        "surfaceRaised",
+        "surfaceOverlay",
+        "sidebar",
+        "sidebarRowSelected",
+        "border",
+        "secondary",
+        "accentSurface",
+        "messageAction",
+      ] as const) {
+        const [r, g, b] = [1, 3, 5].map((index) =>
+          Number.parseInt(colors[role].slice(index, index + 2), 16),
+        );
+        expect(r! - b!, `${mode} ${role}`).toBeLessThanOrEqual(2);
+        expect(Math.abs(r! - g!), `${mode} ${role}`).toBeLessThanOrEqual(2);
+      }
+      for (const role of ["focus", "accent"] as const) {
+        const [r, , b] = [1, 3, 5].map((index) =>
+          Number.parseInt(colors[role].slice(index, index + 2), 16),
+        );
+        expect(r!, `${mode} ${role} is blue, not orange`).toBeLessThan(b!);
+      }
     }
   });
 

@@ -1,9 +1,15 @@
 import type { ModelSelection, ProviderInstanceId, RuntimeMode } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
-import { type ComponentProps, memo, useId, useRef, useState } from "react";
+import { type ComponentProps, memo, useId, useRef } from "react";
 
-import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuTrigger,
+} from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
@@ -97,90 +103,53 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
 });
 
 /**
- * Permission modes as one horizontal toggle, with the shown mode named below.
- * Each segment is a real menu radio item, so arrow keys reach it from the rest of the menu
- * and a pick closes the menu. Lives inside a Menu: the permissions chip, the model picker,
- * or the overflow menu.
+ * Permission modes as a list: each row names the mode with a one-line description and the
+ * current one carries a check. Rows are real menu radio items, so a pick closes the menu.
+ * Lives inside a Menu: the permissions chip, the model picker, or the overflow menu.
  */
 export function ComposerPermissionsSection(props: {
   runtimeMode: RuntimeMode;
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
-  // Hover or keyboard focus previews a mode's name and description before a pick.
-  const [previewMode, setPreviewMode] = useState<RuntimeMode | null>(null);
-  const shownMode = previewMode ?? props.runtimeMode;
-  const shown =
-    props.runtimeModeOptions.find((option) => option.mode === shownMode) ??
-    supervisedRuntimeModeOption;
   const descriptionId = useId();
   return (
-    <div data-composer-permissions className="grid w-72 gap-1.5 px-2 py-1.5">
-      <div className="font-medium text-muted-foreground text-xs">Permissions</div>
-      <MenuPrimitive.RadioGroup
+    <div data-composer-permissions className="grid w-72 gap-0.5">
+      <div className="px-2 pt-1 pb-0.5 font-medium text-muted-foreground text-xs">
+        Permissions · this thread
+      </div>
+      <MenuRadioGroup
         aria-label="Permissions"
         value={props.runtimeMode}
         onValueChange={(value: RuntimeMode) => {
           if (value !== props.runtimeMode) props.onRuntimeModeChange(value);
         }}
-        className="flex rounded-lg bg-input/40 p-0.5"
-        // Menus navigate with Up/Down only; the row reads horizontally, so Left/Right move too.
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          const items = Array.from(
-            event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
-          );
-          const index = items.findIndex((item) => item === document.activeElement);
-          const next = items[index + (event.key === "ArrowRight" ? 1 : -1)];
-          if (index < 0 || !next) return;
-          event.preventDefault();
-          event.stopPropagation();
-          next.focus();
-        }}
       >
-        {props.runtimeModeOptions.map((option) => {
-          const OptionIcon = option.icon;
-          return (
-            <MenuPrimitive.RadioItem
-              key={option.mode}
-              value={option.mode}
-              disabled={option.disabledReason !== undefined}
-              label={option.label}
-              aria-label={option.label}
-              aria-describedby={`${descriptionId}-${option.mode}`}
-              closeOnClick
-              onPointerEnter={() => setPreviewMode(option.mode)}
-              onPointerLeave={() => setPreviewMode(null)}
-              onFocus={() => setPreviewMode(option.mode)}
-              onBlur={() => setPreviewMode(null)}
-              className="flex h-6 flex-1 cursor-pointer items-center justify-center text-muted-foreground outline-none first:rounded-l-md last:rounded-r-md data-disabled:cursor-not-allowed data-disabled:opacity-40 data-checked:bg-input/72 data-checked:text-foreground data-highlighted:text-foreground not-data-checked:data-highlighted:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-            >
-              <OptionIcon aria-hidden="true" className="size-3.5" />
-            </MenuPrimitive.RadioItem>
-          );
-        })}
-      </MenuPrimitive.RadioGroup>
-      {/* Static per-mode descriptions for screen readers; the preview below is visual only. */}
-      {props.runtimeModeOptions.map((option) => (
-        <span key={option.mode} id={`${descriptionId}-${option.mode}`} className="sr-only">
-          {option.disabledReason ?? option.description}
-        </span>
-      ))}
-      <div className="grid gap-0.5" aria-hidden="true">
-        <span
-          className={
-            shownMode === props.runtimeMode
-              ? "text-foreground text-sm"
-              : "text-muted-foreground text-sm"
-          }
-        >
-          {shown.label}
-        </span>
-        {/* Two lines reserved so the menu does not shift while you preview modes. */}
-        <span className="min-h-8 text-muted-foreground text-xs leading-4">
-          {shown.disabledReason ?? shown.description}
-        </span>
-      </div>
+        {props.runtimeModeOptions.map((option) => (
+          <MenuRadioItem
+            key={option.mode}
+            value={option.mode}
+            disabled={option.disabledReason !== undefined}
+            label={option.label}
+            aria-label={option.label}
+            aria-describedby={`${descriptionId}-${option.mode}`}
+            closeOnClick
+          >
+            <span className="flex items-start gap-3 py-0.5">
+              <span className="grid min-w-0 flex-1 gap-0.5">
+                <span className="text-foreground">{option.label}</span>
+                <span
+                  id={`${descriptionId}-${option.mode}`}
+                  className="text-muted-foreground text-xs leading-4"
+                >
+                  {option.disabledReason ?? option.description}
+                </span>
+              </span>
+              <MenuRadioItemIndicator className="mt-0.5" />
+            </span>
+          </MenuRadioItem>
+        ))}
+      </MenuRadioGroup>
     </div>
   );
 }

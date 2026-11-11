@@ -1596,6 +1596,66 @@ html[data-theme-id="t3-chat"] [data-app-sidebar] {
   }
 }
 
+/* The Claude app fills hover and selection with a translucent wash so the same
+   step reads on the window, the composer and menus. The opaque accent-surface
+   token is that wash over the canvas. */
+html[data-theme-id="claude"]:not([data-theme-id=""]),
+html[data-theme-id="claude"] [data-app-sidebar] {
+  --accent: color-mix(in srgb, var(--app-theme-text) 7%, transparent);
+}
+
+/* Menus and popovers are solid raised panels with a 14px corner, a 6px gutter
+   and 8px rows, not frosted glass; highlighted rows use the selected wash. */
+html[data-theme-id="claude"] :is([data-slot="menu-popup"], [data-slot="popover-popup"]) {
+  --accent: color-mix(in srgb, var(--app-theme-text) 14%, transparent);
+  background: var(--popover);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-radius: 0.875rem;
+  border-color: color-mix(in srgb, var(--contrast-foreground) 10%, transparent);
+  box-shadow:
+    0 8px 24px rgb(0 0 0 / 12%),
+    0 2px 6px rgb(0 0 0 / 8%);
+
+  @variant dark {
+    box-shadow:
+      0 8px 24px rgb(0 0 0 / 32%),
+      0 2px 6px rgb(0 0 0 / 20%);
+  }
+}
+
+html[data-theme-id="claude"] [data-slot="menu-popup"] > div {
+  padding: 0.375rem;
+}
+
+/* The current choice is marked by a blue check alone, without a row fill. */
+html[data-theme-id="claude"] [data-slot="menu-radio-item"][data-checked]:not([data-highlighted]) {
+  background: transparent;
+}
+
+html[data-theme-id="claude"] [data-slot="menu-radio-item-indicator"] {
+  color: var(--app-theme-accent);
+}
+
+html[data-theme-id="claude"]
+  [data-slot="menu-popup"]
+  :is(
+    [data-slot="menu-item"],
+    [data-slot="menu-radio-item"],
+    [data-slot="menu-checkbox-item"],
+    [data-slot="menu-sub-trigger"]
+  ) {
+  border-radius: 0.5rem;
+}
+
+html[data-theme-id="claude"] :is([data-sidebar-control], [data-sidebar-history]) svg {
+  stroke-width: 1.5;
+}
+
+html[data-theme-id="claude"] [data-sidebar-history] button:disabled {
+  opacity: 0.4;
+}
+
 /* Recompute contrast wherever a subtree owns its own semantic color palette. */
 :root,
 [data-app-sidebar] {

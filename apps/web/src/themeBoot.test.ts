@@ -157,8 +157,8 @@ describe("index.html boot script", () => {
       const boot = runBootScript({ channel: "nightly", prefersDark });
       expect(boot.themeId).toBe("claude");
       expect(boot.isDark).toBe(prefersDark);
-      expect(boot.backgroundColor).toBe(prefersDark ? "#292928" : "#f0eee6");
-      expect(boot.bootVariables["--boot-background"]).toBe(prefersDark ? "#191919" : "#faf9f5");
+      expect(boot.backgroundColor).toBe(prefersDark ? "#1f1f1f" : "#fafafa");
+      expect(boot.bootVariables["--boot-background"]).toBe(prefersDark ? "#191919" : "#ffffff");
       for (const theme of ["system", "grove", "t3-chat"]) {
         const stored = { [THEME_STORAGE_KEY]: theme };
         expect(runBootScript({ channel: "nightly", prefersDark, storage: stored })).toEqual(
