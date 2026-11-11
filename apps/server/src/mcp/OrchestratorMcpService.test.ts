@@ -1,3 +1,4 @@
+import * as Decisions from "../decisions/Decisions.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -1807,6 +1808,9 @@ describe("OrchestratorMcpService provider resolution", () => {
           }),
           forkShadow,
         ]),
+        Layer.mock(Decisions.Decisions)({
+          agentDecision: () => Effect.die("An explicit target must bypass Decisions"),
+        }),
         adapterRegistryLayer([codexInstanceId]),
         Layer.mock(ProjectService.ProjectService)({}),
         Layer.mock(SecretRequests.SecretRequests)({}),

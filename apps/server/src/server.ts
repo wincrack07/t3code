@@ -1,3 +1,4 @@
+import * as Decisions from "./decisions/Decisions.ts";
 import * as KeepAwakeRuntime from "./keepAwake/runtime.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as MachineSampler from "./systemMonitor/MachineSampler.ts";
@@ -820,6 +821,7 @@ const layerMakeRoutes = Layer.mergeAll(
     speechStreamRouteLayer,
   ),
   McpHttpServer.layer.pipe(
+    Layer.provide(Decisions.layer),
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),

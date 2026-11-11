@@ -8447,6 +8447,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         senderThreadId: command.parentThreadId,
         messageId: childMessageId,
         text: command.task,
+        ...(command.routingDecision ? { routingDecision: command.routingDecision } : {}),
         attachments: [],
         modelSelection: command.modelSelection,
         dispatchMode:

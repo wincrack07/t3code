@@ -1,4 +1,5 @@
 import {
+  Project,
   AUTO_MODEL,
   ProviderInstanceId,
   type ModelSelection,
@@ -11,6 +12,15 @@ import { applyDecisionRules } from "@t3tools/shared/decisionRules";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { defaultTextGenerationModel } from "@t3tools/shared/serverSettings";
+import * as PeerForwarding from "../peer/PeerForwarding.ts";
+import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
+import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
+import {
+  peerCapabilities,
+  peerProjects,
+  peerMachine,
+  peerDecisionCandidates,
+} from "./agentCandidates.ts";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -31,6 +41,11 @@ import { requestOpenAiDecision } from "./openai.ts";
 export class Decisions extends Context.Service<
   Decisions,
   {
+    readonly agentDecision: (
+      scope: McpInvocationScope,
+      input: DecisionInput,
+      allowRemote?: boolean,
+    ) => Effect.Effect<DecisionResult>;
     readonly route: (
       input: DecisionInput,
       selection: ModelSelection,
@@ -53,11 +68,16 @@ const make = Effect.gen(function* () {
   const text = yield* TextGeneration.TextGeneration;
   const fs = yield* FileSystem.FileSystem;
   const http = yield* HttpClient.HttpClient;
+  const peers = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
+  const identities = yield* Effect.serviceOption(
+    RepositoryIdentityResolver.RepositoryIdentityResolver,
+  );
   let previousApiKey: unknown;
   const cache = new Map<string, { at: number; result: DecisionResult }>();
   const decide = Effect.fn("Decisions.decide")(function* (
     input: DecisionInput,
     explicit?: DecisionCandidate,
+    remote: ReadonlyArray<{ candidates: ReadonlyArray<DecisionCandidate>; load: unknown }> = [],
   ) {
     const fallback = (reason: string, ruleIds: ReadonlyArray<string> = []): DecisionResult => ({
       choice: null,
@@ -92,7 +112,16 @@ const make = Effect.gen(function* () {
       config.allowedEnvironmentIds ?? undefined,
       config.allowedProviderInstanceIds ?? undefined,
     );
-    const filtered = applyDecisionRules(config.rules, input, candidates);
+    const remoteCandidates = remote
+      .flatMap((entry) => entry.candidates)
+      .filter(
+        (choice) =>
+          (config.allowedEnvironmentIds === null ||
+            config.allowedEnvironmentIds.includes(choice.environmentId)) &&
+          (config.allowedProviderInstanceIds === null ||
+            config.allowedProviderInstanceIds.includes(choice.providerInstanceId)),
+      );
+    const filtered = applyDecisionRules(config.rules, input, [...candidates, ...remoteCandidates]);
     if (filtered.candidates.length === 0)
       return fallback(
         "No usable option matches the routing rules; using normal defaults.",
@@ -118,6 +147,7 @@ const make = Effect.gen(function* () {
       cpu: sample.cpu,
       pressure: sample.pressure,
       memoryAvailable: sample.memoryAvailable,
+      peers: remote.map((entry) => entry.load),
     };
     const modelCandidates = filtered.candidates.slice(0, 64);
     const prompt = decisionPrompt(input, modelCandidates, load);
@@ -126,6 +156,7 @@ const make = Effect.gen(function* () {
       modelCandidates,
       environmentId,
       sample.pressure,
+      remote.map((entry) => entry.load),
       config.source,
       config.modelSelection,
       config.openaiModel,
@@ -141,9 +172,23 @@ const make = Effect.gen(function* () {
           Effect.provideService(HttpClient.HttpClient, http),
         );
       }
+      const deciderCandidates = decisionCandidates(
+        [
+          {
+            environmentId,
+            projectId: input.projectId,
+            reachable: true,
+            hasProject: true,
+            providers,
+          },
+        ],
+        settings,
+        input.projectId,
+        now,
+      );
       const provider = providers.find(
         (candidate) =>
-          candidates.some((option) => option.providerInstanceId === candidate.instanceId) &&
+          deciderCandidates.some((option) => option.providerInstanceId === candidate.instanceId) &&
           isProviderTextGenerationCapable(candidate),
       );
       if (!provider) return yield* Effect.fail("No decision provider available");
@@ -222,7 +267,106 @@ const make = Effect.gen(function* () {
       : { ...fallback, routing: "auto" };
     return { modelSelection, routingDecision: decision };
   });
+  const agentDecision = Effect.fn("Decisions.agentDecision")(function* (
+    scope: McpInvocationScope,
+    input: DecisionInput,
+    allowRemote = true,
+  ) {
+    const settings = yield* settingsService.getSettings;
+    if (
+      !settings.decisions.enabled ||
+      !allowRemote ||
+      scope.linkedEnvironments === false ||
+      Option.isNone(peers) ||
+      Option.isNone(identities)
+    )
+      return yield* decide(input);
+    const forwarding = peers.value;
+    const project = yield* projects.get(input.projectId);
+    const identity = Option.isSome(project)
+      ? yield* identities.value.resolve(project.value.workspaceRoot)
+      : null;
+    if (!identity) return yield* decide(input);
+    const discover = Effect.gen(function* () {
+      const links = (yield* forwarding.links(scope)).links
+        .filter(
+          (link) =>
+            link.status !== "expired" &&
+            link.access !== "read-only" &&
+            (settings.decisions.allowedEnvironmentIds === null ||
+              settings.decisions.allowedEnvironmentIds.includes(link.environmentId)),
+        )
+        .slice(0, 8);
+      return yield* Effect.forEach(
+        links,
+        (link) =>
+          Effect.gen(function* () {
+            const matches: Array<Project> = [];
+            let cursor: number | null = 0;
+            for (let page = 0; page < 5 && cursor !== null; page++) {
+              const listed: { projects: ReadonlyArray<Project>; nextCursor: number | null } =
+                yield* forwarding.call(scope, peerProjects, link.environmentId, {
+                  cursor,
+                  limit: 100,
+                });
+              matches.push(
+                ...listed.projects.filter(
+                  (candidate) =>
+                    candidate.repositoryIdentity?.canonicalKey === identity.canonicalKey,
+                ),
+              );
+              cursor = listed.nextCursor;
+            }
+            if (cursor !== null || matches.length !== 1) return [];
+            const remoteProject = matches[0]!;
+            const [capabilities, resources] = yield* Effect.all(
+              [
+                forwarding.call(scope, peerCapabilities, link.environmentId, {
+                  projectId: remoteProject.id,
+                  availableOnly: true,
+                }),
+                forwarding.call(scope, peerMachine, link.environmentId, {}),
+              ],
+              { concurrency: 2 },
+            );
+            return [
+              {
+                candidates: peerDecisionCandidates(
+                  link.environmentId,
+                  remoteProject.id,
+                  capabilities.providers,
+                ),
+                load: {
+                  environmentId: link.environmentId,
+                  cpu: resources.machine.sample.cpu,
+                  pressure: resources.machine.sample.pressure,
+                  memoryAvailable: resources.machine.sample.memoryAvailable,
+                },
+              },
+            ];
+          }).pipe(
+            Effect.timeout("2 seconds"),
+            Effect.orElseSucceed(() => []),
+          ),
+        { concurrency: 3 },
+      );
+    }).pipe(
+      Effect.timeout("3 seconds"),
+      Effect.orElseSucceed(() => []),
+    );
+    return yield* decide(input, undefined, (yield* discover).flat());
+  });
   return Decisions.of({
+    agentDecision: Effect.fn("Decisions.safeAgentDecision")((scope, input, allowRemote) =>
+      agentDecision(scope, input, allowRemote).pipe(
+        Effect.orElseSucceed(() => ({
+          choice: null,
+          source: "fallback" as const,
+          reason: "Decision unavailable; using normal defaults.",
+          ruleIds: [],
+        })),
+      ),
+    ),
     route: Effect.fn("Decisions.safeRoute")((input, selection) =>
       route(input, selection).pipe(
         Effect.orElseSucceed(() => ({

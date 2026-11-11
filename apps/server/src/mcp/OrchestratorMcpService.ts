@@ -1,3 +1,5 @@
+import * as Decisions from "../decisions/Decisions.ts";
+import { exhaustedUsageWindow } from "@t3tools/shared/usageLimits";
 import {
   CommandId,
   type RunId,
@@ -35,7 +37,9 @@ import {
   type OrchestratorMcpTaskCancelResult,
   type OrchestratorMcpUpdateScheduledTaskInput,
   type OrchestratorMcpListScheduledTasksInput,
-  type ProjectId,
+  ProjectId,
+  EnvironmentId,
+  ProviderInstanceId,
   type OrchestratorMcpThreadDetail,
   type OrchestratorMcpThreadPullRequest,
   type OrchestratorMcpThreadInterruptInput,
@@ -1039,6 +1043,7 @@ const make = Effect.gen(function* () {
   const gitDriver = yield* GitVcsDriver.GitVcsDriver;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
+  const decisions = yield* Effect.serviceOption(Decisions.Decisions);
 
   const requireProject = (projectId: ProjectId) =>
     projects.getById(projectId).pipe(
@@ -2287,6 +2292,8 @@ const make = Effect.gen(function* () {
         Effect.mapError(() => failure("orchestration_error", "Unable to read server settings.")),
       );
       const inherited = parent?.thread.modelSelection;
+      const capabilityProjectId = input.projectId ?? parent?.thread.projectId;
+      const capabilityNow = DateTime.toEpochMillis(yield* DateTime.now);
       const searchTerms = input.search?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
       return {
         parentThreadId: parent?.thread.id ?? null,
@@ -2305,10 +2312,10 @@ const make = Effect.gen(function* () {
         providers: providers.map((provider) => {
           // Snapshots list instances any project enables; delegate_task checks the caller's project.
           const enabledForCaller =
-            parent === undefined ||
+            capabilityProjectId === undefined ||
             resolveProjectProviderInstanceEnabled(
               settings,
-              parent.thread.projectId,
+              capabilityProjectId,
               provider.instanceId,
             );
           const constraints = providerConstraints(
@@ -2331,16 +2338,22 @@ const make = Effect.gen(function* () {
             providerInstanceId: provider.instanceId,
             driverKind: provider.driver,
             displayName: provider.displayName ?? null,
-            models: listed.map((model) => {
-              const options = model.capabilities?.optionDescriptors ?? [];
-              return {
-                id: model.slug,
-                ...(model.name.toLowerCase() === model.slug.toLowerCase()
-                  ? {}
-                  : { label: model.name }),
-                ...(options.length === 0 ? {} : { options: options.map(capabilityModelOption) }),
-              };
-            }),
+            models: listed
+              .filter(
+                (model) =>
+                  !input.availableOnly ||
+                  !exhaustedUsageWindow(provider, capabilityNow, model.slug),
+              )
+              .map((model) => {
+                const options = model.capabilities?.optionDescriptors ?? [];
+                return {
+                  id: model.slug,
+                  ...(model.name.toLowerCase() === model.slug.toLowerCase()
+                    ? {}
+                    : { label: model.name }),
+                  ...(options.length === 0 ? {} : { options: options.map(capabilityModelOption) }),
+                };
+              }),
             ...(omitted === 0 ? {} : { omittedModels: omitted }),
             ...(provider.supportedRuntimeModes === undefined ||
             provider.supportedRuntimeModes.length === 0
@@ -2364,6 +2377,55 @@ const make = Effect.gen(function* () {
       };
     }),
     delegateTask: Effect.fn("OrchestratorMcpService.delegateTask")(function* (callerScope, input) {
+      let routingDecision: import("@t3tools/contracts").DecisionResult | undefined;
+      if (
+        input.target === undefined &&
+        Option.isSome(decisions) &&
+        (yield* serverSettings.getSettings.pipe(
+          Effect.map((settings) => settings.decisions.enabled),
+          Effect.orElseSucceed(() => false),
+        ))
+      ) {
+        const { parent } = yield* loadThreadCaller(callerScope, "delegate_task");
+        const providers = yield* loadProviders;
+        routingDecision = yield* decisions.value.agentDecision(
+          callerScope,
+          {
+            projectId: parent.thread.projectId,
+            prompt: input.task,
+            ...(input.role ? { role: input.role } : {}),
+            authorInstanceId: parent.thread.modelSelection.instanceId,
+            ...(providers.find(
+              (provider) => provider.instanceId === parent.thread.modelSelection.instanceId,
+            )?.driver
+              ? {
+                  authorDriver: providers.find(
+                    (provider) => provider.instanceId === parent.thread.modelSelection.instanceId,
+                  )!.driver,
+                }
+              : {}),
+          },
+          input.isolation !== "worktree",
+        );
+        const choice = routingDecision.choice;
+        if (choice)
+          input = {
+            ...input,
+            target: {
+              providerInstanceId: ProviderInstanceId.make(choice.providerInstanceId),
+              model: choice.model,
+              ...(choice.effort !== null && choice.effortOptionId !== null
+                ? { options: [{ id: choice.effortOptionId, value: choice.effort }] }
+                : {}),
+              ...(choice.environmentId !== callerScope.environmentId
+                ? {
+                    environmentId: EnvironmentId.make(choice.environmentId),
+                    projectId: ProjectId.make(choice.projectId),
+                  }
+                : {}),
+            },
+          };
+      }
       const environmentId =
         input.target === undefined
           ? undefined
@@ -2372,10 +2434,14 @@ const make = Effect.gen(function* () {
         yield* requireCapability(callerScope);
         const scope = yield* requireThreadScope(callerScope, "delegate_task");
         // The task's child runs as an ordinary thread there; this thread keeps the task.
-        const { taskId } = yield* remoteDelegation.delegate(scope, {
-          ...input,
-          target: { ...input.target, environmentId },
-        });
+        const { taskId } = yield* remoteDelegation.delegate(
+          scope,
+          {
+            ...input,
+            target: { ...input.target, environmentId },
+          },
+          routingDecision,
+        );
         return yield* input.mode === "wait"
           ? awaitTask(scope, taskId, input.timeoutMs)
           : readTask(scope, taskId, false, true);
@@ -2469,6 +2535,7 @@ const make = Effect.gen(function* () {
           parentRunId: parentRun.id,
           parentNodeId: parentRun.rootNodeId,
           task: taskPrompt(input),
+          ...(routingDecision ? { routingDecision } : {}),
           ...(input.title === undefined ? {} : { title: input.title }),
           modelSelection: target.modelSelection,
           runtimeMode,

@@ -78,6 +78,7 @@ export class RemoteDelegation extends Context.Service<
           readonly environmentId: EnvironmentId;
         };
       },
+      routingDecision?: import("@t3tools/contracts").DecisionResult,
     ) => Effect.Effect<{ readonly taskId: NodeId }, OrchestratorMcpFailure>;
     /**
      * Stops the task's thread there, then completes it here as cancelled. A
@@ -187,7 +188,7 @@ const make = Effect.gen(function* () {
   });
 
   const delegate: RemoteDelegation["Service"]["delegate"] = Effect.fn("RemoteDelegation.delegate")(
-    function* (scope, input) {
+    function* (scope, input, routingDecision) {
       const parent = yield* threads.getThreadRecords(scope.thread.threadId, ["runs"]).pipe(
         Effect.mapError(
           () =>
@@ -272,6 +273,7 @@ const make = Effect.gen(function* () {
           ...(runtimeMode === undefined ? {} : { runtimeMode }),
           ...(interactionMode === undefined ? {} : { interactionMode }),
           message: task,
+          ...(routingDecision ? { routingDecision } : {}),
           clientRequestId: `delegate:${scope.thread.threadId}:${key}`,
           // The thread there shows it is this thread's subagent, with a way back.
           delegatedFrom: {

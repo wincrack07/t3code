@@ -1,3 +1,6 @@
+import * as PeerForwarding from "../peer/PeerForwarding.ts";
+import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
+import { Project, RepositoryIdentity, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { expect } from "vite-plus/test";
@@ -23,6 +26,9 @@ import * as SystemMonitor from "../systemMonitor/SystemMonitor.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as Decisions from "./Decisions.ts";
 import { mapSettingsSecrets, SECRET_REDACTED } from "../settingsSecrets.ts";
+
+const decodeIdentity = Schema.decodeSync(RepositoryIdentity);
+const decodeProject = Schema.decodeSync(Project);
 
 const input = { projectId: ProjectId.make("app"), prompt: "Fix typo" };
 const provider = Schema.decodeSync(ServerProvider)({
@@ -193,4 +199,147 @@ it.effect("keeps the decision API credential in the existing secret mapping", ()
     expect(JSON.stringify(client)).not.toContain("fake-decision-key");
     expect(client.decisions.apiKey).toBe(SECRET_REDACTED);
   }),
+);
+
+it.effect(
+  "chooses a matching reachable peer by rule and falls back when that peer cannot answer",
+  () =>
+    Effect.gen(function* () {
+      const identity = decodeIdentity({
+        canonicalKey: "github.com/acme/app",
+        locator: {
+          source: "git-remote",
+          remoteName: "origin",
+          remoteUrl: "https://github.com/acme/app.git",
+        },
+      });
+      const remoteProject = decodeProject({
+        id: "remote-app",
+        title: "App",
+        workspaceRoot: "/home/user/app",
+        repositoryIdentity: identity,
+        defaultModelSelection: null,
+        scripts: [],
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+        deletedAt: null,
+      });
+      const scope = {
+        environmentId: EnvironmentId.make("local"),
+        capabilities: new Set(["orchestration"] as const),
+        issuedAt: 0,
+        requestNamespace: "decision-test",
+        thread: undefined,
+        client: undefined,
+      };
+      const remoteConfig = {
+        ...config,
+        rules: [
+          {
+            id: "node",
+            name: "Linux work",
+            enabled: true,
+            when: {},
+            choose: { environmentIds: ["linux"] },
+            action: "decide" as const,
+          },
+        ],
+      };
+      const replies: Record<string, unknown> = {
+        t3_project_list: { projects: [remoteProject], nextCursor: null },
+        orchestrator_capabilities: {
+          parentThreadId: null,
+          inheritedProviderInstanceId: null,
+          inheritedModel: null,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          providers: [
+            {
+              providerInstanceId: "codex",
+              driverKind: "codex",
+              displayName: null,
+              canRunChildTask: true,
+              canRunCrossProviderChildTask: true,
+              constraints: [],
+              models: [{ id: "fast" }],
+            },
+          ],
+          features: {
+            appOwnedSubagents: true,
+            asyncPolling: true,
+            cancellation: true,
+            batchThreadCreation: true,
+            threadManagement: true,
+            incrementalThreadRead: true,
+            scheduledTasks: true,
+            maxBatchThreads: 20,
+          },
+        },
+        t3_environment_read: {
+          machine: {
+            sample: {
+              at: 0,
+              cpu: 0,
+              pressure: "normal",
+              memoryAvailable: 1000,
+              memoryUsed: 0,
+              memoryTotal: 1000,
+              swapUsed: null,
+              swapTotal: null,
+              diskFree: null,
+              diskTotal: null,
+              networkDown: null,
+              networkUp: null,
+              load: [],
+              uptime: 0,
+            },
+            history: [],
+            limitations: [],
+          },
+        },
+      };
+      for (const reachable of [true, false]) {
+        const peers = Layer.mock(PeerForwarding.PeerForwarding)({
+          links: () =>
+            Effect.succeed({
+              environmentId: scope.environmentId,
+              links: [
+                {
+                  environmentId: EnvironmentId.make("linux"),
+                  label: "Linux",
+                  status: "reachable",
+                  access: "full-access",
+                  expiresAt: "2099-01-01T00:00:00Z",
+                  lastError: null,
+                },
+              ],
+              notListed: "",
+            }),
+          call: (_scope, tool) =>
+            reachable
+              ? Effect.succeed(replies[tool.name] as import("effect/ai/Tool").Success<typeof tool>)
+              : Effect.fail(
+                  new OrchestratorMcpFailure({ code: "orchestration_error", message: "Offline" }),
+                ),
+        });
+        const result = yield* Decisions.Decisions.pipe(
+          Effect.flatMap((service) => service.agentDecision(scope, input)),
+          Effect.provide(
+            fixture(remoteConfig, "must not ask a model", []).pipe(
+              Layer.provide(
+                Layer.merge(
+                  peers,
+                  Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
+                    resolve: () => Effect.succeed(identity),
+                  }),
+                ),
+              ),
+            ),
+          ),
+        );
+        expect(result.source).toBe(reachable ? "rule" : "fallback");
+        expect(result.choice?.environmentId).toBe(reachable ? "linux" : undefined);
+        if (reachable) expect(result.choice?.projectId).toBe("remote-app");
+      }
+    }),
 );
