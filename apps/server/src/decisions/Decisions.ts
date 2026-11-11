@@ -1,10 +1,15 @@
 import {
+  AUTO_MODEL,
+  ProviderInstanceId,
+  type ModelSelection,
   type DecisionCandidate,
   type DecisionInput,
   type DecisionResult,
   isProviderTextGenerationCapable,
 } from "@t3tools/contracts";
 import { applyDecisionRules } from "@t3tools/shared/decisionRules";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { defaultTextGenerationModel } from "@t3tools/shared/serverSettings";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
@@ -26,6 +31,10 @@ import { requestOpenAiDecision } from "./openai.ts";
 export class Decisions extends Context.Service<
   Decisions,
   {
+    readonly route: (
+      input: DecisionInput,
+      selection: ModelSelection,
+    ) => Effect.Effect<{ modelSelection: ModelSelection; routingDecision?: DecisionResult }>;
     readonly decide: (
       input: DecisionInput,
       explicit?: DecisionCandidate,
@@ -166,7 +175,64 @@ const make = Effect.gen(function* () {
     cache.set(key, { at: now, result });
     return result;
   });
+  const route = Effect.fn("Decisions.route")(function* (
+    input: DecisionInput,
+    selection: ModelSelection,
+  ) {
+    if (selection.model !== AUTO_MODEL && selection.routing !== "auto")
+      return { modelSelection: selection };
+    let fallback = selection;
+    if (selection.model === AUTO_MODEL) {
+      const settings = resolveProjectSettings(
+        yield* settingsService.getSettings,
+        input.projectId,
+      ).settings;
+      const project = yield* projects.get(input.projectId);
+      fallback =
+        resolveNewThreadModelSelection({
+          defaultSelection: Option.isSome(project)
+            ? (project.value.defaultModelSelection ?? settings.defaultModelSelection)
+            : settings.defaultModelSelection,
+          fallbackSelection: settings.fallbackModelSelection,
+          providers: yield* registry.getProviders,
+          settings,
+          projectId: input.projectId,
+          now: yield* Clock.currentTimeMillis,
+        }).selection ?? settings.textGenerationModelSelection;
+      if (fallback.model === AUTO_MODEL) fallback = settings.textGenerationModelSelection;
+    }
+    const decision = yield* decide(input).pipe(
+      Effect.orElseSucceed(() => ({
+        choice: null,
+        reason: "Decision unavailable; using normal defaults.",
+        source: "fallback" as const,
+        ruleIds: [],
+      })),
+    );
+    const choice = decision.choice;
+    const modelSelection: ModelSelection = choice
+      ? {
+          instanceId: ProviderInstanceId.make(choice.providerInstanceId),
+          model: choice.model,
+          ...(choice.effort !== null && choice.effortOptionId !== null
+            ? { options: [{ id: choice.effortOptionId, value: choice.effort }] }
+            : {}),
+          routing: "auto",
+        }
+      : { ...fallback, routing: "auto" };
+    return { modelSelection, routingDecision: decision };
+  });
   return Decisions.of({
+    route: Effect.fn("Decisions.safeRoute")((input, selection) =>
+      route(input, selection).pipe(
+        Effect.orElseSucceed(() => ({
+          modelSelection:
+            selection.model === AUTO_MODEL
+              ? { instanceId: selection.instanceId, model: "default", routing: "auto" as const }
+              : selection,
+        })),
+      ),
+    ),
     decide: Effect.fn("Decisions.safeDecide")((input, explicit) =>
       decide(input, explicit).pipe(
         Effect.orElseSucceed(() => ({

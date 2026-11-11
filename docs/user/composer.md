@@ -441,14 +441,18 @@ including filenames or folders containing `#` or `?`.
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.
 
-## Preview automatic routing
+## Automatic routing
 
-Settings → Labs → Decisions lets you test routing prompts without starting work. Enable the
-preview, choose a configured provider model or enter an OpenAI API key and model, then add rules
-in priority order. A restrict rule narrows the choices; a decide rule selects the first matching
-usable choice. Provider-instance allowlists can separate personal and work accounts.
+Enable Settings → Labs → Decisions, choose a configured provider model or enter an OpenAI API
+key and model, then add rules in priority order. A restrict rule narrows the choices; a decide
+rule selects the first matching usable choice. Provider-instance allowlists can separate
+personal and work accounts.
 
-Enter a project ID and task in Test a prompt to see the proposed provider, model, effort,
-environment, and reason. The preview currently considers the selected server's providers.
-Failed or invalid model answers return a fallback result. The preview does not change composer
-selections or start tasks.
+On web and desktop, choose Auto in the model picker before sending a new thread or message.
+The server chooses a provider, model and effort from this environment's usable options. Each
+run records the choice and reason beside its message. Use this model next pins the resolved
+model for your next message; Change model opens the picker. Choosing a concrete model leaves
+Auto. If a decision fails, your normal defaults are used.
+
+Test a prompt in Decisions settings previews routing for a project without starting work.
+Mobile does not yet offer Auto in its picker.

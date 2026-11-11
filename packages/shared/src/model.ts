@@ -1,4 +1,5 @@
 import {
+  AUTO_MODEL,
   type CustomModelSetting,
   MODEL_SLUG_ALIASES_BY_PROVIDER,
   ModelCapabilities,
@@ -103,7 +104,11 @@ function canonicalModelSelectionOptions(
 }
 
 export function modelSelectionsEqual(left: ModelSelection, right: ModelSelection): boolean {
-  if (left.instanceId !== right.instanceId || left.model !== right.model) {
+  if (
+    left.instanceId !== right.instanceId ||
+    left.model !== right.model ||
+    left.routing !== right.routing
+  ) {
     return false;
   }
   const leftOptions = canonicalModelSelectionOptions(left);
@@ -121,6 +126,7 @@ export function modelSelectionsEqual(left: ModelSelection, right: ModelSelection
  * `fastMode: false` for models with a fast toggle while mobile omits it, so off counts as unset.
  */
 export function draftModelPickMatchesThread(pick: ModelSelection, thread: ModelSelection): boolean {
+  if (pick.routing !== thread.routing) return false;
   const withoutFastModeOff = (selection: ModelSelection) =>
     createModelSelection(
       selection.instanceId,
@@ -465,6 +471,7 @@ export function resolveSelectableModel(
   }
 
   const trimmed = value.trim();
+  if (trimmed === AUTO_MODEL) return AUTO_MODEL;
   if (!trimmed) {
     return null;
   }

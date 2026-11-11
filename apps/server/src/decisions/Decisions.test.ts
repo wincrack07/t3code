@@ -2,7 +2,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { expect } from "vite-plus/test";
 import {
+  AUTO_MODEL,
   DEFAULT_SERVER_SETTINGS,
+  ProviderInstanceId,
   EnvironmentId,
   ProjectId,
   ServerProvider,
@@ -123,6 +125,18 @@ it.effect("honors explicit choices before settings and caches valid answers", ()
       expect(calls).toEqual([]);
       expect((yield* service.decide(input)).choice?.model).toBe("other");
       yield* service.decide(input);
+      const routed = yield* service.route(input, {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: AUTO_MODEL,
+      });
+      expect(routed.modelSelection).toEqual({
+        instanceId: "codex",
+        model: "other",
+        routing: "auto",
+      });
+      expect(routed.routingDecision?.reason).toBe("Suitable");
+      const manual = { instanceId: ProviderInstanceId.make("codex"), model: "fast" };
+      expect((yield* service.route(input, manual)).modelSelection).toEqual(manual);
       expect(calls).toHaveLength(1);
     }).pipe(Effect.provide(fixture(config, '{"candidate":1,"reason":"Suitable"}', calls)));
   }),

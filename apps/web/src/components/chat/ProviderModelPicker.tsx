@@ -276,6 +276,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
   const picker = (
     <ModelPickerContent
+      allowAuto={props.isComposerOwned === true}
       searchInputRef={searchInputRef}
       environmentId={props.environmentId}
       activeInstanceId={activeInstanceId}

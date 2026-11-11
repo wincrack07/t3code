@@ -19,7 +19,8 @@ import { REASONING_EFFORT_OPTION_IDS } from "./state/threadExecution.ts";
 export type HandoffTimelineRun = Pick<
   OrchestrationV2Run,
   "id" | "ordinal" | "providerInstanceId" | "modelSelection"
->;
+> &
+  Partial<Pick<OrchestrationV2Run, "routingDecision" | "userMessageId">>;
 
 export type HandoffEndpoints = ReturnType<typeof resolveHandoffEndpoints>;
 

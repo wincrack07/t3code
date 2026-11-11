@@ -1,3 +1,4 @@
+import { AutoDecisionRow } from "./AutoDecisionRow";
 import { InlineAudioPreview } from "../files/InlineAudioPreview";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
 import { findRevealRef } from "./markdownFindContext";
@@ -256,6 +257,10 @@ export function UserMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mes
       {modelSwitch ? (
         <ModelSwitchRow environmentId={ctx.activeThreadEnvironmentId} modelSwitch={modelSwitch} />
       ) : null}
+      <AutoDecisionRow
+        run={ctx.runs.find((run) => run.userMessageId === row.message.id)}
+        threadRef={ctx.threadRef}
+      />
       <UserMessageContent row={row} />
     </>
   );

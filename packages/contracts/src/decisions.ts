@@ -90,3 +90,5 @@ export const DecisionInput = Schema.Struct({
   authorInstanceId: Schema.optional(Schema.String),
 });
 export type DecisionInput = typeof DecisionInput.Type;
+
+export const AUTO_MODEL = "t3:auto";

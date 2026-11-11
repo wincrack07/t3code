@@ -39,8 +39,8 @@ export function DecisionsSettingsSection() {
   return (
     <SettingsSection id="decisions" title="Decisions">
       <SettingsRow
-        title="Decision preview"
-        description="Test your rules and decision model against this server’s usable providers without starting work."
+        title="Automatic routing"
+        description="Enable Auto in the model picker and apply your routing rules before starting a turn."
         control={
           <Switch
             aria-label="Enable Decisions"
