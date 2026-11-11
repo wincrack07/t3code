@@ -1248,7 +1248,31 @@ it("reconciles cards in place, preserves focus and respects local close until ex
     activeSurfaceId: "diff",
     surfaces: [{ id: "diff", kind: "diff" } as const],
   };
-  const pinned = reconcileHtmlCards(initial, [first]);
+  expect(reconcileHtmlCards(initial, [first])).toBe(initial);
+  expect(
+    reconcileHtmlCards(
+      {
+        ...initial,
+        surfaces: [
+          ...initial.surfaces,
+          { id: "html-card:progress", kind: "html-card", card: first },
+        ],
+      },
+      [first],
+    ).surfaces,
+  ).toEqual(initial.surfaces);
+  const pinned = {
+    ...initial,
+    surfaces: [
+      ...initial.surfaces,
+      {
+        id: "html-card:progress",
+        kind: "html-card" as const,
+        card: first,
+        userOpened: true as const,
+      },
+    ],
+  };
   expect(pinned.activeSurfaceId).toBe("diff");
   expect(reconcileHtmlCards(pinned, [{ ...first }])).toBe(pinned);
   const updated = reconcileHtmlCards(pinned, [{ ...first, attachmentId: "v2" }]);
@@ -1268,7 +1292,7 @@ it("reconciles cards in place, preserves focus and respects local close until ex
     ...initial,
     surfaces: [
       ...initial.surfaces,
-      { id: "html-card:status", kind: "html-card", card: details } as const,
+      { id: "html-card:status", kind: "html-card", card: details, userOpened: true } as const,
     ],
   };
   expect(

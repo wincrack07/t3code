@@ -1,4 +1,6 @@
 import {
+  ORCHESTRATION_V2_WS_METHODS,
+  CommandId,
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
@@ -466,5 +468,43 @@ it.effect("denies manual cleanup before the handler without settings permission"
       requiredPermission: AuthSettingsWriteScope,
     });
     expect(handled).toBe(false);
+  }).pipe(Effect.scoped),
+);
+
+it.effect("guards persisted card removal with operate permission", () =>
+  Effect.gen(function* () {
+    const method = ORCHESTRATION_V2_WS_METHODS.dispatchCommand;
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> => tag !== method,
+      ),
+    );
+    const handled: unknown[] = [];
+    const handlers = group.toLayerHandler(method, (command) =>
+      Effect.sync(() => {
+        handled.push(command);
+        return { sequence: 1 };
+      }),
+    );
+    const command = {
+      type: "thread.metadata.update" as const,
+      commandId: CommandId.make("remove-card"),
+      threadId: ThreadId.make("thread-with-card"),
+      htmlCard: { id: "status", card: null },
+    };
+    const denied = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationReadScope]))),
+    );
+    expect(yield* denied[method](command).pipe(Effect.flip)).toMatchObject({
+      requiredPermission: AuthOrchestrationOperateScope,
+    });
+    expect(handled).toEqual([]);
+    const allowed = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(
+        Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationOperateScope])),
+      ),
+    );
+    yield* allowed[method](command);
+    expect(handled).toEqual([command]);
   }).pipe(Effect.scoped),
 );

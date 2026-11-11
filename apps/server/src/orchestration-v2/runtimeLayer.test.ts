@@ -2552,7 +2552,12 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           });
           refs.push(reference);
           const { pin: _pin, ...snapshot } = reference;
-          const expected = [{ ...snapshot, id: "progress" }];
+          const persisted = (yield* store.getThreadProjection(threadId)).thread
+            .pinnedHtmlCards?.[0];
+          assert.isString(persisted?.updatedAt);
+          const expected = [
+            { ...snapshot, id: "progress", placement: "details", updatedAt: persisted?.updatedAt },
+          ];
           assert.deepEqual(
             (yield* orchestrator.getThreadProjection(threadId)).thread.pinnedHtmlCards,
             expected,
@@ -2571,7 +2576,13 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         const fileSystem = yield* FileSystem.FileSystem;
         const config = yield* ServerConfig.ServerConfig;
         const attachments = yield* fileSystem.readDirectory(config.attachmentsDir);
-        yield* htmlRender.unpin({ threadId, pin: "progress" });
+        const management = yield* ThreadManagementService.ThreadManagementService;
+        yield* management.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("remove-progress-card"),
+          threadId,
+          htmlCard: { id: "progress", card: null },
+        });
         assert.deepEqual((yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards, []);
         const unpinnedShell = (yield* store.getShellSnapshot()).threads.find(
           (thread) => thread.id === threadId,
@@ -2585,6 +2596,18 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         yield* htmlRender.unpin({ threadId, pin: "progress" });
         assert.deepEqual(yield* orchestrator.getThreadProjection(threadId), afterUnpin);
         assert.deepEqual(yield* fileSystem.readDirectory(config.attachmentsDir), attachments);
+        yield* htmlRender.publish({
+          threadId,
+          pin: "progress",
+          html: "<p>Reopened</p>",
+          title: "Progress",
+          height: 200,
+        });
+        assert.equal(
+          (yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards?.[0]?.id,
+          "progress",
+        );
+        yield* htmlRender.unpin({ threadId, pin: "progress" });
         for (let index = 0; index < 9; index++) {
           yield* htmlRender.publish({
             threadId,
@@ -2620,8 +2643,8 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         assert.equal(yield* placementOf("details"), "details");
         // An update without a placement must not move the card back to the panel.
         assert.equal(yield* placementOf(), "details");
-        assert.isUndefined(yield* placementOf("panel"));
-        assert.isUndefined(yield* placementOf());
+        assert.equal(yield* placementOf("panel"), "details");
+        assert.equal(yield* placementOf(), "details");
       }).pipe(
         Effect.provide(
           HtmlRender.layer.pipe(
