@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { environmentPortTargetFromUrl, environmentPortTargetUrl } from "@t3tools/shared/preview";
 import * as FileSystem from "effect/FileSystem";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
@@ -195,25 +196,30 @@ const handlers = {
   preview_status: McpToolAccess.readsAsCaller((input) =>
     invokeTargeted<PreviewAutomationStatus>("status", input ?? {}),
   ),
-  // Models often pass a dev server as both `url` and `target`; the target knows the environment.
-  preview_open: McpToolAccess.actsAsCaller(({ target, url, ...input }) =>
-    Effect.gen(function* () {
-      const opened = yield* invokeTargeted<PreviewAutomationStatus>(
-        "open",
-        normalizePreviewOpenInput(
-          target === undefined && url !== undefined ? { ...input, url } : input,
-        ),
-      );
-      if (target === undefined || opened.tabId === null) return opened;
-      return yield* invokeTargeted<PreviewAutomationStatus>("navigate", {
-        target,
-        tabId: opened.tabId,
-      });
-    }),
-  ),
-  preview_navigate: McpToolAccess.actsAsCaller((input) =>
-    invokeTargeted<PreviewAutomationStatus>("navigate", input, input.timeoutMs),
-  ),
+  preview_open: McpToolAccess.actsAsCaller(({ target, url, ...input }) => {
+    const environmentTarget =
+      target ?? (url === undefined ? null : environmentPortTargetFromUrl(url));
+    return invokeTargeted<PreviewAutomationStatus>(
+      "open",
+      normalizePreviewOpenInput({
+        ...input,
+        ...(environmentTarget
+          ? { url: environmentPortTargetUrl(environmentTarget) }
+          : url !== undefined
+            ? { url }
+            : {}),
+      }),
+    );
+  }),
+  preview_navigate: McpToolAccess.actsAsCaller(({ url, target, ...input }) => {
+    const environmentTarget =
+      target ?? (url === undefined ? null : environmentPortTargetFromUrl(url));
+    return invokeTargeted<PreviewAutomationStatus>(
+      "navigate",
+      { ...input, ...(environmentTarget ? { target: environmentTarget } : { url }) },
+      input.timeoutMs,
+    );
+  }),
   preview_resize: McpToolAccess.actsAsCaller((input) =>
     invokeTargeted<PreviewAutomationResizeResult>("resize", input, input.timeoutMs),
   ),

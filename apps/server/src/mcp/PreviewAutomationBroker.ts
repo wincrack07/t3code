@@ -22,11 +22,13 @@ import {
   PreviewTabId,
   type PreviewAutomationError,
   type PreviewAutomationOperation,
+  type PreviewAutomationNavigateInput,
   type PreviewAutomationHost,
   type PreviewAutomationHostFocus,
   type PreviewAutomationResponse,
   type PreviewAutomationStreamEvent,
 } from "@t3tools/contracts";
+import { environmentPortTargetFromUrl, environmentPortTargetUrl } from "@t3tools/shared/preview";
 import * as Context from "effect/Context";
 import type * as Cause from "effect/Cause";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -516,6 +518,17 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
   const invoke = Effect.fn("PreviewAutomationBroker.invoke")(function* <A = unknown>(
     input: Parameters<PreviewAutomationBroker["Service"]["invoke"]>[0],
   ): Effect.fn.Return<A, PreviewAutomationError> {
+    const navigation = input.input as Partial<PreviewAutomationNavigateInput> | null;
+    const navigationUrl =
+      navigation?.target?.kind === "url" ? navigation.target.url : navigation?.url;
+    const environmentTarget =
+      navigation?.target?.kind === "environment-port"
+        ? navigation.target
+        : typeof navigationUrl === "string"
+          ? environmentPortTargetFromUrl(navigationUrl)
+          : null;
+    const environmentPort =
+      (input.operation === "open" || input.operation === "navigate") && environmentTarget !== null;
     const deferred = yield* Deferred.make<unknown, PreviewAutomationError>();
     const route = yield* SynchronizedRef.modify(state, (current) => {
       const assignments = new Map(
@@ -530,8 +543,10 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       const assignmentKey = hostAssignmentKey(input.scope);
       const assigned = assignments.get(assignmentKey);
       const assignedConnection = assigned ? current.clients.get(assigned.clientId) : undefined;
-      const hasLiveAssignment = assignedConnection?.environmentId === input.scope.environmentId;
-      // Pin interactions to one desktop runtime so cookie/DOM state cannot jump between hosts.
+      const hasLiveAssignment =
+        assignedConnection?.environmentId === input.scope.environmentId &&
+        (!environmentPort || assignedConnection.clientId === SERVER_BROWSER_AUTOMATION_CLIENT_ID);
+      // Keep interactions on their runtime; environment-port navigation can replace a desktop tab.
       const ownsTargetTab = (host: ClientConnection, visibleOnly = false) =>
         host.liveTabs.some(
           (tab) =>
@@ -548,6 +563,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
                 .filter(
                   (host) =>
                     host.environmentId === input.scope.environmentId &&
+                    (!environmentPort || host.clientId === SERVER_BROWSER_AUTOMATION_CLIENT_ID) &&
                     supportsOperation(host, input.operation),
                 )
                 .sort(
@@ -564,9 +580,6 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         if (!hasLiveAssignment) assignments.delete(assignmentKey);
         return [undefined, { ...current, assignments }] as const;
       }
-      // First open may install Chromium for ten minutes; keep it alive without replaying effects.
-      const timeoutMs =
-        input.timeoutMs ?? (input.operation === "open" && connection.preferred ? 660_000 : 15_000);
       const canReuseAssignedTab =
         assigned !== undefined &&
         assigned.connectionId === connection.connectionId &&
@@ -581,9 +594,31 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
           : {}),
       });
 
+      const replacesDesktopTab =
+        environmentPort &&
+        input.tabId !== undefined &&
+        assigned?.tabId === input.tabId &&
+        assignedConnection !== undefined &&
+        assignedConnection.clientId !== SERVER_BROWSER_AUTOMATION_CLIENT_ID;
+      const createEnvironmentTab =
+        environmentPort &&
+        input.operation === "navigate" &&
+        (replacesDesktopTab ||
+          (input.tabId === undefined && !(canReuseAssignedTab && assigned.tabId !== undefined)));
+      const operation = createEnvironmentTab ? ("open" as const) : input.operation;
+      // First open may install Chromium for ten minutes; keep it alive without replaying effects.
+      const timeoutMs =
+        input.timeoutMs ?? (operation === "open" && connection.preferred ? 660_000 : 15_000);
+      const operationInput =
+        createEnvironmentTab && environmentTarget
+          ? { url: environmentPortTargetUrl(environmentTarget) }
+          : input.input;
       const requestSequence = current.requestSequence;
       const requestId = `preview-${requestSequence}`;
-      const tabId = input.tabId ?? (canReuseAssignedTab ? assigned.tabId : undefined);
+      const tabId = replacesDesktopTab
+        ? undefined
+        : (input.tabId ?? (canReuseAssignedTab ? assigned.tabId : undefined));
+      const tabIdExplicit = input.tabId !== undefined && !replacesDesktopTab;
       const selectorDiagnostics = selectorDiagnosticsFromInput(input.input);
       const context: PreviewAutomationRequestErrorContext = {
         operation: input.operation,
@@ -601,7 +636,15 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       const pending = new Map(current.pending);
       pending.set(requestId, { queue: connection.queue, deferred, context });
       return [
-        { connection, requestId, requestContext: context, requestSequence },
+        {
+          connection,
+          requestId,
+          requestContext: context,
+          requestSequence,
+          operation,
+          operationInput,
+          tabIdExplicit,
+        },
         { ...current, assignments, pending, requestSequence: current.requestSequence + 1 },
       ] as const;
     });
@@ -614,7 +657,15 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         providerInstanceId: input.scope.thread.providerInstanceId,
       });
     }
-    const { connection, requestId, requestContext, requestSequence } = route;
+    const {
+      connection,
+      requestId,
+      requestContext,
+      requestSequence,
+      operation,
+      operationInput,
+      tabIdExplicit,
+    } = route;
     const { timeoutMs } = requestContext;
     input.onTargetTab?.(requestContext.tabId);
     const removePending = SynchronizedRef.update(state, (next) => {
@@ -639,10 +690,10 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
             requestId,
             threadId: input.scope.thread.threadId,
             tabId: requestContext.tabId,
-            tabIdExplicit: input.tabId !== undefined,
+            tabIdExplicit,
             agentSessionId: hostAssignmentKey(input.scope),
-            operation: input.operation,
-            input: input.input,
+            operation,
+            input: operationInput,
             timeoutMs,
           },
         }).pipe(Effect.map((offered) => [offered, current] as const));

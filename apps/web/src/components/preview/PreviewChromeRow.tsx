@@ -22,6 +22,7 @@ import { cn } from "~/lib/utils";
 
 interface Props {
   url: string;
+  environmentLabel?: string | undefined;
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -52,6 +53,7 @@ const NOOP = () => {};
 
 export function PreviewChromeRow({
   url,
+  environmentLabel,
   loading,
   canGoBack,
   canGoForward,
@@ -151,6 +153,16 @@ export function PreviewChromeRow({
         {leadingActions}
 
         <InputGroup variant="ghost" className="group/address h-7 flex-1">
+          {environmentLabel ? (
+            <InputGroupAddon>
+              <Tooltip>
+                <TooltipTrigger render={<span className="max-w-28 truncate" />}>
+                  {environmentLabel} ›
+                </TooltipTrigger>
+                <TooltipPopup>{environmentLabel}</TooltipPopup>
+              </Tooltip>
+            </InputGroupAddon>
+          ) : null}
           <Tooltip>
             <TooltipTrigger
               render={
