@@ -7,10 +7,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LayoutGridIcon,
+  MoreHorizontalIcon,
   SettingsIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -31,6 +32,7 @@ import {
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
+import { Menu, MenuTrigger, MenuPopup, MenuItem } from "../ui/menu";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -242,6 +244,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const [utilityWidth, setUtilityWidth] = useState(0);
+  const observeUtilityWidth = (row: HTMLUListElement) =>
+    observeResize(row, ([entry]) => {
+      if (entry) setUtilityWidth(Math.floor(entry.contentRect.width));
+    });
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -281,8 +288,28 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigateToMainApp();
   };
 
+  const secondaryActions = [
+    ...(pullRequestsSupported
+      ? [
+          {
+            label: "Pull requests",
+            icon: <PullRequestGlyph.pullRequest />,
+            onClick: handlePullRequestsClick,
+          },
+        ]
+      : []),
+    { label: "Usage", icon: <ChartNoAxesColumnIcon />, onClick: handleUsageClick },
+    { label: "Artifacts", icon: <LayoutGridIcon />, onClick: handleArtifactsClick },
+  ];
+  // Reserve the status controls and update button before budgeting 32px links and 4px gaps.
+  const visibleCount =
+    utilityWidth >= 136 + secondaryActions.length * 36
+      ? secondaryActions.length
+      : Math.max(0, Math.min(secondaryActions.length - 1, Math.floor((utilityWidth - 172) / 36)));
+  const overflowActions = isOnUtilityPage ? [] : secondaryActions.slice(visibleCount);
+
   return (
-    <SidebarMenu className="flex-row items-center">
+    <SidebarMenu ref={observeUtilityWidth} className="flex-row flex-nowrap items-center">
       {isOnUtilityPage ? (
         <SidebarMenuItem className="min-w-0 flex-1">
           <SidebarMenuButton onClick={handleBackClick}>
@@ -297,23 +324,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Settings"
             onClick={handleSettingsClick}
           />
-          {pullRequestsSupported ? (
-            <SidebarUtilityItem
-              icon={<PullRequestGlyph.pullRequest />}
-              label="Pull requests"
-              onClick={handlePullRequestsClick}
-            />
-          ) : null}
-          <SidebarUtilityItem
-            icon={<ChartNoAxesColumnIcon />}
-            label="Usage"
-            onClick={handleUsageClick}
-          />
-          <SidebarUtilityItem
-            icon={<LayoutGridIcon />}
-            label="Artifacts"
-            onClick={handleArtifactsClick}
-          />
+          {secondaryActions.slice(0, visibleCount).map((action) => (
+            <SidebarUtilityItem key={action.label} {...action} />
+          ))}
           <SidebarMachineMonitorItem onOpen={handleMonitorClick} />
         </>
       )}
@@ -322,6 +335,25 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       </SidebarMenuItem>
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
+      {overflowActions.length > 0 ? (
+        <SidebarMenuItem className="shrink-0">
+          <Menu>
+            <MenuTrigger
+              render={<SidebarMenuButton size="icon" aria-label="More sidebar actions" />}
+            >
+              <MoreHorizontalIcon />
+            </MenuTrigger>
+            <MenuPopup side="top" align="end">
+              {overflowActions.map((action) => (
+                <MenuItem key={action.label} onClick={action.onClick}>
+                  {action.icon}
+                  {action.label}
+                </MenuItem>
+              ))}
+            </MenuPopup>
+          </Menu>
+        </SidebarMenuItem>
+      ) : null}
     </SidebarMenu>
   );
 });
