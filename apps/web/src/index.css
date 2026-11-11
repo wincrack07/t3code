@@ -1947,6 +1947,22 @@ html[data-theme-id="claude"] [data-slot="command-item"] {
   }
 }
 
+/* Sidebar rows (and the sliding selection pill, which copies them) use the
+   8px control corner; scrollbar thumbs are the app's 20% wash, 30% on hover. */
+html[data-theme-id="claude"] [data-app-sidebar] [data-sidebar-row] {
+  border-radius: 0.5rem;
+}
+
+html[data-theme-id="claude"] {
+  --app-scrollbar-thumb: rgb(0 0 0 / 20%);
+  --app-scrollbar-thumb-hover: rgb(0 0 0 / 30%);
+
+  @variant dark {
+    --app-scrollbar-thumb: rgb(255 255 255 / 20%);
+    --app-scrollbar-thumb-hover: rgb(255 255 255 / 30%);
+  }
+}
+
 html[data-theme-id="claude"] :is([data-sidebar-control], [data-sidebar-history]) svg {
   stroke-width: 1.5;
 }
