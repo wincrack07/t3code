@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import type { PreviewCaptureFailureEncoded } from "./previewCapture.ts";
 
 import { SnapShotSource } from "./chatAttachment.ts";
-import { EnvironmentId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { EnvironmentId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { BrowserProfileId } from "./browserProfile.ts";
 import type {
   BrowserImportResult,
@@ -1067,6 +1067,8 @@ export interface DesktopBridge {
    * Renderer `window.focus()` cannot raise an Electron window, and on Wayland
    * only the main process can spend a notification click's activation token.
    */
+  openThread?: (environmentId: EnvironmentId, threadId: ThreadId) => Promise<void>;
+  newWindow?: () => Promise<void>;
   revealWindow: () => Promise<void>;
   /**
    * The OS locale as a BCP-47 tag, which the renderer cannot read for itself:

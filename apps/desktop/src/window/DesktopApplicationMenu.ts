@@ -157,6 +157,18 @@ export const make = Effect.gen(function* () {
     const mainContentsClick = (command: DesktopWindow.MainWindowContentsCommand) => () => {
       runMenuEffect(command, runMainContentsCommand(command));
     };
+    const newWindowClick = () =>
+      runMenuEffect(
+        "new-window",
+        Effect.flatMap(DesktopWindow.DesktopWindow, (window) => window.createMain).pipe(
+          Effect.asVoid,
+        ),
+      );
+    const newWindowItem = {
+      label: "New Window",
+      accelerator: "CmdOrCtrl+Alt+Shift+N",
+      click: newWindowClick,
+    };
     const template: Electron.MenuItemConstructorOptions[] = [];
 
     if (environment.platform === "darwin") {
@@ -190,6 +202,7 @@ export const make = Effect.gen(function* () {
       {
         label: "File",
         submenu: [
+          newWindowItem,
           ...(environment.platform === "darwin"
             ? []
             : [
@@ -326,6 +339,11 @@ export const make = Effect.gen(function* () {
     );
 
     yield* electronMenu.setApplicationMenu(template);
+    if (environment.platform === "darwin") {
+      yield* Effect.sync(() =>
+        Electron.app.dock?.setMenu(Electron.Menu.buildFromTemplate([newWindowItem])),
+      );
+    }
   }).pipe(Effect.withSpan("desktop.menu.configure"));
 
   return DesktopApplicationMenu.of({

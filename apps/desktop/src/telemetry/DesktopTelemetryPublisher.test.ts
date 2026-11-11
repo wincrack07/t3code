@@ -1,3 +1,5 @@
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -86,7 +88,9 @@ describe("DesktopTelemetryPublisher", () => {
         const layer = DesktopTelemetryPublisher.layer.pipe(
           Layer.provide(
             Layer.mergeAll(
+              Layer.succeed(HostProcess.Platform, "linux"),
               layerElectronApp([]),
+              Layer.mock(ElectronWindow.ElectronWindow)({ main: Effect.succeedNone }),
               layerPower,
               layerHistory,
               Layer.succeed(DesktopShellEnvironment.DesktopShellEnvironment, {

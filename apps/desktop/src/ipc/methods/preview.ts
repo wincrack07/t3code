@@ -51,13 +51,13 @@ export const installPreviewEventForwarding = Effect.fn(
     electronWindow.sendAll(IpcChannels.PREVIEW_STATE_CHANGE_CHANNEL, tabId, state),
   );
   yield* manager.subscribeRecordingInputs((event) =>
-    electronWindow.sendAll(IpcChannels.PREVIEW_RECORDING_INPUT_CHANNEL, event),
+    manager.sendToHost(event.tabId, IpcChannels.PREVIEW_RECORDING_INPUT_CHANNEL, event),
   );
   yield* manager.subscribePointerEvents((event) =>
-    electronWindow.sendAll(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, event),
+    manager.sendToHost(event.tabId, IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, event),
   );
   yield* manager.subscribeOpenLinks((event) =>
-    electronWindow.sendAll(IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, event),
+    manager.sendToHost(event.tabId, IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, event),
   );
 });
 

@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeEvents from "node:events";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
@@ -18,7 +19,9 @@ const makeWindow = () => {
       if (channel === WEB_LINK_OPEN_CHANNEL) sent.push(url);
     },
   });
-  const window = { webContents } as unknown as Electron.BrowserWindow;
+  const window = Object.assign(new NodeEvents.EventEmitter(), {
+    webContents,
+  }) as unknown as Electron.BrowserWindow;
   const reload = () =>
     webContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
   const layer = DesktopWebLinks.layer.pipe(
@@ -41,6 +44,49 @@ const makeWindow = () => {
 };
 
 describe("DesktopWebLinks", () => {
+  it.effect(
+    "keeps readiness per sender and delivers links to the most recently focused window",
+    () => {
+      const sent: string[][] = [[], []];
+      const windows = sent.map((messages, index) =>
+        Object.assign(new NodeEvents.EventEmitter(), {
+          webContents: Object.assign(new NodeEvents.EventEmitter(), {
+            id: index + 1,
+            isDestroyed: () => false,
+            send: (_channel: string, url: string) => messages.push(url),
+          }),
+        }),
+      ) as unknown as Electron.BrowserWindow[];
+      let current = windows[0];
+      const layer = DesktopWebLinks.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.mock(DesktopWindow.DesktopWindow)({ activate: Effect.void }),
+            Layer.mock(ElectronWindow.ElectronWindow)({
+              currentMainOrFirst: Effect.sync(() => Option.fromNullishOr(current)),
+              fromSender: (id) =>
+                Effect.succeed(Option.fromNullishOr(windows.find((w) => w.webContents.id === id))),
+            }),
+          ),
+        ),
+      );
+      return Effect.gen(function* () {
+        const links = yield* DesktopWebLinks.DesktopWebLinks;
+        yield* links.setRendererReady(true, 1);
+        yield* links.setRendererReady(true, 2);
+        yield* links.receive("https://example.com/first");
+        current = windows[1];
+        yield* links.receive("https://example.com/second");
+        yield* links.setRendererReady(false, 1);
+        yield* links.receive("https://example.com/third");
+        assert.deepEqual(sent, [
+          ["https://example.com/first"],
+          ["https://example.com/second", "https://example.com/third"],
+        ]);
+      }).pipe(Effect.provide(layer));
+    },
+  );
+
   it.effect("holds links until the renderer listens, then delivers them in order", () => {
     const { sent, revealed, layer } = makeWindow();
     return Effect.gen(function* () {

@@ -290,11 +290,10 @@ function layerTest(input: {
         Effect.as(input.window),
       ),
     main: Ref.get(input.mainWindow),
+    appWindows: Effect.succeed([]),
+    fromSender: () => Effect.succeedNone,
     currentMainOrFirst: Ref.get(input.mainWindow),
-    focusedMainOrFirst:
-      input.focusedWindow === undefined
-        ? Ref.get(input.mainWindow)
-        : Effect.succeedSome(input.focusedWindow),
+    focusedMainOrFirst: Ref.get(input.mainWindow),
     setMain: (window) => Ref.set(input.mainWindow, Option.some(window)),
     clearMain: () => Ref.set(input.mainWindow, Option.none()),
     prepareReveal: () => Effect.succeed(false),
@@ -415,6 +414,8 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
           return outcome;
         }),
       main: Ref.get(mainWindow),
+      appWindows: Effect.succeed([]),
+      fromSender: () => Effect.succeedNone,
       currentMainOrFirst,
       focusedMainOrFirst: currentMainOrFirst,
       setMain: (window) => Ref.set(mainWindow, Option.some(window)),

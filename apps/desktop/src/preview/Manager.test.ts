@@ -1579,6 +1579,38 @@ describe("PreviewManager", () => {
     ),
   );
 
+  effectIt.effect(
+    "accepts previews in either app window and keeps the other host after a close",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const firstHost = makeTestHostWebContents();
+          const secondHost = makeTestHostWebContents();
+          const first = makeTestPreviewWebContents(vi.fn(), 41, firstHost);
+          const second = makeTestPreviewWebContents(vi.fn(), 42, secondHost);
+          fromId.mockImplementation((id) => (id === 41 ? first : id === 42 ? second : null));
+          let closeFirst: (() => void) | undefined;
+          for (const host of [firstHost, secondHost]) {
+            yield* manager.setMainWindow({
+              isDestroyed: () => false,
+              webContents: host,
+              once: (_event: string, callback: () => void) => {
+                if (host === firstHost) closeFirst = callback;
+              },
+            } as never);
+          }
+          yield* manager.createTab("multi_first");
+          yield* manager.createTab("multi_second");
+          yield* manager.registerWebview("multi_first", 41);
+          yield* manager.registerWebview("multi_second", 42);
+          closeFirst?.();
+          yield* manager.registerWebview("multi_second", 42);
+          const rejected = yield* Effect.exit(manager.registerWebview("multi_first", 41));
+          expect(rejected._tag).toBe("Failure");
+        }),
+      ),
+  );
+
   effectIt.effect("keeps every recorded guest unthrottled until its frame capture stops", () =>
     withManager((manager) =>
       Effect.gen(function* () {

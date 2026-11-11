@@ -124,6 +124,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   const layerWindow = Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected BrowserWindow creation"),
     main: Effect.succeedNone,
+    appWindows: Effect.succeed([]),
+    fromSender: () => Effect.succeedNone,
     currentMainOrFirst: Effect.succeedNone,
     focusedMainOrFirst: Effect.succeedNone,
     setMain: () => Effect.void,

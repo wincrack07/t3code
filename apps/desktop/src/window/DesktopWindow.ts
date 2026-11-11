@@ -1152,7 +1152,7 @@ export const make = Effect.gen(function* () {
     }),
     zoomMain: Effect.fn("desktop.window.zoomMain")(function* (direction) {
       yield* Effect.annotateCurrentSpan({ direction });
-      const window = yield* electronWindow.main;
+      const window = yield* electronWindow.focusedMainOrFirst;
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
@@ -1161,7 +1161,7 @@ export const make = Effect.gen(function* () {
     runMainContentsCommand: Effect.fn("desktop.window.runMainContentsCommand")(function* (command) {
       yield* Effect.annotateCurrentSpan({ command });
       // A focused OAuth popup must not receive the app's Reload command.
-      const window = yield* electronWindow.main;
+      const window = yield* electronWindow.focusedMainOrFirst;
       if (Option.isNone(window) || window.value.isDestroyed()) return;
       const webContents = window.value.webContents;
       if (command === "reload") webContents.reload();

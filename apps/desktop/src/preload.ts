@@ -114,6 +114,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.on(IpcChannels.TRACKPAD_SCROLL_END_CHANNEL, handler);
     return () => ipcRenderer.removeListener(IpcChannels.TRACKPAD_SCROLL_END_CHANNEL, handler);
   },
+  openThread: (environmentId, threadId) =>
+    ipcRenderer.invoke(IpcChannels.OPEN_THREAD_CHANNEL, { environmentId, threadId }),
+  newWindow: () => ipcRenderer.invoke(IpcChannels.NEW_WINDOW_CHANNEL),
   revealWindow: () => ipcRenderer.invoke(IpcChannels.REVEAL_WINDOW_CHANNEL),
   getSystemLocale: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_SYSTEM_LOCALE_CHANNEL);

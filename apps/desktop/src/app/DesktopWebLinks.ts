@@ -19,68 +19,74 @@ export class DesktopWebLinks extends Context.Service<
   DesktopWebLinks,
   {
     readonly receive: (url: string) => Effect.Effect<void>;
-    readonly setRendererReady: (ready: boolean) => Effect.Effect<void>;
+    readonly setRendererReady: (ready: boolean, senderId?: number) => Effect.Effect<void>;
   }
 >()("@t3tools/desktop/app/DesktopWebLinks") {}
 
 const make = Effect.gen(function* () {
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const pending: Array<string> = [];
-  let listening: Electron.WebContents | null = null;
-  let detachListening: (() => void) | null = null;
-
-  const stopListening = () => {
-    detachListening?.();
-    detachListening = null;
-    listening = null;
-  };
+  const listeners = new Map<Electron.WebContents, () => void>();
 
   const flush = Effect.gen(function* () {
-    if (listening === null || pending.length === 0) return;
+    if (pending.length === 0) return;
     const window = yield* electronWindow.currentMainOrFirst;
-    if (Option.isNone(window) || window.value.webContents !== listening) return;
-    if (listening.isDestroyed()) {
-      stopListening();
-      return;
-    }
-    for (const url of pending.splice(0)) listening.send(WEB_LINK_OPEN_CHANNEL, url);
+    if (Option.isNone(window)) return;
+    const contents = window.value.webContents;
+    if (!listeners.has(contents) || contents.isDestroyed()) return;
+    for (const url of pending.splice(0)) contents.send(WEB_LINK_OPEN_CHANNEL, url);
     yield* desktopWindow.activate.pipe(Effect.ignore);
   });
 
-  const startListening = Effect.gen(function* () {
-    const window = yield* electronWindow.currentMainOrFirst;
-    if (Option.isNone(window) || window.value.webContents.isDestroyed()) return;
-    const webContents = window.value.webContents;
-    if (listening === webContents) return;
-    stopListening();
-    listening = webContents;
-    const onNavigation = (
+  const setReady = Effect.fn("DesktopWebLinks.setReady")(function* (
+    ready: boolean,
+    senderId?: number,
+  ) {
+    const window = yield* senderId === undefined
+      ? electronWindow.currentMainOrFirst
+      : electronWindow.fromSender(senderId);
+    if (Option.isNone(window)) return;
+    const contents = window.value.webContents;
+    if (!ready) {
+      listeners.get(contents)?.();
+      return;
+    }
+    if (contents.isDestroyed() || listeners.has(contents)) return;
+    const stop = () => {
+      listeners.delete(contents);
+      contents.removeListener("did-start-navigation", navigation);
+      contents.removeListener("render-process-gone", stop);
+      contents.removeListener("destroyed", stop);
+      window.value.removeListener("focus", focus);
+    };
+    const navigation = (
       event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
     ) => {
-      if (event.isMainFrame && !event.isSameDocument) stopListening();
+      if (event.isMainFrame && !event.isSameDocument) stop();
     };
-    webContents.on("did-start-navigation", onNavigation);
-    webContents.on("render-process-gone", stopListening);
-    webContents.once("destroyed", stopListening);
-    detachListening = () => {
-      webContents.removeListener("did-start-navigation", onNavigation);
-      webContents.removeListener("render-process-gone", stopListening);
-      webContents.removeListener("destroyed", stopListening);
+    const focus = () => {
+      void runPromise(flush);
     };
+    window.value.on("focus", focus);
+    listeners.set(contents, stop);
+    contents.on("did-start-navigation", navigation);
+    contents.on("render-process-gone", stop);
+    contents.once("destroyed", stop);
   });
 
   return DesktopWebLinks.of({
     receive: Effect.fn("DesktopWebLinks.receive")(function (url) {
       return Effect.suspend(() => {
         pending.push(url);
-        return listening === null
+        return listeners.size === 0
           ? desktopWindow.activate.pipe(Effect.ignore, Effect.andThen(flush))
           : flush;
       });
     }),
-    setRendererReady: Effect.fn("DesktopWebLinks.setRendererReady")(function (ready) {
-      return ready ? startListening : Effect.sync(stopListening);
+    setRendererReady: Effect.fn("DesktopWebLinks.setRendererReady")(function (ready, senderId) {
+      return setReady(ready, senderId);
     }, Effect.andThen(flush)),
   });
 });

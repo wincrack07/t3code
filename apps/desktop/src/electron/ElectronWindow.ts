@@ -9,10 +9,10 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
+import { WindowRegistry } from "../window/WindowRegistry.ts";
 
 import {
   activateWindowsForeground,
@@ -115,6 +115,10 @@ export class ElectronWindow extends Context.Service<
       options: Electron.BrowserWindowConstructorOptions,
       behavior?: { readonly auxiliary?: boolean },
     ) => Effect.Effect<Electron.BrowserWindow, ElectronWindowCreateError>;
+    readonly appWindows: Effect.Effect<readonly Electron.BrowserWindow[]>;
+    readonly fromSender: (
+      senderId: number | undefined,
+    ) => Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly main: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly currentMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly focusedMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
@@ -143,7 +147,7 @@ export const make = Effect.gen(function* () {
   };
   const captureRevealWindows = new Set<number>();
   yield* Effect.addFinalizer(() => Effect.sync(() => windowsForegroundFocus?.close()));
-  const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+  const registry = new WindowRegistry<Electron.BrowserWindow>();
   const auxiliaryWindows = new WeakSet<Electron.BrowserWindow>();
 
   const listWindows = Effect.try({
@@ -171,13 +175,7 @@ export const make = Effect.gen(function* () {
         }),
     }).pipe(Effect.orDie);
 
-  const liveMain = Effect.gen(function* () {
-    const main = yield* Ref.get(mainWindowRef);
-    if (Option.isNone(main) || (yield* isWindowDestroyed(main.value))) {
-      return Option.none<Electron.BrowserWindow>();
-    }
-    return main;
-  });
+  const liveMain = Effect.sync(() => Option.fromNullishOr(registry.current()));
 
   const currentMainOrFirst = Effect.gen(function* () {
     const main = yield* liveMain;
@@ -206,7 +204,7 @@ export const make = Effect.gen(function* () {
           cause,
         }),
     }).pipe(Effect.orDie);
-    if (Option.isSome(focused) && !(yield* isWindowDestroyed(focused.value))) {
+    if (Option.isSome(focused) && registry.list().includes(focused.value)) {
       return focused;
     }
     return yield* currentMainOrFirst;
@@ -246,21 +244,26 @@ export const make = Effect.gen(function* () {
         catch: (cause) => new ElectronWindowCreateError({ options: diagnosticOptions, cause }),
       });
     }),
+    appWindows: Effect.sync(() => registry.list()),
+    fromSender: Effect.fn("ElectronWindow.fromSender")((senderId) =>
+      Effect.sync(() =>
+        Option.fromNullishOr(registry.list().find((window) => window.webContents.id === senderId)),
+      ),
+    ),
     main: liveMain,
     currentMainOrFirst,
     focusedMainOrFirst,
     setMain: Effect.fn("ElectronWindow.setMain")(function (window) {
-      return Ref.set(mainWindowRef, Option.some(window));
+      return Effect.sync(() => {
+        registry.register(window);
+        window.on("focus", () => registry.focus(window));
+        window.once("closed", () => registry.remove(window));
+      });
     }),
     clearMain: Effect.fn("ElectronWindow.clearMain")(function (window) {
-      return Ref.update(mainWindowRef, (current) => {
-        if (Option.isNone(current)) {
-          return current;
-        }
-        if (Option.isSome(window) && current.value !== window.value) {
-          return current;
-        }
-        return Option.none();
+      return Effect.sync(() => {
+        if (Option.isSome(window)) registry.remove(window.value);
+        else for (const current of registry.list()) registry.remove(current);
       });
     }),
     prepareReveal: Effect.fn("ElectronWindow.prepareReveal")(function (window) {
