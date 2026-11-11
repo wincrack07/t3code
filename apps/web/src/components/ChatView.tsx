@@ -3572,7 +3572,7 @@ export default function ChatView(props: ChatViewProps) {
                             ) : null}
                             {!composerMounted ? null : (
                               <ChatComposer
-                                locationControls={
+                                locationControls={showComposerContextStrip ? (
                                   <BranchToolbar
                                     forceNewWorktree={multipleModelSelections !== null}
                                     ref={branchToolbarRef}
@@ -3615,7 +3615,7 @@ export default function ChatView(props: ChatViewProps) {
                                     }
                                     availableEnvironments={logicalProjectEnvironments}
                                   />
-                                }
+                                ) : null}
                                 contextTokens={activeContextWindow?.usedTokens ?? null}
                                 contextPercentage={activeContextWindow?.usedPercentage ?? null}
                                 canOperateThread={canOperateThread}
