@@ -1,3 +1,4 @@
+import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
 import { PromptPolishSettings } from "./PromptPolishSettings";
 import { KeepAwakeControl } from "../KeepAwakeControl";
 import { useAtomValue } from "@effect/atom-react";
@@ -427,6 +428,7 @@ function AboutVersionSection() {
         />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
+      <FinderIntegrationSettingsRow />
       {switchChannel === null ? null : (
         <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
       )}

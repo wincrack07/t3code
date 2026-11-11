@@ -1,3 +1,4 @@
+import { readFinderLink } from "@t3tools/shared/finderIntegration";
 import { createClerkBridge } from "@clerk/electron";
 import * as NodeURL from "node:url";
 import { storage } from "@clerk/electron/storage";
@@ -210,7 +211,12 @@ export const make = Effect.gen(function* () {
         return true;
       };
       const openAppLink = (value: string | undefined) => {
-        if (!value || (promptLinkAppPath(value) === null && readPairingAppLink(value) === null))
+        if (
+          !value ||
+          (promptLinkAppPath(value) === null &&
+            readPairingAppLink(value) === null &&
+            readFinderLink(value) === null)
+        )
           return false;
         void runPromise(webLinks.receive(value));
         return true;

@@ -1029,6 +1029,19 @@ export type DesktopMediaRead = typeof DesktopMediaReadSchema.Type;
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const DesktopFinderStateSchema = Schema.Struct({
+  supported: Schema.Boolean,
+  installed: Schema.Boolean,
+});
+export const DesktopFinderItemSchema = Schema.Struct({
+  id: Schema.String,
+  path: Schema.String,
+  name: Schema.String,
+  kind: Schema.Literals(["file", "folder"]),
+  sizeBytes: Schema.Number,
+});
+export type DesktopFinderItem = typeof DesktopFinderItemSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
@@ -1145,6 +1158,12 @@ export interface DesktopBridge {
     install: () => Promise<DesktopCliCommandState>;
     uninstall: () => Promise<DesktopCliCommandState>;
     addToPath: () => Promise<DesktopCliCommandState>;
+  };
+  finderIntegration?: {
+    getState: () => Promise<typeof DesktopFinderStateSchema.Type>;
+    setInstalled: (installed: boolean) => Promise<typeof DesktopFinderStateSchema.Type>;
+    inspect: (url: string) => Promise<readonly DesktopFinderItem[]>;
+    read: (id: string) => Promise<Uint8Array>;
   };
   webLinks: {
     setReady: (ready: boolean) => Promise<void>;

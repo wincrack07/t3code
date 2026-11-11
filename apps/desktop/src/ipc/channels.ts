@@ -132,3 +132,8 @@ export const RECEIVE_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:receive-provider-
 export const CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:cancel-provider-auth-callback";
 export const TAKE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:take-legacy-local-storage";
 export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-local-storage";
+
+export const FINDER_STATE_CHANNEL = "finder:state";
+export const FINDER_INSTALL_CHANNEL = "finder:install";
+export const FINDER_INSPECT_CHANNEL = "finder:inspect";
+export const FINDER_READ_CHANNEL = "finder:read";

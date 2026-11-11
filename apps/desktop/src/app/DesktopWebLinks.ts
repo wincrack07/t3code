@@ -74,7 +74,9 @@ const make = Effect.gen(function* () {
     receive: Effect.fn("DesktopWebLinks.receive")(function (url) {
       return Effect.suspend(() => {
         pending.push(url);
-        return flush;
+        return listening === null
+          ? desktopWindow.activate.pipe(Effect.ignore, Effect.andThen(flush))
+          : flush;
       });
     }),
     setRendererReady: Effect.fn("DesktopWebLinks.setRendererReady")(function (ready) {

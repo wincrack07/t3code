@@ -100,10 +100,11 @@ describe("reduceCommandPaletteUiState", () => {
     expect(state).toMatchObject({ open: true, openIntent: { kind: "new-thread-in" }, session: 1 });
     state = reduceCommandPaletteUiState(state, { _tag: "ToggleMode", mode: "files" });
     expect(state).toMatchObject({ mode: "files", openIntent: null, session: 1 });
-    state = reduceCommandPaletteUiState(state, { _tag: "OpenAddProject" });
+    const folder = { path: "/work/new folder", environmentId: EnvironmentId.make("local") };
+    state = reduceCommandPaletteUiState(state, { _tag: "OpenAddProject", folder });
     expect(state).toMatchObject({
       mode: "command",
-      openIntent: { kind: "add-project" },
+      openIntent: { kind: "add-project", folder },
       session: 2,
     });
   });
