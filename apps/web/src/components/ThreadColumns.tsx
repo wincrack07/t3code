@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
+import { isElectron } from "../env";
 import { cn } from "../lib/utils";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
@@ -17,6 +18,7 @@ import {
   type ThreadColumn,
 } from "../threadColumnsStore";
 import { buildThreadRouteParams, type ThreadRouteTarget } from "../threadRoutes";
+import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 import {
   threadContextDropTargetProps,
   useThreadContextDrop,
@@ -93,6 +95,7 @@ function Column({
   column,
   active,
   multiple,
+  first,
   next,
   background,
   target,
@@ -105,6 +108,7 @@ function Column({
   column: ThreadColumn;
   active: boolean;
   multiple: boolean;
+  first: boolean;
   next?: ThreadColumn | undefined;
   background: boolean;
 }) {
@@ -156,7 +160,11 @@ function Column({
       {multiple ? (
         <div
           className={cn(
-            "flex h-8 shrink-0 items-center gap-2 border-b px-2",
+            "flex shrink-0 items-center gap-2 border-b px-2",
+            // The desktop title bar holds the window buttons, so the strip fills it and clears them.
+            isElectron ? "drag-region h-(--workspace-topbar-height)" : "h-8",
+            first && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+            !next && isElectron && "wco:pr-(--workspace-native-controls-inset)",
             active ? "bg-accent" : "bg-muted/30",
           )}
         >
@@ -282,6 +290,7 @@ export function ThreadColumns({
             }
             active={column.id === layout.activeId}
             multiple={columns.length > 1}
+            first={index === 0}
             next={columns[index + 1]}
             background={background}
           />
