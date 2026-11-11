@@ -542,6 +542,10 @@
     "./speech": {
       "types": "./src/speech.ts",
       "import": "./src/speech.ts"
+    },
+    "./decisionRules": {
+      "types": "./src/decisionRules.ts",
+      "import": "./src/decisionRules.ts"
     }
   },
   "scripts": {
