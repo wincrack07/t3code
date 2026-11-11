@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
+import {
+  cliReleaseIndexPageUrl,
+  cliArchiveTarCommand,
+  newestCliReleaseVersion,
+  parseChecksums,
+} from "./cliRelease.ts";
 
 describe("cliRelease", () => {
+  it("discovers fork prereleases through the public GitHub API", () => {
+    expect(
+      cliReleaseIndexPageUrl(2, "https://github.com/wincrack07/t3code/releases/download"),
+    ).toBe("https://api.github.com/repos/wincrack07/t3code/releases?per_page=100&page=2");
+    expect(() => cliReleaseIndexPageUrl(1, "https://example.com/releases/download")).toThrow();
+  });
   it("parses sha256sum output including binary-mode markers", () => {
     const checksums = parseChecksums(
       [
@@ -29,6 +40,7 @@ describe("cliRelease", () => {
     const releases = [
       { tag_name: "v1.2.4-preview.20260912.9", draft: true },
       { tag_name: "v1.2.4-preview.20260912.8" },
+      { tag_name: "v1.2.3-nightly.20260911.1" },
       { tag_name: "v1.2.4-nightly.20260912.7" },
       { tag_name: "desktop-preview" },
       { tag_name: "v1.2.3" },

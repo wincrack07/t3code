@@ -2,6 +2,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import type { ManagedPolicyDocument } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as ServerSettings from "../serverSettings.ts";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -161,6 +164,58 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
 });
 
 it.layer(NodeServices.layer)("server self update", (it) => {
+  it.effect.each([
+    { custom: true, enabled: undefined, expected: 2 },
+    { custom: true, enabled: false, expected: 0 },
+    { custom: false, enabled: undefined, expected: 0 },
+    { custom: false, enabled: true, expected: 2 },
+  ])(
+    "checks periodically only when automatic updates are enabled: $custom/$enabled",
+    ({ custom, enabled, expected }) =>
+      Effect.gen(function* () {
+        const requests: string[] = [];
+        const httpClient = HttpClient.make((request) => {
+          requests.push(request.url);
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              Response.json([{ tag_name: `v${packageJson.version}` }]),
+            ),
+          );
+        });
+        const { selfUpdate } = yield* makeHarness({ httpClient }).pipe(
+          Effect.provide(
+            ConfigProvider.layer(
+              ConfigProvider.fromEnv({
+                env: custom
+                  ? {
+                      T3CODE_RELEASE_BASE_URL:
+                        "https://github.com/wincrack07/t3code/releases/download",
+                    }
+                  : {},
+              }),
+            ),
+          ),
+        );
+        yield* selfUpdate.startAutomaticUpdates.pipe(
+          Effect.provide(
+            Layer.merge(
+              ServerSettings.layerTest(enabled === undefined ? {} : { autoUpdateServer: enabled }),
+              NodeSqliteClient.layer({ filename: ":memory:" }),
+            ),
+          ),
+        );
+        expect(requests).toHaveLength(0);
+        yield* TestClock.adjust("5 minutes");
+        yield* TestClock.adjust("6 hours");
+        expect(requests).toHaveLength(expected);
+        if (expected > 0)
+          expect(requests[0]).toContain(
+            `/repos/${custom ? "wincrack07" : "pingdotgg"}/t3code/releases`,
+          );
+      }),
+  );
+
   it.effect.each([
     { asset: "checksums", status: 504 },
     { asset: "archive", status: 503 },

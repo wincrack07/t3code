@@ -20,6 +20,7 @@ import * as DesktopUpdates from "./DesktopUpdates.ts";
 export const flushCallbacks = Effect.yieldNow;
 
 export interface UpdatesHarnessOptions {
+  readonly installOnQuitOnly?: boolean;
   readonly checkForUpdates?: Effect.Effect<
     void,
     ElectronUpdater.ElectronUpdaterCheckForUpdatesError
@@ -75,6 +76,9 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   };
 
   const layerUpdater = Layer.succeed(ElectronUpdater.ElectronUpdater, {
+    ...(options.installOnQuitOnly === undefined
+      ? {}
+      : { installOnQuitOnly: options.installOnQuitOnly }),
     setFeedURL: (options) =>
       Effect.sync(() => {
         feedUrls.push(options);

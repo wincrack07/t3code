@@ -59,7 +59,9 @@ function shouldUseSidebarUpdateReleaseNotesPopover(
   showUpdateDetails: boolean,
   state: DesktopUpdateState | null,
 ): boolean {
-  return showUpdateDetails && (state?.releaseNotes.length ?? 0) > 0;
+  return (
+    (showUpdateDetails || state?.status === "up-to-date") && (state?.releaseNotes.length ?? 0) > 0
+  );
 }
 
 function handleSidebarUpdateReleaseNotesPopoverOpenChange(
@@ -578,7 +580,9 @@ function SidebarUpdateControl() {
             <SidebarUpdateReleaseNotes
               shell={window.desktopBridge}
               state={state}
-              tooltip={tooltip}
+              tooltip={
+                state.status === "up-to-date" ? `What’s new in ${state.currentVersion}` : tooltip
+              }
             />
           </PopoverPopup>
         ) : null}

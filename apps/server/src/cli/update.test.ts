@@ -68,6 +68,35 @@ it.effect("authenticates each release page until the requested channel is found"
   }),
 );
 
+it.effect("discovers the newest fork nightly without a GitHub token", () =>
+  Effect.gen(function* () {
+    const httpClient = HttpClient.make((request) => {
+      assert.include(request.url, "/repos/wincrack07/t3code/releases?");
+      assert.isUndefined(request.headers.authorization);
+      return Effect.succeed(
+        HttpClientResponse.fromWeb(
+          request,
+          Response.json([
+            { tag_name: "v1.2.4-nightly.20261110.9001" },
+            { tag_name: "v1.2.4-nightly.20261111.9002", prerelease: true },
+            { tag_name: "v1.2.5-nightly.20261111.9003", draft: true },
+          ]),
+        ),
+      );
+    });
+    assert.equal(
+      yield* resolveNewestVersion(
+        "nightly",
+        "https://github.com/wincrack07/t3code/releases/download",
+      ).pipe(
+        Effect.provideService(HostProcess.Environment, {}),
+        Effect.provideService(HttpClient.HttpClient, httpClient),
+      ),
+      "1.2.4-nightly.20261111.9002",
+    );
+  }),
+);
+
 it.effect("reads the newest version from the update feed file a mirror publishes", () =>
   Effect.gen(function* () {
     const requested: string[] = [];

@@ -5,7 +5,7 @@ name: Fork nightly
 #   - t3-<version>-linux-x64.tar.gz + SHA256SUMS, the server runtime that
 #     self-hosted T3 servers install. Point a server at this fork's releases with
 #     T3CODE_RELEASE_BASE_URL=https://github.com/<owner>/<repo>/releases/download
-#   - an unsigned Apple Silicon DMG of the desktop app.
+#   - an ad-hoc-signed Apple Silicon DMG and ZIP of the desktop app.
 # The version is <base>-nightly.<UTC date>.<9000 + run number>, so a fork build
 # always sorts above the same day's upstream nightly.
 #
@@ -60,6 +60,7 @@ jobs:
       sha: ${{ steps.pick.outputs.sha }}
       version: ${{ steps.pick.outputs.version }}
       build: ${{ steps.pick.outputs.build }}
+      previous_tag: ${{ steps.pick.outputs.previous_tag }}
     env:
       GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN || github.token }}
       REPO: ${{ github.repository }}
@@ -101,7 +102,7 @@ jobs:
           sha=$(gh api "repos/$REPO/commits/$ref" -q .sha)
           base=$(gh api "repos/$REPO/contents/package.json?ref=$sha" -q .content | base64 -d | jq -r .version | sed 's/-.*//')
           version="${INPUT_VERSION:-$base-nightly.$(date -u +%Y%m%d).$((9000 + GITHUB_RUN_NUMBER))}"
-          last=$(gh release list -R "$REPO" --limit 1 --json tagName -q '.[0].tagName // empty')
+          last=$(gh release list -R "$REPO" --exclude-drafts --limit 1 --json tagName -q '.[0].tagName // empty')
           last_sha=""
           if [[ -n "$last" ]]; then
             last_sha=$(gh api "repos/$REPO/commits/$last" -q .sha 2>/dev/null || true)
@@ -111,6 +112,7 @@ jobs:
             build=false
             echo "main ($sha) is already released as $last; nothing to build."
           fi
+          echo "previous_tag=$last" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
@@ -239,16 +241,20 @@ jobs:
         env:
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
           T3CODE_DESKTOP_SIGNED: "false"
+          T3CODE_DESKTOP_UNSIGNED_MAC_UPDATES: "true"
+          T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          unset GITHUB_REPOSITORY T3CODE_DESKTOP_UPDATE_REPOSITORY
           node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64 --build-version "$BUILD_VERSION" --verbose
 
       - name: Upload DMG
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-mac-arm64
-          path: release/*.dmg
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*-mac.yml
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
@@ -270,6 +276,29 @@ jobs:
           path: assets
           merge-multiple: true
 
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+
+      - name: Generate fork release notes
+        shell: bash
+        env:
+          PREVIOUS_TAG: ${{ needs.prepare.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          git init history
+          cd history
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --filter=blob:none --no-tags origin "$SHA"
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            git fetch --filter=blob:none origin "refs/tags/$PREVIOUS_TAG:refs/tags/$PREVIOUS_TAG"
+          fi
+          git fetch --filter=blob:none https://github.com/pingdotgg/t3code.git main:refs/remotes/upstream/main
+          git fetch --filter=blob:none --no-tags origin "$GITHUB_SHA"
+          git show "$GITHUB_SHA:scripts/fork-release-notes.ts" > "$RUNNER_TEMP/fork-release-notes.mts"
+          node "$RUNNER_TEMP/fork-release-notes.mts" > "$RUNNER_TEMP/fork-release-notes.md"
+
       - name: Publish prerelease
         shell: bash
         run: |
@@ -278,9 +307,7 @@ jobs:
           ls -la
           sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
-          upstream=$(gh api "repos/$GITHUB_REPOSITORY/compare/pingdotgg:t3code:main...$SHA" -q '"\(.ahead_by) commits ahead / \(.behind_by) behind upstream main"' 2>/dev/null || echo "")
-          notes=$(printf 'Fork build of `%s` (%s).\n\nServers: set `T3CODE_RELEASE_BASE_URL=%s/%s/releases/download` and update to `%s` from the app.\nThe DMG is unsigned: open it with right click → Open the first time.' \
-            "${SHA:0:12}" "$upstream" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$VERSION")
           gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" \
-            --target "$SHA" --prerelease \
-            --title "T3 Code fork $VERSION" --notes "$notes" -- *
+            --target "$SHA" --prerelease --draft \
+            --title "T3 Code fork $VERSION" --notes-file "$RUNNER_TEMP/fork-release-notes.md" -- *
+          gh release edit "v$VERSION" -R "$GITHUB_REPOSITORY" --draft=false

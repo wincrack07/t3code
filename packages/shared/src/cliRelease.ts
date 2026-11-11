@@ -132,8 +132,14 @@ export function acceptsTrackSwitchRelease(
 }
 
 /** Page until the channel matches; nightlies can push preview/stable releases past the first page. */
-export function cliReleaseIndexPageUrl(page: number): string {
-  return `https://api.github.com/repos/${CLI_RELEASE_REPOSITORY}/releases?per_page=100&page=${page}`;
+export function cliReleaseIndexPageUrl(page: number, baseUrl?: string): string {
+  const repository =
+    baseUrl === undefined
+      ? CLI_RELEASE_REPOSITORY
+      : /^https:\/\/github\.com\/([^/]+\/[^/]+)\/releases\/download\/?$/.exec(baseUrl.trim())?.[1];
+  if (repository === undefined)
+    throw new Error("Release discovery requires a GitHub releases/download URL.");
+  return `https://api.github.com/repos/${repository}/releases?per_page=100&page=${page}`;
 }
 
 /** Draft assets are not downloadable. */
@@ -144,13 +150,18 @@ export function newestCliReleaseVersion(
   }>,
   channel: CliReleaseChannel,
 ): string | undefined {
+  let newest: string | undefined;
   for (const release of releases) {
     if (release.draft) continue;
     const version = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(release.tag_name)?.[1];
     if (version === undefined) continue;
-    if (cliReleaseChannelOf(version) === channel) return version;
+    if (
+      cliReleaseChannelOf(version) === channel &&
+      (newest === undefined || compareSemverVersions(version, newest) > 0)
+    )
+      newest = version;
   }
-  return undefined;
+  return newest;
 }
 
 const NpmReleaseMigrationManifest = Schema.Struct({
