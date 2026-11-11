@@ -587,6 +587,7 @@ export const AuthMcpTokenRequest = Schema.Struct({
   client_id: Schema.optionalKey(Schema.String),
   code_verifier: Schema.optionalKey(Schema.RedactedFromValue(Schema.String)),
   resource: Schema.optionalKey(Schema.String),
+  peer_link_token: Schema.optionalKey(Schema.RedactedFromValue(Schema.String)),
 }).pipe(HttpApiSchema.asFormUrlEncoded());
 export type AuthMcpTokenRequest = typeof AuthMcpTokenRequest.Type;
 
