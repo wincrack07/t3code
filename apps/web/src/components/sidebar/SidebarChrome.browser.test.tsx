@@ -62,7 +62,9 @@ it("pins the footer at 500px tall, fits narrow widths, opens More, and restores 
         </SidebarContent>
         <SidebarChromeFooter />
       </Sidebar>
-      <SidebarTrigger />
+      <div className="fixed right-2 top-2 z-50">
+        <SidebarTrigger />
+      </div>
     </SidebarProvider>
   );
   await using screen = await render(layout(320));
