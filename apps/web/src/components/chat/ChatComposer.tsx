@@ -2426,16 +2426,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     panelAnimationsActive,
     panelAnimationDurationMs,
   );
-  const restingHiddenBlockCount = showInlineRestingControls
-    ? restingControlsHiddenBlockCount
-    : composerControlsCollapsed
-      ? 0
-      : expandedControlsHiddenBlockCount;
-  const iconOnlyBlockCount = showInlineRestingControls
-    ? restingControlsIconOnlyBlockCount
-    : composerControlsCollapsed
-      ? 0
-      : expandedControlsIconOnlyBlockCount;
+  const restingHiddenBlockCount = !isMobileViewport
+    ? 0
+    : showInlineRestingControls
+      ? restingControlsHiddenBlockCount
+      : composerControlsCollapsed
+        ? 0
+        : expandedControlsHiddenBlockCount;
+  const iconOnlyBlockCount = !isMobileViewport
+    ? 0
+    : showInlineRestingControls
+      ? restingControlsIconOnlyBlockCount
+      : composerControlsCollapsed
+        ? 0
+        : expandedControlsIconOnlyBlockCount;
   const composerControls = (
     <ComposerControlsBar
       environmentId={environmentId}
@@ -3256,7 +3260,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton
       addComposerAttachments={addComposerAttachments}
+      useAddMenu={!isMobileViewport}
       focusComposer={focusComposer}
+      onAddReference={(trigger) =>
+        insertComposerTextStable(trigger, "cursor", { ensureLeadingBoundary: true })
+      }
     />
   ) : null;
   return (
@@ -3358,16 +3366,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             data-chat-composer-surface="true"
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
-              "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end rounded-xl bg-(--chat-composer-glass-surface) transition-[background-color] duration-200",
+              isMobileViewport
+                ? "rounded-2xl transition-[background-color] duration-200"
+                : "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end rounded-xl bg-(--chat-composer-glass-surface) transition-[background-color] duration-200",
               "in-data-[thread-context-over]:bg-accent/45 in-data-[thread-context-over]:ring-1 in-data-[thread-context-over]:ring-inset in-data-[thread-context-over]:ring-primary/70",
               isDragOverComposer ? "bg-accent/45 ring-1 ring-inset ring-primary/70" : null,
               projectSelectionRequired ? "opacity-75" : null,
               composerProviderState.composerSurfaceClassName,
             )}
           >
-            <div className="col-start-1 row-start-1 self-end p-1">
-              {isComposerCollapsedMobile ? null : composerAttachButton}
-            </div>
+            {isMobileViewport ? null : (
+              <div className="col-start-1 row-start-1 self-end p-1">{composerAttachButton}</div>
+            )}
             {showCollapsedMobilePromptRow ? (
               <div className="col-span-3 flex items-center justify-between gap-2 px-3 py-2">
                 <button
@@ -3428,7 +3438,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               }}
               data-chat-composer-body="true"
               className={cn(
-                "relative col-start-2 row-start-1 min-w-0 py-2",
+                isMobileViewport
+                  ? "relative px-4 pb-2 pt-3.5 sm:pt-4"
+                  : "relative col-start-2 row-start-1 min-w-0 py-2",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
@@ -3592,14 +3604,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </div>
             </div>
 
-            <ComposerPromptLengthValidation
-              message={providerInputSubmissionError ?? composerSubmissionError}
-            />
+            <div className="col-span-3">
+              <ComposerPromptLengthValidation
+                message={providerInputSubmissionError ?? composerSubmissionError}
+              />
+            </div>
 
             {speechInput.preview ? (
               <div
                 aria-label="Live transcription"
-                className="mx-3 mb-3 max-h-32 overflow-y-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap sm:mx-4"
+                className="col-span-3 mx-3 mb-3 max-h-32 overflow-y-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap sm:mx-4"
               >
                 <span>{speechInput.preview.committed}</span>
                 <span className="text-muted-foreground">{speechInput.preview.tentative}</span>
@@ -3610,13 +3624,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               <div
                 data-chat-composer-footer="true"
                 className={cn(
-                  "col-start-3 row-start-1 flex min-w-0 flex-nowrap items-center self-end p-1",
+                  isMobileViewport
+                    ? "flex min-w-0 flex-nowrap items-center overflow-visible px-2 pb-2"
+                    : "col-start-3 row-start-1 flex min-w-0 flex-nowrap items-center self-end p-1",
                   pendingUserInputs.length > 0 && "pt-2",
                   showMobilePendingAnswerActions &&
                     speechInput.state.phase === "idle" &&
                     "hidden sm:flex",
                 )}
               >
+                {isMobileViewport && composerAttachButton ? (
+                  <div className="me-2">{composerAttachButton}</div>
+                ) : null}
                 <div
                   data-chat-composer-actions="right"
                   data-chat-composer-transition-actions="true"
@@ -3625,6 +3644,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   }
                   className="flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-2"
                 >
+                  {isMobileViewport ? (
+                    <div
+                      ref={attachExpandedComposerControls}
+                      data-chat-composer-controls="footer"
+                      data-chat-composer-footer-controls="true"
+                      className="relative flex min-w-0 flex-1 items-center justify-end gap-0.5"
+                    >
+                      {composerControls}
+                    </div>
+                  ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
@@ -3713,68 +3742,98 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 </div>
               </div>
             )}
-          </div>
-        </ComposerSurface.Main>
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1 text-xs text-muted-foreground">
-          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
-            <span className="max-w-40 truncate px-1.5">{projectName}</span>
-            {props.locationControls}
-          </div>
-          <div
-            ref={setInlineRestingControlsHost}
-            className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1"
-          >
-            <div ref={attachRestingComposerControls} data-controls-visible={restingControlsVisible}>
-              <div
-                ref={attachExpandedComposerControls}
-                data-chat-composer-controls="footer"
-                data-chat-composer-footer-controls="true"
-                className="relative flex min-w-0 flex-1 flex-wrap items-center justify-end gap-0.5"
-              >
-                {composerControls}
-              </div>
-            </div>
-            {props.contextTokens != null ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent disabled:opacity-50"
-                      aria-label="Compact context"
-                      disabled={compactDisabled || compactThreadUnavailable}
-                      onClick={compactThreadContextStable}
-                    />
-                  }
+            {showInlineRestingControls ? (
+              <div className="h-8">
+                <div
+                  ref={setInlineRestingControlsHost}
+                  className="absolute bottom-2 inset-x-4 min-w-0"
                 >
-                  <svg className="size-3.5" viewBox="0 0 16 16" aria-hidden="true">
-                    <circle
-                      cx="8"
-                      cy="8"
-                      r="6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                    <circle
-                      cx="8"
-                      cy="8"
-                      r="6"
-                      fill="none"
-                      stroke="var(--primary)"
-                      strokeWidth="2"
-                      pathLength="100"
-                      strokeDasharray={`${props.contextPercentage ?? 0} 100`}
-                      transform="rotate(-90 8 8)"
-                    />
-                  </svg>
-                  {formatContextWindowTokens(props.contextTokens)}
-                </TooltipTrigger>
-                <TooltipPopup>Compact context</TooltipPopup>
-              </Tooltip>
+                  <div
+                    ref={attachRestingComposerControls}
+                    data-chat-composer-resting-controls="true"
+                    aria-hidden={restingControlsVisible ? undefined : true}
+                    inert={restingControlsVisible ? undefined : true}
+                    className={cn(
+                      "relative flex w-max min-w-0 max-w-full items-center gap-1 text-muted-foreground/70 [&_button]:text-xs!",
+                      !restingControlsVisible && "invisible",
+                    )}
+                  >
+                    {composerControls}
+                  </div>
+                </div>
+              </div>
             ) : null}
           </div>
-        </div>
+        </ComposerSurface.Main>
+        {isMobileViewport ? (
+          props.locationControls
+        ) : (
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1 text-xs text-muted-foreground">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
+              {props.locationControls ? (
+                <span className="max-w-40 truncate px-1.5">{projectName}</span>
+              ) : null}
+              {props.locationControls}
+            </div>
+            <div
+              ref={setInlineRestingControlsHost}
+              className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1"
+            >
+              <div
+                ref={attachRestingComposerControls}
+                data-controls-visible={restingControlsVisible}
+              >
+                <div
+                  ref={attachExpandedComposerControls}
+                  data-chat-composer-controls="footer"
+                  data-chat-composer-footer-controls="true"
+                  className="relative flex min-w-0 flex-1 flex-wrap items-center justify-end gap-0.5"
+                >
+                  {composerControls}
+                </div>
+              </div>
+              {props.contextTokens != null ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent disabled:opacity-50"
+                        aria-label="Compact context"
+                        disabled={compactDisabled || compactThreadUnavailable}
+                        onClick={compactThreadContextStable}
+                      />
+                    }
+                  >
+                    <svg className="size-3.5" viewBox="0 0 16 16" aria-hidden="true">
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        fill="none"
+                        stroke="var(--primary)"
+                        strokeWidth="2"
+                        pathLength="100"
+                        strokeDasharray={`${props.contextPercentage ?? 0} 100`}
+                        transform="rotate(-90 8 8)"
+                      />
+                    </svg>
+                    {formatContextWindowTokens(props.contextTokens)}
+                  </TooltipTrigger>
+                  <TooltipPopup>Compact context</TooltipPopup>
+                </Tooltip>
+              ) : null}
+            </div>
+          </div>
+        )}
       </div>
     </form>
   );
