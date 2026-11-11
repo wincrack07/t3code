@@ -54,7 +54,8 @@ export const make = Effect.fn("KeepAwakeTray.make")(function* () {
               : "Indefinitely";
       const statsTitle = trayStatsTitle(settings, sample);
       const title = statsTitle || label;
-      if (titleChanged(title)) tray.setTitle(title, statsTitle ? { fontType: "monospaced" } : {});
+      if (titleChanged(title))
+        tray.setTitle(title, statsTitle ? { fontType: "monospacedDigit" } : {});
       tray.setToolTip(`T3 Code · Keep awake · ${label} · MB/s = megabytes per second`);
       if (active !== status.active) {
         active = status.active;
