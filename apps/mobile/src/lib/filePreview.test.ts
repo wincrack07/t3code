@@ -227,7 +227,7 @@ vi.mock("react-native-safe-area-context", () => ({
 }));
 vi.mock("expo-haptics", () => ({ selectionAsync: async () => {} }));
 vi.mock("expo-image", () => ({}));
-vi.mock("uniwind", () => ({}));
+vi.mock("uniwind", () => ({ withUniwind: <T>(component: T) => component }));
 vi.mock("../components/ui/Dialog", () => ({}));
 vi.mock("../components/ui/NativePresentation", () => ({
   PresentationSource: ({ children }: { children?: ReactNode }) => children,
