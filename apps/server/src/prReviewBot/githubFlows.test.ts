@@ -33,7 +33,9 @@ interface FakeComment {
 }
 
 /** Just enough of GitHub's REST API for the claim and poll paths. */
-function makeFakeGitHub(options: { readonly gateFirstListings?: Deferred.Deferred<void> } = {}) {
+function makeFakeGitHub(
+  options: { readonly gateFirstListings?: Deferred.Deferred<void>; readonly etags?: boolean } = {},
+) {
   const state = {
     nextId: 100,
     issueComments: [] as Array<FakeComment>,
@@ -63,6 +65,7 @@ function makeFakeGitHub(options: { readonly gateFirstListings?: Deferred.Deferre
     const etag = `"${JSON.stringify(body).length}-${JSON.stringify(body)
       .split("")
       .reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0)}"`;
+    if (options.etags === false) return json(200, body);
     return request.etag === etag ? json(304, null) : json(200, body, etag);
   };
   const route = (request: GitHubRequest): GitHubResponse => {
@@ -373,6 +376,35 @@ describe("polling", () => {
           .filter((t) => t.kind === "mention")
           .map((t) => t.kind === "mention" && t.commentId),
       ).toEqual([2]);
+    }),
+  );
+
+  it.effect("auto-reviews a new head even when GitHub sends no ETag", () =>
+    Effect.gen(function* () {
+      const github = makeFakeGitHub({ etags: false });
+      github.state.pulls.push({ number: 7, sha: "abc", requested: [] });
+      const poll = (cursor: Parameters<typeof pollRepository>[0]["cursor"]) =>
+        pollRepository({
+          api: github.api,
+          repository,
+          config,
+          botLogin: BOT,
+          cursor,
+          isBotReviewComment: () => false,
+        });
+      const baseline = yield* poll(initialCursor("2026-11-11T11:00:00Z"));
+      expect(baseline.triggers).toEqual([]);
+      github.state.pulls[0]!.sha = "def";
+      github.state.pulls.push({ number: 8, sha: "new", requested: [] });
+      const next = yield* poll(baseline.cursor);
+      expect(
+        next.triggers.map(
+          (trigger) => trigger.kind === "auto" && [trigger.number, trigger.headSha],
+        ),
+      ).toEqual([
+        [7, "def"],
+        [8, "new"],
+      ]);
     }),
   );
 

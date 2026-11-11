@@ -5,7 +5,6 @@ import {
   type ModelSelection,
   PrReviewConfig,
   PrReviewError,
-  PR_REVIEW_EXECUTION_SHIPPED,
   type PrReviewIdentityStatus,
   type PrReviewRecord,
   type PrReviewRequestInput,
@@ -13,6 +12,7 @@ import {
   type ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -44,6 +44,7 @@ import {
   GitHubCallError,
   isValidPrivateKey,
   makeAppIdentity,
+  DEV_API_URL_VARIABLE,
   makeFetchSend,
   makeGhIdentity,
   verifiedLogin,
@@ -114,8 +115,6 @@ const parsePullRequestUrl = (url: string) => {
 
 const short = (sha: string) => sha.slice(0, 7);
 
-const notShipped = new PrReviewError({ detail: "PR reviews cannot run on this server yet." });
-
 const isGitHubCallError = Schema.is(GitHubCallError);
 const errorDetail = (cause: Cause.Cause<unknown>) => {
   const error = Cause.squash(cause);
@@ -136,7 +135,11 @@ export const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const runner = yield* ProcessRunner.ProcessRunner;
   const checkouts = yield* makeReviewCheckouts;
-  const send: GitHubSend = yield* makeFetchSend;
+  const devApiUrl =
+    config.devUrl === undefined
+      ? undefined
+      : (yield* HostProcess.Environment)[DEV_API_URL_VARIABLE];
+  const send: GitHubSend = yield* makeFetchSend(devApiUrl?.trim() || undefined);
   const sql = yield* SqlClient.SqlClient;
   const statePath = path.join(config.stateDir, STATE_FILE);
 
@@ -735,7 +738,7 @@ export const make = Effect.gen(function* () {
 
   const pollOnce = Effect.fn("PrReviewBot.pollOnce")(function* () {
     const current = yield* Ref.get(state);
-    if (!PR_REVIEW_EXECUTION_SHIPPED || !current.config.enabled) return { polled: false };
+    if (!current.config.enabled) return { polled: false };
     const api = yield* currentApi;
     const botLogin = yield* api.identity.login;
     const now = yield* nowMs;
@@ -839,7 +842,6 @@ export const make = Effect.gen(function* () {
       return yield* getState;
     }),
     request: Effect.fn("PrReviewBot.request")(function* (input) {
-      if (!PR_REVIEW_EXECUTION_SHIPPED) return yield* notShipped;
       let target = input.url === undefined ? null : parsePullRequestUrl(input.url);
       if (input.threadId !== undefined && target === null) {
         const shell = yield* threads
@@ -870,7 +872,6 @@ export const make = Effect.gen(function* () {
       return record;
     }),
     rerun: Effect.fn("PrReviewBot.rerun")(function* (recordId) {
-      if (!PR_REVIEW_EXECUTION_SHIPPED) return yield* notShipped;
       const previous = (yield* Ref.get(state)).history.find((entry) => entry.id === recordId);
       if (previous === undefined)
         return yield* new PrReviewError({ detail: "That review is no longer in the history." });

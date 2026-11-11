@@ -41,6 +41,8 @@ export const RepositoryCursor = Schema.Struct({
   }),
   /** Comment ids already handled; `since` re-lists edited comments. */
   seenCommentIds: Schema.Array(Schema.Number),
+  /** Open pull requests were listed once, so a head not seen before is new, not pre-existing. */
+  pullsPrimed: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** The head each open pull request had at the last poll. */
   heads: Schema.Record(Schema.String, Schema.String),
   /** Heads the bot was asked to review by a review request. */

@@ -54,12 +54,6 @@ export type PrReviewIdentityConfig = typeof PrReviewIdentityConfig.Type;
 
 export const DEFAULT_PR_REVIEW_COMMAND = "@t3 review";
 
-/**
- * Off until reviews are verified end to end: the server polls, claims and posts nothing, and
- * clients hide every way to start one. Settings can be prepared meanwhile.
- */
-export const PR_REVIEW_EXECUTION_SHIPPED = false;
-
 /** Stored per environment. The App private key is not here: it lives in the server's secret store. */
 export const PrReviewConfig = Schema.Struct({
   /** This environment is a designated reviewer. Off, it polls nothing and claims nothing. */

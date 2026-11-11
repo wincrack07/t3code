@@ -12,6 +12,9 @@ import { rateLimitRetryAtMs } from "./pollingBackoff.ts";
 
 const API = "https://api.github.com";
 
+/** Dev servers only: points the bot at a local fake GitHub, so the whole path runs offline. */
+export const DEV_API_URL_VARIABLE = "T3CODE_PR_REVIEW_GITHUB_API_URL";
+
 export interface GitHubRequest {
   readonly method?: "GET" | "POST" | "PATCH" | "DELETE";
   /** Relative to the API root, with its query string. */
@@ -44,10 +47,12 @@ export class GitHubCallError extends Schema.TaggedError<GitHubCallError>()("GitH
   }
 }
 
-export const makeFetchSend = Effect.gen(function* () {
+export const makeFetchSend = Effect.fn("PrReviewGitHub.makeFetchSend")(function* (
+  apiUrl: string = API,
+) {
   const http = yield* HttpClient.HttpClient;
   const send: GitHubSend = (token, request) => {
-    const base = HttpClientRequest.make(request.method ?? "GET")(`${API}${request.path}`).pipe(
+    const base = HttpClientRequest.make(request.method ?? "GET")(`${apiUrl}${request.path}`).pipe(
       HttpClientRequest.setHeaders({
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${token}`,

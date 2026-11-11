@@ -12,7 +12,6 @@ import {
   type PrReviewConfig,
   type PrReviewRecord,
   type ProjectId,
-  PR_REVIEW_EXECUTION_SHIPPED,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
@@ -362,24 +361,17 @@ export function PrReviewsSettings() {
             <SettingsRow title={query.error ?? "Loading…"} />
           ) : (
             <>
-              {PR_REVIEW_EXECUTION_SHIPPED ? (
-                <SettingsRow
-                  title="Review pull requests from this environment"
-                  description="Only designated environments poll GitHub. With several, the lowest priority number reviews; the others wait one grace period per step and take over only if it does not claim the pull request."
-                  control={
-                    <Switch
-                      checked={config.enabled}
-                      disabled={!canWrite}
-                      onCheckedChange={(enabled) => edit({ enabled })}
-                    />
-                  }
-                />
-              ) : (
-                <SettingsRow
-                  title="Reviews are not running yet"
-                  description="Prepare the identity, repositories and rules now. A later update turns reviews on."
-                />
-              )}
+              <SettingsRow
+                title="Review pull requests from this environment"
+                description="Only designated environments poll GitHub. With several, the lowest priority number reviews; the others wait one grace period per step and take over only if it does not claim the pull request."
+                control={
+                  <Switch
+                    checked={config.enabled}
+                    disabled={!canWrite}
+                    onCheckedChange={(enabled) => edit({ enabled })}
+                  />
+                }
+              />
               <SettingsRow
                 title="Priority"
                 description="0 is the primary reviewer, 1 the first fallback, and so on."
@@ -833,31 +825,29 @@ export function PrReviewsSettings() {
               </SettingsRow>
             </SettingsSection>
 
-            {PR_REVIEW_EXECUTION_SHIPPED ? (
-              <SettingsSection title="History">
-                <SettingsRow
-                  title="Polling"
-                  description={
-                    state.polling.lastError
-                      ? `Last poll failed: ${state.polling.lastError}`
-                      : state.polling.lastPollAt
-                        ? `Last polled ${formatRelativeTimeLabel(state.polling.lastPollAt)}.`
-                        : config.enabled
-                          ? "Waiting for the first poll."
-                          : "Off on this environment."
-                  }
+            <SettingsSection title="History">
+              <SettingsRow
+                title="Polling"
+                description={
+                  state.polling.lastError
+                    ? `Last poll failed: ${state.polling.lastError}`
+                    : state.polling.lastPollAt
+                      ? `Last polled ${formatRelativeTimeLabel(state.polling.lastPollAt)}.`
+                      : config.enabled
+                        ? "Waiting for the first poll."
+                        : "Off on this environment."
+                }
+              />
+              {state.history.length === 0 ? <SettingsRow title="No reviews yet" /> : null}
+              {state.history.map((record) => (
+                <HistoryRow
+                  key={record.id}
+                  environmentId={environmentId}
+                  record={record}
+                  canOperate={canOperate}
                 />
-                {state.history.length === 0 ? <SettingsRow title="No reviews yet" /> : null}
-                {state.history.map((record) => (
-                  <HistoryRow
-                    key={record.id}
-                    environmentId={environmentId}
-                    record={record}
-                    canOperate={canOperate}
-                  />
-                ))}
-              </SettingsSection>
-            ) : null}
+              ))}
+            </SettingsSection>
           </>
         ) : null}
       </SettingsSection>
