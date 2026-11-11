@@ -74,6 +74,8 @@ export function hasChangedBackgroundActivitySettings(
 
 type TypographySettings = Pick<
   UnifiedSettings,
+  | "fontFamilyReply"
+  | "fontSizeReply"
   | "fontFamilySans"
   | "fontFamilyComposer"
   | "fontFamilyCode"
@@ -86,6 +88,10 @@ type TypographySettings = Pick<
 
 export function getChangedTypographySettingLabels(settings: TypographySettings): string[] {
   return [
+    ...(settings.fontFamilyReply !== DEFAULT_UNIFIED_SETTINGS.fontFamilyReply ||
+    settings.fontSizeReply !== DEFAULT_UNIFIED_SETTINGS.fontSizeReply
+      ? ["Reply font"]
+      : []),
     ...(settings.fontFamilySans !== DEFAULT_UNIFIED_SETTINGS.fontFamilySans ||
     settings.fontSizeInterface !== DEFAULT_UNIFIED_SETTINGS.fontSizeInterface
       ? ["Interface font"]

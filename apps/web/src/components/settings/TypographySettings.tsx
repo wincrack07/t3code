@@ -72,7 +72,7 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
   return (
     <FontFamilySettingsRow
       {...searchableSetting("interface-font")}
-      description="Everything outside code blocks and the terminal."
+      description="The interface and user messages."
       defaultFamily={defaults.sans}
       defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilySans}
       value={settings.fontFamilySans}
@@ -92,6 +92,30 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
         onChange: (fontSizeInterface) => updateSettings({ fontSizeInterface }),
       }}
       {...(preview !== undefined ? { preview } : {})}
+    />
+  );
+}
+
+function ReplyFontRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <FontFamilySettingsRow
+      {...searchableSetting("reply-font")}
+      description="Assistant replies. Code keeps the monospace font."
+      defaultFamily="Same as interface"
+      defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilyReply}
+      value={settings.fontFamilyReply}
+      onValueChange={(fontFamilyReply) => updateSettings({ fontFamilyReply })}
+      onReset={() => updateSettings({ fontFamilyReply: "", fontSizeReply: null })}
+      size={{
+        label: "Reply font size",
+        min: MIN_PROMPT_FONT_SIZE,
+        max: MAX_PROMPT_FONT_SIZE,
+        value: settings.fontSizeReply ?? Math.round(settings.fontSizeInterface * 0.875),
+        defaultValue: Math.round(settings.fontSizeInterface * 0.875),
+        onChange: (fontSizeReply) => updateSettings({ fontSizeReply }),
+      }}
     />
   );
 }
@@ -268,6 +292,7 @@ function FontSettingsGroup() {
   return (
     <>
       <InterfaceFontRow />
+      <ReplyFontRow />
       <PromptFontRow />
       <CodeFontRow />
       <TerminalFontRow />
@@ -302,6 +327,7 @@ function SimpleFontRows() {
   return (
     <>
       <InterfaceFontRow preview={<PromptFontPreview />} />
+      <ReplyFontRow />
       <CodeFontRow
         title="Monospace font"
         description="Code blocks, diffs, file previews, and the terminal."

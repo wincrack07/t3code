@@ -2645,6 +2645,23 @@ code {
   }
 }
 
+:root {
+  --font-reply: var(--font-sans);
+  --font-size-reply: var(--text-sm);
+}
+
+html[data-theme-id="claude"] {
+  --font-sans:
+    "Anthropic Sans", -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui,
+    sans-serif;
+  --font-reply: "Anthropic Serif", "New York", ui-serif, Georgia, serif;
+}
+
+[data-assistant-reply] .chat-markdown {
+  font-family: var(--font-reply);
+  font-size: var(--font-size-reply);
+}
+
 .sidebar-nested-sessions > [data-thread-item] {
   position: relative;
 }

@@ -36,6 +36,13 @@ Each project's settled sessions expand in pages. Pinned projects and projects ac
 14 days stay in the main list; older inactive projects appear under **Other projects**. Expansion
 is remembered on this device. Expand a thread's chevron to load its nested sessions.
 
+## Typography
+
+In **Settings → Appearance → Typography**, choose installed fonts and text sizes. **Reply font**
+changes assistant replies; user messages keep the interface font and code keeps the monospace font.
+Replies follow the interface by default. The Claude theme uses a serif reply stack; an explicit
+font choice overrides the theme. Fonts are used only when installed on your machine.
+
 ## Math
 
 Turn on **Render math** in **Settings → Appearance** to typeset LaTeX in messages and Markdown
