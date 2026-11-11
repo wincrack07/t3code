@@ -17,19 +17,16 @@ import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { HtmlRenderFrame } from "./HtmlRenderFrame";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 
-/** Live cards an agent pinned into Thread Details. They mount only while the card is open. */
+/** All placements, including legacy panel pins, live in this list. */
 export function ThreadPinnedCardsPanel(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
   const threadRef = scopeThreadRef(props.environmentId, props.threadId);
-  const cards = useThreadShell(threadRef)?.pinnedHtmlCards?.filter(
-    (card) => card.placement === "details",
-  );
+  const cards = useThreadShell(threadRef)?.pinnedHtmlCards;
   const canOperate = useEnvironmentScope(props.environmentId, AuthOrchestrationOperateScope);
   const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -97,14 +94,11 @@ export function ThreadPinnedCardsPanel(props: {
         </>
       }
     >
-      <div data-thread-details-html-card className="mx-2 max-h-80 overflow-y-auto rounded-lg">
-        <HtmlRenderFrame
-          key={card.attachmentId}
-          environmentId={props.environmentId}
-          threadRef={threadRef}
-          htmlRender={card}
-        />
-      </div>
+      <p className="mx-2 text-xs text-muted-foreground">
+        {card.updatedAt
+          ? `Updated ${new Date(card.updatedAt).toLocaleString()}`
+          : "Updated before card timestamps were recorded"}
+      </p>
     </ThreadDetailsSection>
   ));
 }

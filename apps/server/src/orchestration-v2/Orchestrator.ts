@@ -21,6 +21,7 @@ import {
 } from "../sourceControl/threadPullRequests.ts";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
+  applyOpenQuestionsUpdate,
   type ChatAttachment,
   CommandId,
   type GuestMessageId,
@@ -642,18 +643,6 @@ const decodeUserInputAnswers = Schema.decodeUnknownEffect(
     ]),
   ),
 );
-
-type PinnedHtmlCard = NonNullable<OrchestrationV2AppThread["pinnedHtmlCards"]>[number];
-
-/** A card update without a placement keeps the card where it is; panel is stored as no placement. */
-function pinnedHtmlCardUpdate(
-  current: OrchestrationV2AppThread["pinnedHtmlCards"],
-  card: PinnedHtmlCard,
-): PinnedHtmlCard {
-  const { placement: requested, ...rest } = card;
-  const placement = requested ?? current?.find((existing) => existing.id === card.id)?.placement;
-  return placement === "details" ? { ...rest, placement } : rest;
-}
 
 function pendingThreadTitleGenerationEffect(
   commandId: CommandId,
@@ -4077,8 +4066,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     ),
                     ...(command.htmlCard.card === null
                       ? []
-                      : [pinnedHtmlCardUpdate(thread.pinnedHtmlCards, command.htmlCard.card)]),
+                      : [
+                          {
+                            ...command.htmlCard.card,
+                            placement: "details" as const,
+                            updatedAt: DateTime.formatIso(now),
+                          },
+                        ]),
                   ].slice(-8),
+                }),
+            ...(command.openQuestions === undefined
+              ? {}
+              : {
+                  openQuestions: applyOpenQuestionsUpdate(
+                    thread.openQuestions ?? [],
+                    command.openQuestions,
+                    DateTime.formatIso(now),
+                  ),
                 }),
             ...(command.title === undefined ? {} : { title: command.title }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),

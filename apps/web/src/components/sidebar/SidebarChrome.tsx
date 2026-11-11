@@ -1,4 +1,5 @@
 import { SidebarMachineMonitorItem } from "../systemMonitor/SystemMonitorIndicator";
+import { KeepAwakeControl } from "../KeepAwakeControl";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
@@ -292,6 +293,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           <SidebarMachineMonitorItem onOpen={handleMonitorClick} />
         </>
       )}
+      <SidebarMenuItem>
+        <KeepAwakeControl />
+      </SidebarMenuItem>
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
     </SidebarMenu>

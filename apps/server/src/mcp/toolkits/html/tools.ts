@@ -80,7 +80,7 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
 
 // This affects only the caller's thread, not its workspace, so read-only sandboxes and plan mode may use it.
 const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
-  description: `Show a finished HTML page (chart, diagram, mockup) inline in this thread, above your final reply. Pin with a short stable id; reuse it to update the card beside this thread. placement:"details" pins a small live status card into the thread's details card instead of a panel tab; updates keep the card's placement. Unpin with only pin and unpin:true, without a page. Cards can request a confirmed prompt via parent.postMessage({type:"t3-html-render-prompt",text:"..."}, "*"). Do not announce or restate the page. Frame fits height to ${HTML_RENDER_MAX_FIT_HEIGHT}px. On mobile, content past the given height scrolls. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
+  description: `Show a finished HTML page (chart, diagram, mockup) inline in this thread, above your final reply. Pin with a short stable id in Thread Details (default); reuse it to update the card. Users can open or remove pins there. placement:"panel" is a legacy alias for "details". Unpin with only pin and unpin:true, without a page. Cards can request a confirmed prompt via parent.postMessage({type:"t3-html-render-prompt",text:"..."}, "*"). Do not announce or restate the page. Frame fits height to ${HTML_RENDER_MAX_FIT_HEIGHT}px. On mobile, content past the given height scrolls. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
   parameters: Schema.Struct({
     path: Schema.optional(HtmlPath),
     html: Schema.optional(Html),

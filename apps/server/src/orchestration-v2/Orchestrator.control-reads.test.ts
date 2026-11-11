@@ -4,6 +4,7 @@ import {
   MessageId,
   EventId,
   NodeId,
+  type OpenQuestionsUpdate,
   type OrchestrationV2DomainEvent,
   PlanId,
   ProjectId,
@@ -370,6 +371,85 @@ it.effect(
       yield* setStatus("clear", null);
       assert.isUndefined(yield* status);
     }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("persists open questions through declare, answer, undo, and a later declaration", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = ThreadId.make("thread:open-questions");
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("create-open-questions"),
+      threadId,
+      projectId: ProjectId.make("project:open-questions"),
+      title: "Questions",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    let step = 0;
+    const update = (openQuestions: OpenQuestionsUpdate) =>
+      orchestrator.dispatch({
+        type: "thread.metadata.update",
+        commandId: CommandId.make(`open-questions-${(step += 1)}`),
+        threadId,
+        openQuestions,
+      });
+    const states = Effect.gen(function* () {
+      const shell = yield* projections.getThreadShell(threadId);
+      const thread = yield* projections.getThread(threadId);
+      assert.deepEqual(shell?.openQuestions, thread.openQuestions);
+      return (thread.openQuestions ?? []).map(
+        (question) =>
+          `${question.id}:${question.status}${question.answer ? `=${question.answer}` : ""}`,
+      );
+    });
+    const first = RunId.make("run:first");
+    yield* update({
+      action: "declare",
+      runId: first,
+      questions: [
+        { id: "fix", text: "Open the one-cent fix?", suggestions: ["Yes, open it", "No"] },
+        { id: "merge", text: "Merge dev into main?", suggestions: ["Do it now", "Wait"] },
+        { id: "audio", text: "Research credit sales?", suggestions: ["Yes", "No"] },
+      ],
+    });
+    yield* update({
+      action: "set_status",
+      updates: [
+        { id: "fix", status: "answered", answer: "Yes, open it" },
+        { id: "audio", status: "dismissed" },
+      ],
+    });
+    assert.deepEqual(yield* states, ["fix:answered=Yes, open it", "merge:open", "audio:dismissed"]);
+
+    yield* update({ action: "set_status", updates: [{ id: "audio", status: "open" }] });
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("open-questions-reply"),
+      threadId,
+      messageId: MessageId.make("open-questions-reply"),
+      text: "A typed reply",
+      attachments: [],
+      dispatchMode: { type: "defer_start" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    assert.deepEqual(yield* states, ["fix:answered=Yes, open it", "merge:open", "audio:open"]);
+
+    // A later turn's questions keep earlier open ones and drop earlier settled ones.
+    yield* update({
+      action: "declare",
+      runId: RunId.make("run:second"),
+      questions: [{ id: "tests", text: "Run the tests?", suggestions: ["Run", "Skip"] }],
+    });
+    assert.deepEqual(yield* states, ["merge:open", "audio:open", "tests:open"]);
+  }).pipe(Effect.provide(layerTest)),
 );
 
 it.effect("mark unread retires an expired snooze so a dismissed wake stays dismissed", () =>

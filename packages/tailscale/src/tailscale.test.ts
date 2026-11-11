@@ -50,7 +50,7 @@ function assertCarriesNoSecret(error: object, secret: string): void {
 
   walk(error, "error");
 }
-const tailscaleStatusJson = `{"Self":{"DNSName":"desktop.tail.ts.net.","TailscaleIPs":["100.100.100.100","fd7a:115c:a1e0::1","192.168.1.20"]}}`;
+const tailscaleStatusJson = `{"Self":{"DNSName":"desktop.tail.ts.net.","TailscaleIPs":["100.100.100.100","fd7a:115c:a1e0::1","192.168.1.20"]},"BackendState":"Running","Peer":{"node":{"TailscaleIPs":["100.84.251.28","192.168.0.12"]}}}`;
 
 function mockHandle(result: { stdout?: string; stderr?: string; code?: number }) {
   return ChildProcessSpawner.makeHandle({
@@ -196,8 +196,20 @@ describe("tailscale", () => {
       assert.deepEqual(status, {
         magicDnsName: "desktop.tail.ts.net",
         tailnetIpv4Addresses: ["100.100.100.100"],
+        peerIpv4Addresses: ["100.84.251.28"],
         httpsServeEnabled: null,
       });
+      assert.deepEqual(
+        (yield* parseTailscaleStatus(tailscaleStatusJson.replace("Running", "Stopped")))
+          .peerIpv4Addresses,
+        [],
+      );
+      assert.deepEqual(
+        (yield* parseTailscaleStatus(
+          '{"BackendState":"Running","Peer":{"carrier":{"TailscaleIPs":["100.128.0.1","100.64.1.2oops","192.168.1.2"]}}}',
+        )).peerIpv4Addresses,
+        [],
+      );
     }),
   );
 

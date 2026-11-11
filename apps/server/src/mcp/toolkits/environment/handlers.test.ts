@@ -1,3 +1,4 @@
+import * as KeepAwake from "../../../keepAwake/KeepAwake.ts";
 import * as SystemMonitor from "../../../systemMonitor/SystemMonitor.ts";
 import { expect, it } from "@effect/vitest";
 import {
@@ -33,6 +34,7 @@ it.effect("refuses a preferences update when the caller's turn ends while it wai
     const updates = yield* Ref.make(0);
     const checked = yield* Deferred.make<void>();
     const layerDependencies = Layer.mergeAll(
+      Layer.mock(KeepAwake.KeepAwake)({}),
       Layer.mock(SystemMonitor.SystemMonitor)({}),
       ThreadCommandExecutor.layer,
       Layer.succeed(McpInvocationContext.McpInvocationContext, {

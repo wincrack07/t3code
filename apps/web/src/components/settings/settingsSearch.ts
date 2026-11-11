@@ -766,6 +766,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "keep-awake",
+    title: "Keep awake",
+    to: "/settings/maintenance",
+    scope: "environment-defaults",
+    searchTerms: ["sleep inhibit amphetamine caffeine agents duration display lid"],
+  },
+  {
     id: "background-activity",
     title: "Background activity",
     to: "/settings/maintenance",
@@ -840,6 +847,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: ["generated thread titles source control content default provider"],
+  },
+  {
+    id: "prompt-polish",
+    title: "Polish prompt",
+    to: "/settings/threads",
+    searchTerms: ["rewrite composer draft prompt instruction custom rules"],
   },
   {
     id: "thread-title-instructions",

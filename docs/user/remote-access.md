@@ -353,6 +353,12 @@ makes the pairing code itself; otherwise paste one from that machine's
 **Settings → Sharing & access**. From a terminal, use
 `t3 environment link <address> --pairing-code <code> --access <mode>`.
 
+Plain HTTP peer links require loopback or Tailscale. For a Tailscale IPv4
+address, the linking machine must have a running local Tailscale daemon that
+lists the destination as a peer; the shared 100.64.0.0/10 range alone is not
+enough. Otherwise use HTTPS. Machines advertise their MagicDNS name and
+validated Tailscale HTTPS address ahead of raw IP addresses when available.
+
 You can also ask an agent to link a machine by name, such as "delegate this to
 my vps". It shows a card in the thread where you pick the machine the same way
 and the access, then approve.
@@ -368,6 +374,27 @@ and the access, then approve.
   outside agent. Revoke it there to end it. **Forget** on this machine only
   removes it here.
 - Links last 30 days. Link again with a new pairing code to renew one.
+
+In web or desktop **Settings → Connections**, choose **Link all my environments
+to each other** to link every ordered pair of connected environments with one
+access choice. Your sessions must manage access on each machine. Each direction
+shows its own result; retry the action to complete failed directions. A machine
+that only listens on loopback needs network access or Tailscale Serve enabled
+before another machine can link to it.
+
+**Keep links renewed** is an opt-in for this browser or desktop app. While the
+app is open, it checks hourly and after waking, renewing its own links during
+their last five days when both sides are connected. Renewal uses a fresh
+pairing code and the old, still-valid link credential, preserving access and
+thread ownership. Both servers must support renewal. It never restores a
+forgotten, revoked, expired, or manually replaced link automatically; click
+**Link all** to authorize linking again. New environments also need that click.
+No pairing code or token is saved in the browser's renewal settings.
+
+**Unlink all** disables renewal and forgets links between currently connected
+machines. Connect offline machines and run it again to remove their links too.
+As with **Forget**, revoke the session on the destination to end its access
+there immediately.
 
 An agent can also hand a task to a linked machine with `delegate_task`: it runs
 there as an ordinary thread, in the project with the same repository (or the

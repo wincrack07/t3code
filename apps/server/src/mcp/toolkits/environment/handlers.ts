@@ -1,3 +1,4 @@
+import * as KeepAwake from "../../../keepAwake/KeepAwake.ts";
 import * as SystemMonitor from "../../../systemMonitor/SystemMonitor.ts";
 import { OrchestratorMcpFailure, type ServerSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -42,6 +43,19 @@ const access = Effect.gen(function* () {
   return { ...context, descriptor, settings: yield* Settings.ServerSettingsService };
 });
 export const layer = McpToolAccess.toLayer(EnvironmentToolkit, {
+  t3_keep_awake_read: McpToolAccess.reads(() =>
+    Effect.gen(function* () {
+      yield* access;
+      return yield* (yield* KeepAwake.KeepAwake).status;
+    }),
+  ),
+  t3_keep_awake_change: McpToolAccess.writesEnvironment((input, check) =>
+    Effect.gen(function* () {
+      yield* check;
+      yield* access;
+      return yield* (yield* KeepAwake.KeepAwake).change({ session: input.session });
+    }),
+  ),
   t3_environment_read: McpToolAccess.reads(() =>
     Effect.gen(function* () {
       const { descriptor, settings } = yield* access;

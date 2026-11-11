@@ -1,3 +1,4 @@
+import { useThreadCardsMenu } from "./use-thread-cards-menu";
 import { AppBar } from "../../components/ui/AppBar";
 import type { AppBarAction, AppBarMenu } from "../../components/ui/AppBar.types";
 import {
@@ -40,7 +41,10 @@ export function ThreadHeader(props: {
         },
       ]
     : [];
-  const menus = [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
+  const cardsMenu = useThreadCardsMenu(props.gitControls.environmentId, props.gitControls.threadId);
+  const menus = [gitMenu, terminalMenu, cardsMenu].filter(
+    (menu): menu is AppBarMenu => menu !== null,
+  );
 
   return (
     <AppBar

@@ -5,6 +5,10 @@ import * as NodeHttps from "node:https";
 import { NodeHttpServer } from "@effect/platform-node";
 import { type ExecutionEnvironmentDescriptor, OrchestratorMcpFailure } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -87,8 +91,9 @@ const serveB = (descriptor: ExecutionEnvironmentDescriptor) =>
 const makeA = (
   descriptor: ExecutionEnvironmentDescriptor,
   secrets?: typeof ServerSecretStore.layer,
+  transport?: Parameters<typeof layerLinkingEnvironment>[3],
 ) =>
-  layerLinkingEnvironment(descriptor, secrets).pipe(
+  layerLinkingEnvironment(descriptor, secrets, undefined, transport).pipe(
     Layer.build,
     Effect.map((context) => ({
       links: Context.get(context, PeerLinks.PeerLinks),
@@ -205,6 +210,84 @@ it.effect("links with a pairing code, and the peer holds its agents to the limit
       expect(notFound).toMatchObject({ code: "thread_not_found", message: "No such thread." });
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
+  "renewal preserves the peer session and a concurrent forget cannot restore the link",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveB(descriptorOf(box.environmentId, "Box", { peerLinkRenewal: true }));
+        const stored = yield* Ref.make(0);
+        const renewalStored = yield* Deferred.make<void>();
+        const finishStore = yield* Deferred.make<void>();
+        const secrets = Layer.effect(
+          ServerSecretStore.ServerSecretStore,
+          Effect.map(ServerSecretStore.make, (store) =>
+            ServerSecretStore.ServerSecretStore.of({
+              ...store,
+              set: (name, value) =>
+                store.set(name, value).pipe(
+                  Effect.andThen(
+                    Effect.gen(function* () {
+                      if (!name.startsWith("peer-link-")) return;
+                      const count = yield* Ref.updateAndGet(stored, (count) => count + 1);
+                      if (count === 3)
+                        yield* Deferred.succeed(renewalStored, undefined).pipe(
+                          Effect.andThen(Deferred.await(finishStore)),
+                        );
+                    }),
+                  ),
+                ),
+            }),
+          ),
+        );
+        const a = yield* makeA(laptop, secrets);
+        const original = yield* a.links.link({
+          url: b.url,
+          pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+          access: "auto",
+        });
+        const [session] = yield* linkedSessions(b);
+        yield* TestClock.adjust(Duration.days(26));
+        const renewed = yield* a.links.link({
+          url: b.url,
+          pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+          access: "auto",
+          renewExisting: true,
+        });
+        expect(renewed.linkedAt).toEqual(original.linkedAt);
+        expect(renewed.expiresAt.epochMilliseconds).toBeGreaterThan(
+          original.expiresAt.epochMilliseconds,
+        );
+        expect((yield* linkedSessions(b)).map((value) => value.sessionId)).toEqual([
+          session!.sessionId,
+        ]);
+        expect((yield* a.links.resolve(box.environmentId)).link.expiresAt).toEqual(
+          renewed.expiresAt,
+        );
+        const code = (yield* b.auth.issuePairingCredential()).credential;
+        const renewal = yield* a.links
+          .link({ url: b.url, pairingCode: code, access: "auto", renewExisting: true })
+          .pipe(Effect.result, Effect.forkScoped);
+        yield* Deferred.await(renewalStored);
+        yield* a.links.unlink(box.environmentId);
+        yield* Deferred.succeed(finishStore, undefined);
+        const raced = yield* Fiber.join(renewal);
+        expect(raced._tag).toBe("Failure");
+        expect(yield* a.links.get(box.environmentId)).toEqual(Option.none());
+        const forgotten = yield* a.links
+          .link({
+            url: b.url,
+            pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+            access: "auto",
+            renewExisting: true,
+          })
+          .pipe(Effect.flip);
+        expect(forgotten.message).toContain("forgotten, expired, or changed access");
+        yield* b.auth.revokeSession(session!.sessionId);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
 it.effect(
@@ -382,7 +465,7 @@ it.effect("never sends a link's token to an address that stops answering as that
       yield* Ref.set(b.descriptor, descriptorOf("environment-impostor", "Impostor"));
       yield* Ref.set(b.bearers, []);
       const failed = yield* probe(a).pipe(Effect.flip);
-      expect(failed.message).toContain("Box did not answer");
+      expect(failed.message).toContain("answered as a different environment");
       expect(yield* Ref.get(b.bearers)).toEqual([]);
       expect((yield* a.links.list).map((link) => link.status)).toEqual(["unreachable"]);
     }),
@@ -492,6 +575,22 @@ it.effect("tells the agent to link again once the peer revokes the link or it ex
       const revoked = yield* probe(a).pipe(Effect.flip);
       expect(revoked.code).toBe("capability_denied");
       expect(revoked.message).toContain("revoked there");
+      yield* Ref.set(b.descriptor, {
+        ...box,
+        capabilities: { ...box.capabilities, peerLinkRenewal: true },
+      });
+      const rejectedRenewal = yield* a.links
+        .link({
+          url: b.url,
+          pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+          access: "auto",
+          renewExisting: true,
+        })
+        .pipe(Effect.flip);
+      expect(rejectedRenewal.reason).toBe("pairing_rejected");
+      expect(Option.getOrThrow(yield* a.links.get(box.environmentId)).lastError).toContain(
+        "could not be renewed",
+      );
 
       yield* a.links.link({
         url: b.url,
@@ -627,9 +726,8 @@ it.effect("linking a picked machine that answers nowhere names it and links noth
         })
         .pipe(Effect.flip);
       expect(failed.reason).toBe("unreachable");
-      expect(failed.message).toBe(
-        `This environment could not reach Box at ${impostor.url}, http://192.168.1.20:3773.`,
-      );
+      expect(failed.message).toContain("http://192.168.1.20:3773 is plain http");
+      expect(failed.message).toContain(`${impostor.url} answered as a different environment`);
       expect(yield* a.links.list).toEqual([]);
       expect(yield* linkedSessions(impostor)).toEqual([]);
 
@@ -643,10 +741,108 @@ it.effect("linking a picked machine that answers nowhere names it and links noth
           expectedLabel: "Box",
         })
         .pipe(Effect.flip);
-      expect(refused.message).toContain("could not reach Box");
+      expect(refused.message).toContain("http://192.168.1.20:3773");
       expect(refused.message).toContain("plain http");
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
+  "links a verified Tailscale IPv4 among LAN and wrong loopback candidates, refusing unverified peers",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const impostor = yield* serveApart(descriptorOf("environment-impostor", "Impostor"));
+        const host = HttpRouter.middleware(
+          (httpEffect) =>
+            HttpServerRequest.HttpServerRequest.pipe(
+              Effect.flatMap((request) =>
+                Effect.provideService(
+                  httpEffect,
+                  HttpServerRequest.HttpServerRequest,
+                  request.modify({ headers: { ...request.headers, host: "100.84.251.28:3773" } }),
+                ),
+              ),
+            ),
+          { global: true },
+        );
+        const b = yield* servePeer(
+          box,
+          Layer.merge(McpHttpServer.toolkitRegistration(ProbeToolkit, probeHandlers), host),
+        );
+        const verified = yield* Ref.make(false);
+        const requests: string[] = [];
+        const transport = Layer.merge(
+          Layer.effect(
+            HttpClient.HttpClient,
+            HttpClient.HttpClient.pipe(
+              Effect.map((client) =>
+                HttpClient.make((request) => {
+                  requests.push(request.url);
+                  return client.execute(
+                    request.url.startsWith("http://100.84.251.28:3773")
+                      ? HttpClientRequest.setUrl(
+                          request,
+                          request.url.replace("http://100.84.251.28:3773", b.url),
+                        ).pipe(HttpClientRequest.setHeader("host", "100.84.251.28:3773"))
+                      : request,
+                  );
+                }),
+              ),
+            ),
+          ),
+          Layer.succeed(
+            ChildProcessSpawner.ChildProcessSpawner,
+            ChildProcessSpawner.make(() =>
+              Effect.map(Ref.get(verified), (known) =>
+                ChildProcessSpawner.makeHandle({
+                  pid: ChildProcessSpawner.ProcessId(1),
+                  exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+                  isRunning: Effect.succeed(false),
+                  kill: () => Effect.void,
+                  unref: Effect.succeed(Effect.void),
+                  stdin: Sink.drain,
+                  stdout: Stream.make(
+                    new TextEncoder().encode(
+                      JSON.stringify({
+                        BackendState: "Running",
+                        Peer: known ? { mac: { TailscaleIPs: ["100.84.251.28"] } } : {},
+                      }),
+                    ),
+                  ),
+                  stderr: Stream.empty,
+                  all: Stream.empty,
+                  getInputFd: () => Sink.drain,
+                  getOutputFd: () => Stream.empty,
+                }),
+              ),
+            ),
+          ),
+        ).pipe(Layer.provide(FetchHttpClient.layer));
+        const a = yield* makeA(laptop, undefined, transport);
+        const pairing = yield* b.auth.issuePairingCredential();
+        const input = {
+          url: "http://192.168.0.12:3773",
+          alternateUrls: ["http://100.84.251.28:3773", impostor.url],
+          pairingCode: pairing.credential,
+          access: "auto" as const,
+          expectedEnvironmentId: box.environmentId,
+        };
+        const failed = yield* a.links.link(input).pipe(Effect.flip);
+        expect(failed.message).toContain(
+          "http://100.84.251.28:3773 is plain http and the local Tailscale daemon could not verify",
+        );
+        expect(failed.message).toContain("answered as a different environment");
+        expect(requests.some((url) => url.includes("100.84.251.28"))).toBe(false);
+        yield* Ref.set(verified, true);
+        const linked = yield* a.links.link(input);
+        expect(linked.urls).toEqual(["http://100.84.251.28:3773"]);
+        yield* Ref.set(verified, false);
+        const refused = yield* a.links.resolve(box.environmentId).pipe(Effect.flip);
+        expect(refused.reason).toBe("unreachable");
+        expect(yield* linkedSessions(impostor)).toEqual([]);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
 /** An https listener whose certificate this machine does not trust. */

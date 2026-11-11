@@ -1180,9 +1180,22 @@ const decodePullRequestThread = Schema.decodeUnknownEffect(
   Schema.fromJsonString(PullRequestThread),
 );
 
-const decodeThreadPayload = Schema.decodeUnknownEffect(
+const decodeStoredThreadPayload = Schema.decodeUnknownEffect(
   Schema.fromJsonString(OrchestrationV2AppThreadJsonSchema),
 );
+// Row decoding runs inside bulk reads; avoid a tracing span for every thread.
+const decodeThreadPayload = Effect.fnUntraced(function* (payload: string) {
+  const thread = yield* decodeStoredThreadPayload(payload);
+  return thread.pinnedHtmlCards?.some((card) => card.placement !== "details")
+    ? {
+        ...thread,
+        pinnedHtmlCards: thread.pinnedHtmlCards.map((card) => ({
+          ...card,
+          placement: "details" as const,
+        })),
+      }
+    : thread;
+});
 const decodeRunPayload = Schema.decodeUnknownEffect(
   Schema.fromJsonString(OrchestrationV2RunJsonSchema),
 );
@@ -1634,6 +1647,9 @@ export function threadShellFromProjection(
     ...(projection.thread.statusText === undefined
       ? {}
       : { statusText: projection.thread.statusText }),
+    ...(projection.thread.openQuestions?.length
+      ? { openQuestions: projection.thread.openQuestions }
+      : {}),
     ...(projection.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: projection.thread.linkedPullRequest }),
@@ -1921,6 +1937,9 @@ function shellFromState(input: {
     ...(input.state.thread.statusText === undefined
       ? {}
       : { statusText: input.state.thread.statusText }),
+    ...(input.state.thread.openQuestions?.length
+      ? { openQuestions: input.state.thread.openQuestions }
+      : {}),
     ...(input.state.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: input.state.thread.linkedPullRequest }),
