@@ -2758,6 +2758,7 @@ export const layerWsRpc = (
         [WS_METHODS.serverRetryResourceTelemetry]: (_input) => resourceTelemetry.retry,
         [WS_METHODS.serverCheckOtlpEndpoint]: (input) => otlpEndpointCheck.check(input),
         [WS_METHODS.serverListTextGeneratorModels]: (input) => textGenerators.listModels(input),
+        [WS_METHODS.serverTestDecisionConnection]: () => decisions.testConnection(),
         [WS_METHODS.serverDecide]: (input) => decisions.decide(input),
         [WS_METHODS.serverPolishPrompt]: (input) => promptPolish.polish(input),
         [WS_METHODS.serverCompletePrompt]: (input) => promptCompletion.complete(input),

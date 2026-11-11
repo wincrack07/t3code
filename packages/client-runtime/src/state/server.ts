@@ -1677,6 +1677,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:list-text-generator-models",
       tag: WS_METHODS.serverListTextGeneratorModels,
     }),
+    testDecisionConnection: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:server:test-decision-connection",
+      tag: WS_METHODS.serverTestDecisionConnection,
+    }),
     decide: createEnvironmentRpcCommand(runtime, {
       label: "environment-command:server:decide",
       tag: WS_METHODS.serverDecide,

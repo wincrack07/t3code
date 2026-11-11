@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as Schema from "effect/Schema";
-import { HttpClient } from "effect/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -65,7 +65,12 @@ const choice: DecisionCandidate = {
   projectId: "app",
 };
 const config: DecisionSettings = { ...DEFAULT_SERVER_SETTINGS.decisions, enabled: true };
-const fixture = (config: DecisionSettings, answer: string, calls: string[]) =>
+const fixture = (
+  config: DecisionSettings,
+  answer: string,
+  calls: string[],
+  http = HttpClient.make(() => Effect.die("Unexpected API request")),
+) =>
   Decisions.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -108,10 +113,7 @@ const fixture = (config: DecisionSettings, answer: string, calls: string[]) =>
             return Effect.succeed({ transcription: answer });
           },
         }),
-        Layer.succeed(
-          HttpClient.HttpClient,
-          HttpClient.make(() => Effect.die("Unexpected API request")),
-        ),
+        Layer.succeed(HttpClient.HttpClient, http),
       ),
     ),
   );
@@ -183,14 +185,74 @@ it.effect("keeps the decision API credential in the existing secret mapping", ()
   Effect.sync(() => {
     const seen: string[] = [];
     const client = mapSettingsSecrets(
-      { ...DEFAULT_SERVER_SETTINGS, decisions: { ...config, apiKey: "fake-decision-key" } },
+      {
+        ...DEFAULT_SERVER_SETTINGS,
+        decisions: { ...config, apiKey: "fake-decision-key", customApiKey: "fake-custom-key" },
+      },
       (secret) => {
-        if (secret.secretName === "decisions-apiKey") seen.push(secret.value);
+        if (
+          secret.secretName === "decisions-apiKey" ||
+          secret.secretName === "decisions-customApiKey"
+        )
+          seen.push(secret.value);
         return { value: SECRET_REDACTED, redacted: true };
       },
     );
-    expect(seen).toEqual(["fake-decision-key"]);
+    expect(seen).toEqual(["fake-custom-key", "fake-decision-key"]);
+    expect(JSON.stringify(client)).not.toContain("fake-custom-key");
+    expect(client.decisions.customApiKey).toBe(SECRET_REDACTED);
     expect(JSON.stringify(client)).not.toContain("fake-decision-key");
     expect(client.decisions.apiKey).toBe(SECRET_REDACTED);
   }),
+);
+
+it.effect.each([
+  {
+    status: 200,
+    content: '{"candidate":0,"reason":"Connected"}',
+    success: true,
+    message: "Connection successful.",
+  },
+  { status: 401, content: "", success: false, message: "Decision API returned HTTP 401" },
+  {
+    status: 200,
+    content: '{"candidate":99,"reason":"Invented"}',
+    success: false,
+    message: "Decision API returned an invalid answer.",
+  },
+])(
+  "tests the saved custom decision endpoint ($status, $success)",
+  ({ status, content, success, message }) =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request) => {
+        expect(request.url).toBe("https://router.example.test/v1/chat/completions");
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({ choices: [{ finish_reason: "stop", message: { content } }] }),
+              { status },
+            ),
+          ),
+        );
+      });
+      const result = yield* Decisions.Decisions.pipe(
+        Effect.flatMap((service) => service.testConnection()),
+        Effect.provide(
+          fixture(
+            {
+              ...config,
+              source: "custom",
+              customBaseUrl: "https://router.example.test/v1",
+              customModel: "router",
+              customApiKey: "fake-key",
+            },
+            "",
+            [],
+            http,
+          ),
+        ),
+      );
+      expect(result).toEqual({ success, message });
+    }),
 );

@@ -245,6 +245,10 @@ whole draft as a clearer prompt before you send it. It keeps your language, file
 skills. If you edit the draft while the rewrite runs, your edit wins. On web and
 desktop, **Undo** in the notice restores your original draft.
 
+In **Settings → Polish prompt**, choose a separate model and effort or keep
+**Same as text generation**. Save to apply your choice. If the chosen model becomes
+unavailable, polishing uses the shared text generation model.
+
 ## Voice input on web and desktop
 
 Use the composer's microphone or `mod+shift+d` to dictate into your draft. Audio
@@ -475,8 +479,11 @@ Android opens a compatible installed file viewer.
 
 ## Automatic routing
 
-Enable Settings → Labs → Decisions, choose a configured provider model or enter an OpenAI API
-key and model, then add rules in priority order. A restrict rule narrows the choices; a decide
+Enable Settings → Labs → Decisions, choose a configured provider model, OpenAI API, or **Custom (OpenAI-compatible)**,
+then add rules in priority order. For a custom service, enter its API base URL (including
+any `/v1` prefix), API key, and model name, then use **Test connection**. Keys stay in
+the environment’s secret store. HTTP is allowed only for loopback and tailnet endpoints;
+other endpoints require HTTPS. A restrict rule narrows the choices; a decide
 rule selects the first matching usable choice. Provider-instance allowlists can separate
 personal and work accounts.
 

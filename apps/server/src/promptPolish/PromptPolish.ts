@@ -1,5 +1,8 @@
 import {
   DEFAULT_PROMPT_POLISH_SETTINGS,
+  isProviderAvailable,
+  isProviderTextGenerationCapable,
+  resolveProjectProviderInstanceEnabled,
   type PromptPolishSettings,
   TextGenerationError,
   type PromptPolishInput,
@@ -12,6 +15,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 
@@ -45,6 +49,7 @@ ${draft}
 const make = Effect.gen(function* () {
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const fileSystem = yield* FileSystem.FileSystem;
+  const registry = yield* ProviderRegistry.ProviderRegistry;
   const textGeneration = yield* TextGeneration.TextGeneration;
   return PromptPolish.of({
     polish: Effect.fn("PromptPolish.polish")(
@@ -54,13 +59,36 @@ const make = Effect.gen(function* () {
           yield* settingsService.getSettings,
           input.projectId ?? null,
         ).settings;
+        const override = settings.promptPolish.modelSelection;
+        const provider = override
+          ? (yield* registry.getProviders).find(
+              (provider) => provider.instanceId === override.instanceId,
+            )
+          : undefined;
+        const modelSelection =
+          override &&
+          provider &&
+          provider.enabled &&
+          provider.installed &&
+          provider.status !== "error" &&
+          provider.auth.status !== "unauthenticated" &&
+          isProviderAvailable(provider) &&
+          isProviderTextGenerationCapable(provider) &&
+          resolveProjectProviderInstanceEnabled(
+            settings,
+            input.projectId ?? null,
+            provider.instanceId,
+          ) &&
+          provider.models.some((model) => model.slug === override.model)
+            ? override
+            : settings.textGenerationModelSelection;
         // Providers run in a working directory; a rewrite must not read a checkout.
         const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-prompt-polish-" });
         // Providers expose one free-form text operation, named for its first use.
         const generated = yield* textGeneration.generateTranscriptionPostProcessing({
           cwd,
           prompt: buildPromptPolishPrompt(input.prompt, settings.promptPolish),
-          modelSelection: settings.textGenerationModelSelection,
+          modelSelection,
         });
         const prompt = generated.transcription.trim();
         return { prompt: prompt.length > 0 ? prompt : input.prompt };

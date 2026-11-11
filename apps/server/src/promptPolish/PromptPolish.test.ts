@@ -7,6 +7,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   type ModelSelection,
+  ServerProvider,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,15 +16,21 @@ import { expect } from "vite-plus/test";
 
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as PromptPolish from "./PromptPolish.ts";
 
+const decodeProvider = Schema.decodeUnknownSync(ServerProvider);
 const projectId = ProjectId.make("project-polish");
 const projectModel: ModelSelection = {
   instanceId: ProviderInstanceId.make("claudeAgent"),
   model: "project-model",
 };
 
-const run = (reply: string, calls: Array<{ prompt: string; modelSelection: ModelSelection }>) =>
+const run = (
+  reply: string,
+  calls: Array<{ prompt: string; modelSelection: ModelSelection }>,
+  override: ModelSelection | null = null,
+) =>
   PromptPolish.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -31,10 +38,28 @@ const run = (reply: string, calls: Array<{ prompt: string; modelSelection: Model
         Layer.mock(ServerSettings.ServerSettingsService)({
           getSettings: Effect.succeed({
             ...DEFAULT_SERVER_SETTINGS,
+            promptPolish: { ...DEFAULT_PROMPT_POLISH_SETTINGS, modelSelection: override },
             projectSettingsOverrides: {
               [projectId]: { textGenerationModelSelection: projectModel },
             },
           }),
+        }),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({
+          getProviders: Effect.succeed([
+            decodeProvider({
+              instanceId: "claudeAgent",
+              driver: "claudeAgent",
+              enabled: true,
+              installed: true,
+              version: null,
+              status: "ready",
+              auth: { status: "authenticated" },
+              checkedAt: "2026-01-01T00:00:00Z",
+              models: [
+                { slug: "project-model", name: "Project model", isCustom: false, capabilities: {} },
+              ],
+            }),
+          ]),
         }),
         Layer.mock(TextGeneration.TextGeneration)({
           generateTranscriptionPostProcessing: (input) => {
@@ -69,6 +94,23 @@ it.effect(
         DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
       );
 
+      const polishModel = { ...projectModel, options: [{ id: "effort", value: "high" }] };
+      for (const override of [
+        polishModel,
+        { ...projectModel, model: "removed" },
+        { ...projectModel, instanceId: ProviderInstanceId.make("removed") },
+      ]) {
+        const overrideCalls: Array<{ prompt: string; modelSelection: ModelSelection }> = [];
+        yield* PromptPolish.PromptPolish.pipe(
+          Effect.flatMap((service) => service.polish({ prompt: "Polish this" })),
+          Effect.provide(run("Polished", overrideCalls, override)),
+        );
+        expect(overrideCalls[0]!.modelSelection).toEqual(
+          override === polishModel
+            ? polishModel
+            : DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
+        );
+      }
       const blank = yield* PromptPolish.PromptPolish.pipe(
         Effect.flatMap((service) => service.polish({ prompt: "  " })),
         Effect.provide(run("unused", calls)),
