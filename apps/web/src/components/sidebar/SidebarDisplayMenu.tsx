@@ -21,7 +21,6 @@ export function SidebarDisplayMenu() {
         <SlidersHorizontalIcon className="size-4" />
       </MenuTrigger>
       <MenuPopup align="end">
-        <MenuGroupLabel>Thread density</MenuGroupLabel>
         <MenuRadioGroup
           value={density}
           onValueChange={(value) => {
@@ -29,12 +28,12 @@ export function SidebarDisplayMenu() {
               update({ sidebarDensity: value });
           }}
         >
+          <MenuGroupLabel>Thread density</MenuGroupLabel>
           <MenuRadioItem value="theme">Theme default</MenuRadioItem>
           <MenuRadioItem value="compact">Compact</MenuRadioItem>
           <MenuRadioItem value="comfortable">Comfortable</MenuRadioItem>
         </MenuRadioGroup>
         <MenuSeparator />
-        <MenuGroupLabel>Thread grouping</MenuGroupLabel>
         <MenuRadioGroup
           value={grouping}
           onValueChange={(value) => {
@@ -42,6 +41,7 @@ export function SidebarDisplayMenu() {
               update({ sidebarThreadGrouping: value });
           }}
         >
+          <MenuGroupLabel>Thread grouping</MenuGroupLabel>
           <MenuRadioItem value="theme">Theme default</MenuRadioItem>
           <MenuRadioItem value="project">All threads by project</MenuRadioItem>
           <MenuRadioItem value="global">Global settled section</MenuRadioItem>
