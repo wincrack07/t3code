@@ -25,6 +25,7 @@ export const initialCursor = (nowIso: string): RepositoryCursor => ({
   issuesSince: nowIso,
   reviewsSince: nowIso,
   etags: {},
+  pullsPrimed: false,
   seenCommentIds: [],
   heads: {},
   requestedHeads: {},
@@ -118,7 +119,7 @@ export const pollRepository = Effect.fn("PrReviewPoller.poll")(function* (input:
   const pulls = watchesPulls
     ? yield* input.api.listOpenPulls(repository, input.cursor.etags.pulls)
     : { items: null, etag: input.cursor.etags.pulls };
-  const firstPoll = input.cursor.etags.pulls === undefined;
+  const firstPoll = !input.cursor.pullsPrimed;
   for (const pull of pulls.items ?? []) {
     const key = String(pull.number);
     const headSha = pull.head.sha;
@@ -161,6 +162,7 @@ export const pollRepository = Effect.fn("PrReviewPoller.poll")(function* (input:
       ...(reviews.etag === undefined ? {} : { reviews: reviews.etag }),
       ...(pulls.etag === undefined ? {} : { pulls: pulls.etag }),
     },
+    pullsPrimed: input.cursor.pullsPrimed || pulls.items !== null,
     seenCommentIds: [...input.cursor.seenCommentIds, ...fresh].slice(-MAX_SEEN),
     heads,
     requestedHeads,
