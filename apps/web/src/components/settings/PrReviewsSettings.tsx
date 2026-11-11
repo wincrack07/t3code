@@ -326,6 +326,7 @@ export function PrReviewsSettings() {
   return (
     <SettingsPageContainer>
       <SettingsSection
+        id="pr-reviews"
         title="Reviewer environment"
         headerAction={
           <Button size="sm" disabled={!dirty || saving || !canWrite} onClick={save}>

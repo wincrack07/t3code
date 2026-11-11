@@ -236,6 +236,31 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
 
 export const SETTINGS_SEARCH_ITEMS = [
   {
+    id: "decisions",
+    title: "Decisions",
+    to: "/settings/labs",
+    searchTerms: ["routing custom OpenAI compatible source model"],
+  },
+  {
+    id: "peer-link-mesh",
+    title: "Link my environments",
+    to: "/settings/connections",
+    searchTerms: ["peer mesh link all renew unlink"],
+  },
+  {
+    id: "pr-reviews",
+    title: "PR reviews",
+    to: "/settings/pr-reviews",
+    searchTerms: ["pull request reviewer GitHub identity triggers instructions"],
+  },
+  {
+    id: "finder-integration",
+    title: "Finder integration",
+    to: "/settings/about",
+    desktopOnly: true,
+    searchTerms: ["Send to T3 Code quick action files folders install remove"],
+  },
+  {
     id: "storage-worktree-keep-when",
     targetId: "storage-worktrees",
     title: "Keep worktrees with local changes",
@@ -801,7 +826,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Keep awake",
     to: "/settings/maintenance",
     scope: "environment-defaults",
-    searchTerms: ["sleep inhibit amphetamine caffeine agents duration display lid"],
+    searchTerms: [
+      "sleep inhibit amphetamine caffeine agents duration display lid menu bar tray stats CPU memory disk network",
+    ],
   },
   {
     id: "background-activity",

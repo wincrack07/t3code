@@ -21,6 +21,7 @@ export function FinderIntegrationSettingsRow() {
   if (!bridge || !state?.supported) return null;
   return (
     <SettingsRow
+      id="finder-integration"
       title="Finder integration"
       status={state.installed ? "Installed" : "Not installed"}
       description="Adds Send to T3 Code for files and folders. You may need to enable it in System Settings → Keyboard → Keyboard Shortcuts → Services."

@@ -23,7 +23,7 @@ export function PeerLinkMeshSettings() {
   const progress = useAtomValue(peerMeshProgressAtom);
   if (hosts.length < 2 && settings.managed.length === 0) return null;
   return (
-    <SettingsSection title="Link my environments">
+    <SettingsSection id="peer-link-mesh" title="Link my environments">
       <SettingsRow
         title="Link every environment"
         description="Links each connected environment to every other one, in both directions. Run it again to retry any that failed."
