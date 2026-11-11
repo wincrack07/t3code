@@ -100,7 +100,15 @@ jobs:
           set -euo pipefail
           ref="${INPUT_REF:-main}"
           sha=$(gh api "repos/$REPO/commits/$ref" -q .sha)
-          base=$(gh api "repos/$REPO/contents/package.json?ref=$sha" -q .content | base64 -d | jq -r .version | sed 's/-.*//')
+          # The root package.json has no version; the desktop app carries it.
+          # A nightly is a prerelease of the next patch, so bump it.
+          current=$(gh api "repos/$REPO/contents/apps/desktop/package.json?ref=$sha" -q .content | base64 -d | jq -r '.version // empty' | sed 's/-.*//')
+          if [[ ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not read a version from apps/desktop/package.json (got '$current')."
+            exit 1
+          fi
+          IFS=. read -r major minor patch <<<"$current"
+          base="$major.$minor.$((patch + 1))"
           version="${INPUT_VERSION:-$base-nightly.$(date -u +%Y%m%d).$((9000 + GITHUB_RUN_NUMBER))}"
           last=$(gh release list -R "$REPO" --exclude-drafts --limit 1 --json tagName -q '.[0].tagName // empty')
           last_sha=""
