@@ -2873,7 +2873,6 @@ html[data-theme-id="claude"] {
   --font-sans:
     "Anthropic Sans", -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui,
     sans-serif;
-  --font-reply: "Anthropic Serif", "New York", ui-serif, Georgia, serif;
 }
 
 [data-assistant-reply] .chat-markdown {

@@ -52,7 +52,7 @@ describe("applyAppearanceFontVariables", () => {
       expect(touchComposerFontSize()).toBe("16px");
 
       root.dataset.themeId = "claude";
-      expect(getComputedStyle(root).getPropertyValue("--font-reply")).toContain("Anthropic Serif");
+      expect(getComputedStyle(root).getPropertyValue("--font-reply")).toContain("Anthropic Sans");
       applyAppearanceFontVariables(root, {
         ...preferences,
         separate: false,
