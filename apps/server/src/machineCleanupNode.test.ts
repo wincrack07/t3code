@@ -138,3 +138,15 @@ it("uses the APFS data mount and omits rules for unsupported platforms", async (
     ),
   ).toEqual([false, true]);
 });
+
+it("attempts one notification per run and alerts on low space without pending items", async () => {
+  await using f = await fixture();
+  const signal = new AbortController().signal;
+  const scan = await f.backend.scan(f.settings, signal, () => {});
+  const report = { ...scan, mode: "unattended" as const, items: [], freeAfter: 5 * 1024 ** 3 };
+  await f.backend.notify(report, f.settings, signal);
+  await f.backend.notify(report, f.settings, signal);
+  expect(f.calls.filter((call) => call.command === "notify-send")).toHaveLength(1);
+  await f.backend.notify({ ...report, id: "dry-run", mode: "scan" }, f.settings, signal);
+  expect(f.calls.filter((call) => call.command === "notify-send")).toHaveLength(1);
+});

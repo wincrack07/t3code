@@ -1,3 +1,6 @@
+import * as DateTime from "effect/DateTime";
+import { cleanupScheduleDay, selectedMachineCleanupItems } from "./machineCleanupSchedule.ts";
+import { forkParked } from "./serverActivation.ts";
 import { withWorkspaceLease } from "./workspace/workspaceLease.ts";
 import {
   MachineCleanupError,
@@ -61,6 +64,10 @@ const make = Effect.gen(function* () {
   const scope = yield* Effect.scope;
   const mutex = yield* Semaphore.make(1);
   const historyPath = path.join(config.stateDir, "machine-cleanup-history.json");
+  const schedulePath = path.join(config.stateDir, "machine-cleanup-last-day");
+  let lastScheduledDay = yield* fs
+    .readFileString(schedulePath)
+    .pipe(Effect.orElseSucceed(() => ""));
   const decodeHistory = Schema.decodeUnknownEffect(
     Schema.fromJsonString(Schema.Array(MachineCleanupReport)),
   );
@@ -77,6 +84,7 @@ const make = Effect.gen(function* () {
   let activePaths: readonly string[] = [];
   let progress = "";
   let job: Fiber.Fiber<void> | null = null;
+  let activeJob = 0;
   const backend = makeMachineCleanupNode({
     home,
     t3Home: config.baseDir,
@@ -151,6 +159,7 @@ const make = Effect.gen(function* () {
             operation: "selection",
             cause: "Approve each aggressive item separately",
           });
+        const ticket = ++activeJob;
         const approved = state.report;
         yield* SubscriptionRef.update(ref, (value) => ({
           ...value,
@@ -167,13 +176,7 @@ const make = Effect.gen(function* () {
           );
           report = { ...report, mode };
           if (mode !== "scan") {
-            const selected = report.items.filter(
-              (item) =>
-                item.outcome === "pending" &&
-                ((item.phase === "A" && mode !== "phaseB") ||
-                  (selection?.itemIds.includes(item.id) &&
-                    item.phase === (mode === "phaseB" ? "B" : "C"))),
-            );
+            const selected = selectedMachineCleanupItems(report, mode, selection?.itemIds ?? []);
             const missing =
               selection?.itemIds.filter((id) => !selected.some((item) => item.id === id)) ?? [];
             if (missing.length)
@@ -223,6 +226,9 @@ const make = Effect.gen(function* () {
               };
             }
           }
+          report = yield* io("notification", (signal) =>
+            backend.notify(report, currentSettings, signal),
+          );
           yield* persist(report);
         }).pipe(
           Effect.catch((cause) =>
@@ -236,7 +242,7 @@ const make = Effect.gen(function* () {
           ),
           Effect.ensuring(
             SubscriptionRef.update(ref, (state) =>
-              state.running
+              state.running && ticket === activeJob
                 ? { ...state, running: false, progress: "Cancelled; remaining files retained" }
                 : state,
             ),
@@ -254,6 +260,23 @@ const make = Effect.gen(function* () {
     ),
     Effect.repeat(Schedule.spaced("1 second")),
     Effect.forkIn(scope),
+  );
+  const scheduledTick = Effect.fn("MachineCleanup.scheduledTick")(
+    function* () {
+      const state = yield* SubscriptionRef.get(ref);
+      if (state.running) return;
+      const current = (yield* settings.getSettings).machineCleanup;
+      const local = yield* DateTime.withCurrentZoneLocal(DateTime.nowInCurrentZone);
+      const day = cleanupScheduleDay(current, DateTime.toParts(local), lastScheduledDay);
+      if (day === null) return;
+      yield* start("unattended");
+      lastScheduledDay = day;
+      yield* fs.writeFileString(schedulePath, day);
+    },
+    Effect.catch((cause) => Effect.logWarning("Machine cleanup schedule failed", { cause })),
+  );
+  yield* forkParked(
+    scheduledTick().pipe(Effect.repeat(Schedule.spaced("1 minute")), Effect.asVoid),
   );
   const cancel = Effect.gen(function* () {
     if (job) yield* Fiber.interrupt(job);

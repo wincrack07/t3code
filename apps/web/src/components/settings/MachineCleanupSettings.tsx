@@ -196,6 +196,54 @@ function EnvironmentCleanup({
           />
         }
       />
+      <SettingsRow
+        title="Daily unattended cleanup"
+        description="Run regenerable cleanup only, once per local day. Approval candidates remain untouched."
+        control={
+          <Switch
+            aria-label="Daily machine cleanup"
+            checked={settings.scheduleEnabled}
+            disabled={!canConfigure || busy}
+            onCheckedChange={(checked) => patch({ scheduleEnabled: checked })}
+          />
+        }
+      />
+      <SettingsRow
+        title="Daily cleanup time"
+        description="Local time on this environment. A missed run starts when the server next becomes available."
+        control={
+          <Input
+            type="time"
+            aria-label="Daily cleanup time"
+            value={settings.scheduleTime}
+            disabled={!canConfigure || busy}
+            onChange={(event) => {
+              if (/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(event.target.value))
+                patch({ scheduleTime: event.target.value });
+            }}
+          />
+        }
+      />
+      <SettingsRow
+        title="Low-space alert"
+        description="Notify below this many GiB, even when no approval candidates exist. Notification delivery depends on the environment's native notification service."
+        control={
+          <Input
+            type="number"
+            aria-label="Low-space threshold GiB"
+            min={0}
+            max={10000}
+            defaultValue={settings.lowSpaceGiB}
+            key={settings.lowSpaceGiB}
+            disabled={!canConfigure || busy}
+            onBlur={(event) => {
+              const value = Number(event.target.value);
+              if (Number.isFinite(value) && value >= 0 && value <= 10000)
+                patch({ lowSpaceGiB: value });
+            }}
+          />
+        }
+      />
       {aRules.map((rule) => (
         <SettingsRow
           key={rule}

@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - Node adapter owns native process, allocated-block and filesystem operations.
+import { cleanupNotification } from "./machineCleanupSchedule.ts";
 import * as DateTime from "effect/DateTime";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
@@ -434,6 +435,8 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
       }
       progress(row.path);
       try {
+        if (row.phase === "A" && !machineRuleEnabled(settings, row.rule))
+          throw new Error("Rule was disabled");
         const processes = cleanupBuildProcesses(await run("ps", ["-axo", "pid=,pcpu=,args="]));
         const rule: MachineCacheRule | undefined =
           row.rule.startsWith("rustup:") && /^[A-Za-z0-9._-]+$/.test(row.rule.slice(7))
@@ -606,5 +609,36 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
       finishedAt: DateTime.formatIso(DateTime.makeUnsafe(options.now())),
     };
   };
-  return { scan, execute };
+  const notified = new Set<string>();
+  const notify = async (
+    report: MachineCleanupReport,
+    settings: MachineCleanupSettings,
+    signal: AbortSignal,
+  ): Promise<MachineCleanupReport> => {
+    const message = cleanupNotification(report, settings.lowSpaceGiB);
+    if (!message || notified.has(report.id)) return report;
+    notified.add(report.id);
+    if (notified.size > 100) notified.delete(notified.values().next().value!);
+    try {
+      if (options.platform === "darwin")
+        await options.command(
+          options.home,
+          "osascript",
+          ["-e", `display notification ${JSON.stringify(message)} with title "Machine cleanup"`],
+          signal,
+        );
+      else await options.command(options.home, "notify-send", ["Machine cleanup", message], signal);
+      return report;
+    } catch {
+      signal.throwIfAborted();
+      return {
+        ...report,
+        notes: [
+          ...report.notes,
+          "Notification not sent: the environment's native notification channel is unavailable",
+        ],
+      };
+    }
+  };
+  return { scan, execute, notify };
 }
