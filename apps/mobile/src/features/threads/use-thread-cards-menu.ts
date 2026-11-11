@@ -1,7 +1,7 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useEnvironmentScope } from "../../state/session";
 import { useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { htmlRenderFileName } from "@t3tools/shared/htmlRender";
 
 import type { AppBarMenu } from "../../components/ui/AppBar.types";
@@ -15,11 +15,11 @@ export function useThreadCardsMenu(environment: string, thread: string): AppBarM
   const cards = useThreadShell(scopeThreadRef(environmentId, threadId))?.pinnedHtmlCards;
   const navigation = useNavigation();
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
-  const canRemove = useAtomValue(threadEnvironment.updateMetadata.permissionAtom(environmentId));
+  const canRemove = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   if (!cards?.length) return null;
   return {
     title: "Agent cards",
-    icon: "rectangle.stack",
+    icon: "doc.on.doc",
     items: cards.map((card) => ({
       id: card.id,
       title: card.title,

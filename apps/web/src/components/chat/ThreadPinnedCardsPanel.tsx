@@ -3,12 +3,16 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  type EnvironmentId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { PanelRightOpenIcon, XIcon } from "lucide-react";
 
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useThreadShell } from "../../state/entities";
-import { useAtomValue } from "@effect/atom-react";
+import { useEnvironmentScope } from "../../state/session";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -23,9 +27,7 @@ export function ThreadPinnedCardsPanel(props: {
 }) {
   const threadRef = scopeThreadRef(props.environmentId, props.threadId);
   const cards = useThreadShell(threadRef)?.pinnedHtmlCards;
-  const canOperate = useAtomValue(
-    threadEnvironment.updateMetadata.permissionAtom(props.environmentId),
-  );
+  const canOperate = useEnvironmentScope(props.environmentId, AuthOrchestrationOperateScope);
   const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });

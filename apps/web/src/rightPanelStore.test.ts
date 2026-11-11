@@ -1266,7 +1266,7 @@ it("reconciles cards in place, preserves focus and respects local close until ex
     surfaces: [
       ...initial.surfaces,
       {
-        id: "html-card:progress",
+        id: "html-card:progress" as const,
         kind: "html-card" as const,
         card: first,
         userOpened: true as const,
