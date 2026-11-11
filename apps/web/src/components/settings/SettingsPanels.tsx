@@ -1,3 +1,4 @@
+import { PromptPolishSettings } from "./PromptPolishSettings";
 import { SystemMonitorView } from "../SystemMonitor";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
@@ -1964,6 +1965,7 @@ export function ThreadsSettingsPanel() {
           />
         </AdvancedSettings>
       </SettingsSection>
+      {!isProjectScope && <PromptPolishSettings />}
     </SettingsPageContainer>
   );
 }

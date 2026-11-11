@@ -1,6 +1,10 @@
 import * as NodeUtil from "node:util";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { CodexSettings, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  CodexSettings,
+  DEFAULT_PROMPT_POLISH_SETTINGS,
+  ProviderInstanceId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -54,7 +58,20 @@ await Effect.runPromise(
     const review = [];
     const key = [];
     for (const fixture of fixtures) {
-      const prompt = buildPromptPolishPrompt(fixture.draft);
+      const prompt = buildPromptPolishPrompt(
+        fixture.draft,
+        "customRule" in fixture
+          ? {
+              ...DEFAULT_PROMPT_POLISH_SETTINGS,
+              rules: [
+                ...DEFAULT_PROMPT_POLISH_SETTINGS.rules.filter(
+                  (rule) => rule.name !== "Preserve language",
+                ),
+                { name: "Custom", text: fixture.customRule, enabled: true },
+              ],
+            }
+          : DEFAULT_PROMPT_POLISH_SETTINGS,
+      );
       for (let sample = 1; sample <= samples; sample++) {
         const previous = baseline.find((row) => row.id === fixture.id && row.sample === sample);
         if (values.baseline && !previous)

@@ -834,6 +834,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["generated thread titles source control content default provider"],
   },
   {
+    id: "prompt-polish",
+    title: "Polish prompt",
+    to: "/settings/threads",
+    searchTerms: ["rewrite composer draft prompt instruction custom rules"],
+  },
+  {
     id: "thread-title-instructions",
     title: "Thread title instructions",
     to: "/settings/threads",
