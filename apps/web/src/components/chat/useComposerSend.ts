@@ -96,6 +96,8 @@ import {
   referencedThreadContexts,
 } from "./composerSend.logic";
 import { useMultipleModelSend } from "./useMultipleModelSend";
+import { useSetOpenQuestionStatus } from "./useSetOpenQuestionStatus";
+import { answerShownOpenQuestion, clearOpenQuestionDrafts } from "../../openQuestionDeckStore";
 import { type ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import {
   awaitAttachmentUploads,
@@ -332,6 +334,7 @@ export function useComposerSend(input: ComposerSendInput) {
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
+  const setOpenQuestionStatus = useSetOpenQuestionStatus();
   const uploadThreadFeedback = useOrchestrationCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
   });
@@ -783,12 +786,24 @@ export function useComposerSend(input: ComposerSendInput) {
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
+    // While the card above the composer shows an open question, a typed message answers it.
+    const questionAnswer =
+      isServerThread &&
+      phase !== "running" &&
+      multipleModelSelections === null &&
+      sendCtx.shownPendingApprovalIds.length === 0 &&
+      messageTextForSend.trim().length > 0
+        ? answerShownOpenQuestion(
+            scopeThreadRef(environmentId, threadIdForSend),
+            messageTextForSend,
+          )
+        : null;
     const outgoingMessageText = formatOutgoingPrompt({
       provider: ctxSelectedProvider,
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextForSend || ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
+      text: questionAnswer?.text ?? (messageTextForSend || ATTACHMENT_ONLY_BOOTSTRAP_PROMPT),
     });
     if (composerRef.current?.validateProviderInput(outgoingMessageText) === false) {
       return;
@@ -1282,6 +1297,18 @@ export function useComposerSend(input: ComposerSendInput) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        if (questionAnswer !== null) {
+          const threadRef = scopeThreadRef(environmentId, threadIdForSend);
+          clearOpenQuestionDrafts(
+            threadRef,
+            questionAnswer.update.updates.map((entry) => entry.id),
+          );
+          void setOpenQuestionStatus(
+            threadRef,
+            questionAnswer.update,
+            "Answer sent, but the question did not update",
+          );
+        }
         setKeepFullHistory(routeThreadKey, false);
         if (freshArm !== undefined) disarmFreshSession(routeThreadKey, freshArm);
         clearUsageLimitsFor(routeThreadKey);

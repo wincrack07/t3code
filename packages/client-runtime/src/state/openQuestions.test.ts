@@ -1,7 +1,13 @@
 import { RunId, type OpenQuestion } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { assembleOpenQuestionAnswers, openQuestionAnswer } from "./openQuestions.ts";
+import {
+  assembleOpenQuestionAnswers,
+  nextAfterOpenQuestionAnswer,
+  openQuestionAnswer,
+  openQuestionDeck,
+  openQuestionOptions,
+} from "./openQuestions.ts";
 
 const runId = RunId.make("run:1");
 const question = (id: string, text: string, status: OpenQuestion["status"] = "open") =>
@@ -45,5 +51,66 @@ describe("assembleOpenQuestionAnswers", () => {
   it("sends nothing when no card has an answer", () => {
     expect(assembleOpenQuestionAnswers([question("a", "A?")], { a: { detail: " " } })).toBeNull();
     expect(openQuestionAnswer({ detail: "custom answer" })).toBe("custom answer");
+  });
+});
+
+describe("openQuestionOptions", () => {
+  it("puts the recommended answer first, else keeps the declared order", () => {
+    const merge = { ...question("merge", "Merge?"), suggestions: ["Keep reviewing", "Merge"] };
+    expect(openQuestionOptions({ ...merge, recommended: "Merge" })).toEqual([
+      "Merge",
+      "Keep reviewing",
+    ]);
+    expect(openQuestionOptions(merge)).toEqual(["Keep reviewing", "Merge"]);
+  });
+});
+
+describe("open question deck", () => {
+  const questions = [
+    question("a", "A?"),
+    question("done", "Done?", "answered"),
+    question("b", "B?"),
+    question("c", "C?"),
+  ];
+
+  it("shows one open question at a time, falling back to the first open one", () => {
+    expect(openQuestionDeck(questions, "b")).toMatchObject({ index: 1, question: { id: "b" } });
+    expect(openQuestionDeck(questions, "done")?.question.id).toBe("a");
+    expect(openQuestionDeck(questions, null)?.open.map((open) => open.id)).toEqual(["a", "b", "c"]);
+    expect(openQuestionDeck([question("x", "X?", "dismissed")], null)).toBeNull();
+  });
+
+  it("advances to the next unanswered question, wrapping, and sends once all have answers", () => {
+    const deck = openQuestionDeck(questions, "b")!;
+    expect(nextAfterOpenQuestionAnswer(deck, { b: { choice: "Yes" } })).toEqual({
+      kind: "show",
+      id: "c",
+    });
+    expect(
+      nextAfterOpenQuestionAnswer(deck, { b: { choice: "Yes" }, c: { choice: "No" } }),
+    ).toEqual({ kind: "show", id: "a" });
+    expect(
+      nextAfterOpenQuestionAnswer(deck, {
+        a: { choice: "Yes" },
+        b: { choice: "Yes" },
+        c: { choice: "No" },
+      }),
+    ).toEqual({ kind: "send" });
+  });
+
+  it("ties a typed reply to the shown question verbatim, alongside answers already picked", () => {
+    const later = RunId.make("run:2");
+    const result = assembleOpenQuestionAnswers(
+      [...questions, { ...question("tests", "Run the tests?"), runId: later }],
+      { a: { choice: "Yes" } },
+      { id: "tests", text: "  Only the fast ones.\nSkip e2e.  " },
+    );
+    expect(result?.text).toBe(
+      ["1 · A → Yes", "1 · Run the tests → Only the fast ones.\nSkip e2e."].join("\n"),
+    );
+    expect(result?.update.updates).toEqual([
+      { id: "a", status: "answered", answer: "Yes" },
+      { id: "tests", status: "answered", answer: "Only the fast ones. Skip e2e." },
+    ]);
   });
 });

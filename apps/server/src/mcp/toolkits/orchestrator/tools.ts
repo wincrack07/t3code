@@ -272,7 +272,7 @@ const ThreadUpdateTool = Tool.make("t3_thread_update", {
 
 const OpenQuestionsTool = Tool.make("t3_open_questions", {
   description:
-    "Show decisions you leave to the user as answer cards under your final reply. Non-blocking: the user answers in a later message. `declare` with `questions` (id, Markdown text, 2-4 short answers); a new declare replaces this turn's. `resolve` with `ids` once one is settled another way.",
+    "Show decisions you leave to the user in a card above their composer. Non-blocking: the user answers in a later message. `declare` with `questions` (id, one-sentence `context`, Markdown text, 2-4 short answers, and the one you `recommended`); a new declare replaces this turn's. `resolve` with `ids` once one is settled another way.",
   parameters: ThreadOpenQuestionsMcpInput,
   success: ThreadOpenQuestionsMcpResult,
   failure: OrchestratorMcpFailure,

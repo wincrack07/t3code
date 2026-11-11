@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { IsoDateTime, RunId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 const OPEN_QUESTION_TEXT_MAX_LENGTH = 600;
+const OPEN_QUESTION_CONTEXT_MAX_LENGTH = 400;
 const OPEN_QUESTION_SUGGESTION_MAX_LENGTH = 60;
 const OPEN_QUESTION_ANSWER_MAX_LENGTH = 2_000;
 const OPEN_QUESTIONS_PER_DECLARATION_MAX = 8;
@@ -20,8 +21,13 @@ export type OpenQuestionId = typeof OpenQuestionId.Type;
 export const OpenQuestionStatus = Schema.Literals(["open", "answered", "dismissed", "resolved"]);
 export type OpenQuestionStatus = typeof OpenQuestionStatus.Type;
 
-export const OpenQuestionDeclaration = Schema.Struct({
+const OpenQuestionFields = Schema.Struct({
   id: OpenQuestionId,
+  context: Schema.optional(
+    TrimmedNonEmptyString.check(Schema.isMaxLength(OPEN_QUESTION_CONTEXT_MAX_LENGTH)).annotate({
+      description: "One sentence: what happened and why it needs a decision.",
+    }),
+  ),
   text: TrimmedNonEmptyString.check(Schema.isMaxLength(OPEN_QUESTION_TEXT_MAX_LENGTH)).annotate({
     description: "The question, in Markdown.",
   }),
@@ -30,11 +36,24 @@ export const OpenQuestionDeclaration = Schema.Struct({
   )
     .check(Schema.isMinLength(2), Schema.isMaxLength(4))
     .annotate({ description: "2 to 4 short answers, such as `Yes, open it`, `Wait`." }),
+  recommended: Schema.optional(
+    TrimmedNonEmptyString.annotate({
+      description: "The suggestion you recommend, copied exactly. Omit when you have none.",
+    }),
+  ),
 });
+
+export const OpenQuestionDeclaration = OpenQuestionFields.check(
+  Schema.makeFilter((question) =>
+    question.recommended === undefined || question.suggestions.includes(question.recommended)
+      ? true
+      : "`recommended` must equal one of the suggestions.",
+  ),
+);
 export type OpenQuestionDeclaration = typeof OpenQuestionDeclaration.Type;
 
 export const OpenQuestion = Schema.Struct({
-  ...OpenQuestionDeclaration.fields,
+  ...OpenQuestionFields.fields,
   /** The run whose final reply shows the question. */
   runId: Schema.NullOr(RunId),
   status: OpenQuestionStatus,
@@ -113,8 +132,10 @@ export function applyOpenQuestionsUpdate(
   );
   const declared = update.questions.map((question): OpenQuestion => ({
     id: question.id,
+    ...(question.context === undefined ? {} : { context: question.context }),
     text: question.text,
     suggestions: question.suggestions,
+    ...(question.recommended === undefined ? {} : { recommended: question.recommended }),
     runId: update.runId,
     status: "open",
     createdAt: now,
