@@ -2599,6 +2599,29 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           capped.thread.pinnedHtmlCards?.map((card) => card.id),
           Array.from({ length: 8 }, (_, index) => `card-${index + 1}`),
         );
+        const placementOf = Effect.fn("test.placementOf")(function* (
+          placement?: "panel" | "details",
+        ) {
+          yield* htmlRender.publish({
+            threadId,
+            pin: "status",
+            html: "<p>Status</p>",
+            title: "Status",
+            height: 200,
+            ...(placement === undefined ? {} : { placement }),
+          });
+          const shell = (yield* store.getShellSnapshot()).threads.find(
+            (thread) => thread.id === threadId,
+          );
+          const card = shell?.pinnedHtmlCards?.find((candidate) => candidate.id === "status");
+          assert.ok(card);
+          return card.placement;
+        });
+        assert.equal(yield* placementOf("details"), "details");
+        // An update without a placement must not move the card back to the panel.
+        assert.equal(yield* placementOf(), "details");
+        assert.isUndefined(yield* placementOf("panel"));
+        assert.isUndefined(yield* placementOf());
       }).pipe(
         Effect.provide(
           HtmlRender.layer.pipe(

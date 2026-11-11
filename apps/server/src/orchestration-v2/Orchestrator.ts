@@ -643,6 +643,18 @@ const decodeUserInputAnswers = Schema.decodeUnknownEffect(
   ),
 );
 
+type PinnedHtmlCard = NonNullable<OrchestrationV2AppThread["pinnedHtmlCards"]>[number];
+
+/** A card update without a placement keeps the card where it is; panel is stored as no placement. */
+function pinnedHtmlCardUpdate(
+  current: OrchestrationV2AppThread["pinnedHtmlCards"],
+  card: PinnedHtmlCard,
+): PinnedHtmlCard {
+  const { placement: requested, ...rest } = card;
+  const placement = requested ?? current?.find((existing) => existing.id === card.id)?.placement;
+  return placement === "details" ? { ...rest, placement } : rest;
+}
+
 function pendingThreadTitleGenerationEffect(
   commandId: CommandId,
   threadId: ThreadId,
@@ -4061,7 +4073,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     ...(thread.pinnedHtmlCards ?? []).filter(
                       (card) => card.id !== command.htmlCard?.id,
                     ),
-                    ...(command.htmlCard.card === null ? [] : [command.htmlCard.card]),
+                    ...(command.htmlCard.card === null
+                      ? []
+                      : [pinnedHtmlCardUpdate(thread.pinnedHtmlCards, command.htmlCard.card)]),
                   ].slice(-8),
                 }),
             ...(command.title === undefined ? {} : { title: command.title }),

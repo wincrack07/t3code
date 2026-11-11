@@ -87,12 +87,17 @@ import {
 } from "./providerRuntime.ts";
 import { ThreadTokenUsageSnapshot } from "./providerRuntime.ts";
 
+/** Where a pinned card shows: a right-panel tab (the default) or a Thread Details section. */
+export const PinnedHtmlCardPlacement = Schema.Literals(["panel", "details"]);
+export type PinnedHtmlCardPlacement = typeof PinnedHtmlCardPlacement.Type;
+
 const PinnedHtmlCard = Schema.Struct({
   id: Schema.String.check(Schema.isPattern(HTML_RENDER_PIN_ID_PATTERN)),
   attachmentId: Schema.String,
   title: Schema.String,
   height: Schema.Number,
   heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
+  placement: Schema.optional(PinnedHtmlCardPlacement),
 });
 
 export const OrchestrationV2Actor = Schema.Literals(["user", "agent", "system"]);
