@@ -359,12 +359,17 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
     window.addEventListener("keydown", onKeyDown, true);
     const unsubscribe = window.desktopBridge?.onMenuAction((action) => {
       if (action === "sidebar.toggle") toggleSidebar();
+      if (action === "machine-monitor.open") {
+        void window.desktopBridge?.getHostEnvironmentId?.().then((machine) => {
+          if (machine) void router.navigate({ to: "/settings/monitor", search: { machine } });
+        });
+      }
     });
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
       unsubscribe?.();
     };
-  }, [keybindings, showSidebar, toggleSidebar, usagePageOpen]);
+  }, [keybindings, showSidebar, toggleSidebar, usagePageOpen, router]);
 
   // The control lives as long as the shell, so it carries the shell's commands. Created
   // once so re-renders never re-register them.

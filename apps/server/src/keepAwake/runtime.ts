@@ -1,6 +1,9 @@
+import { traySamples } from "./traySamples.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as SystemMonitor from "../systemMonitor/SystemMonitor.ts";
 import { updateRunActivity } from "./activity.ts";
 import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
-import { DEFAULT_KEEP_AWAKE, KeepAwakeDefaults } from "@t3tools/contracts";
+import { DEFAULT_KEEP_AWAKE, DEFAULT_TRAY_STATS, KeepAwakeDefaults } from "@t3tools/contracts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -48,19 +51,32 @@ export const activityLayer = Layer.effectDiscard(
   Effect.gen(function* () {
     const service = yield* KeepAwake.KeepAwake;
     const desktop = yield* DesktopTelemetryReceiver.DesktopTelemetryReceiver;
-    yield* service.changes.pipe(
-      Stream.runForEach((status) => desktop.reportKeepAwake(status).pipe(Effect.ignore)),
+    const platform = yield* HostProcess.Platform;
+    const monitor = yield* SystemMonitor.SystemMonitor;
+    const health = yield* desktop.subscribeHealth;
+    yield* Stream.merge(
+      service.changes.pipe(Stream.map(() => undefined)),
+      Stream.concat(Stream.make(health.latest), health.changes).pipe(Stream.map(() => undefined)),
+    ).pipe(
+      Stream.mapEffect(() => Effect.all([service.status, desktop.health])),
+      Stream.tap(([status]) => desktop.reportKeepAwake(status).pipe(Effect.ignore)),
+      Stream.map(
+        ([status, connection]) =>
+          platform === "darwin" &&
+          connection.status === "healthy" &&
+          (status.defaults.trayStats ?? DEFAULT_TRAY_STATS).enabled,
+      ),
+      (enabled) => traySamples(enabled, monitor.stream({ detail: false })),
+      Stream.runForEach((frame) =>
+        service.status.pipe(
+          Effect.flatMap((status) => desktop.reportKeepAwake(status, frame?.sample)),
+          Effect.ignore,
+        ),
+      ),
       Effect.forkScoped,
     );
     yield* desktop.keepAwakeChanges.pipe(
       Stream.runForEach((session) => service.change({ session })),
-      Effect.forkScoped,
-    );
-    const health = yield* desktop.subscribeHealth;
-    yield* health.changes.pipe(
-      Stream.runForEach(() =>
-        service.status.pipe(Effect.flatMap(desktop.reportKeepAwake), Effect.ignore),
-      ),
       Effect.forkScoped,
     );
     const sink = yield* EventSink.EventSinkV2;

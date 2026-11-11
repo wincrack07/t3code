@@ -372,7 +372,7 @@ Measurements describe the machine running the environment's server. Project tota
 accessible processes whose working directory belongs to that project or a known worktree.
 Process RAM is resident memory, so process totals do not equal total machine RAM. macOS
 available RAM includes reclaimable file-backed and purgeable memory. History stays in memory
-and collects only while a monitor is open or sidebar machine health is on. The sidebar and
+and collects only while a monitor is open, sidebar machine health is on, or macOS menu bar stats are on. The sidebar and
 mobile summary collect resource counters only. Process snapshots and attribution refresh every
 ten seconds while the full monitor view is open; closing its last viewer stops that work.
 Storage and macOS command counters refresh every ten seconds; CPU and Linux resource counters

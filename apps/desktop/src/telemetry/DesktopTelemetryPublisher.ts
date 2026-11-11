@@ -328,7 +328,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
   ) => {
     switch (message.type) {
       case "keepAwakeStatus":
-        return tray.update(sourceId, message.status);
+        return tray.update(sourceId, message.status, message.sample);
       case "setDiagnosticsDemand":
         return Ref.modify(diagnosticsDemandSources, (sources) => {
           const previous = sources.size > 0;
@@ -362,16 +362,20 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
   const removeControlSource: DesktopTelemetryPublisher["Service"]["removeControlSource"] = (
     sourceId,
   ) =>
-    Ref.modify(diagnosticsDemandSources, (sources) => {
-      const previous = sources.size > 0;
-      const next = new Set(sources);
-      next.delete(sourceId);
-      return [[previous, next.size > 0] as const, next] as const;
-    }).pipe(
-      Effect.flatMap(([previous, enabled]) =>
-        previous === enabled
-          ? Effect.void
-          : Queue.offer(sampleTriggers, undefined).pipe(Effect.asVoid),
+    tray.remove(sourceId).pipe(
+      Effect.andThen(
+        Ref.modify(diagnosticsDemandSources, (sources) => {
+          const previous = sources.size > 0;
+          const next = new Set(sources);
+          next.delete(sourceId);
+          return [[previous, next.size > 0] as const, next] as const;
+        }).pipe(
+          Effect.flatMap(([previous, enabled]) =>
+            previous === enabled
+              ? Effect.void
+              : Queue.offer(sampleTriggers, undefined).pipe(Effect.asVoid),
+          ),
+        ),
       ),
     );
 

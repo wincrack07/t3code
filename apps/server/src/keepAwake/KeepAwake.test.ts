@@ -1,6 +1,6 @@
 import { updateRunActivity } from "./activity.ts";
 import { expect, it } from "@effect/vitest";
-import { DEFAULT_KEEP_AWAKE } from "@t3tools/contracts";
+import { DEFAULT_KEEP_AWAKE, DEFAULT_TRAY_STATS } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
@@ -189,9 +189,25 @@ it.effect("saves startup defaults without replacing the current session", () =>
     });
     expect((yield* service.status).active).toBe(true);
     expect((yield* Ref.get(saved)).mode).toBe("off");
+    yield* service.change({
+      defaults: {
+        ...(yield* service.status).defaults,
+        trayStats: { ...DEFAULT_TRAY_STATS, enabled: false, memory: true },
+      },
+    });
+    expect((yield* Ref.get(saved)).trayStats).toEqual({
+      ...DEFAULT_TRAY_STATS,
+      enabled: false,
+      memory: true,
+    });
     const restarted = yield* Layer.build(KeepAwake.layer.pipe(Layer.provide(deps)));
     const status = yield* Context.get(restarted, KeepAwake.KeepAwake).status;
     expect(status.mode).toBe("off");
     expect(status.options.batteryCutoff).toBe(40);
+    expect(status.defaults.trayStats).toEqual({
+      ...DEFAULT_TRAY_STATS,
+      enabled: false,
+      memory: true,
+    });
   }),
 );
