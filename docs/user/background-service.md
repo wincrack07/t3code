@@ -209,6 +209,13 @@ is gone, a version before 0.1.0 starts with no threads or settings.
 
 ## Keep awake
 
+On macOS, the cup in the menu bar can also show the desktop Mac’s network speed and
+CPU usage. In **Settings → Background activity → Keep awake**, select the desktop’s
+local environment to configure **Show stats in the menu bar** and the Network speed,
+CPU, Memory, and Disk toggles. Stats, Network speed, and CPU start on; Memory and Disk
+start off. MB/s means megabytes per second. The menu includes full resource readings
+and **Open machine monitor**. A marked cup means Keep awake is active.
+
 Use **Keep awake** in the sidebar, Activity board, or macOS menu bar to keep the
 machine running your agents awake. Remote controls apply to the selected environment.
 The default follows running and queued turns, releasing the sleep inhibitor ten

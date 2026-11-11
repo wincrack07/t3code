@@ -107,7 +107,7 @@ const make = Effect.gen(function* () {
     if (at - lastSlow >= 10_000) {
       lastSlow = at;
       const disk = yield* Effect.tryPromise({
-        try: () => NodeFSP.statfs(config.baseDir),
+        try: () => NodeFSP.statfs(platform === "darwin" ? "/" : config.baseDir),
         catch: (cause) => new MachineReadError({ cause }),
       }).pipe(Effect.orElseSucceed(() => null));
       diskFree = disk ? disk.bavail * disk.bsize : null;

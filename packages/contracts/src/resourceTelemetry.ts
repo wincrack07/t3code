@@ -1,3 +1,4 @@
+import { MachineSample } from "./systemMonitor.ts";
 import { KeepAwakeStatus, KeepAwakeSession } from "./keepAwake.ts";
 import * as Schema from "effect/Schema";
 
@@ -396,6 +397,7 @@ export const DesktopTelemetryControlMessage = Schema.Union([
     version: Schema.Literal(1),
     type: Schema.Literal("keepAwakeStatus"),
     status: KeepAwakeStatus,
+    sample: Schema.optionalKey(MachineSample),
   }),
   DesktopTelemetrySetDiagnosticsDemand,
   DesktopTelemetrySetHostPowerIntervals,

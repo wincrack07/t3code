@@ -1,3 +1,4 @@
+import { DEFAULT_TRAY_STATS } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
@@ -120,6 +121,36 @@ function KeepAwakeForm({
   };
   return (
     <div className="space-y-3 text-sm">
+      {settings ? (
+        <fieldset className="space-y-2">
+          <legend>Menu bar stats (this environment’s desktop)</legend>
+          {(
+            [
+              ["enabled", "Show stats in the menu bar"],
+              ["network", "Network speed"],
+              ["cpu", "CPU"],
+              ["memory", "Memory"],
+              ["disk", "Disk"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2">
+              <Checkbox
+                disabled={disabled}
+                checked={(status.defaults.trayStats ?? DEFAULT_TRAY_STATS)[key]}
+                onCheckedChange={(checked) =>
+                  saveDefaults({
+                    trayStats: {
+                      ...(status.defaults.trayStats ?? DEFAULT_TRAY_STATS),
+                      [key]: checked,
+                    },
+                  })
+                }
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       <p role="status">{keepAwakeLabel(status)}</p>
       {status.reason ? <p className="text-xs text-muted-foreground">{status.reason}</p> : null}
       {settings ? (

@@ -7,7 +7,23 @@ export const KeepAwakeOptions = Schema.Struct({
   lidClosed: Schema.Boolean,
 });
 export type KeepAwakeOptions = typeof KeepAwakeOptions.Type;
+export const TrayStatsSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  network: Schema.Boolean,
+  cpu: Schema.Boolean,
+  memory: Schema.Boolean,
+  disk: Schema.Boolean,
+});
+export type TrayStatsSettings = typeof TrayStatsSettings.Type;
+export const DEFAULT_TRAY_STATS: TrayStatsSettings = {
+  enabled: true,
+  network: true,
+  cpu: true,
+  memory: false,
+  disk: false,
+};
 export const KeepAwakeDefaults = Schema.Struct({
+  trayStats: Schema.optionalKey(TrayStatsSettings),
   mode: KeepAwakeMode,
   durationMinutes: Schema.Number.check(Schema.isBetween({ minimum: 1, maximum: 10080 })),
   untilTime: Schema.String.check(Schema.isPattern(/^([01]\d|2[0-3]):[0-5]\d$/)),
