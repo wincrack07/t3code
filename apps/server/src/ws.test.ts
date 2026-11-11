@@ -1,3 +1,4 @@
+import * as Decisions from "./decisions/Decisions.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -1003,7 +1004,10 @@ it.effect.each([
             yield* ServerBrowser.ServerBrowser,
             () => Effect.void,
             { secretReferences: true },
-          ).pipe(Layer.provide(configRpcServices)),
+          ).pipe(
+            Layer.provide(Layer.mock(Decisions.Decisions)({})),
+            Layer.provide(configRpcServices),
+          ),
         ),
       );
       const requestId = RpcMessage.RequestId("config");
@@ -1245,7 +1249,10 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
-        ).pipe(Layer.provide(configRpcServices)),
+        ).pipe(
+          Layer.provide(Layer.mock(Decisions.Decisions)({})),
+          Layer.provide(configRpcServices),
+        ),
       ),
     );
     const configRequest = RpcMessage.RequestId("config");
@@ -1408,6 +1415,7 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
           () => Effect.void,
           { secretReferences: true },
         ).pipe(
+          Layer.provide(Layer.mock(Decisions.Decisions)({})),
           Layer.provide(services),
           Layer.merge(RpcAuthorization.layer([AuthSourceControlWriteScope])),
         ),

@@ -1,3 +1,4 @@
+import { DecisionInput, DecisionResult } from "./decisions.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";
 import {
   OrchestrationV2SearchThreadError,
@@ -546,6 +547,7 @@ export const WS_METHODS = {
   serverCheckOtlpEndpoint: "server.checkOtlpEndpoint",
   serverListTextGeneratorModels: "server.listTextGeneratorModels",
   serverPolishPrompt: "server.polishPrompt",
+  serverDecide: "server.decide",
   serverPrepareTriage: "server.prepareTriage",
   serverSignalProcess: "server.signalProcess",
   serverReportClientActivity: "server.reportClientActivity",
@@ -991,6 +993,12 @@ const WsServerListTextGeneratorModelsRpc = Rpc.make(WS_METHODS.serverListTextGen
   payload: ListTextGeneratorModelsInput,
   success: ListTextGeneratorModelsResult,
   error: Schema.Union([TextGeneratorError, EnvironmentAuthorizationError]),
+});
+
+const WsServerDecideRpc = Rpc.make(WS_METHODS.serverDecide, {
+  payload: DecisionInput,
+  success: DecisionResult,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerPolishPromptRpc = Rpc.make(WS_METHODS.serverPolishPrompt, {
@@ -2140,6 +2148,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerCheckOtlpEndpointRpc,
   WsServerListTextGeneratorModelsRpc,
   WsServerPolishPromptRpc,
+  WsServerDecideRpc,
   WsServerPrepareTriageRpc,
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,

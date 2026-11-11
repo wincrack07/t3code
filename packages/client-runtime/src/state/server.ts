@@ -1634,6 +1634,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:list-text-generator-models",
       tag: WS_METHODS.serverListTextGeneratorModels,
     }),
+    decide: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:server:decide",
+      tag: WS_METHODS.serverDecide,
+    }),
     polishPrompt: createEnvironmentRpcCommand(runtime, {
       label: "environment-command:server:polish-prompt",
       tag: WS_METHODS.serverPolishPrompt,
