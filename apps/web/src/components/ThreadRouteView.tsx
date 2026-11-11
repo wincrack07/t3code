@@ -13,11 +13,7 @@ import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { SidebarInset } from "./ui/sidebar";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
-import {
-  useEnvironmentThreadRefs,
-  useAnyEnvironmentHiding,
-  useQuietThreadShell,
-} from "../state/entities";
+import { useAnyEnvironmentHiding, useQuietThreadShell } from "../state/entities";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useEnvironmentShellStatus } from "../state/shell";
 import { useEnvironment } from "../state/environments";
@@ -76,7 +72,6 @@ export function ThreadRouteView({
   const environment = useEnvironment(serverThreadRef?.environmentId ?? null);
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
-  const environmentThreadRefs = useEnvironmentThreadRefs(serverThreadRef?.environmentId ?? null);
   const bootstrapComplete = isThreadRouteSnapshotAuthoritative(shellStatus);
   const draftThread = useComposerDraftStore((store) =>
     serverThreadRef ? store.getDraftThreadByRef(serverThreadRef) : null,
@@ -101,9 +96,6 @@ export function ThreadRouteView({
   if (nextHandoffKey !== handoffKey) {
     setHandoffKey(nextHandoffKey);
   }
-  const environmentHasDraftThreads = useComposerDraftStore((store) =>
-    serverThreadRef ? store.hasDraftThreadsInEnvironment(serverThreadRef.environmentId) : false,
-  );
   // Until the shell lists the thread, its own load (HTTP, then the socket)
   // decides whether it exists. Read only then: once listed, ChatView keeps
   // this stream open and its updates need not re-render the route.
@@ -146,7 +138,6 @@ export function ThreadRouteView({
     unlistedThreadDetail,
     draftThreadExists: draftThread !== null,
   });
-  const environmentHasAnyThreads = environmentThreadRefs.length > 0 || environmentHasDraftThreads;
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears pending file drops and navigates the router home and prunes inactive columns once a live snapshot confirms a thread is missing
   useEffect(() => {
@@ -157,20 +148,11 @@ export function ThreadRouteView({
       const { clearPendingFileDropsForThread } = useSidebarPendingFileDropStore.getState();
       clearPendingFileDropsForThread(target.threadRef);
       if (column && inactive) useThreadColumnsStore.getState().closeMissing(target.threadRef);
-      if (environmentHasAnyThreads && !background && !inactive) {
+      if (!background && !inactive) {
         void navigate({ to: "/", replace: true });
       }
     }
-  }, [
-    background,
-    column,
-    inactive,
-    bootstrapComplete,
-    environmentHasAnyThreads,
-    navigate,
-    renderState,
-    target,
-  ]);
+  }, [background, column, inactive, bootstrapComplete, navigate, renderState, target]);
 
   let view: React.ReactNode = null;
   let redirect: React.ReactNode = null;
