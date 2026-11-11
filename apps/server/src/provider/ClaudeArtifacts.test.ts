@@ -76,7 +76,14 @@ describe("parseClaudeArtifactFrames", () => {
   it("maps HTTP statuses to account states", () => {
     expect(
       [200, 401, 403, 404, 429, 500].map(ClaudeArtifacts.claudeArtifactsFailureForStatus),
-    ).toEqual([undefined, "loginExpired", "unavailable", "unavailable", "rateLimited", "requestFailed"]);
+    ).toEqual([
+      undefined,
+      "loginExpired",
+      "unavailable",
+      "unavailable",
+      "rateLimited",
+      "requestFailed",
+    ]);
   });
 });
 
@@ -113,8 +120,13 @@ const withService = <A, E>(
           Layer.provide(
             ServerSettings.layerTest({
               providerInstances: {
-                [WORK]: { driver: ProviderDriverKind.make("claudeAgent"), config: { homePath: directory } },
-                codex_work: { driver: ProviderDriverKind.make("codex") },
+                [WORK]: {
+                  driver: ProviderDriverKind.make("claudeAgent"),
+                  config: { homePath: directory },
+                },
+                [ProviderInstanceId.make("codex_work")]: {
+                  driver: ProviderDriverKind.make("codex"),
+                },
               },
             }),
           ),
@@ -125,7 +137,8 @@ const withService = <A, E>(
     return yield* use(service, requests);
   }).pipe(Effect.provideService(HostProcess.Platform, "linux"));
 
-const LOGIN = '{"claudeAiOauth":{"accessToken":"work-token"},"mcpOAuth":{"x":{"accessToken":"other"}}}';
+const LOGIN =
+  '{"claudeAiOauth":{"accessToken":"work-token"},"mcpOAuth":{"x":{"accessToken":"other"}}}';
 
 it.layer(NodeServices.layer)("ClaudeArtifacts.list", (it) => {
   it.effect("lists with the instance's own login, filters scope, pages, and caches", () =>

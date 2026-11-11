@@ -1,6 +1,7 @@
 import {
   ClaudeArtifactsError,
   ClaudeSettings,
+  defaultInstanceIdForDriver,
   ProviderDriverKind,
   ProviderInstanceId,
   resolveProviderInstanceEnabled,
@@ -143,7 +144,7 @@ const make = Effect.gen(function* () {
       instanceId,
     )
       ? settings.providerInstances[instanceId]
-      : instanceId === CLAUDE_DRIVER
+      : instanceId === defaultInstanceIdForDriver(CLAUDE_DRIVER)
         ? { driver: CLAUDE_DRIVER }
         : undefined;
     if (configured === undefined || !resolveProviderInstanceEnabled(configured)) {
@@ -237,23 +238,23 @@ const make = Effect.gen(function* () {
     },
   );
 
-  const list: ClaudeArtifacts["Service"]["list"] = Effect.fn("ClaudeArtifacts.list")(function* (
-    input,
-  ) {
-    const listing = yield* Cache.get(listings, input.instanceId);
-    const scope = input.scope ?? "all";
-    const matching =
-      scope === "all"
-        ? listing.artifacts
-        : listing.artifacts.filter((artifact) => artifact.relation === scope);
-    const offset = Math.max(0, Number.parseInt(input.cursor ?? "0", 10) || 0);
-    const end = offset + (input.limit ?? DEFAULT_PAGE_SIZE);
-    return {
-      artifacts: matching.slice(offset, end),
-      ...(end < matching.length ? { nextCursor: String(end) } : {}),
-      truncated: listing.truncated,
-    };
-  });
+  const list: ClaudeArtifacts["Service"]["list"] = Effect.fn("ClaudeArtifacts.list")(
+    function* (input) {
+      const listing = yield* Cache.get(listings, input.instanceId);
+      const scope = input.scope ?? "all";
+      const matching =
+        scope === "all"
+          ? listing.artifacts
+          : listing.artifacts.filter((artifact) => artifact.relation === scope);
+      const offset = Math.max(0, Number.parseInt(input.cursor ?? "0", 10) || 0);
+      const end = offset + (input.limit ?? DEFAULT_PAGE_SIZE);
+      return {
+        artifacts: matching.slice(offset, end),
+        ...(end < matching.length ? { nextCursor: String(end) } : {}),
+        truncated: listing.truncated,
+      };
+    },
+  );
 
   return ClaudeArtifacts.of({ list });
 });

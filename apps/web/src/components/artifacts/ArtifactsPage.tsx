@@ -1,4 +1,4 @@
-import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/providerInstanceDisplay";
+import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/provider-instance-display";
 import type {
   ClaudeArtifact,
   EnvironmentId,
@@ -218,7 +218,7 @@ function AccountArtifacts(props: {
         ) : (
           <ArtifactGrid>
             {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} className="aspect-[4/3] rounded-lg" />
+              <Skeleton key={index} shape="card" className="aspect-[16/10]" />
             ))}
           </ArtifactGrid>
         )
@@ -267,7 +267,7 @@ function ArtifactCard(props: {
     <a
       href={artifact.url}
       onClick={(event) => props.onOpen(artifact.url, event)}
-      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card outline-none hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card outline-none hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <div className="aspect-[16/10] w-full overflow-hidden border-b border-border bg-muted">
         {thumbnail ? (
