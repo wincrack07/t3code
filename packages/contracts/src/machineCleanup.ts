@@ -75,3 +75,8 @@ export class MachineCleanupError extends Schema.TaggedError<MachineCleanupError>
     return `Machine cleanup ${this.operation} failed.`;
   }
 }
+
+export const MachineCleanupAgentInput = Schema.Struct({
+  action: Schema.Literals(["scan", "phaseA", "status", "requestApproval"]),
+  phase: Schema.optionalKey(Schema.Literals(["B", "C"])),
+});

@@ -4,6 +4,7 @@ import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPo
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
+  AuthEnvironmentMaintainScope,
   AuthSettingsWriteScope,
   AuthProvidersManageScope,
   type AuthEnvironmentScope,
@@ -2035,6 +2036,7 @@ export function requiredScopesForServerSettingsPatch(
   return [
     ...(changesSettings || !changesProviders ? [AuthSettingsWriteScope] : []),
     ...(changesProviders ? [AuthProvidersManageScope] : []),
+    ...(patch.machineCleanup === undefined ? [] : [AuthEnvironmentMaintainScope]),
   ];
 }
 

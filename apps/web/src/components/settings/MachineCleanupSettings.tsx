@@ -67,6 +67,7 @@ function EnvironmentCleanup({
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [confirming, setConfirming] = useState<{
     phase: "B" | "C";
+    reportId: string;
     items: readonly MachineCleanupItem[];
   } | null>(null);
   const state = query._tag === "Success" ? query.value : null;
@@ -142,7 +143,7 @@ function EnvironmentCleanup({
         control={
           <Textarea
             aria-label="Cleanup project roots"
-            disabled={!canConfigure || busy}
+            disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.projectRoots.join("\n")}
             key={settings.projectRoots.join("\n")}
             onBlur={(event) =>
@@ -162,7 +163,7 @@ function EnvironmentCleanup({
         control={
           <Textarea
             aria-label="Cleanup protected paths"
-            disabled={!canConfigure || busy}
+            disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.protectedPaths.join("\n")}
             key={settings.protectedPaths.join("\n")}
             onBlur={(event) =>
@@ -185,7 +186,7 @@ function EnvironmentCleanup({
             type="number"
             min={1}
             max={3650}
-            disabled={!canConfigure || busy}
+            disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.inactivityDays}
             key={settings.inactivityDays}
             onBlur={(event) => {
@@ -203,7 +204,7 @@ function EnvironmentCleanup({
           <Switch
             aria-label="Daily machine cleanup"
             checked={settings.scheduleEnabled}
-            disabled={!canConfigure || busy}
+            disabled={!canConfigure || !allowed || busy}
             onCheckedChange={(checked) => patch({ scheduleEnabled: checked })}
           />
         }
@@ -216,7 +217,7 @@ function EnvironmentCleanup({
             type="time"
             aria-label="Daily cleanup time"
             value={settings.scheduleTime}
-            disabled={!canConfigure || busy}
+            disabled={!canConfigure || !allowed || busy}
             onChange={(event) => {
               if (/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(event.target.value))
                 patch({ scheduleTime: event.target.value });
@@ -235,7 +236,7 @@ function EnvironmentCleanup({
             max={10000}
             defaultValue={settings.lowSpaceGiB}
             key={settings.lowSpaceGiB}
-            disabled={!canConfigure || busy}
+            disabled={!canConfigure || !allowed || busy}
             onBlur={(event) => {
               const value = Number(event.target.value);
               if (Number.isFinite(value) && value >= 0 && value <= 10000)
@@ -252,7 +253,7 @@ function EnvironmentCleanup({
           control={
             <Switch
               aria-label={`Enable cleanup rule ${rule}`}
-              disabled={!canConfigure || busy}
+              disabled={!canConfigure || !allowed || busy}
               checked={
                 !settings.enabledRules.includes(`!${rule}`) &&
                 (settings.enabledRules.includes("*") || settings.enabledRules.includes(rule))
@@ -288,6 +289,7 @@ function EnvironmentCleanup({
             onClick={() =>
               setConfirming({
                 phase: "B",
+                reportId: report!.id,
                 items: candidates.filter((item) => selected.includes(item.id)),
               })
             }
@@ -327,7 +329,7 @@ function EnvironmentCleanup({
               <Button
                 variant="outline"
                 disabled={!allowed || busy}
-                onClick={() => setConfirming({ phase: "C", items: [item] })}
+                onClick={() => setConfirming({ phase: "C", reportId: report!.id, items: [item] })}
               >
                 Review aggressive cleanup
               </Button>
@@ -392,7 +394,10 @@ function EnvironmentCleanup({
                 const command = confirming.phase === "B" ? phaseB : phaseC;
                 void command({
                   environmentId,
-                  input: { reportId: report.id, itemIds: confirming.items.map((item) => item.id) },
+                  input: {
+                    reportId: confirming.reportId,
+                    itemIds: confirming.items.map((item) => item.id),
+                  },
                 });
                 setConfirming(null);
                 setSelected([]);
