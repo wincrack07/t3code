@@ -27,7 +27,7 @@ export function ComposerPolishAction(props: {
           <AppActivityIndicator size="small" colorClassName="accent-icon-muted" />
         ) : (
           <SymbolView
-            name="sparkles"
+            name="pencil"
             size={Math.round((props.size === "large" ? 24 : 20) * scale)}
             tintColorClassName="accent-icon"
             type="monochrome"
