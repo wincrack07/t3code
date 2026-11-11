@@ -11,6 +11,8 @@ import * as Electron from "electron";
 
 export const make = Effect.fn("KeepAwakeTray.make")(function* () {
   const platform = yield* HostProcess.Platform;
+  const supportsHeaders =
+    platform === "darwin" && Number(process.getSystemVersion().split(".")[0]) >= 14;
   const actions = yield* PubSub.unbounded<{
     readonly sourceId: string;
     readonly session: KeepAwakeSession;
@@ -71,7 +73,9 @@ export const make = Effect.fn("KeepAwakeTray.make")(function* () {
         Electron.Menu.buildFromTemplate([
           ...(settings.enabled
             ? [
-                ...trayStatsRows(sample).map((label) => ({ label, enabled: false })),
+                ...trayStatsRows(sample).map((label) =>
+                  supportsHeaders ? { label, type: "header" as const } : { label, enabled: false },
+                ),
                 { type: "separator" as const },
               ]
             : []),
