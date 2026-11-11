@@ -275,7 +275,7 @@ function ArtifactGridSkeleton() {
   return (
     <ArtifactGrid>
       {Array.from({ length: 4 }, (_, index) => (
-        <Skeleton key={index} shape="card" className="aspect-[16/10]" />
+        <Skeleton key={index} shape="card" className="aspect-[2/1]" />
       ))}
     </ArtifactGrid>
   );
@@ -283,7 +283,9 @@ function ArtifactGridSkeleton() {
 
 function ArtifactGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">{children}</div>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(max(240px,30%),1fr))] gap-6">
+      {children}
+    </div>
   );
 }
 
@@ -298,13 +300,41 @@ function ArtifactCard(props: {
     : artifact.thumbnailUrl;
   const updated = artifact.updatedAt ? formatRelativeTimeLabel(artifact.updatedAt) : "";
 
+  const owner =
+    artifact.relation === "shared" && artifact.ownerEmail
+      ? artifact.ownerEmail
+      : updated
+        ? `Updated ${updated}`
+        : null;
+  const meta = [
+    owner === null ? null : (
+      <span key="owner" className="min-w-0 truncate">
+        {owner}
+      </span>
+    ),
+    artifact.viewCount === undefined ? null : (
+      <span key="views" className="flex shrink-0 items-center gap-0.5 tabular-nums">
+        <EyeIcon aria-hidden className="size-3" />
+        <span aria-label={`${artifact.viewCount} views`}>{artifact.viewCount}</span>
+      </span>
+    ),
+    artifact.isPublic ? (
+      <Tooltip key="public">
+        <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
+          <GlobeIcon aria-label="Public" className="size-3" />
+        </TooltipTrigger>
+        <TooltipPopup side="top">Anyone with the link can view</TooltipPopup>
+      </Tooltip>
+    ) : null,
+  ].filter((part) => part !== null);
+
   return (
     <a
       href={artifact.url}
       onClick={(event) => props.onOpen(artifact.url, event)}
-      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card outline-none hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="group press-spring focus-ring relative flex min-w-0 flex-col overflow-hidden rounded-xl bg-card outline-none ring-1 ring-border after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:bg-foreground/5 after:opacity-0 after:transition-opacity after:duration-75 hover:after:opacity-100 motion-reduce:after:transition-none"
     >
-      <div className="aspect-[16/10] w-full overflow-hidden border-b border-border bg-muted">
+      <div className="aspect-[2/1] w-full overflow-hidden border-b border-border bg-muted">
         {thumbnail ? (
           <img
             src={thumbnail}
@@ -320,33 +350,24 @@ function ArtifactCard(props: {
           </div>
         )}
       </div>
-      <div className="flex min-w-0 flex-col gap-1 p-2.5">
-        <span className="truncate text-sm font-medium">{artifact.title}</span>
-        <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <span className="truncate">
-            {artifact.relation === "shared" && artifact.ownerEmail
-              ? artifact.ownerEmail
-              : updated
-                ? `Updated ${updated}`
-                : ""}
+      <div className="flex min-h-[60px] min-w-0 flex-col justify-center gap-0.5 px-3 py-2.75">
+        <span className="truncate text-sm/5 font-medium">{artifact.title}</span>
+        {meta.length > 0 ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-xs/[17px] text-muted-foreground">
+            {meta.flatMap((part, index) =>
+              index === 0
+                ? [part]
+                : [
+                    <span
+                      key={`dot-${part.key}`}
+                      aria-hidden
+                      className="size-[3px] shrink-0 rounded-full bg-foreground/20"
+                    />,
+                    part,
+                  ],
+            )}
           </span>
-          <span className="ms-auto flex shrink-0 items-center gap-2">
-            {artifact.viewCount !== undefined ? (
-              <span className="flex items-center gap-0.5 tabular-nums">
-                <EyeIcon aria-hidden className="size-3" />
-                <span aria-label={`${artifact.viewCount} views`}>{artifact.viewCount}</span>
-              </span>
-            ) : null}
-            {artifact.isPublic ? (
-              <Tooltip>
-                <TooltipTrigger render={<span className="flex items-center" />}>
-                  <GlobeIcon aria-label="Public" className="size-3" />
-                </TooltipTrigger>
-                <TooltipPopup side="top">Anyone with the link can view</TooltipPopup>
-              </Tooltip>
-            ) : null}
-          </span>
-        </span>
+        ) : null}
       </div>
     </a>
   );

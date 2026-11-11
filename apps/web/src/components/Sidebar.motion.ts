@@ -1,3 +1,6 @@
+import { SIDEBAR_SELECTION_PILL_ATTRIBUTE } from "./Sidebar.selection";
+
+const isSelectionPill = (node: HTMLElement) => node.hasAttribute(SIDEBAR_SELECTION_PILL_ATTRIBUTE);
 const motionTiming = { duration: 150, easing: "ease-out" };
 const rowTravel = (height: number) => Math.min(height, 40);
 // Fades clone removed rows and animate clones and entries; intervening layout reads force reflows.
@@ -122,7 +125,10 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
       if (disposed) return;
       const next = new Map(
         Array.from(parent.children)
-          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
+          .filter(
+            (node): node is HTMLElement =>
+              node instanceof HTMLElement && !exiting.has(node) && !isSelectionPill(node),
+          )
           .map((node) => [
             node,
             {
@@ -233,7 +239,10 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
       const origin = parent.getBoundingClientRect().top;
       released = new Map(
         Array.from(parent.children)
-          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
+          .filter(
+            (node): node is HTMLElement =>
+              node instanceof HTMLElement && !exiting.has(node) && !isSelectionPill(node),
+          )
           .map((node) => [node, node.getBoundingClientRect().top - origin]),
       );
     },

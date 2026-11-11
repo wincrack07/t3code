@@ -220,6 +220,7 @@ import {
 } from "./Sidebar.drag";
 import { SidebarPointerSensor } from "./Sidebar.pointer";
 import { createSidebarListMotion } from "./Sidebar.motion";
+import { createSidebarSelectionSlide } from "./Sidebar.selection";
 import {
   pickSnoozePreset,
   resolveSnoozePresets,
@@ -1654,7 +1655,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const attachTreeRef = (node: HTMLUListElement) => {
     const detachMotion = attachListMotionRef(node);
     const detachTree = attachSidebarTree(node);
+    const selectionSlide = createSidebarSelectionSlide(node);
     return () => {
+      selectionSlide.dispose();
       detachTree?.();
       detachMotion();
     };
