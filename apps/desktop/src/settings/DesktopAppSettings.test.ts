@@ -146,6 +146,21 @@ describe("DesktopSettings", () => {
       ),
   );
 
+  it.effect("persists the painted canvas for both appearances", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        const windowTheme = { theme: "system", light: "#ffffff", dark: "#191919" } as const;
+        assert.isTrue((yield* settings.setWindowTheme(windowTheme)).changed);
+        assert.deepEqual((yield* settings.load).windowTheme, windowTheme);
+        assert.isFalse((yield* settings.setWindowTheme(windowTheme)).changed);
+        const changed = { ...windowTheme, dark: "#222222" };
+        assert.isTrue((yield* settings.setWindowTheme(changed)).changed);
+        assert.deepEqual((yield* settings.load).windowTheme, changed);
+      }),
+    ),
+  );
+
   it.effect("falls back to defaults when the settings file is malformed", () =>
     withSettings(
       Effect.gen(function* () {
@@ -191,6 +206,7 @@ describe("DesktopSettings", () => {
           wslBackendEnabled: false,
           wslOnly: false,
           wslDistro: null,
+          windowTheme: null,
         } satisfies DesktopAppSettings.DesktopSettings);
       }),
     ),
@@ -322,6 +338,7 @@ describe("DesktopSettings", () => {
           wslBackendEnabled: false,
           wslOnly: false,
           wslDistro: null,
+          windowTheme: null,
         } satisfies DesktopAppSettings.DesktopSettings);
       }),
       { appVersion: "0.0.17-nightly.20260415.1" },
@@ -351,6 +368,7 @@ describe("DesktopSettings", () => {
           wslBackendEnabled: false,
           wslOnly: false,
           wslDistro: null,
+          windowTheme: null,
         } satisfies DesktopAppSettings.DesktopSettings);
       }),
       { appVersion: "0.0.17-nightly.20260415.1" },

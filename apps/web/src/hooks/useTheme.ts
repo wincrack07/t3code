@@ -1,10 +1,14 @@
 import { pipe } from "effect/Function";
-import type { DesktopBridge } from "@t3tools/contracts";
+import type { DesktopBridge, DesktopWindowTheme } from "@t3tools/contracts";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import * as Schema from "effect/Schema";
 import { useSyncExternalStore } from "react";
 import {
   applyThemePalette,
+  getThemeDefinition,
+  getThemeColorsForMode,
+  getDefaultThemeColors,
+  themeColorToHex,
   CUSTOM_THEMES_STORAGE_KEY,
   invalidateCustomThemes,
   canonicalThemePreference,
@@ -126,7 +130,7 @@ const isDesktopThemeSyncError = Schema.is(DesktopThemeSyncError);
 let listeners: Array<() => void> = [];
 let lastSnapshot: ThemeSnapshot | null = null;
 let snapshotStale = true;
-let lastDesktopTheme: "light" | "dark" | "system" | null = null;
+let lastDesktopTheme: string | null = null;
 let lastAppliedTheme: Omit<ThemeSnapshot, "resolvedTheme"> | null = null;
 let themeStorageReadFailure: ThemeStorageError | null = null;
 
@@ -347,15 +351,29 @@ function applyTheme(theme: Theme, { suppressTransitions = false, preservePreview
   }
 }
 
+function desktopWindowColors(theme: Theme, halves: ThemeHalves | null) {
+  const canvas = (appearance: ThemeAppearance) => {
+    const definition = getThemeDefinition(resolveThemeHalf(theme, halves, appearance));
+    const colors = definition
+      ? (getThemeColorsForMode(definition, appearance) ?? definition.colors)
+      : getDefaultThemeColors(appearance);
+    return (
+      themeColorToHex(colors.canvas)?.slice(0, 7) ?? (appearance === "dark" ? "#000000" : "#ffffff")
+    );
+  };
+  return { light: canvas("light"), dark: canvas("dark") };
+}
+
 async function syncDesktopThemePreference(
   bridge: DesktopThemeBridge,
+  colors: Pick<DesktopWindowTheme, "light" | "dark">,
   theme: Theme,
   followSystem?: boolean,
   appearanceMode?: ThemePreferenceMode,
   halves: ThemeHalves | null = readStoredThemeHalves(),
 ): Promise<void> {
   try {
-    await bridge.setTheme(resolveDesktopTheme(theme, followSystem, appearanceMode, halves));
+    await bridge.setTheme(resolveDesktopTheme(theme, followSystem, appearanceMode, halves), colors);
   } catch (cause) {
     throw new DesktopThemeSyncError({ theme, cause });
   }
@@ -370,25 +388,30 @@ function syncDesktopTheme(
   const bridge = window.desktopBridge;
   const halves = readStoredThemeHalves();
   const desktopTheme = resolveDesktopTheme(theme, followSystem, appearanceMode, halves);
-  if (!bridge || typeof bridge.setTheme !== "function" || lastDesktopTheme === desktopTheme) {
-    return;
-  }
-
-  lastDesktopTheme = desktopTheme;
-  void syncDesktopThemePreference(bridge, theme, followSystem, appearanceMode, halves).catch(
-    (cause: unknown) => {
-      const error = isDesktopThemeSyncError(cause)
-        ? cause
-        : new DesktopThemeSyncError({ theme, cause });
-      console.error(error.message, {
-        theme: error.theme,
-        ...safeErrorLogAttributes(error),
-      });
-      if (lastDesktopTheme === desktopTheme) {
-        lastDesktopTheme = null;
-      }
-    },
-  );
+  if (!bridge || typeof bridge.setTheme !== "function") return;
+  const colors = desktopWindowColors(theme, halves);
+  const key = JSON.stringify([desktopTheme, colors]);
+  if (lastDesktopTheme === key) return;
+  lastDesktopTheme = key;
+  void syncDesktopThemePreference(
+    bridge,
+    colors,
+    theme,
+    followSystem,
+    appearanceMode,
+    halves,
+  ).catch((cause: unknown) => {
+    const error = isDesktopThemeSyncError(cause)
+      ? cause
+      : new DesktopThemeSyncError({ theme, cause });
+    console.error(error.message, {
+      theme: error.theme,
+      ...safeErrorLogAttributes(error),
+    });
+    if (lastDesktopTheme === key) {
+      lastDesktopTheme = null;
+    }
+  });
 }
 
 if (typeof document !== "undefined" && typeof window !== "undefined") {

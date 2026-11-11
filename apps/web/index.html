@@ -382,6 +382,7 @@
                 ? DARK_BACKGROUND
                 : LIGHT_BACKGROUND;
           document.documentElement.style.backgroundColor = chromeColor;
+          document.documentElement.style.setProperty("--boot-chrome", chromeColor);
           if (hasSelection) {
             const splashColors = customSplash ?? builtInSplash ?? fallbackSplash;
             for (const [name, value] of Object.entries(splashColors)) {
@@ -438,6 +439,34 @@
       html[data-theme-selected="true"] #boot-shell {
         background: var(--boot-background);
         color: var(--boot-foreground);
+      }
+
+      #boot-sidebar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 256px;
+        background: var(--boot-chrome, inherit);
+      }
+
+      #boot-composer {
+        position: absolute;
+        right: 32px;
+        bottom: 32px;
+        left: 288px;
+        height: 60px;
+        border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+        border-radius: 14px;
+        opacity: 0.5;
+      }
+
+      @media (width < 640px) {
+        #boot-sidebar {
+          display: none;
+        }
+        #boot-composer {
+          left: 24px;
+          right: 24px;
+        }
       }
 
       #boot-shell-card {
@@ -690,6 +719,8 @@
   <body>
     <div id="root">
       <div id="boot-shell">
+        <div id="boot-sidebar" aria-hidden="true"></div>
+        <div id="boot-composer" aria-hidden="true"></div>
         <div id="boot-shell-card" aria-label="T3 Code splash screen">
           <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
         </div>

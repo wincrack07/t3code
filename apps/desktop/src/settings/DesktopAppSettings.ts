@@ -1,5 +1,7 @@
 import {
   DesktopServerExposureModeSchema,
+  DesktopWindowThemeSchema,
+  type DesktopWindowTheme,
   DesktopUpdateChannelSchema,
   type DesktopServerExposureMode,
   type DesktopUpdateChannel,
@@ -26,6 +28,7 @@ import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
+  readonly windowTheme: DesktopWindowTheme | null;
   readonly localEnvironmentEnabled: boolean;
   readonly linuxPasswordStore: LinuxPasswordStorePreference;
   readonly mainWindowBounds: DesktopWindowBounds | null;
@@ -67,6 +70,7 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 } as const;
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
+  windowTheme: null,
   localEnvironmentEnabled: true,
   linuxPasswordStore: DEFAULT_LINUX_PASSWORD_STORE,
   mainWindowBounds: null,
@@ -89,6 +93,7 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 });
 
 const DesktopSettingsDocument = Schema.Struct({
+  windowTheme: Schema.optionalKey(Schema.NullOr(DesktopWindowThemeSchema)),
   localEnvironmentEnabled: Schema.optionalKey(Schema.Boolean),
   linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
   mainWindowBounds: Schema.optionalKey(Schema.NullOr(DesktopWindowBoundsDocument)),
@@ -146,6 +151,9 @@ export class DesktopAppSettings extends Context.Service<
   {
     readonly load: Effect.Effect<DesktopSettings>;
     readonly get: Effect.Effect<DesktopSettings>;
+    readonly setWindowTheme: (
+      theme: DesktopWindowTheme,
+    ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setLocalEnvironmentEnabled: (
       enabled: boolean,
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
@@ -218,6 +226,7 @@ function normalizeDesktopSettingsDocument(
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
   return {
+    windowTheme: parsed.windowTheme ?? null,
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,
     linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
     mainWindowBounds,
@@ -241,6 +250,7 @@ function toDesktopSettingsDocument(
   defaults: DesktopSettings,
 ): DesktopSettingsDocument {
   const document: Mutable<DesktopSettingsDocument> = {};
+  if (settings.windowTheme !== null) document.windowTheme = settings.windowTheme;
 
   if (settings.localEnvironmentEnabled !== defaults.localEnvironmentEnabled) {
     document.localEnvironmentEnabled = settings.localEnvironmentEnabled;
@@ -281,6 +291,18 @@ function toDesktopSettingsDocument(
   }
 
   return document;
+}
+
+function setWindowTheme(
+  settings: DesktopSettings,
+  windowTheme: DesktopWindowTheme,
+): DesktopSettings {
+  const previous = settings.windowTheme;
+  return previous?.theme === windowTheme.theme &&
+    previous.light === windowTheme.light &&
+    previous.dark === windowTheme.dark
+    ? settings
+    : { ...settings, windowTheme };
 }
 
 function setServerExposureMode(
@@ -518,6 +540,9 @@ export const make = Effect.gen(function* () {
       );
       return yield* SynchronizedRef.setAndGet(settingsRef, settings);
     }).pipe(Effect.withSpan("desktop.settings.load")),
+    setWindowTheme: Effect.fn("desktop.settings.setWindowTheme")(function (theme) {
+      return persist((settings) => setWindowTheme(settings, theme));
+    }),
     setMainWindowBounds: Effect.fn("desktop.settings.setMainWindowBounds")(
       function* (bounds, isMaximized) {
         yield* Effect.annotateCurrentSpan({
@@ -599,6 +624,9 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
       return DesktopAppSettings.of({
         get: SynchronizedRef.get(settingsRef),
         load: SynchronizedRef.get(settingsRef),
+        setWindowTheme: Effect.fn("DesktopAppSettings.setWindowTheme")(function (theme) {
+          return update((settings) => setWindowTheme(settings, theme));
+        }),
         setMainWindowBounds: Effect.fn("DesktopAppSettings.setMainWindowBounds")(
           function (bounds, isMaximized) {
             return update((settings) => setMainWindowBounds(settings, bounds, isMaximized));
