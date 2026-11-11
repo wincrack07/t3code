@@ -1,3 +1,4 @@
+import "../../index.css";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
@@ -75,6 +76,9 @@ it("opens the display menu and collapses all projects while preserving the curre
       sidebarFolderExpansionKeys(projects[1]!),
     ),
   ).toBe(false);
+  await expect
+    .element(page.getByRole("menuitem", { name: "Collapse all projects", exact: true }))
+    .not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Expand all projects", exact: true }));
   expect(
     resolveProjectExpanded(
@@ -115,6 +119,9 @@ it("opens group actions and the move-to-group submenu", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Group actions for StaffPass" }));
   await userEvent.click(page.getByRole("menuitem", { name: "Rename group" }));
   expect(onRename).toHaveBeenCalledOnce();
+  await expect
+    .element(page.getByRole("menuitem", { name: "Rename group", exact: true }))
+    .not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Project actions" }));
   await userEvent.hover(page.getByRole("menuitem", { name: "Move to group" }));
   await expect
