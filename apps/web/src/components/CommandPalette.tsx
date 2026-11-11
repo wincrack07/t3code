@@ -1700,6 +1700,17 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
+  actionItems.push({
+    kind: "action",
+    value: "action:system-monitor",
+    title: "Open system monitor",
+    searchTerms: ["cpu", "ram", "memory", "network", "storage", "processes", "monitor"],
+    icon: <ChartNoAxesColumnIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/settings/general" });
+    },
+  });
+
   for (const direction of [1, -1] as const) {
     const title = direction === 1 ? "Focus Next Workspace Area" : "Focus Previous Workspace Area";
     actionItems.push({

@@ -1,3 +1,5 @@
+import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
+import * as MachineSampler from "./systemMonitor/MachineSampler.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -642,6 +644,13 @@ const layerServerRestart = Layer.effect(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
+  SystemMonitor.layer.pipe(
+    Layer.provide(
+      MachineSampler.layer.pipe(
+        Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+      ),
+    ),
+  ),
   AgentAwarenessRelay.layer,
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
