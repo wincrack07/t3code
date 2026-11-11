@@ -167,6 +167,21 @@ on that machine. Existing threads stay where they started. If resource checks ar
 unavailable or all eligible machines are full, choose a machine manually to continue.
 Mobile keeps its manual environment selection.
 
+### See what each machine is running
+
+The activity board shows every connected machine side by side. Open it with the
+board button next to Search at the top of the sidebar, or with **Open activity
+board** in the command palette. Web and desktop only.
+
+Each machine gets a column with its connection state, its CPU and memory use,
+and how many threads are active there. Threads are grouped by project. A thread
+is listed while it is working, waiting on subagents or background work, waiting
+for your approval or answer, or keeping a background command such as a dev
+server alive. Its running subagents are listed under it. Select a thread or a
+subagent to open it. A machine marked **Busy** is running high on CPU or memory;
+**Strained** means [Auto balance](#balance-new-threads-across-machines) skips it
+for now. A machine that is not connected keeps its column, without activity.
+
 ### Tailscale HTTPS
 
 Join both devices to the same tailnet. In the desktop app, enable **Tailscale

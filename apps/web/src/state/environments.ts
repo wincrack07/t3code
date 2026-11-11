@@ -114,3 +114,8 @@ export function useEnvironmentMachines() {
 export function useConnectedEnvironmentIds() {
   return useAtomValue(environmentSummaries.connectedEnvironmentIdsAtom);
 }
+
+/** Every catalog environment with its connection state, without server config churn. */
+export function useEnvironmentConnectionSummaries() {
+  return useAtomValue(environmentSummaries.environmentsAtom);
+}

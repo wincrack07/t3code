@@ -11,8 +11,6 @@ import {
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useAtomValue } from "@effect/atom-react";
-import * as Option from "effect/Option";
-import { Atom } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import {
   DndContext,
@@ -154,7 +152,6 @@ import {
   useServerConfigs,
   useQuietThreadShells,
 } from "../state/entities";
-import { environmentPresentations } from "../state/presentation";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
@@ -230,7 +227,6 @@ import {
   type SnoozePreset,
 } from "./Sidebar.snooze";
 import { ProjectFavicon } from "./ProjectFavicon";
-import { deriveProviderEntriesByEnvironment } from "../providerInstances";
 import { useStableCallback } from "../hooks/useStableCallback";
 import {
   resolveSidebarRouteReveal,
@@ -274,55 +270,7 @@ import {
   SidebarSectionHeader,
   SidebarSectionPlaceholder,
 } from "./sidebar/SidebarListMarkers";
-
-function sameSidebarProviderEntries(
-  left: ReadonlyMap<string, SidebarProviderEntry>,
-  right: ReadonlyMap<string, SidebarProviderEntry>,
-): boolean {
-  if (left.size !== right.size) return false;
-  for (const [instanceId, entry] of right) {
-    const other = left.get(instanceId);
-    if (
-      other === undefined ||
-      other.driverKind !== entry.driverKind ||
-      other.enabled !== entry.enabled ||
-      other.displayName !== entry.displayName ||
-      other.accentColor !== entry.accentColor ||
-      other.acpRegistryAgentId !== entry.acpRegistryAgentId ||
-      other.acpRegistryIconUrl !== entry.acpRegistryIconUrl ||
-      other.models !== entry.models
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Resolve providers per environment because default instance ids collide across environments.
-const sidebarProviderEntriesAtom = Atom.make((get) => {
-  const providersByEnvironment = get(environmentPresentations.providersByEnvironmentAtom);
-  const derived = deriveProviderEntriesByEnvironment(
-    [...get(environmentPresentations.serverConfigsAtom)].map(
-      ([environmentId, config]) =>
-        [environmentId, providersByEnvironment.get(environmentId) ?? [], config.settings] as const,
-    ),
-  );
-  const previous = Option.getOrNull(
-    get.self<ReadonlyMap<string, ReadonlyMap<string, SidebarProviderEntry>>>(),
-  );
-  const next = new Map<string, ReadonlyMap<string, SidebarProviderEntry>>();
-  let changed = previous === null || previous.size !== derived.size;
-  for (const [environmentId, entries] of derived) {
-    const prior = previous?.get(environmentId);
-    if (prior !== undefined && sameSidebarProviderEntries(prior, entries)) {
-      next.set(environmentId, prior);
-    } else {
-      next.set(environmentId, entries);
-      changed = true;
-    }
-  }
-  return !changed && previous !== null ? previous : next;
-}).pipe(Atom.withLabel("sidebar-provider-entries"));
+import { sidebarProviderEntriesAtom } from "./sidebar/sidebarProviderEntries";
 
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
@@ -2967,6 +2915,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   const showJumpHints = useThreadJumpHintsVisible(shouldShowJumpHintsNow);
 
+  const handleOpenActivityClick = () => {
+    if (isMobile) setOpenMobile(false);
+    void router.navigate({ to: "/activity" });
+  };
   const handleNewThreadClick = (event?: ReactMouseEvent) => {
     if (
       shouldCreateNewThreadInCurrentProject(
@@ -3209,6 +3161,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   </ComboboxPopup>
                 </Combobox>
               }
+              onOpenActivity={handleOpenActivityClick}
               onNewProject={openAddProjectCommandPalette}
               onNewThread={handleNewThreadClick}
               newThreadDisabled={projects.length === 0}
