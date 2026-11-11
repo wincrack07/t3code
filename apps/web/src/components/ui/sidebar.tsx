@@ -662,6 +662,7 @@ function SidebarContent({
       <ScrollArea
         hideScrollbars
         scrollFade
+        scrollShadow
         scrollFadePadding={false}
         // Rows provide keyboard access; exclude the viewport from tab order to flatten VoiceOver's WebKit
         // interaction boundary.

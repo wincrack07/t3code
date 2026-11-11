@@ -4,6 +4,7 @@ import {
   DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
   DEFAULT_UNIFIED_SETTINGS,
   type ChatWidth,
+  type UiDensity,
   type EffortDisplay,
   type EnvironmentIdentificationMode,
   MAX_APPEARANCE_CONTRAST,
@@ -77,6 +78,11 @@ const CHAT_WIDTH_LABELS: Record<ChatWidth, string> = {
   comfortable: "Comfortable",
   wide: "Wide",
   full: "Full",
+};
+
+const UI_DENSITY_LABELS: Record<UiDensity, string> = {
+  comfortable: "Comfortable",
+  compact: "Compact",
 };
 
 const EFFORT_DISPLAY_LABELS: Record<EffortDisplay, string> = {
@@ -257,6 +263,37 @@ export function AppearanceSettingsPanel() {
           }
         />
 
+        <SettingsRow
+          {...searchableSetting("ui-density")}
+          description="Tighten controls, rows, and text to fit more on screen."
+          resetAction={
+            settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? (
+              <SettingResetButton
+                label="density"
+                onClick={() => updateSettings({ uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity })}
+              />
+            ) : null
+          }
+          control={
+            <div className="w-full sm:w-40">
+              <Select
+                value={settings.uiDensity}
+                onValueChange={(value) => {
+                  if (value === "comfortable" || value === "compact")
+                    updateSettings({ uiDensity: value });
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Density">
+                  <SelectValue>{UI_DENSITY_LABELS[settings.uiDensity]}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem value="comfortable">Comfortable (default)</SelectItem>
+                  <SelectItem value="compact">Compact</SelectItem>
+                </SelectPopup>
+              </Select>
+            </div>
+          }
+        />
         <SettingsRow
           {...searchableSetting("chat-width")}
           description="Set how wide messages and the composer can grow on large screens."

@@ -201,7 +201,7 @@ export function ColorHueSlider({
       aria-valuemin={0}
       aria-valuenow={Math.round(value)}
       className={cn(
-        "relative flex h-6 cursor-pointer touch-none items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover",
+        "relative flex h-6 cursor-pointer touch-none items-center rounded-full outline-none focus-ring [--focus-ring-gap:var(--popover)]",
         className,
       )}
       role="slider"
