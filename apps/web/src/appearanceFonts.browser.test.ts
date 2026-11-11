@@ -53,6 +53,13 @@ describe("applyAppearanceFontVariables", () => {
 
       root.dataset.themeId = "claude";
       expect(getComputedStyle(root).getPropertyValue("--font-reply")).toContain("Anthropic Sans");
+      applyAppearanceFontVariables(root, { ...preferences, separate: false });
+      expect(composerFontSize()).toBe("18.75px");
+      expect(
+        renderedFontSize((probe) => {
+          probe.style.fontSize = "var(--font-size-reply)";
+        }),
+      ).toBe("18.75px");
       applyAppearanceFontVariables(root, {
         ...preferences,
         separate: false,
