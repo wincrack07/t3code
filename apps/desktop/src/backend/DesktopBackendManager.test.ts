@@ -164,6 +164,7 @@ function makeTestInstance(input: MakeInstanceInput) {
       latest: Effect.succeedNone,
       changes: Stream.empty,
       encoded: input.desktopTelemetryStream ?? Stream.empty,
+      encodedForSource: () => input.desktopTelemetryStream ?? Stream.empty,
       handleControlForSource: () => Effect.void,
       removeControlSource: () => Effect.void,
       publishUpdateReport: () => Effect.void,

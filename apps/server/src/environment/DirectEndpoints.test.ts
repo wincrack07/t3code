@@ -273,12 +273,12 @@ const layerServeConfig = (host = "127.0.0.1") =>
     Layer.provide(NodeServices.layer),
   );
 
-const resolveWithServe = (probeStatus: number) =>
+const resolveWithServe = (probeStatus: number, host = "127.0.0.1") =>
   Effect.flatMap(DirectEndpoints.DirectEndpoints, (service) => service.resolve()).pipe(
     Effect.provide(
       DirectEndpoints.layer.pipe(
         Layer.provide(
-          Layer.mergeAll(layerServeConfig(), layerTailscaleUp, layerServeProbe(probeStatus)),
+          Layer.mergeAll(layerServeConfig(host), layerTailscaleUp, layerServeProbe(probeStatus)),
         ),
       ),
     ),
@@ -289,6 +289,15 @@ describe("DirectEndpoints Tailscale Serve", () => {
     Effect.gen(function* () {
       expect(yield* resolveWithServe(200)).toEqual([
         { kind: "tailnet", httpBaseUrl: "https://bb-1.tail1234.ts.net/" },
+      ]);
+      expect(yield* resolveWithServe(200, "100.64.1.2")).toEqual([
+        { kind: "tailnet", httpBaseUrl: "https://bb-1.tail1234.ts.net/" },
+        { kind: "tailnet", httpBaseUrl: "http://bb-1.tail1234.ts.net:3773/" },
+        { kind: "lan", httpBaseUrl: "http://100.64.1.2:3773/" },
+      ]);
+      expect(yield* resolveWithServe(502, "100.64.1.2")).toEqual([
+        { kind: "tailnet", httpBaseUrl: "http://bb-1.tail1234.ts.net:3773/" },
+        { kind: "lan", httpBaseUrl: "http://100.64.1.2:3773/" },
       ]);
     }),
   );
@@ -336,8 +345,8 @@ describe("DirectEndpoints Tailscale Serve", () => {
         yield* Deferred.succeed(finishProbe, undefined);
         const validated = yield* Fiber.join(resolving);
         expect(validated).toEqual([
-          bound,
           { kind: "tailnet", httpBaseUrl: "https://bb-1.tail1234.ts.net/" },
+          bound,
         ]);
         expect(yield* service.resolveAvailable()).toEqual(validated);
         yield* Ref.set(status, 502);

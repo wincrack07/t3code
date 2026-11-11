@@ -32,7 +32,14 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiClient from "effect/http-api/HttpApiClient";
-import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
+import {
+  isLocalLoopbackHost,
+  isTailnetHost,
+  isSharedAddressSpaceHost,
+} from "@t3tools/shared/hostClassification";
+
+import { readTailscaleStatus } from "@t3tools/tailscale";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -157,36 +164,46 @@ const failStorage = (cause: unknown) =>
  * code and then the link's token travel to it, so plain http is accepted only
  * where the network already encrypts: this machine, or a Tailscale address.
  */
-const peerOrigin = (url: string) => {
+const peerOrigin = Effect.fn("PeerLinks.peerOrigin")(function* (url: string) {
   const parsed = URL.parse(url);
   if (parsed === null || (parsed.protocol !== "https:" && parsed.protocol !== "http:")) {
-    return Effect.fail(
-      new PeerLinkError({
-        reason: "unreachable",
-        message: `${url} is not an http or https address.`,
-      }),
-    );
+    return yield* new PeerLinkError({
+      reason: "unreachable",
+      message: `${url} is not an http or https address.`,
+    });
   }
   if (
     parsed.protocol === "http:" &&
     !isLocalLoopbackHost(parsed.hostname) &&
     !isTailnetHost(parsed.hostname)
   ) {
-    return Effect.fail(
-      new PeerLinkError({
+    if (isSharedAddressSpaceHost(parsed.hostname)) {
+      const verified = yield* readTailscaleStatus.pipe(
+        Effect.map((status) => status.peerIpv4Addresses.includes(parsed.hostname)),
+        Effect.orElseSucceed(() => false),
+      );
+      if (verified) return parsed.origin;
+      return yield* new PeerLinkError({
         reason: "unreachable",
-        message: `${url} is plain http, which would send the link's credentials unencrypted. Use its https address, or its Tailscale address.`,
-      }),
-    );
+        message: `${parsed.origin} is plain http and the local Tailscale daemon could not verify this IPv4 address as a peer on this tailnet. The shared 100.64.0.0/10 range alone does not protect credentials. Use https or connect both machines to Tailscale.`,
+      });
+    }
+    return yield* new PeerLinkError({
+      reason: "unreachable",
+      message: `${parsed.origin} is plain http, which would send the link's credentials unencrypted. Use its https address, or its Tailscale address.`,
+    });
   }
-  return Effect.succeed(parsed.origin);
-};
+  return parsed.origin;
+});
 
 /** Whether a peer holds a linked agent to its limits and keeps its work within its link. */
 const linkLimitsHold = (peer: { readonly capabilities: ExecutionEnvironmentCapabilities }) =>
   peer.capabilities.mcpModeLimitHeader === true && peer.capabilities.linkFence === true;
 
 const make = Effect.gen(function* () {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const checkedOrigin = (url: string) =>
+    peerOrigin(url).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner));
   const sql = yield* SqlClient.SqlClient;
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const random = yield* SecureRandom.SecureRandom;
@@ -244,7 +261,9 @@ const make = Effect.gen(function* () {
     url: string,
     environmentId: EnvironmentId,
   ) {
-    const found = yield* describe(url).pipe(Effect.orElseSucceed(() => Option.none()));
+    const origin = yield* checkedOrigin(url).pipe(Effect.option);
+    if (Option.isNone(origin)) return Option.none<ExecutionEnvironmentDescriptor>();
+    const found = yield* describe(origin.value).pipe(Effect.orElseSucceed(() => Option.none()));
     return Option.filter(found, (peer) => peer.environmentId === environmentId);
   });
 
@@ -278,7 +297,12 @@ const make = Effect.gen(function* () {
 
   /** Signs in to the peer's `/mcp` with a pairing code: register, decide, exchange. */
   const signIn = Effect.fn("PeerLinks.signIn")(
-    function* (origin: string, input: PeerLinkCreateInput, clientName: string) {
+    function* (
+      origin: string,
+      input: PeerLinkCreateInput,
+      clientName: string,
+      renewalToken?: string,
+    ) {
       const client = yield* clientFor(origin);
       // Only the peer's own refusals are rejections. A dropped connection or
       // an answer this version cannot read is classified below.
@@ -350,6 +374,7 @@ const make = Effect.gen(function* () {
       return yield* client.mcpOAuth
         .token({
           payload: {
+            ...(renewalToken === undefined ? {} : { peer_link_token: Redacted.make(renewalToken) }),
             grant_type: "authorization_code",
             code: Redacted.make(code),
             redirect_uri: LINK_REDIRECT_URI,
@@ -397,7 +422,7 @@ const make = Effect.gen(function* () {
   /**
    * The addresses that answer as `environmentId`, in the order given, with
    * what the first one answered. Addresses this environment would not send
-   * credentials to are skipped; when every one is, the failure says why.
+   * credentials to are skipped; failures preserve every refusal.
    */
   const answeringAs = Effect.fn("PeerLinks.answeringAs")(function* (
     urls: ReadonlyArray<string>,
@@ -408,7 +433,7 @@ const make = Effect.gen(function* () {
       urls,
       (url) =>
         Effect.gen(function* () {
-          const origin = yield* peerOrigin(url);
+          const origin = yield* checkedOrigin(url);
           return { origin, descriptor: yield* describe(origin) };
         }).pipe(Effect.result),
       { concurrency: "unbounded" },
@@ -425,12 +450,18 @@ const make = Effect.gen(function* () {
       const refusals = checked.flatMap((result) =>
         Result.isFailure(result) ? [result.failure.message] : [],
       );
+      const tried = checked.flatMap((result) =>
+        Result.isSuccess(result)
+          ? [
+              Option.isSome(result.success.descriptor)
+                ? `${result.success.origin} answered as a different environment.`
+                : `This environment could not reach ${name} at ${result.success.origin}.`,
+            ]
+          : [],
+      );
       return yield* new PeerLinkError({
         reason: "unreachable",
-        message:
-          refusals.length === checked.length
-            ? `This environment could not reach ${name}: ${refusals.join(" ")}`
-            : `This environment could not reach ${name} at ${urls.join(", ")}.`,
+        message: [...refusals, ...tried].join(" "),
       });
     }
     // Each address is kept once, even when two spellings share an origin.
@@ -440,7 +471,7 @@ const make = Effect.gen(function* () {
 
   /** The peer at `url`, with every address checked for credentials first. */
   const answeringAt = Effect.fn("PeerLinks.answeringAt")(function* (urls: ReadonlyArray<string>) {
-    const origins = yield* Effect.forEach(urls, peerOrigin);
+    const origins = yield* Effect.forEach(urls, checkedOrigin);
     const primary = origins[0]!;
     const descriptor = yield* describe(primary);
     if (Option.isNone(descriptor)) {
@@ -480,14 +511,56 @@ const make = Effect.gen(function* () {
         message: `${peer.label} runs a T3 Code version that cannot keep a linked agent's limits. Update it, then link again.`,
       });
     }
-    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`);
+    const renewing =
+      input.renewExisting === true
+        ? yield* readRow(peer.environmentId)
+        : Option.none<PeerLinkRow>();
+    let renewalToken: string | undefined;
+    if (input.renewExisting === true) {
+      if (peer.capabilities.peerLinkRenewal !== true)
+        return yield* new PeerLinkError({
+          reason: "incompatible",
+          message:
+            "Update both environments to renew links without changing their thread ownership.",
+        });
+      if (
+        Option.isNone(renewing) ||
+        renewing.value.fenced !== 1 ||
+        renewing.value.access !== input.access ||
+        DateTime.isLessThanOrEqualTo(
+          DateTime.makeUnsafe(renewing.value.expires_at),
+          yield* DateTime.now,
+        )
+      ) {
+        return yield* new PeerLinkError({
+          reason: "expired",
+          message: "This link was forgotten, expired, or changed access. Link it again explicitly.",
+        });
+      }
+      const stored = yield* secrets.get(renewing.value.secret_name).pipe(Effect.catch(failStorage));
+      if (Option.isNone(stored))
+        return yield* new PeerLinkError({
+          reason: "unknown_link",
+          message: "This link lost its credential. Link it again explicitly.",
+        });
+      renewalToken = new TextDecoder().decode(stored.value);
+    }
+    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`, renewalToken).pipe(
+      Effect.tapError((error) =>
+        Option.isSome(renewing) && error.reason === "pairing_rejected"
+          ? sql`UPDATE peer_environment_links SET last_error = ${error.message} WHERE environment_id = ${peer.environmentId} AND secret_name = ${renewing.value.secret_name}`.pipe(
+              Effect.ignoreCause({ log: true }),
+            )
+          : Effect.void,
+      ),
+    );
     const now = yield* DateTime.now;
     const linked: PeerLink = {
       environmentId: peer.environmentId,
       label: peer.label,
       urls: origins,
       access: input.access,
-      linkedAt: now,
+      linkedAt: Option.isSome(renewing) ? DateTime.makeUnsafe(renewing.value.linked_at) : now,
       expiresAt: DateTime.add(now, { seconds: issued.expires_in }),
       lastReachedAt: now,
       lastError: null,
@@ -502,6 +575,14 @@ const make = Effect.gen(function* () {
     const previous = yield* Effect.gen(function* () {
       const urlsJson = yield* encodeUrls(origins).pipe(Effect.catch(failStorage));
       const previous = yield* readRow(peer.environmentId);
+      if (
+        Option.isSome(renewing) &&
+        (Option.isNone(previous) || previous.value.secret_name !== renewing.value.secret_name)
+      )
+        return yield* new PeerLinkError({
+          reason: "unknown_link",
+          message: "The link changed while renewing. It has not been restored.",
+        });
       yield* sql`
         INSERT INTO peer_environment_links (
           environment_id, secret_name, label, urls_json, access, linked_at, expires_at,
@@ -523,7 +604,11 @@ const make = Effect.gen(function* () {
           last_error = NULL
       `.pipe(Effect.catch(failStorage));
       return previous;
-    }).pipe(Effect.onError(() => secrets.remove(secretName).pipe(Effect.ignore)));
+    }).pipe(
+      sql.withTransaction,
+      Effect.catchTags({ SqlError: failStorage }),
+      Effect.onError(() => secrets.remove(secretName).pipe(Effect.ignore)),
+    );
     // Linking again replaces the old token. A racing link may leave its own
     // behind; it is unused either way.
     if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
@@ -533,7 +618,7 @@ const make = Effect.gen(function* () {
   });
 
   const describeUrl: PeerLinks["Service"]["describe"] = (url) =>
-    peerOrigin(url).pipe(
+    checkedOrigin(url).pipe(
       Effect.flatMap(describe),
       Effect.map(Option.map((peer) => ({ environmentId: peer.environmentId, label: peer.label }))),
       Effect.orElseSucceed(() => Option.none()),
@@ -623,24 +708,9 @@ const make = Effect.gen(function* () {
       }
       // The token goes only to an address that proves it is this peer, so a
       // reused LAN address or a moved hostname never receives it.
-      let fenced = true;
-      let label = link.label;
-      const url = yield* Effect.findFirst(link.urls, (candidate) =>
-        answersAs(candidate, environmentId).pipe(
-          Effect.map((found) => {
-            if (Option.isNone(found)) return false;
-            fenced = linkLimitsHold(found.value);
-            label = found.value.label;
-            return true;
-          }),
-        ),
-      );
-      if (Option.isNone(url)) {
-        return yield* new PeerLinkError({
-          reason: "unreachable",
-          message: `${link.label} did not answer at ${link.urls.join(", ")}.`,
-        });
-      }
+      const { primary: url, peer } = yield* answeringAs(link.urls, environmentId, link.label);
+      const fenced = linkLimitsHold(peer);
+      const label = peer.label;
       // A link made before the peer had to fence linked work, or a peer moved
       // back to such a version, would carry work past those limits.
       if (!fenced) {
@@ -651,7 +721,7 @@ const make = Effect.gen(function* () {
       }
       return {
         link: yield* withLabel(link, label),
-        url: url.value,
+        url,
         token: new TextDecoder().decode(stored.value),
       };
     },

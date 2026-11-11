@@ -59,6 +59,12 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
   const environment = connections.connectedEnvironments.find(
     (entry) => entry.environmentId === environmentId,
   );
+  const awakeResult = useAtomValue(serverEnvironment.keepAwake({ environmentId, input: {} }));
+  const awake = AsyncResult.getOrElse(awakeResult, () => null);
+  const canChangeAwake = useAtomValue(
+    serverEnvironment.changeKeepAwake.permissionAtom(environmentId),
+  );
+  const changeAwake = useAtomCommand(serverEnvironment.changeKeepAwake);
   const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const session = useAtomValue(environmentSession.sessionStateValueAtom(environmentId));
   const sessionResult = useAtomValue(environmentSession.sessionStateAtom(environmentId));
@@ -306,6 +312,33 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                       onPress={requestServerUpdate}
                     />
                   ) : null}
+                </SettingsSection>
+                <SettingsSection title="Keep awake">
+                  <Text>
+                    {awake
+                      ? !awake.supported
+                        ? "Not supported"
+                        : awake.active
+                          ? awake.mode === "agents"
+                            ? `Awake · ${awake.agents} agents`
+                            : awake.endsAt
+                              ? `Awake until ${new Date(awake.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                              : "Awake indefinitely"
+                          : awake.mode === "agents"
+                            ? "Waiting for agents"
+                            : "Off"
+                      : "Unavailable"}
+                  </Text>
+                  <SettingsActionRow
+                    label={awake?.mode !== "off" ? "End session now" : "While agents work"}
+                    disabled={!canChangeAwake || !awake?.supported}
+                    onPress={() => {
+                      void changeAwake({
+                        environmentId,
+                        input: { session: { mode: awake?.mode !== "off" ? "off" : "agents" } },
+                      });
+                    }}
+                  />
                 </SettingsSection>
                 <SettingsSection title="Providers">
                   <SettingsActionRow

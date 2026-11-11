@@ -550,6 +550,10 @@
     "./provider-instance-ids": {
       "types": "./src/providerInstanceIds.ts",
       "default": "./src/providerInstanceIds.ts"
+    },
+    "./peer-link-mesh": {
+      "types": "./src/peerLinkMesh.ts",
+      "default": "./src/peerLinkMesh.ts"
     }
   },
   "scripts": {

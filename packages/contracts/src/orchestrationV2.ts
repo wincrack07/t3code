@@ -87,7 +87,7 @@ import {
 } from "./providerRuntime.ts";
 import { ThreadTokenUsageSnapshot } from "./providerRuntime.ts";
 
-/** Where a pinned card shows: a right-panel tab (the default) or a Thread Details section. */
+/** Panel is a legacy alias for details; retained so old events and callers still decode. */
 export const PinnedHtmlCardPlacement = Schema.Literals(["panel", "details"]);
 export type PinnedHtmlCardPlacement = typeof PinnedHtmlCardPlacement.Type;
 
@@ -98,6 +98,7 @@ const PinnedHtmlCard = Schema.Struct({
   height: Schema.Number,
   heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
   placement: Schema.optional(PinnedHtmlCardPlacement),
+  updatedAt: Schema.optional(Schema.String),
 });
 
 export const THREAD_STATUS_TEXT_MAX_LENGTH = 120;

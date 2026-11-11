@@ -5,6 +5,8 @@ import * as NodeTls from "node:tls";
 
 import * as NodeStream from "@effect/platform-node/NodeStream";
 import {
+  type KeepAwakeStatus,
+  type KeepAwakeSession,
   DesktopHostTelemetryMessage,
   type DesktopHostTelemetryMessage as DesktopHostTelemetryMessageValue,
   type DesktopHostTelemetrySnapshot,
@@ -184,6 +186,10 @@ export class DesktopTelemetryReceiver extends Context.Service<
       never,
       Scope.Scope
     >;
+    readonly keepAwakeChanges: Stream.Stream<KeepAwakeSession>;
+    readonly reportKeepAwake: (
+      status: KeepAwakeStatus,
+    ) => Effect.Effect<void, DesktopTelemetryControlError>;
     readonly setDiagnosticsDemand: (
       enabled: boolean,
     ) => Effect.Effect<void, DesktopTelemetryControlError>;
@@ -420,6 +426,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
   const healthChanges = yield* PubSub.sliding<DesktopTelemetryReceiverHealth>(4);
   const latestUpdateReport = yield* Ref.make(Option.none<DesktopUpdateStatusReport>());
   const updateReportChanges = yield* PubSub.sliding<DesktopUpdateStatusReport>(16);
+  const keepAwakeChanges = yield* PubSub.unbounded<KeepAwakeSession>();
   const controlMutex = yield* Semaphore.make(1);
   const snapshotMutex = yield* Semaphore.make(1);
   const health = yield* Ref.make<DesktopTelemetryReceiverHealth>({
@@ -596,6 +603,9 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
           );
         }
 
+        if (message.type === "keepAwakeChange")
+          return PubSub.publish(keepAwakeChanges, message.session).pipe(Effect.asVoid);
+
         if (message.type === "shellEnvironment") {
           return recordContact.pipe(Effect.andThen(applyShellSnapshot(message)));
         }
@@ -717,6 +727,10 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     health: Ref.get(health),
     subscribeHealth: subscribeBeforeSnapshotWithoutMutex(healthChanges, Ref.get(health)),
     setDiagnosticsDemand,
+    keepAwakeChanges: Stream.fromPubSub(keepAwakeChanges),
+    reportKeepAwake: Effect.fn("DesktopTelemetryReceiver.reportKeepAwake")((status) =>
+      sendControlMessage({ version: 1, type: "keepAwakeStatus", status }),
+    ),
     requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(
       function (requestId, trackSwitch) {
         return sendControlMessage({
@@ -787,6 +801,8 @@ export const layerTest = (
       setDiagnosticsDemand: Effect.fn("DesktopTelemetryReceiver.setDiagnosticsDemand")(function () {
         return Effect.void;
       }),
+      keepAwakeChanges: Stream.empty,
+      reportKeepAwake: Effect.fn("DesktopTelemetryReceiver.reportKeepAwake")(() => Effect.void),
       requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(function () {
         return Effect.void;
       }),

@@ -1,3 +1,4 @@
+import { KeepAwakeControl } from "../KeepAwakeControl";
 import { SystemMonitorIndicator } from "../SystemMonitor";
 import {
   ArrowLeftIcon,
@@ -302,6 +303,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           />
         </>
       )}
+      <SidebarMenuItem>
+        <KeepAwakeControl />
+      </SidebarMenuItem>
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
     </SidebarMenu>

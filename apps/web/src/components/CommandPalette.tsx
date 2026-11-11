@@ -471,6 +471,10 @@ function OpenCommandPaletteDialog(props: {
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const keepAwakeAllowed = useAtomValue(
+    serverEnvironment.changeKeepAwake.permissionAtom(primaryEnvironmentId),
+  );
+  const changeKeepAwake = useAtomCommand(serverEnvironment.changeKeepAwake);
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
@@ -1589,6 +1593,23 @@ function OpenCommandPaletteDialog(props: {
       openAddProjectFlow();
     },
   };
+  if (primaryEnvironmentId && keepAwakeAllowed) {
+    for (const mode of ["agents", "indefinite", "off"] as const) {
+      actionItems.push({
+        kind: "action",
+        value: `action:keep-awake:${mode}`,
+        title: `Keep awake: ${mode === "agents" ? "while agents work" : mode}`,
+        searchTerms: ["sleep", "caffeine", "keep awake"],
+        icon: <span>☕</span>,
+        run: async () => {
+          await changeKeepAwake({
+            environmentId: primaryEnvironmentId,
+            input: { session: { mode } },
+          });
+        },
+      });
+    }
+  }
   actionItems.push(addProjectAction);
 
   if (wslAddProjectEnvironmentOption) {

@@ -1,3 +1,4 @@
+import * as KeepAwakeTray from "../electron/KeepAwakeTray.ts";
 import {
   DesktopHostTelemetryMessage,
   type DesktopHostTelemetrySnapshot,
@@ -65,6 +66,7 @@ export class DesktopTelemetryPublisher extends Context.Service<
     readonly latest: Effect.Effect<Option.Option<DesktopHostTelemetrySnapshot>>;
     readonly changes: Stream.Stream<DesktopHostTelemetrySnapshot>;
     readonly encoded: Stream.Stream<Uint8Array>;
+    readonly encodedForSource: (sourceId: string) => Stream.Stream<Uint8Array>;
     readonly handleControlForSource: (
       sourceId: string,
       message: DesktopTelemetryControlMessage,
@@ -144,6 +146,7 @@ function sampleInterval(
 
 /** @public */
 export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
+  const tray = yield* KeepAwakeTray.make();
   const electronApp = yield* ElectronApp.ElectronApp;
   const powerMonitor = yield* ElectronPowerMonitor.ElectronPowerMonitor;
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
@@ -324,6 +327,8 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     message,
   ) => {
     switch (message.type) {
+      case "keepAwakeStatus":
+        return tray.update(sourceId, message.status);
       case "setDiagnosticsDemand":
         return Ref.modify(diagnosticsDemandSources, (sources) => {
           const previous = sources.size > 0;
@@ -404,6 +409,18 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     } as const),
     Stream.merge(Stream.merge(snapshots, updateReports), shellEnvironment.updates),
   ).pipe(Stream.map((message) => textEncoder.encode(`${encodeMessage(message)}\n`)));
+  const encodedForSource = (sourceId: string) =>
+    Stream.merge(
+      encoded,
+      tray.actions.pipe(
+        Stream.filter((action) => action.sourceId === sourceId),
+        Stream.map(({ session }) =>
+          textEncoder.encode(
+            `${encodeMessage({ version: 1, type: "keepAwakeChange", session })}\n`,
+          ),
+        ),
+      ),
+    );
 
   const publishUpdateReport: DesktopTelemetryPublisher["Service"]["publishUpdateReport"] = (
     report,
@@ -417,6 +434,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     latest: Ref.get(latest),
     changes: Stream.fromPubSub(changes),
     encoded,
+    encodedForSource,
     handleControlForSource,
     removeControlSource,
     publishUpdateReport,

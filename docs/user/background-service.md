@@ -194,3 +194,21 @@ If you upgraded from a version before 0.1.0, its database (`state.sqlite`) is
 still kept next to the current one so you can roll back. `t3 doctor` offers to
 delete it, but never selects that repair for you and `--fix` skips it: once it
 is gone, a version before 0.1.0 starts with no threads or settings.
+
+## Keep awake
+
+Use **Keep awake** in the sidebar, Activity board, or macOS menu bar to keep the
+machine running your agents awake. Remote controls apply to the selected environment.
+The default follows running and queued turns, releasing the sleep inhibitor ten
+seconds after the last turn finishes. You can also choose a duration, an end time,
+an indefinite session, or Off. Closing a browser does not end a session.
+
+In **Settings → Background activity → Keep awake**, choose the session used when
+the environment starts, whether the display may sleep, and a battery cutoff
+(default 20%). A battery cutoff ends the session; start another session to resume.
+Defaults apply on the next server start; active sessions are not restored after a restart.
+
+On macOS, lid-closed use requires power and an external display in supported
+clamshell mode. T3 Code does not override lid-close sleep or change privileged
+power settings. Linux uses systemd sleep inhibitors when available. Unsupported
+hosts show their status instead of offering an ineffective switch.
