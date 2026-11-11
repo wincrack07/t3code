@@ -20,6 +20,7 @@ import {
 } from "../state/entities";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useEnvironmentShellStatus } from "../state/shell";
+import { useEnvironment } from "../state/environments";
 import { environmentThreadShells, threadFamilies, useEnvironmentThread } from "../state/threads";
 import {
   buildThreadRouteParams,
@@ -72,6 +73,7 @@ export function ThreadRouteView({
     draftId === null ? null : store.getPromotedDraftRedirect(draftId),
   );
   const serverThreadRef = target.kind === "server" ? target.threadRef : null;
+  const environment = useEnvironment(serverThreadRef?.environmentId ?? null);
   const serverThreadShell = useQuietThreadShell(serverThreadRef);
   const shellStatus = useEnvironmentShellStatus(serverThreadRef?.environmentId ?? null);
   const environmentThreadRefs = useEnvironmentThreadRefs(serverThreadRef?.environmentId ?? null);
@@ -241,16 +243,17 @@ export function ThreadRouteView({
     );
   }
 
+  const pendingView =
+    renderState === "loading" && redirect === null ? (
+      <p className="p-4 text-sm text-muted-foreground" role="status">
+        Reconnecting to {environment?.label ?? "this environment"}…
+      </p>
+    ) : null;
+
   if (column) {
     return (
       <BackgroundThreadContext value={background || inactive}>
-        {view ??
-          (renderState === "loading" && redirect === null ? (
-            <p className="p-4 text-sm text-muted-foreground">
-              Waiting for this environment to connect. This column will stay open until its thread
-              can be checked.
-            </p>
-          ) : null)}
+        {view ?? pendingView}
         {background || inactive ? null : redirect}
       </BackgroundThreadContext>
     );
@@ -261,7 +264,7 @@ export function ThreadRouteView({
       className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh"
       inert={background}
     >
-      <BackgroundThreadContext value={background}>{view}</BackgroundThreadContext>
+      <BackgroundThreadContext value={background}>{view ?? pendingView}</BackgroundThreadContext>
       {background ? null : redirect}
     </SidebarInset>
   );
