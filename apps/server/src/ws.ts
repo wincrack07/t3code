@@ -3083,6 +3083,7 @@ export const layerWsRpc = (
         [WS_METHODS.agentSessionsScan]: () => agentSessionScanner.scan,
         [WS_METHODS.agentSessionsImport]: (input) =>
           agentSessionImporter.importRecentAgentThreads(input),
+        [WS_METHODS.claudeArtifactsAccounts]: () => claudeArtifacts.accounts,
         [WS_METHODS.claudeArtifactsList]: (input) =>
           Effect.annotateCurrentSpan({ instanceId: input.instanceId }).pipe(
             Effect.andThen(claudeArtifacts.list(input)),
