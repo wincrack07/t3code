@@ -119,6 +119,7 @@ import {
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetTurnDiffError,
 } from "./checkpointDiff.ts";
+import { PromptCompletionInput, PromptCompletionResult } from "./promptCompletion.ts";
 import { PromptPolishInput, PromptPolishResult } from "./promptPolish.ts";
 import {
   WorktreeSetupCancelInput,
@@ -549,6 +550,7 @@ export const WS_METHODS = {
   serverCheckOtlpEndpoint: "server.checkOtlpEndpoint",
   serverListTextGeneratorModels: "server.listTextGeneratorModels",
   serverPolishPrompt: "server.polishPrompt",
+  serverCompletePrompt: "server.completePrompt",
   serverPrepareTriage: "server.prepareTriage",
   serverSignalProcess: "server.signalProcess",
   serverReportClientActivity: "server.reportClientActivity",
@@ -999,6 +1001,12 @@ const WsServerListTextGeneratorModelsRpc = Rpc.make(WS_METHODS.serverListTextGen
 const WsServerPolishPromptRpc = Rpc.make(WS_METHODS.serverPolishPrompt, {
   payload: PromptPolishInput,
   success: PromptPolishResult,
+  error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+});
+
+const WsServerCompletePromptRpc = Rpc.make(WS_METHODS.serverCompletePrompt, {
+  payload: PromptCompletionInput,
+  success: PromptCompletionResult,
   error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
 });
 
@@ -2157,6 +2165,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerCheckOtlpEndpointRpc,
   WsServerListTextGeneratorModelsRpc,
   WsServerPolishPromptRpc,
+  WsServerCompletePromptRpc,
   WsServerPrepareTriageRpc,
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,

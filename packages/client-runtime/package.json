@@ -359,6 +359,10 @@
       "types": "./src/state/openQuestions.ts",
       "default": "./src/state/openQuestions.ts"
     },
+    "./state/prompt-completion": {
+      "types": "./src/state/promptCompletion.ts",
+      "default": "./src/state/promptCompletion.ts"
+    },
     "./state/pending-user-input": {
       "types": "./src/state/pendingUserInput.ts",
       "default": "./src/state/pendingUserInput.ts"

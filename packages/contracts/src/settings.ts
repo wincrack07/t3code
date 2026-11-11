@@ -1344,6 +1344,11 @@ export const CloudSpeechCredentials = Schema.Struct({
   openrouter: CloudSpeechCredential,
 });
 
+export const DEFAULT_PROMPT_COMPLETION_DELAY_MS = 700;
+export const PromptCompletionDelayMs = Schema.Int.check(
+  Schema.isBetween({ minimum: 300, maximum: 3_000 }),
+);
+
 export const ServerSettings = Schema.Struct({
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1460,6 +1465,21 @@ export const ServerSettings = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Beta: Claude and Codex predict the next prompt after completed turns. Codex follows a change at once; open Claude threads after they restart. */
   promptSuggestionsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Ghost-text continuation of a typed draft. Off by default: it costs a request on every pause. */
+  promptCompletionInlineEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  /** Suggested next prompts in the empty composer after a finished reply. */
+  promptCompletionNextEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  promptCompletionDelayMs: PromptCompletionDelayMs.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROMPT_COMPLETION_DELAY_MS)),
+  ),
+  // Null follows textGenerationModelSelection.
+  promptCompletionModelSelection: Schema.NullOr(ModelSelection).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -1882,6 +1902,10 @@ export const ServerSettingsPatch = Schema.Struct({
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
+  promptCompletionInlineEnabled: Schema.optionalKey(Schema.Boolean),
+  promptCompletionNextEnabled: Schema.optionalKey(Schema.Boolean),
+  promptCompletionDelayMs: Schema.optionalKey(PromptCompletionDelayMs),
+  promptCompletionModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),

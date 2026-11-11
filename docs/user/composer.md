@@ -168,6 +168,27 @@ thread and near usage limits. Codex needs version 0.165 or later; if T3 Code man
 Codex, update it in Settings > Providers. Codex follows a change to the setting at once; open Claude
 threads follow it after they restart. Suggestions show on web and desktop.
 
+## Prompt suggestions
+
+On web and desktop, **Settings → Chat → Prompt suggestions** has the composer suggest text written
+by a model on your environment:
+
+- **Suggest a reply when the input is empty**: after a reply finishes, the empty input shows a
+  likely next prompt in place of the placeholder. `Tab` fills it in without sending. When there are
+  several, a small `1/3` shows at the right edge; `Alt+]` and `Alt+[` switch between them. It also
+  includes the provider's own suggestion when **Suggest next prompt** is on. Nothing is suggested
+  while the reply's open question cards wait for answers.
+- **Complete while typing**: when you pause with the caret at the end of your draft, a dimmed
+  continuation appears after it. `Tab` accepts all of it, `Alt+→` or `Ctrl+→` accepts one word, and
+  `Escape` or typing dismisses it. It stays out of the way of `@`, `$` and `/` menus, input methods,
+  and pastes.
+
+Both are off by default, because each suggestion is a small request: one per finished reply, or one
+per pause while typing. A suggestion sees your draft, the last few messages of the thread, and the
+project name. Choose **Suggestion model** to use a fast, cheap model instead of the environment's
+[text generation model](./text-generation.md), and **Pause before suggesting** to change how long
+the input waits.
+
 ## Answer an agent's open questions
 
 When an agent finishes a reply with decisions left for you, it can attach them as cards under that

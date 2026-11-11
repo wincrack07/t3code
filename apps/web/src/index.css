@@ -2482,6 +2482,25 @@ code {
   position: relative;
 }
 
+/* A zero-width box: the suggestion overflows to the right and never wraps or grows the editor. */
+.composer-tiptap .composer-ghost-text {
+  display: inline-block;
+  width: 0;
+  overflow: visible;
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
+}
+
+.composer-tiptap .composer-ghost-text > span {
+  color: var(--placeholder);
+}
+
+/* Clip the overflowing suggestion instead of adding a horizontal scrollbar. */
+.composer-tiptap:has(.composer-ghost-text) {
+  overflow-x: hidden;
+}
+
 .composer-tiptap.ProseMirror-focused .composer-chip-range-selected::after {
   content: "";
   position: absolute;

@@ -167,6 +167,8 @@ export interface ComposerPromptEditorProps {
   placeholder: string;
   /** Rendered after the placeholder text, such as a key hint. */
   placeholderSuffix?: ReactNode;
+  /** Suggested continuation shown after the caret while it sits at the end of the draft. */
+  ghostText?: string | null;
   ariaLabel?: string | undefined;
   suggestionListId?: string | undefined;
   activeSuggestionId?: string | undefined;
@@ -727,6 +729,53 @@ function chipSelectionDecorations({ doc, selection }: EditorState): DecorationSe
   return DecorationSet.create(doc, decorations);
 }
 
+const GhostTextPluginKey = new PluginKey<string | null>("composer-ghost-text");
+
+/**
+ * Dimmed suggested text after the caret at the end of the draft. Any document change clears it,
+ * so a suggestion for an older draft can never show. Its zero-width box never changes layout.
+ */
+const ComposerGhostTextExtension = Extension.create({
+  name: "composer-ghost-text",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<string | null>({
+        key: GhostTextPluginKey,
+        state: {
+          init: () => null,
+          apply: (tr, value) => {
+            const meta: string | null | undefined = tr.getMeta(GhostTextPluginKey);
+            return meta !== undefined ? meta : tr.docChanged ? null : value;
+          },
+        },
+        props: {
+          decorations: (state) => {
+            const text = GhostTextPluginKey.getState(state);
+            const end = TextSelection.atEnd(state.doc).to;
+            if (!text || !state.selection.empty || state.selection.from !== end) return null;
+            return DecorationSet.create(state.doc, [
+              Decoration.widget(
+                end,
+                () => {
+                  const box = document.createElement("span");
+                  box.className = "composer-ghost-text";
+                  box.setAttribute("aria-hidden", "true");
+                  box.contentEditable = "false";
+                  const label = document.createElement("span");
+                  label.textContent = text;
+                  box.append(label);
+                  return box;
+                },
+                { side: 1, key: `ghost:${text}`, ignoreSelection: true },
+              ),
+            ]);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 type TiptapEditor = NonNullable<ReturnType<typeof useEditor>>;
 
 function replaceSkillChips(
@@ -818,6 +867,7 @@ function createComposerExtensions(richText: boolean) {
     ComposerCitationExtension,
     ComposerContextReferenceExtension,
     ComposerChipSelectionExtension,
+    ComposerGhostTextExtension,
     ...(richText
       ? [
           ComposerMarkdownSourceExtension,
@@ -923,6 +973,7 @@ function ComposerPromptEditorTiptapInner(
     className,
     placeholderClassName,
     placeholderSuffix,
+    ghostText = null,
     onChange,
     onVisibleSelectionChange,
     onCommandKeyDown,
@@ -1472,6 +1523,13 @@ function ComposerPromptEditorTiptapInner(
   useEffect(() => {
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes the suggested continuation into the ProseMirror plugin that draws it
+  useEffect(() => {
+    if (!editor?.isInitialized) return;
+    if (GhostTextPluginKey.getState(editor.state) === ghostText) return;
+    editor.view.dispatch(editor.state.tr.setMeta(GhostTextPluginKey, ghostText));
+  }, [editor, ghostText]);
 
   // Push attributes before layout measurements; Tiptap updates them later in a passive effect.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes DOM attributes into the ProseMirror view before layout measurements read them

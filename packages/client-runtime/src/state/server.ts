@@ -1647,6 +1647,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-command:server:polish-prompt",
       tag: WS_METHODS.serverPolishPrompt,
     }),
+    completePrompt: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:server:complete-prompt",
+      tag: WS_METHODS.serverCompletePrompt,
+    }),
     retryResourceTelemetry: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:retry-resource-telemetry",
       tag: WS_METHODS.serverRetryResourceTelemetry,
