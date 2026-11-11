@@ -4068,7 +4068,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                       : [
                           {
                             ...command.htmlCard.card,
-                            placement: "details",
+                            placement: "details" as const,
                             updatedAt: DateTime.formatIso(now),
                           },
                         ]),

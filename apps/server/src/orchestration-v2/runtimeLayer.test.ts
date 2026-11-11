@@ -2556,7 +2556,12 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
             .pinnedHtmlCards?.[0];
           assert.isString(persisted?.updatedAt);
           const expected = [
-            { ...snapshot, id: "progress", placement: "details", updatedAt: persisted?.updatedAt },
+            {
+              ...snapshot,
+              id: "progress",
+              placement: "details" as const,
+              updatedAt: persisted?.updatedAt,
+            },
           ];
           assert.deepEqual(
             (yield* orchestrator.getThreadProjection(threadId)).thread.pinnedHtmlCards,
