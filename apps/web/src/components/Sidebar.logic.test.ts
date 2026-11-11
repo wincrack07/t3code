@@ -35,6 +35,7 @@ import {
   sidebarNestedThreads,
   sidebarProjectIsOther,
   resolveSidebarFolderDot,
+  summarizeSidebarFolder,
   sidebarFolderExpansionKeys,
 } from "./Sidebar.logic";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
@@ -1731,8 +1732,18 @@ describe("resolveSidebarFolderDot", () => {
       resolveSidebarFolderDot([{ ...unread, runtime: { ...runtime, status: "idle" as const } }]),
     ).toBeNull();
     expect(resolveSidebarFolderDot([idle, working])).toBe("working");
-    expect(resolveSidebarFolderDot([working, unread])).toBe("unread");
+    expect(resolveSidebarFolderDot([working, unread])).toBe("working");
     expect(resolveSidebarFolderDot([unread, limited])).toBe("attention");
+    expect(
+      summarizeSidebarFolder([{ hiddenThreads: [idle] }, { hiddenThreads: [working] }]),
+    ).toEqual({ openThreadCount: 2, activity: "working" });
+    expect(
+      summarizeSidebarFolder([
+        { hiddenThreads: [working] },
+        { hiddenThreads: [{ ...idle, hasPendingUserInput: true }] },
+      ]),
+    ).toEqual({ openThreadCount: 2, activity: "attention" });
+    expect(summarizeSidebarFolder([])).toEqual({ openThreadCount: 0, activity: null });
   });
 });
 

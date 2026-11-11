@@ -72,6 +72,25 @@ Drag a divider to resize, or focus it and use the arrow keys. Closing a column k
 the thread; closing the active column activates a neighbor. Narrow windows show
 only the active column and restore the other columns when widened.
 
+## Organize projects
+
+On web and desktop, use **Collapse all projects** or **Expand all projects** in the
+sidebar display menu or command palette. Collapse all keeps the current thread's
+project open; click its header to close it too. Closed projects and groups show
+open-thread counts and signal work or requests for your attention.
+
+Right-click a project header and choose **Move to group → New group…**, or manage
+groups in **Settings → Projects** with no project selected. Groups can contain
+projects from different environments. Add an optional emoji, rename a group, or
+remove projects at any time. Deleting a group keeps its projects.
+**Suggest groups** previews shared name prefixes and waits for your confirmation.
+Creating a group switches to the project-grouped sidebar.
+
+Groups follow the existing project order. A pinned project brings its group
+forward and stays pinned within it. Groups and collapse preferences are saved on
+this client; they do not sync between devices. Mobile continues to show its usual
+project list.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

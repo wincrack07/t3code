@@ -47,6 +47,7 @@ export function useProjectLookups() {
 }
 
 export const selectCommandPaletteClientSettings = (settings: ClientSettings) => ({
+  sidebarProjectFolders: settings.sidebarProjectFolders,
   sidebarProjectGroupingMode: settings.sidebarProjectGroupingMode,
   sidebarProjectGroupingOverrides: settings.sidebarProjectGroupingOverrides,
   sidebarProjectSortOrder: settings.sidebarProjectSortOrder,
