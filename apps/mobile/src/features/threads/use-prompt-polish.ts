@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { useState } from "react";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import {
   isAtomCommandInterrupted,
@@ -10,7 +11,7 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { getComposerDraftSnapshot } from "../../state/use-composer-drafts";
 
-/** `/polish`: rewrites the draft on the environment's text model. */
+/** `/polish` and the composer's polish button: rewrite the draft on the environment's text model. */
 export function usePromptPolish(input: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
@@ -23,13 +24,16 @@ export function usePromptPolish(input: {
     label: "prompt polish",
     reportFailure: false,
   });
+  const [running, setRunning] = useState(false);
 
   const polish = async (original: string) => {
     if (original.trim().length === 0) return;
+    setRunning(true);
     const result = await run({
       environmentId,
       input: { prompt: original, ...(projectId ? { projectId } : {}) },
     });
+    setRunning(false);
     if (result._tag === "Failure") {
       if (isAtomCommandInterrupted(result)) return;
       const error = squashAtomCommandFailure(result);
@@ -44,5 +48,5 @@ export function usePromptPolish(input: {
     onChangeDraftMessage(result.value.prompt);
   };
 
-  return { available, polish };
+  return { available, running, polish };
 }

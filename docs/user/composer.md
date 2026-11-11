@@ -206,9 +206,10 @@ environment at once.
 
 ## Polish a draft
 
-Pick `/polish` from the slash menu, at any point in your draft, to have the
-[text generation model](./text-generation.md) rewrite the whole draft as a clearer
-prompt before you send it. It keeps your language, file links, mentions, and
+Pick `/polish` from the slash menu, at any point in your draft, or press the
+composer's polish button (the wand on web and desktop, the sparkles on mobile while
+you type), to have the [text generation model](./text-generation.md) rewrite the
+whole draft as a clearer prompt before you send it. It keeps your language, file links, mentions, and
 skills. If you edit the draft while the rewrite runs, your edit wins. On web and
 desktop, **Undo** in the notice restores your original draft.
 

@@ -4,13 +4,13 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import type { RefObject } from "react";
+import { type RefObject, useState } from "react";
 
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { toastManager } from "../ui/toast";
 
-/** `/polish`: rewrites the draft on the environment's text model, with an undo. */
+/** `/polish` and the composer's polish button: rewrite the draft on the environment's text model, with an undo. */
 export function usePromptPolish(input: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
@@ -19,16 +19,19 @@ export function usePromptPolish(input: {
   const { environmentId, projectId, promptRef } = input;
   const available = useAtomValue(serverEnvironment.polishPrompt.permissionAtom(environmentId));
   const run = useAtomCommand(serverEnvironment.polishPrompt, { reportFailure: false });
+  const [running, setRunning] = useState(false);
 
   /** `replaceDraft` swaps the whole draft only while it still reads `expected`. */
   const polish = async (replaceDraft: (expected: string, next: string) => boolean) => {
     const original = promptRef.current;
     if (original.trim().length === 0) return;
     const toastId = toastManager.add({ type: "loading", title: "Polishing prompt..." });
+    setRunning(true);
     const result = await run({
       environmentId,
       input: { prompt: original, ...(projectId ? { projectId } : {}) },
     });
+    setRunning(false);
     if (result._tag === "Failure") {
       if (isAtomCommandInterrupted(result)) {
         toastManager.close(toastId);
@@ -69,5 +72,5 @@ export function usePromptPolish(input: {
     });
   };
 
-  return { available, polish };
+  return { available, running, polish };
 }

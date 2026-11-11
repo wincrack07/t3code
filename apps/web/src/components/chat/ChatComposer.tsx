@@ -206,6 +206,7 @@ import {
   ComposerQueuedAttachmentRow,
   ComposerRestingImagePreviews,
 } from "./ComposerAttachmentStrip";
+import { ComposerPolishButton } from "./ComposerPolishButton";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -3232,6 +3233,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onRemoveFile={removeComposerFileFromDraft}
       />
     ) : null;
+  // A question or approval owns the editor, so there is no draft to polish.
+  const composerPolishButton =
+    isComposerApprovalState || activePendingProgress ? null : (
+      <ComposerPolishButton
+        disabled={!promptPolish.available || prompt.trim().length === 0 || voiceInputActive}
+        running={promptPolish.running}
+        onPolish={() =>
+          void promptPolish.polish((expected, next) =>
+            applyPromptReplacementStable(0, promptRef.current.length, next, {
+              expectedText: expected,
+            }),
+          )
+        }
+      />
+    );
   const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton
       addComposerAttachments={addComposerAttachments}
@@ -3655,6 +3671,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     keepFullHistory={props.keepFullHistory}
                     onToggleKeepFullHistory={props.onToggleKeepFullHistory}
                   >
+                    {composerPolishButton}
                     {speechInput.available ? (
                       <>
                         <ComposerSpeechRecordingPill
