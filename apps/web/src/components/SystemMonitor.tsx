@@ -14,10 +14,12 @@ const bytes = (value: number | null) =>
   value === null ? "Unavailable" : `${(value / 1024 ** 3).toFixed(1)} GB`;
 const rate = (value: number | null) =>
   value === null ? "N/A" : `${(value / 1024).toFixed(0)} KB/s`;
-function useMonitor(id: EnvironmentId | null) {
+function useMonitor(id: EnvironmentId | null, detail = false) {
   const allowed = useEnvironmentScope(id, AuthOrchestrationReadScope);
   return useEnvironmentQuery(
-    id && allowed ? serverEnvironment.machineMonitor({ environmentId: id, input: {} }) : null,
+    id && allowed
+      ? serverEnvironment.machineMonitor({ environmentId: id, input: { detail } })
+      : null,
   );
 }
 
@@ -91,7 +93,9 @@ export function SystemMonitorView() {
   const { environments } = useEnvironments();
   const [selected, setSelected] = useState<EnvironmentId | null>(null);
   const id = selected ?? primary;
-  const { data, error } = useMonitor(id);
+  const { data, error } = useMonitor(id, true);
+  const navigate = useNavigate();
+  const details = data?.details;
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"memory" | "cpu">("memory");
   return (
@@ -148,8 +152,9 @@ export function SystemMonitorView() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Process snapshot: {new Date(data.processesAt).toLocaleTimeString()}. Top 30 per metric.
-            CPU may exceed 100%.
+            Process snapshot:{" "}
+            {details ? new Date(details.sampledAt).toLocaleTimeString() : "Waiting for snapshot"}.
+            Top 30 per metric. CPU may exceed 100%.
           </p>
           <table className="w-full text-sm">
             <thead>
@@ -161,7 +166,7 @@ export function SystemMonitorView() {
               </tr>
             </thead>
             <tbody>
-              {(sort === "memory" ? data.topMemory : data.topCpu)
+              {(sort === "memory" ? (details?.topMemory ?? []) : (details?.topCpu ?? []))
                 .filter((p) =>
                   `${p.name} ${p.owner ?? ""} ${p.pid} ${p.cwd ?? ""}`
                     .toLowerCase()
@@ -181,12 +186,35 @@ export function SystemMonitorView() {
             </tbody>
           </table>
           <h3 className="text-sm font-medium">Projects</h3>
-          {data.projects.map((p) => (
+          {(details?.projects ?? []).map((p) => (
             <p className="text-sm" key={p.id}>
               {p.title} · {bytes(p.rss)} · {p.cpu.toFixed(1)}% CPU · {p.count} processes
             </p>
           ))}
-          {data.limitations.map((message) => (
+          <h3 className="text-sm font-medium">Threads</h3>
+          {(details?.threads ?? []).map((thread) => (
+            <div key={thread.id} className="flex flex-wrap items-center gap-2 text-sm">
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => {
+                  if (id)
+                    void navigate({
+                      to: "/$environmentId/$threadId",
+                      params: { environmentId: id, threadId: thread.id },
+                    });
+                }}
+              >
+                {thread.title}
+              </Button>
+              <span>
+                {thread.attribution === "shared-directory"
+                  ? "Thread split unknown: shared directory. See project totals."
+                  : `${bytes(thread.rss)} · ${thread.cpu?.toFixed(1)}% CPU · ${thread.count} processes`}
+              </span>
+            </div>
+          ))}
+          {[...data.limitations, ...(details?.limitations ?? [])].map((message) => (
             <p key={message} className="text-xs text-muted-foreground">
               {message}
             </p>

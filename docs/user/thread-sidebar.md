@@ -364,6 +364,15 @@ Measurements describe the machine running the environment's server. Project tota
 accessible processes whose working directory belongs to that project or a known worktree.
 Process RAM is resident memory, so process totals do not equal total machine RAM. macOS
 available RAM includes reclaimable file-backed and purgeable memory. History stays in memory
-and collects only while a monitor is open or its sidebar indicator is visible. Process, storage
-and macOS command counters refresh every ten seconds; CPU and Linux resource counters refresh
-every two seconds. The monitor has no process controls.
+and collects only while a monitor is open or its sidebar indicator is visible. The sidebar and
+mobile summary collect resource counters only. Process snapshots and attribution refresh every
+ten seconds while the full monitor view is open; closing its last viewer stops that work.
+Storage and macOS command counters refresh every ten seconds; CPU and Linux resource counters
+refresh every two seconds.
+
+Thread totals cover descendants of the environment's T3 server whose working directory belongs
+to that thread. A process without a readable directory inherits its nearest ancestor's directory
+below the server. Threads sharing a directory show an unknown split; use their project's totals
+instead. Select a thread in the monitor to open it. Detached processes outside the server's tree
+can appear in project totals but not thread totals. Leftover detection is not included. The monitor
+has no process controls.

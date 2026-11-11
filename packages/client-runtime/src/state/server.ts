@@ -1,3 +1,4 @@
+import { mergeMachineMonitorSnapshot } from "./machineMonitor.ts";
 import {
   type MachineMonitorSnapshot,
   type EnvironmentId,
@@ -1373,12 +1374,7 @@ export function createServerEnvironmentAtoms<R, E>(
         stream.pipe(
           Stream.scan(
             () => undefined as MachineMonitorSnapshot | undefined,
-            (previous, value) => ({
-              ...value,
-              history: value.history.length
-                ? value.history
-                : [...(previous?.history ?? []), value.sample].slice(-738),
-            }),
+            mergeMachineMonitorSnapshot,
           ),
           Stream.filter((value): value is MachineMonitorSnapshot => value !== undefined),
         ),

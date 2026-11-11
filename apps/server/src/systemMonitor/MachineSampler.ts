@@ -4,7 +4,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Schema from "effect/Schema";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect has no filesystem capacity query.
 import * as NodeFSP from "node:fs/promises";
-import type { MachineMonitorSnapshot, MachineProcess, MachineSample } from "@t3tools/contracts";
+import type { MachineProcessSnapshot, MachineProcess, MachineSample } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -12,9 +12,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
+import { attributeProcesses } from "./attribution.ts";
 import { ServerConfig } from "../config.ts";
 import {
-  attributeProjects,
   macCwds,
   linuxMemory,
   linuxNetwork,
@@ -29,7 +29,11 @@ import {
 export class MachineSampler extends Context.Service<
   MachineSampler,
   {
-    readonly sample: Effect.Effect<Omit<MachineMonitorSnapshot, "history">>;
+    readonly sample: Effect.Effect<{
+      readonly sample: MachineSample;
+      readonly limitations: readonly string[];
+    }>;
+    readonly processes: Effect.Effect<MachineProcessSnapshot>;
   }
 >()("t3/systemMonitor/MachineSampler") {}
 
@@ -53,8 +57,6 @@ const make = Effect.gen(function* () {
   let previousCpu: { idle: number; total: number } | undefined;
   let previousNetwork: { at: number; values: [number, number] } | undefined;
   let lastSlow = -Infinity;
-  let processes: MachineProcess[] = [];
-  let projects: MachineMonitorSnapshot["projects"] = [];
   let diskFree: number | null = null,
     diskTotal: number | null = null;
   let memoryAvailable = NodeOS.freemem();
@@ -69,11 +71,10 @@ const make = Effect.gen(function* () {
   const sample = Effect.fn("MachineSampler.sample")(function* () {
     const at = yield* Clock.currentTimeMillis;
     const total = NodeOS.totalmem();
-    const limitations: string[] = [
-      "Process memory is RSS, not physical footprint.",
-      "Thread attribution is unavailable: providers do not expose verified subprocess identities.",
-      "Leftovers are unavailable: launchd ownership cannot be verified.",
-    ];
+    const limitations =
+      platform === "linux" || platform === "darwin"
+        ? []
+        : ["Machine sampling is supported on Linux and macOS only."];
     const ticks = NodeOS.cpus().reduce(
       (sum, cpu) => ({
         idle: sum.idle + cpu.times.idle,
@@ -104,12 +105,6 @@ const make = Effect.gen(function* () {
       network = linuxNetwork(yield* read("/proc/net/dev"));
     }
     if (at - lastSlow >= 10_000) {
-      if (hz === undefined)
-        hz =
-          platform === "linux"
-            ? Number((yield* command("getconf", ["CLK_TCK"])).trim()) || 100
-            : 100;
-      const elapsed = (at - lastSlow) / 1000;
       lastSlow = at;
       const disk = yield* Effect.tryPromise({
         try: () => NodeFSP.statfs(config.baseDir),
@@ -133,70 +128,9 @@ const make = Effect.gen(function* () {
           yield* command("/usr/sbin/sysctl", ["-n", "kern.memorystatus_vm_pressure_level"]),
         );
         network = macNetwork(yield* command("/usr/sbin/netstat", ["-ibn"]));
-        processes = macProcesses(
-          yield* command("/bin/ps", ["-axo", "pid=,ppid=,%cpu=,rss=,comm="]),
-        );
-        const cwds = macCwds(
-          yield* command("/usr/sbin/lsof", [
-            "-a",
-            "-d",
-            "cwd",
-            "-Fpn",
-            "-u",
-            String(process.getuid?.() ?? 0),
-          ]),
-        );
-        processes = processes.map((p) => ({ ...p, cwd: cwds.get(p.pid) ?? null }));
-      } else if (platform === "linux") {
-        const pids = yield* fs.readDirectory("/proc").pipe(Effect.orElseSucceed(() => []));
-        const next = new Map<number, { start: string | undefined; ticks: number }>();
-        processes = (yield* Effect.forEach(
-          pids.filter((p) => /^\d+$/.test(p)),
-          (id) =>
-            Effect.gen(function* () {
-              const stat = yield* read(`/proc/${id}/stat`);
-              if (!stat) return null;
-              const p = linuxProcess(stat),
-                pid = Number(id);
-              if (!Number.isFinite(p.ticks)) return null;
-              const status = yield* read(`/proc/${id}/status`);
-              const rss = Number(/^VmRSS:\s+(\d+)/m.exec(status)?.[1] ?? 0) * 1024;
-              const cwd = yield* fs
-                .readLink(`/proc/${id}/cwd`)
-                .pipe(Effect.orElseSucceed(() => null));
-              const old = previousProcesses.get(pid);
-              next.set(pid, { start: p.start, ticks: p.ticks });
-              return {
-                pid,
-                ppid: p.ppid,
-                name: p.name.slice(0, 120),
-                owner: null,
-                rss,
-                cwd,
-                cpu:
-                  old && old.start === p.start && Number.isFinite(elapsed)
-                    ? Math.max(0, ((p.ticks - old.ticks) / hz! / elapsed) * 100)
-                    : 0,
-              };
-            }),
-          { concurrency: 16 },
-        )).filter((p): p is NonNullable<typeof p> => p !== null);
-        previousProcesses = next;
-      } else limitations.push("Machine sampling is supported on Linux and macOS only.");
-      const shell = yield* store.getShellSnapshot().pipe(Effect.orElseSucceed(() => null));
-      const projectShells = yield* projectStore.listShells().pipe(Effect.orElseSucceed(() => []));
-      projects = shell
-        ? attributeProjects(
-            processes,
-            projectShells.flatMap((project) => [
-              { id: project.id, title: project.title, path: project.workspaceRoot },
-              ...shell.threads
-                .filter((t) => t.projectId === project.id && t.worktreePath)
-                .map((t) => ({ id: project.id, title: project.title, path: t.worktreePath! })),
-            ]),
-          )
-        : [];
+      }
     }
+
     if (network && (platform !== "darwin" || at === lastSlow)) {
       if (previousNetwork && at > previousNetwork.at) {
         const seconds = (at - previousNetwork.at) / 1000;
@@ -222,13 +156,93 @@ const make = Effect.gen(function* () {
         load: NodeOS.loadavg(),
         uptime: NodeOS.uptime(),
       },
-      projects,
-      processesAt: lastSlow,
-      topMemory: [...processes].sort((a, b) => b.rss - a.rss).slice(0, 30),
-      topCpu: [...processes].sort((a, b) => b.cpu - a.cpu).slice(0, 30),
       limitations,
     };
   });
-  return MachineSampler.of({ sample: sample() });
+  let lastProcessesAt: number | undefined;
+  const processes = Effect.fn("MachineSampler.processes")(function* () {
+    const at = yield* Clock.currentTimeMillis;
+    const elapsed = lastProcessesAt === undefined ? Infinity : (at - lastProcessesAt) / 1000;
+    if (hz === undefined)
+      hz =
+        platform === "linux" ? Number((yield* command("getconf", ["CLK_TCK"])).trim()) || 100 : 100;
+    let processes: MachineProcess[] = [];
+    if (platform === "darwin") {
+      processes = macProcesses(yield* command("/bin/ps", ["-axo", "pid=,ppid=,%cpu=,rss=,comm="]));
+      const cwds = macCwds(
+        yield* command("/usr/sbin/lsof", [
+          "-a",
+          "-d",
+          "cwd",
+          "-Fpn",
+          "-u",
+          String(process.getuid?.() ?? 0),
+        ]),
+      );
+      processes = processes.map((p) => ({ ...p, cwd: cwds.get(p.pid) ?? null }));
+    } else if (platform === "linux") {
+      const pids = yield* fs.readDirectory("/proc").pipe(Effect.orElseSucceed(() => []));
+      const next = new Map<number, { start: string | undefined; ticks: number }>();
+      processes = (yield* Effect.forEach(
+        pids.filter((p) => /^\d+$/.test(p)),
+        (id) =>
+          Effect.gen(function* () {
+            const stat = yield* read(`/proc/${id}/stat`);
+            if (!stat) return null;
+            const p = linuxProcess(stat),
+              pid = Number(id);
+            if (!Number.isFinite(p.ticks)) return null;
+            const status = yield* read(`/proc/${id}/status`);
+            const rss = Number(/^VmRSS:\s+(\d+)/m.exec(status)?.[1] ?? 0) * 1024;
+            const cwd = yield* fs
+              .readLink(`/proc/${id}/cwd`)
+              .pipe(Effect.orElseSucceed(() => null));
+            const old = previousProcesses.get(pid);
+            next.set(pid, { start: p.start, ticks: p.ticks });
+            return {
+              pid,
+              ppid: p.ppid,
+              name: p.name.slice(0, 120),
+              owner: null,
+              rss,
+              cwd,
+              cpu:
+                old && old.start === p.start && elapsed > 0 && Number.isFinite(elapsed)
+                  ? Math.max(0, ((p.ticks - old.ticks) / hz! / elapsed) * 100)
+                  : 0,
+            };
+          }),
+        { concurrency: 16 },
+      )).filter((p): p is NonNullable<typeof p> => p !== null);
+      previousProcesses = next;
+    }
+    lastProcessesAt = at;
+    const shell = yield* store.getShellSnapshot().pipe(Effect.orElseSucceed(() => null));
+    const projects = yield* projectStore.listShells().pipe(Effect.orElseSucceed(() => []));
+    const roots = projects.flatMap((project) => [
+      { id: project.id, title: project.title, path: project.workspaceRoot },
+      ...(shell?.threads ?? [])
+        .filter((t) => t.projectId === project.id && t.worktreePath)
+        .map((t) => ({ id: project.id, title: project.title, path: t.worktreePath! })),
+    ]);
+    const projectById = new Map(projects.map((p) => [p.id, p]));
+    const threads = (shell?.threads ?? []).flatMap((thread) => {
+      const path = thread.worktreePath ?? projectById.get(thread.projectId)?.workspaceRoot;
+      return path
+        ? [{ id: thread.id, title: thread.title, projectId: thread.projectId, path }]
+        : [];
+    });
+    return {
+      sampledAt: at,
+      topMemory: [...processes].sort((a, b) => b.rss - a.rss).slice(0, 30),
+      topCpu: [...processes].sort((a, b) => b.cpu - a.cpu).slice(0, 30),
+      ...attributeProcesses(processes, process.pid, threads, roots),
+      limitations:
+        platform === "linux" || platform === "darwin"
+          ? ["Process memory is RSS, not physical footprint."]
+          : ["Process sampling is supported on Linux and macOS only."],
+    };
+  });
+  return MachineSampler.of({ sample: sample(), processes: processes() });
 });
 export const layer = Layer.effect(MachineSampler, make);

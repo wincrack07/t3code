@@ -3507,7 +3507,7 @@ export const layerWsRpc = (
               );
             }),
           ),
-        [WS_METHODS.subscribeMachineMonitor]: () => systemMonitor.stream,
+        [WS_METHODS.subscribeMachineMonitor]: (input) => systemMonitor.stream(input),
         [WS_METHODS.subscribeResourceTelemetry]: (_input) =>
           Stream.unwrap(
             Effect.map(resourceTelemetry.subscribe, ({ latest, changes }) =>

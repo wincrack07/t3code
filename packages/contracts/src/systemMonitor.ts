@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { ProjectId, ThreadId } from "./baseSchemas.ts";
 
 export const MachineSample = Schema.Struct({
   at: Schema.Number,
@@ -27,10 +28,8 @@ export const MachineProcess = Schema.Struct({
   cwd: Schema.NullOr(Schema.String),
 });
 export type MachineProcess = typeof MachineProcess.Type;
-export const MachineMonitorSnapshot = Schema.Struct({
-  sample: MachineSample,
-  history: Schema.Array(MachineSample),
-  processesAt: Schema.Number,
+export const MachineProcessSnapshot = Schema.Struct({
+  sampledAt: Schema.Number,
   topMemory: Schema.Array(MachineProcess),
   topCpu: Schema.Array(MachineProcess),
   projects: Schema.Array(
@@ -42,6 +41,24 @@ export const MachineMonitorSnapshot = Schema.Struct({
       count: Schema.Number,
     }),
   ),
+  threads: Schema.Array(
+    Schema.Struct({
+      id: ThreadId,
+      title: Schema.String,
+      projectId: ProjectId,
+      attribution: Schema.Literals(["cwd", "shared-directory"]),
+      rss: Schema.NullOr(Schema.Number),
+      cpu: Schema.NullOr(Schema.Number),
+      count: Schema.NullOr(Schema.Number),
+    }),
+  ),
   limitations: Schema.Array(Schema.String),
+});
+export type MachineProcessSnapshot = typeof MachineProcessSnapshot.Type;
+export const MachineMonitorSnapshot = Schema.Struct({
+  sample: MachineSample,
+  history: Schema.Array(MachineSample),
+  limitations: Schema.Array(Schema.String),
+  details: Schema.optionalKey(MachineProcessSnapshot),
 });
 export type MachineMonitorSnapshot = typeof MachineMonitorSnapshot.Type;

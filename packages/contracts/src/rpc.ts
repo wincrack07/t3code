@@ -2076,7 +2076,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 ) {}
 
 const WsSubscribeMachineMonitorRpc = Rpc.make(WS_METHODS.subscribeMachineMonitor, {
-  payload: Schema.Struct({}),
+  payload: Schema.Struct({ detail: Schema.optionalKey(Schema.Boolean) }),
   success: MachineMonitorSnapshot,
   error: EnvironmentAuthorizationError,
   stream: true,
