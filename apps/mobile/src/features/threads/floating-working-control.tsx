@@ -550,6 +550,26 @@ function FloatingStatusLabel(props: {
       </StatusLabelRow>
     );
   }
+  if (props.status.kind === "agent-status") {
+    return (
+      <StatusLabelRow
+        key="agent-status"
+        accessibilityLabel={props.status.label}
+        className="gap-2"
+        onLayout={props.onLayout}
+      >
+        <SymbolView
+          name="info.circle"
+          size={13}
+          tintColorClassName="accent-foreground"
+          type="monochrome"
+        />
+        <Text className="shrink font-t3-medium text-xs text-foreground" numberOfLines={1}>
+          {props.status.label}
+        </Text>
+      </StatusLabelRow>
+    );
+  }
   if (props.status.kind === "goal") {
     return (
       <StatusLabelRow
@@ -597,7 +617,12 @@ function FloatingStatusLabel(props: {
     );
   }
   return (
-    <WorkingDuration key="working" startedAt={props.status.startedAt} onLayout={props.onLayout} />
+    <WorkingDuration
+      key="working"
+      startedAt={props.status.startedAt}
+      statusText={props.status.statusText}
+      onLayout={props.onLayout}
+    />
   );
 }
 
@@ -639,16 +664,20 @@ function StatusLabelRow(props: {
 
 function WorkingDuration(props: {
   readonly startedAt: string;
+  readonly statusText: string | undefined;
   readonly onLayout: (event: LayoutChangeEvent) => void;
 }) {
   return (
     <StatusLabelRow onLayout={props.onLayout}>
-      <WorkingTimer startedAt={props.startedAt} />
+      <WorkingTimer startedAt={props.startedAt} statusText={props.statusText} />
     </StatusLabelRow>
   );
 }
 
-function WorkingTimer(props: { readonly startedAt: string }) {
+function WorkingTimer(props: {
+  readonly startedAt: string;
+  readonly statusText: string | undefined;
+}) {
   const nowMs = useVisibleSecondClock(true);
   return (
     <SystemText
@@ -657,6 +686,7 @@ function WorkingTimer(props: { readonly startedAt: string }) {
       style={{ fontVariant: ["tabular-nums"], fontWeight: "500" }}
     >
       Working {formatWorkingDuration(props.startedAt, nowMs)}
+      {props.statusText ? ` · ${props.statusText}` : null}
     </SystemText>
   );
 }

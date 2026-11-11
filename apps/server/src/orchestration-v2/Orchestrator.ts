@@ -643,6 +643,18 @@ const decodeUserInputAnswers = Schema.decodeUnknownEffect(
   ),
 );
 
+type PinnedHtmlCard = NonNullable<OrchestrationV2AppThread["pinnedHtmlCards"]>[number];
+
+/** A card update without a placement keeps the card where it is; panel is stored as no placement. */
+function pinnedHtmlCardUpdate(
+  current: OrchestrationV2AppThread["pinnedHtmlCards"],
+  card: PinnedHtmlCard,
+): PinnedHtmlCard {
+  const { placement: requested, ...rest } = card;
+  const placement = requested ?? current?.find((existing) => existing.id === card.id)?.placement;
+  return placement === "details" ? { ...rest, placement } : rest;
+}
+
 function pendingThreadTitleGenerationEffect(
   commandId: CommandId,
   threadId: ThreadId,
@@ -4052,8 +4064,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     snooze: command.limitRecovery.snooze ?? previousRecovery?.snooze ?? false,
                     requestId: command.commandId,
                   };
+          const { statusText: _statusText, ...withoutStatus } = thread;
           return {
-            ...thread,
+            ...(command.statusText === null ? withoutStatus : thread),
+            ...(command.statusText == null ? {} : { statusText: command.statusText }),
             ...(command.htmlCard === undefined
               ? {}
               : {
@@ -4061,7 +4075,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     ...(thread.pinnedHtmlCards ?? []).filter(
                       (card) => card.id !== command.htmlCard?.id,
                     ),
-                    ...(command.htmlCard.card === null ? [] : [command.htmlCard.card]),
+                    ...(command.htmlCard.card === null
+                      ? []
+                      : [pinnedHtmlCardUpdate(thread.pinnedHtmlCards, command.htmlCard.card)]),
                   ].slice(-8),
                 }),
             ...(command.title === undefined ? {} : { title: command.title }),
@@ -6022,6 +6038,27 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         providerInstanceId: thread.providerInstanceId,
         occurredAt: now,
         payload: thread,
+      });
+      projection = applyToProjection(projection, event);
+    }
+    // The agent's status line describes the turn the user is now replacing.
+    if (
+      projection.thread.statusText !== undefined &&
+      command.createdBy === "user" &&
+      !automaticWake &&
+      !isNativeMaintenanceCommand(command)
+    ) {
+      const now = yield* DateTime.now;
+      const { statusText: _statusText, ...thread } = projection.thread;
+      const event = yield* emit(
+        events,
+        command,
+      )({
+        type: "thread.metadata-updated",
+        threadId: command.threadId,
+        providerInstanceId: thread.providerInstanceId,
+        occurredAt: now,
+        payload: { ...thread, updatedAt: now },
       });
       projection = applyToProjection(projection, event);
     }

@@ -47,7 +47,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useUiStateStore } from "../../uiStateStore";
 import { type ChatMessage, DEFAULT_INTERACTION_MODE } from "../../types";
-import { AlarmClockIcon, CheckCircle2Icon } from "lucide-react";
+import { ActivityIcon, AlarmClockIcon, CheckCircle2Icon } from "lucide-react";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { newMessageId } from "~/lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -70,6 +70,7 @@ import {
   goalNowItem,
   runStopNowItem,
 } from "./ThreadActivityBanners";
+import type { ThreadNowItem } from "./ThreadNow";
 import { useForceStopThread } from "./useForceStopThread";
 import { useAtomValue } from "@effect/atom-react";
 import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
@@ -594,18 +595,28 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
           onForceStop: () => void forceStop.forceStopThread(activeThread.id, runStop.runId),
         })
       : null;
+  const agentStatusText = activeThreadShell?.statusText;
   const backgroundWorkNow = activeThread
     ? backgroundWorkNowItem({
         environmentId,
         threadId: activeThread.id,
         tasks: activeBackgroundTasks,
         turnItems,
+        statusText: agentStatusText,
         stopDisabled: !canOperateThread || isStoppingBackgroundWork,
         stopping: isStoppingBackgroundWork,
         onStop: handleStopBackgroundWorkStable,
         onOpenThread: onOpenRelatedThreadStable,
       })
     : null;
+  const agentStatusNow: ThreadNowItem | null =
+    activeThread && agentStatusText
+      ? {
+          id: `agent-status:${activeThread.id}`,
+          icon: <ActivityIcon />,
+          title: agentStatusText,
+        }
+      : null;
   // The relative times read the clock; nowMinute re-renders them on the minute.
   const snoozedUntil = activeThreadShell?.snoozedUntil ?? null;
   const settledAt = activeThreadShell?.settledAt ?? null;
@@ -689,7 +700,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     activeBranchMismatchKey,
     // A Stop that went unanswered needs the user; one in progress is the thread's work.
     attentionNow: runStop?.state === "unresponsive" ? runStopNow : childInputNow,
-    workNow: runStop?.state === "stopping" ? runStopNow : backgroundWorkNow,
+    workNow: runStop?.state === "stopping" ? runStopNow : (backgroundWorkNow ?? agentStatusNow),
     childInputNow,
     goalNow,
     handleSwitchCheckoutToThread,

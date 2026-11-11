@@ -311,6 +311,67 @@ const completeAndSnoozeThread = Effect.fn("test.completeAndSnoozeThread")(functi
   return { threadId, completedAt, snoozedUntil };
 });
 
+it.effect(
+  "keeps the agent's status line through agent sends and clears it on the user's next message",
+  () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:status-text");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create-status-text"),
+        threadId,
+        projectId: ProjectId.make("project:status-text"),
+        title: "Status",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      const setStatus = (name: string, statusText: string | null) =>
+        orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make(`status-${name}`),
+          threadId,
+          statusText,
+        });
+      const send = (name: string, createdBy: "user" | "agent", text = "Continue") =>
+        orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`dispatch-${name}`),
+          threadId,
+          messageId: MessageId.make(`dispatch-${name}`),
+          text,
+          attachments: [],
+          dispatchMode: { type: "defer_start" },
+          createdBy,
+          creationSource: createdBy === "user" ? "web" : "mcp",
+        });
+      const status = Effect.gen(function* () {
+        const shell = yield* projections.getThreadShell(threadId);
+        const thread = yield* projections.getThread(threadId);
+        assert.equal(shell?.statusText, thread.statusText);
+        return thread.statusText;
+      });
+
+      yield* setStatus("set", "Migrating 3 of 7 packages");
+      assert.equal(yield* status, "Migrating 3 of 7 packages");
+      yield* send("agent", "agent");
+      yield* send("compact", "user", "/compact");
+      assert.equal(yield* status, "Migrating 3 of 7 packages");
+      yield* send("user", "user");
+      assert.isUndefined(yield* status);
+
+      yield* setStatus("again", "Waiting on CI");
+      yield* setStatus("clear", null);
+      assert.isUndefined(yield* status);
+    }).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("mark unread retires an expired snooze so a dismissed wake stays dismissed", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;

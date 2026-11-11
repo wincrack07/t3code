@@ -22,6 +22,7 @@ import { OpenInPicker } from "./OpenInPicker";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
+import { ThreadPinnedCardsPanel } from "./ThreadPinnedCardsPanel";
 import { ThreadServersPanel } from "./ThreadServersPanel";
 import {
   ThreadDetailsContext,
@@ -236,6 +237,13 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                     ) : null}
                   </div>
                 </ThreadDetailsSection>
+              ) : null}
+
+              {!props.draftId && visible.agentCards ? (
+                <ThreadPinnedCardsPanel
+                  environmentId={props.environmentId}
+                  threadId={props.threadId}
+                />
               ) : null}
 
               {density === "full" && !props.draftId && visible.servers ? (

@@ -7,6 +7,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { THREAD_STATUS_TEXT_MAX_LENGTH } from "./orchestrationV2.ts";
 import { ThreadLinkedPullRequest } from "./threadPullRequest.ts";
 import { ThreadTitleRegeneration } from "./threadTitle.ts";
 
@@ -40,19 +41,32 @@ const ThreadMetadataClientRequestId = TrimmedNonEmptyString.check(Schema.isMaxLe
   )
   .annotate({ description: "Stable idempotency key to reuse when retrying this mutation." });
 
-export const ThreadMetadataMcpAction = Schema.Literals(["rename", "regenerate_title"]);
+const ThreadMetadataStatus = Schema.String.check(
+  Schema.isMaxLength(THREAD_STATUS_TEXT_MAX_LENGTH),
+).annotate({
+  description: `Plain text, at most ${THREAD_STATUS_TEXT_MAX_LENGTH} characters. Empty clears it. Required only when action is set_status.`,
+});
+
+export const ThreadMetadataMcpAction = Schema.Literals([
+  "rename",
+  "regenerate_title",
+  "set_status",
+]);
 export type ThreadMetadataMcpAction = typeof ThreadMetadataMcpAction.Type;
 
 export const ThreadMetadataMcpUpdateInput = Schema.Struct({
   threadId: Schema.optional(ThreadId),
   action: ThreadMetadataMcpAction,
   title: Schema.optional(ThreadMetadataTitle),
+  status: Schema.optional(ThreadMetadataStatus),
   clientRequestId: Schema.optional(ThreadMetadataClientRequestId),
 }).check(
   Schema.makeFilter((input) =>
-    (input.action === "rename") === (input.title !== undefined)
-      ? true
-      : "rename requires title; regenerate_title does not accept one.",
+    (input.action === "rename") !== (input.title !== undefined)
+      ? "Only rename takes title, and rename requires it."
+      : (input.action === "set_status") !== (input.status !== undefined)
+        ? "Only set_status takes status, and set_status requires it."
+        : true,
   ),
 );
 export type ThreadMetadataMcpUpdateInput = typeof ThreadMetadataMcpUpdateInput.Type;
@@ -63,6 +77,7 @@ export const ThreadMetadataMcpUpdateResult = Schema.Struct({
   commandId: CommandId,
   sequence: NonNegativeInt,
   title: Schema.String,
+  statusText: Schema.NullOr(Schema.String),
   titleRegeneration: Schema.NullOr(ThreadTitleRegeneration),
   linkedPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
   updatedAt: IsoDateTime,

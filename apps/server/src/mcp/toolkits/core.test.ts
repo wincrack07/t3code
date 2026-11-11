@@ -289,6 +289,17 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     expect(
       htmlRenderFromToolItem({ toolName: "html_render", output: unpinned.structuredContent }),
     ).toBeUndefined();
+    const unpinnedPlacement = yield* server
+      .callTool({
+        name: "html_render",
+        arguments: { html: "<p>Status</p>", title: "Status", height: 120, placement: "details" },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(unpinnedPlacement.isError).toBe(true);
+    expect(JSON.stringify(unpinnedPlacement.content)).toContain("placement requires pin");
     // Only a full-access thread may have the server read a file for it.
     const byPath = (name: string, caller: McpInvocationContext.McpInvocationScope) =>
       server

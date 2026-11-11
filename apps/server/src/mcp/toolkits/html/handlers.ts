@@ -83,6 +83,11 @@ const handlers = {
           .pipe(Effect.mapError(toFailure));
         return { unpinned: input.pin };
       }
+      if (input.placement !== undefined && input.pin === undefined)
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: "placement requires pin.",
+        });
       if (input.title === undefined || input.height === undefined)
         return yield* new OrchestratorMcpFailure({
           code: "invalid_request",
@@ -96,6 +101,7 @@ const handlers = {
           title: input.title,
           height: input.height,
           pin: input.pin,
+          placement: input.placement,
         })
         .pipe(Effect.mapError(toFailure));
       return {

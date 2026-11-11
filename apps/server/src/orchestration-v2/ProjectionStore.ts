@@ -1631,6 +1631,9 @@ export function threadShellFromProjection(
     ...(projection.thread.pinnedHtmlCards?.length
       ? { pinnedHtmlCards: projection.thread.pinnedHtmlCards }
       : {}),
+    ...(projection.thread.statusText === undefined
+      ? {}
+      : { statusText: projection.thread.statusText }),
     ...(projection.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: projection.thread.linkedPullRequest }),
@@ -1915,6 +1918,9 @@ function shellFromState(input: {
     ...(input.state.thread.pinnedHtmlCards?.length
       ? { pinnedHtmlCards: input.state.thread.pinnedHtmlCards }
       : {}),
+    ...(input.state.thread.statusText === undefined
+      ? {}
+      : { statusText: input.state.thread.statusText }),
     ...(input.state.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: input.state.thread.linkedPullRequest }),

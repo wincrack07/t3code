@@ -1,4 +1,4 @@
-import { CommandId, type ThreadId } from "@t3tools/contracts";
+import { CommandId, type PinnedHtmlCardPlacement, type ThreadId } from "@t3tools/contracts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { isNetworkPath } from "@t3tools/shared/path";
@@ -155,6 +155,7 @@ export class HtmlRender extends Context.Service<
         readonly title: string;
         readonly height: number;
         readonly pin?: string | undefined;
+        readonly placement?: PinnedHtmlCardPlacement | undefined;
       },
     ) => Effect.Effect<
       HtmlRenderReference,
@@ -512,6 +513,7 @@ const make = Effect.gen(function* () {
       readonly title: string;
       readonly height: number;
       readonly pin?: string | undefined;
+      readonly placement?: PinnedHtmlCardPlacement | undefined;
     },
   ) {
     const source = yield* readSource(input);
@@ -571,7 +573,13 @@ const make = Effect.gen(function* () {
                         threadId: input.threadId,
                         htmlCard: {
                           id: input.pin!,
-                          card: { ...card, id: input.pin! },
+                          card: {
+                            ...card,
+                            id: input.pin!,
+                            ...(input.placement === undefined
+                              ? {}
+                              : { placement: input.placement }),
+                          },
                         },
                       })
                       .pipe(Effect.mapError((cause) => new HtmlRenderStoreError({ cause })));

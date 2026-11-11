@@ -173,6 +173,8 @@ export function backgroundWorkNowItem(input: {
   readonly threadId: ThreadId;
   readonly tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>;
   readonly turnItems: ThreadStructure["turnItems"];
+  /** The agent's own status line, which names the work better than a count. */
+  readonly statusText?: string | undefined;
   readonly stopDisabled: boolean;
   readonly stopping: boolean;
   readonly onStop: () => Promise<void>;
@@ -215,14 +217,15 @@ export function backgroundWorkNowItem(input: {
   return {
     id: `background-work:${input.threadId}`,
     icon: rows.every(isCommand) ? <TerminalIcon /> : <CircleDashedIcon />,
-    title:
-      only && typeof only.label !== "string" && only.task.label !== only.task.kind ? (
-        <>
-          {presentation.waiting ? "Waiting" : "Running"} · {only.label}
-        </>
-      ) : (
-        presentation.title
-      ),
+    title: input.statusText ? (
+      input.statusText
+    ) : only && typeof only.label !== "string" && only.task.label !== only.task.kind ? (
+      <>
+        {presentation.waiting ? "Waiting" : "Running"} · {only.label}
+      </>
+    ) : (
+      presentation.title
+    ),
     description: only ? (
       only.activity
     ) : newest ? (

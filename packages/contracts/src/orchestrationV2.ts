@@ -87,13 +87,25 @@ import {
 } from "./providerRuntime.ts";
 import { ThreadTokenUsageSnapshot } from "./providerRuntime.ts";
 
+/** Where a pinned card shows: a right-panel tab (the default) or a Thread Details section. */
+export const PinnedHtmlCardPlacement = Schema.Literals(["panel", "details"]);
+export type PinnedHtmlCardPlacement = typeof PinnedHtmlCardPlacement.Type;
+
 const PinnedHtmlCard = Schema.Struct({
   id: Schema.String.check(Schema.isPattern(HTML_RENDER_PIN_ID_PATTERN)),
   attachmentId: Schema.String,
   title: Schema.String,
   height: Schema.Number,
   heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
+  placement: Schema.optional(PinnedHtmlCardPlacement),
 });
+
+export const THREAD_STATUS_TEXT_MAX_LENGTH = 120;
+/** One line an agent sets on its own thread's status line. */
+export const ThreadStatusText = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(THREAD_STATUS_TEXT_MAX_LENGTH),
+  Schema.isPattern(/^[^\p{Cc}]*$/u),
+);
 
 export const OrchestrationV2Actor = Schema.Literals(["user", "agent", "system"]);
 export type OrchestrationV2Actor = typeof OrchestrationV2Actor.Type;
@@ -462,6 +474,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
+  statusText: Schema.optional(ThreadStatusText),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -2118,6 +2131,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
+  statusText: Schema.optional(ThreadStatusText),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -3099,6 +3113,8 @@ export const OrchestrationV2Command = Schema.Union([
         card: Schema.NullOr(PinnedHtmlCard),
       }),
     ),
+    /** Set (string) or clear (null) the agent's status line; absent leaves it unchanged. */
+    statusText: Schema.optional(Schema.NullOr(ThreadStatusText)),
     title: Schema.optional(TrimmedNonEmptyString),
     regenerateTitle: Schema.optional(Schema.Boolean),
     branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),

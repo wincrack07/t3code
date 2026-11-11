@@ -79,7 +79,24 @@ function metadataCommand(input: {
         threadId: input.threadId,
         regenerateTitle: true,
       };
+    case "set_status":
+      return {
+        type: "thread.metadata.update",
+        commandId: input.commandId,
+        threadId: input.threadId,
+        statusText: normalizeStatusText(input.update.status ?? ""),
+      };
   }
+}
+
+/** One plain line: whitespace runs collapse and control characters drop, so it renders as typed. */
+function normalizeStatusText(status: string): string | null {
+  return (
+    status
+      .replace(/\p{Cc}+/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim() || null
+  );
 }
 
 function resultFromThread(input: {
@@ -88,7 +105,7 @@ function resultFromThread(input: {
   readonly sequence: number;
   readonly thread: Pick<
     OrchestrationV2AppThread,
-    "id" | "title" | "titleRegeneration" | "linkedPullRequest" | "updatedAt"
+    "id" | "title" | "statusText" | "titleRegeneration" | "linkedPullRequest" | "updatedAt"
   >;
 }): ThreadMetadataMcpUpdateResult {
   return {
@@ -97,6 +114,7 @@ function resultFromThread(input: {
     commandId: input.commandId,
     sequence: input.sequence,
     title: input.thread.title,
+    statusText: input.thread.statusText ?? null,
     titleRegeneration:
       input.thread.titleRegeneration === undefined || input.thread.titleRegeneration === null
         ? null
@@ -124,6 +142,16 @@ const make = Effect.gen(function* () {
       );
     }
 
+    if (
+      input.action === "set_status" &&
+      input.threadId !== undefined &&
+      input.threadId !== scope.thread?.threadId
+    ) {
+      return yield* failure(
+        "invalid_request",
+        "set_status only changes your own thread's status. Omit threadId.",
+      );
+    }
     const threadId = input.threadId ?? scope.thread?.threadId;
     if (threadId === undefined) {
       return yield* failure(

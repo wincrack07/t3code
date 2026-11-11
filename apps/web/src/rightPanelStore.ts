@@ -129,10 +129,7 @@ interface RightPanelStoreState {
     ref: ScopedThreadRef,
     kind: Exclude<RightPanelKind, "html-card" | "file" | "terminal" | "pull-request" | "side-chat">,
   ) => void;
-  reconcileHtmlCards: (
-    ref: ScopedThreadRef,
-    cards: readonly (HtmlRenderReference & { id: string })[],
-  ) => void;
+  reconcileHtmlCards: (ref: ScopedThreadRef, cards: readonly PinnedHtmlCardRef[]) => void;
   openHtmlCard: (ref: ScopedThreadRef, card: HtmlRenderReference & { id: string }) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
@@ -1290,12 +1287,19 @@ export function selectSelectedRightPanelSurface(
   return state.surfaces.find((surface) => surface.id === state.activeSurfaceId) ?? null;
 }
 
+type PinnedHtmlCardRef = HtmlRenderReference & {
+  readonly id: string;
+  readonly placement?: "panel" | "details" | undefined;
+};
+
+/** Panel cards open as tabs once; a details card keeps a tab only while the user has one open. */
 export function reconcileHtmlCards(
   current: ThreadRightPanelState,
-  cards: readonly (HtmlRenderReference & { id: string })[],
+  allCards: readonly PinnedHtmlCardRef[],
 ): ThreadRightPanelState {
   const known = current.knownHtmlCardIds ?? [];
-  const byId = new Map(cards.map((card) => [`html-card:${card.id}`, card]));
+  const cards = allCards.filter((card) => card.placement !== "details");
+  const byId = new Map(allCards.map((card) => [`html-card:${card.id}`, card]));
   const surfaces = current.surfaces.flatMap<RightPanelSurface>((surface) => {
     if (surface.kind !== "html-card") return [surface];
     const card = byId.get(surface.id);

@@ -101,6 +101,7 @@ import { compactEditorInsets } from "./compactEditorInsets";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { ComposerPopoverAnchor } from "./ComposerPopoverAnchor";
 import { ComposerQueuedEditAttachments } from "./ComposerQueuedEdit";
+import { ComposerPolishAction } from "./ComposerPolishAction";
 import { usePromptPolish } from "./use-prompt-polish";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import type { ComposerEnvironmentCandidate } from "@t3tools/client-runtime/composerThreadItems";
@@ -1102,6 +1103,18 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 }
               >
                 {modelControl}
+                {isExpanded ? (
+                  <ComposerPolishAction
+                    size={usesLargeControls ? "large" : "regular"}
+                    disabled={
+                      !promptPolish.available ||
+                      isSubmissionLocked ||
+                      draftMessage.trim().length === 0
+                    }
+                    running={promptPolish.running}
+                    onPress={() => void promptPolish.polish(draftMessage)}
+                  />
+                ) : null}
                 <ComposerDictationStartAction
                   size={usesLargeControls ? "large" : "regular"}
                   state={voiceInput.state}

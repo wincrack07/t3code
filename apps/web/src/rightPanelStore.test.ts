@@ -1262,4 +1262,17 @@ it("reconciles cards in place, preserves focus and respects local close until ex
   }).byThreadKey[scopedThreadKey(refA)]!;
   expect(reconcileHtmlCards(restored, [first]).surfaces).toEqual(initial.surfaces);
   expect(reconcileHtmlCards(updated, []).surfaces).toEqual(initial.surfaces);
+  const details = { ...first, id: "status", placement: "details" as const };
+  expect(reconcileHtmlCards(initial, [details])).toBe(initial);
+  const opened = {
+    ...initial,
+    surfaces: [
+      ...initial.surfaces,
+      { id: "html-card:status", kind: "html-card", card: details } as const,
+    ],
+  };
+  expect(
+    reconcileHtmlCards(opened, [{ ...details, attachmentId: "v2" }]).surfaces[1],
+  ).toMatchObject({ card: { attachmentId: "v2" } });
+  expect(reconcileHtmlCards(opened, []).surfaces).toEqual(initial.surfaces);
 });
