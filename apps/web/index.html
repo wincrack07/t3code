@@ -421,6 +421,41 @@
         }
       })();
     </script>
+    <script>
+      (() => {
+        try {
+          const root = document.documentElement;
+          const cached = JSON.parse(localStorage.getItem("t3code:sidebar-tint:v1") ?? "null");
+          const theme = JSON.stringify([
+            root.dataset.themeId ?? "",
+            root.classList.contains("dark"),
+            localStorage.getItem("t3code:themes:v1"),
+            localStorage.getItem("t3code:theme-halves:v1"),
+          ]);
+          if (cached?.path !== location.pathname || cached?.theme !== theme || !cached?.variables)
+            return;
+          const keys = [
+            "--sidebar",
+            "--sidebar-control-surface",
+            "--sidebar-row-hover",
+            "--sidebar-row-active",
+            "--sidebar-row-selected",
+            "--sidebar-border",
+          ];
+          if (
+            !keys.every(
+              (key) =>
+                typeof cached.variables[key] === "string" &&
+                /^#[0-9a-f]{6}$/i.test(cached.variables[key]),
+            )
+          )
+            return;
+          for (const key of keys)
+            root.style.setProperty(`--startup${key.slice(1)}`, cached.variables[key]);
+          root.dataset.sidebarTintStartup = "true";
+        } catch {}
+      })();
+    </script>
     <style>
       html,
       body,

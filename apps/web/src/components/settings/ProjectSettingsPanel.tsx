@@ -1,3 +1,5 @@
+import { SidebarColorPicker } from "../sidebar/SidebarColorPicker";
+import { useProjectSidebarColor } from "../../hooks/useProjectSidebarColor";
 import { useComposerMenuState } from "../chat/useComposerMenuState";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
@@ -261,6 +263,7 @@ function ProjectDetail({
   allMembers: ReadonlyArray<SidebarProjectGroupMember>;
   hasOtherMembers: boolean;
 }) {
+  const sidebarColor = useProjectSidebarColor();
   const navigate = useNavigate({ from: "/settings" });
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { environments } = useEnvironments();
@@ -557,6 +560,17 @@ function ProjectDetail({
                   if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                   if (event.key === "Enter") event.currentTarget.blur();
                 }}
+              />
+            }
+          />
+          <SettingsRow
+            title="Sidebar colour"
+            description="Tint the sidebar while this project is focused. Default follows its group colour."
+            control={
+              <SidebarColorPicker
+                value={sidebarColor.colorFor(group)}
+                disabled={!sidebarColor.canSet(group.memberProjects)}
+                onChange={(color) => void sidebarColor.setColor(group.memberProjects, color)}
               />
             }
           />

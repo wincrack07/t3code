@@ -2903,3 +2903,27 @@ html[data-theme-id="claude"] {
 .composer-quiet-row [data-chat-provider-model-picker-label] {
   color: var(--foreground);
 }
+
+html[data-sidebar-tint-startup] [data-app-sidebar] {
+  --sidebar: var(--startup-sidebar);
+  --sidebar-control-surface: var(--startup-sidebar-control-surface);
+  --sidebar-row-hover: var(--startup-sidebar-row-hover);
+  --sidebar-row-active: var(--startup-sidebar-row-active);
+  --sidebar-row-selected: var(--startup-sidebar-row-selected);
+  --sidebar-border: var(--startup-sidebar-border);
+}
+
+html:not([data-motion="reduce"])
+  [data-app-sidebar]
+  :is([data-sidebar="sidebar"], [data-sidebar-row], [data-sidebar="footer"]) {
+  transition-property: background-color, border-color;
+  transition-duration: 150ms;
+}
+
+[data-app-sidebar] {
+  --contrast-sidebar-border: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--sidebar-border) var(--appearance-contrast-base), transparent),
+    var(--sidebar-foreground) var(--appearance-contrast-border-boost)
+  );
+}

@@ -46,6 +46,21 @@ Settings that are environment-wide stay read-only while a project is selected. W
 targets disagree, a control shows **Mixed** until you choose one value. Appearance, keyboard,
 and other phone-only settings ignore the filter.
 
+## Sidebar colour
+
+On web and desktop, choose **Sidebar colour** in a project's settings or its
+sidebar context menu. Pick a palette colour or enter a custom hex colour.
+The sidebar takes a subtle tint while that project's thread or draft is focused,
+including when you focus a different split column. Conversation panels stay unchanged.
+
+A project's own colour takes priority over its group's colour. **Default** follows
+the group, or leaves the sidebar untinted when the group also uses Default.
+Edit a group or open its action menu to set its colour. Header markers remain
+visible regardless of which project is active.
+
+Project colours are saved on the selected project environments and shared with
+other clients connected to them. Group colours stay with this client's groups.
+
 ## Pin and archive projects
 
 Pinned projects come first in the project pickers: the project picker on a new thread, the

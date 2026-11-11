@@ -37,6 +37,7 @@ export interface SidebarProjectGroupMember extends Project {
 
 export interface SidebarProjectSnapshot extends Project {
   projectKey: string;
+  sidebarColor?: string | null;
   displayName: string;
   groupedProjectCount: number;
   environmentPresence: EnvironmentPresence;
@@ -243,4 +244,21 @@ export function buildSidebarProjectPickerEntries(input: {
   const preferred = entries.find((entry) => entry.isPreferred);
   if (!preferred) return entries;
   return [preferred, ...entries.filter((entry) => entry !== preferred)];
+}
+
+export function withSidebarProjectColors(
+  groups: readonly SidebarProjectSnapshot[],
+  configs: ReadonlyMap<
+    EnvironmentId,
+    { settings: Pick<import("@t3tools/contracts").ServerSettings, "projectSettingsOverrides"> }
+  >,
+  folders: readonly import("./projectFolders").ProjectFolder[],
+): SidebarProjectSnapshot[] {
+  return groups.map((group) => ({
+    ...group,
+    sidebarColor:
+      configs.get(group.environmentId)?.settings.projectSettingsOverrides[group.id]?.sidebarColor ??
+      folders.find((folder) => folder.projectKeys.includes(group.projectKey))?.sidebarColor ??
+      null,
+  }));
 }
