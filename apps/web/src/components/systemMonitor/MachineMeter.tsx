@@ -16,7 +16,9 @@ const DOT: Record<MachineHealthLevel | "unknown", string> = {
 };
 
 export function MachineHealthDot({ level }: { level: MachineHealthLevel | "unknown" }) {
-  return <span aria-hidden className={cn("inline-flex size-2 shrink-0 rounded-full", DOT[level])} />;
+  return (
+    <span aria-hidden className={cn("inline-flex size-2 shrink-0 rounded-full", DOT[level])} />
+  );
 }
 
 /** One labelled share bar; the activity board and the system monitor both use it. */
@@ -29,8 +31,15 @@ export function MachineMeter(props: {
   return (
     <div className="flex min-w-0 items-center gap-2 text-xs">
       <span className="w-14 shrink-0 text-muted-foreground">{props.label}</span>
-      <MachineShareBar label={props.label} share={props.share} level={props.level} detail={props.detail} />
-      <span className="min-w-8 shrink-0 text-right text-muted-foreground tabular-nums">{props.detail}</span>
+      <MachineShareBar
+        label={props.label}
+        share={props.share}
+        level={props.level}
+        detail={props.detail}
+      />
+      <span className="min-w-8 shrink-0 text-right text-muted-foreground tabular-nums">
+        {props.detail}
+      </span>
     </div>
   );
 }

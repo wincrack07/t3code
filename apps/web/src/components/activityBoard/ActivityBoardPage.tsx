@@ -329,4 +329,3 @@ function CapacityMeters({ capacity }: { capacity: HostCapacity }) {
     </div>
   );
 }
-

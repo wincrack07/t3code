@@ -35,7 +35,11 @@ const WINDOWS = [
 ] as const;
 
 const clock = (at: number) =>
-  new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  new Date(at).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 
 export function SystemMonitorSettingsPanel() {
   const { environment } = useSettingsScope();
@@ -287,7 +291,9 @@ function UsageSection({
       }
     >
       {details === undefined ? (
-        <Notice title="Sampling processes">The first process list arrives within a few seconds</Notice>
+        <Notice title="Sampling processes">
+          The first process list arrives within a few seconds
+        </Notice>
       ) : (
         <>
           <ProjectList details={details} environmentId={environmentId} />
@@ -404,7 +410,12 @@ function UsageRow(props: {
       )}
     >
       <span className="flex min-w-0 flex-col">
-        <span className={cn("truncate", props.indent ? "text-foreground" : "font-medium text-foreground")}>
+        <span
+          className={cn(
+            "truncate",
+            props.indent ? "text-foreground" : "font-medium text-foreground",
+          )}
+        >
           {props.name}
         </span>
         <span className="truncate text-xs text-muted-foreground">{props.meta}</span>
@@ -474,7 +485,9 @@ function ProcessList(props: {
                     label={`${p.name} ${props.sort}`}
                     share={(props.sort === "memory" ? p.rss : p.cpu) / top}
                     level="ok"
-                    detail={props.sort === "memory" ? formatMachineBytes(p.rss) : `${p.cpu.toFixed(1)}%`}
+                    detail={
+                      props.sort === "memory" ? formatMachineBytes(p.rss) : `${p.cpu.toFixed(1)}%`
+                    }
                   />
                 </span>
               </span>

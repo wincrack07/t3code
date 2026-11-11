@@ -30,7 +30,9 @@ const WIDTH = 600;
 const HEIGHT = 160;
 
 function formatWindow(ms: number) {
-  return ms >= 3_600_000 ? `${Math.round(ms / 3_600_000)} h ago` : `${Math.round(ms / 60_000)} min ago`;
+  return ms >= 3_600_000
+    ? `${Math.round(ms / 3_600_000)} h ago`
+    : `${Math.round(ms / 60_000)} min ago`;
 }
 
 /** History is mixed resolution (2 s recent, 5 min older), so points sit on a time axis. */

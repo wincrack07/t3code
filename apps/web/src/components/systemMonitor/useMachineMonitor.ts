@@ -8,7 +8,9 @@ import { useEnvironmentScope } from "../../state/session";
 export function useMachineMonitor(id: EnvironmentId | null, detail: boolean) {
   const allowed = useEnvironmentScope(id, AuthOrchestrationReadScope);
   const query = useEnvironmentQuery(
-    id && allowed ? serverEnvironment.machineMonitor({ environmentId: id, input: { detail } }) : null,
+    id && allowed
+      ? serverEnvironment.machineMonitor({ environmentId: id, input: { detail } })
+      : null,
   );
   return { ...query, allowed };
 }

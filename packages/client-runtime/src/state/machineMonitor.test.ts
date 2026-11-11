@@ -72,9 +72,9 @@ it("states machine health from the worst metric past its limit", () => {
   const healthy = presentMachineHealth(sample({}));
   expect(healthy).toMatchObject({ level: "ok", headline: "Healthy", cpu: 0.3, memory: 0.5 });
   expect(healthy.disk).toBeCloseTo(0.6);
-  expect(presentMachineHealth(sample({ cpu: null, diskFree: null, diskTotal: null }))).toMatchObject(
-    { level: "ok", cpu: null, disk: null },
-  );
+  expect(
+    presentMachineHealth(sample({ cpu: null, diskFree: null, diskTotal: null })),
+  ).toMatchObject({ level: "ok", cpu: null, disk: null });
   expect(presentMachineHealth(sample({ cpu: 80 }))).toMatchObject({
     level: "busy",
     headline: "CPU busy",

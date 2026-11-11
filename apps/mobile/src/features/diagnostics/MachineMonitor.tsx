@@ -162,7 +162,10 @@ function Meter(props: {
         accessibilityValue={{ min: 0, max: 100, now: percent, text: props.detail }}
         className="h-1.5 overflow-hidden rounded-full bg-subtle"
       >
-        <View className={`h-full rounded-full ${BAR[props.level]}`} style={{ width: `${percent}%` }} />
+        <View
+          className={`h-full rounded-full ${BAR[props.level]}`}
+          style={{ width: `${percent}%` }}
+        />
       </View>
       <Text textRole="footnote" className="text-foreground-muted" style={TABULAR} numberOfLines={1}>
         {props.detail}
