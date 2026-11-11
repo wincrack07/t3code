@@ -355,6 +355,10 @@
       "types": "./src/state/threadExecution.ts",
       "default": "./src/state/threadExecution.ts"
     },
+    "./state/open-questions": {
+      "types": "./src/state/openQuestions.ts",
+      "default": "./src/state/openQuestions.ts"
+    },
     "./state/pending-user-input": {
       "types": "./src/state/pendingUserInput.ts",
       "default": "./src/state/pendingUserInput.ts"

@@ -4,6 +4,7 @@ import {
   EnvironmentId,
   type OrchestrationV2ServerCommand,
   ProviderInstanceId,
+  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -48,6 +49,65 @@ it.effect("sets the caller's own status as one plain line and clears it when emp
         command.type === "thread.metadata.update" ? command.statusText : command.type,
       ),
       ["Migrating 3 of 7", null],
+    );
+  }).pipe(
+    Effect.provide(
+      ThreadMetadataMcpService.layer.pipe(
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadShell: () => Effect.succeed(shell),
+            dispatch: (command) => {
+              dispatched.push(command);
+              return Effect.succeed({ sequence: dispatched.length, storedEvents: [] });
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+});
+
+it.effect("attaches declared questions to the running turn and resolves only known ones", () => {
+  const dispatched: Array<OrchestrationV2ServerCommand> = [];
+  const runId = RunId.make("run:questions");
+  const shell = {
+    ...McpToolAccessTestkit.liveThreadShell(threadId, { activeRunId: runId }),
+    openQuestions: [
+      {
+        id: "merge",
+        text: "Merge now?",
+        suggestions: ["Merge", "Wait"],
+        runId,
+        status: "open" as const,
+        createdAt: "2026-11-11T00:00:00.000Z",
+      },
+    ],
+  };
+  return Effect.gen(function* () {
+    const service = yield* ThreadMetadataMcpService.ThreadMetadataMcpService;
+    yield* service.openQuestions(scope, {
+      action: "declare",
+      questions: [{ id: "merge", text: "Merge now?", suggestions: ["Merge", "Wait"] }],
+    });
+    const unknown = yield* service
+      .openQuestions(scope, { action: "resolve", ids: ["missing"] })
+      .pipe(Effect.flip);
+    assert.equal(unknown.code, "invalid_request");
+    const resolved = yield* service.openQuestions(scope, { action: "resolve", ids: ["merge"] });
+    assert.deepEqual(resolved.open, ["merge"]);
+    assert.deepEqual(
+      dispatched.map((command) =>
+        command.type === "thread.metadata.update" ? command.openQuestions : command.type,
+      ),
+      [
+        {
+          action: "declare",
+          runId,
+          questions: [{ id: "merge", text: "Merge now?", suggestions: ["Merge", "Wait"] }],
+        },
+        { action: "set_status", updates: [{ id: "merge", status: "resolved" }] },
+      ],
     );
   }).pipe(
     Effect.provide(

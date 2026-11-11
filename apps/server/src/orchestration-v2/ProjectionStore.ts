@@ -1647,6 +1647,9 @@ export function threadShellFromProjection(
     ...(projection.thread.statusText === undefined
       ? {}
       : { statusText: projection.thread.statusText }),
+    ...(projection.thread.openQuestions?.length
+      ? { openQuestions: projection.thread.openQuestions }
+      : {}),
     ...(projection.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: projection.thread.linkedPullRequest }),
@@ -1934,6 +1937,9 @@ function shellFromState(input: {
     ...(input.state.thread.statusText === undefined
       ? {}
       : { statusText: input.state.thread.statusText }),
+    ...(input.state.thread.openQuestions?.length
+      ? { openQuestions: input.state.thread.openQuestions }
+      : {}),
     ...(input.state.thread.linkedPullRequest === undefined
       ? {}
       : { linkedPullRequest: input.state.thread.linkedPullRequest }),
