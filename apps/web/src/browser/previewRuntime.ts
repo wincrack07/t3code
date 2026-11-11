@@ -1,6 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, PreviewRuntime, PreviewSessionSnapshot } from "@t3tools/contracts";
 
+import { requiresEnvironmentBrowser } from "./browserTargetResolver";
+
 import { isElectron } from "~/env";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -10,7 +12,11 @@ import {
   useEnvironmentSupportsServerBrowser,
 } from "~/state/entities";
 
-export function previewRuntimeFor(environmentId: EnvironmentId): PreviewRuntime | undefined {
+export function previewRuntimeFor(
+  environmentId: EnvironmentId,
+  url?: string,
+): PreviewRuntime | undefined {
+  if (url !== undefined && requiresEnvironmentBrowser(environmentId, url)) return "server";
   if (!readEnvironmentSupportsServerBrowser(environmentId)) return undefined;
   if (
     isPreviewSupportedInRuntime() &&

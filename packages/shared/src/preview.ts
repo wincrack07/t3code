@@ -1,4 +1,4 @@
-import type { BrowserSearchEngine } from "@t3tools/contracts";
+import type { BrowserNavigationTarget, BrowserSearchEngine } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 import { isLocalLoopbackHost } from "./hostClassification.ts";
@@ -216,4 +216,29 @@ export function normalizePreviewUrl(rawUrl: string): string {
     });
   }
   return parsed.href;
+}
+
+export function environmentPortTargetFromUrl(
+  rawUrl: string,
+): Extract<BrowserNavigationTarget, { readonly kind: "environment-port" }> | null {
+  let url: URL;
+  try {
+    url = new URL(normalizePreviewUrl(rawUrl));
+  } catch {
+    return null;
+  }
+  if (!isLoopbackHost(url.hostname)) return null;
+  return {
+    kind: "environment-port",
+    port: Number(url.port || (url.protocol === "https:" ? 443 : 80)),
+    protocol: url.protocol === "https:" ? "https" : "http",
+    path: `${url.pathname}${url.search}${url.hash}`,
+  };
+}
+
+export function environmentPortTargetUrl(
+  target: Extract<BrowserNavigationTarget, { readonly kind: "environment-port" }>,
+): string {
+  const path = target.path ?? "/";
+  return `${target.protocol ?? "http"}://localhost:${target.port}${path.startsWith("/") ? path : `/${path}`}`;
 }

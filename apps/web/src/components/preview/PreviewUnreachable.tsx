@@ -1,3 +1,4 @@
+import { environmentPortTargetFromUrl } from "@t3tools/shared/preview";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -8,6 +9,7 @@ interface Props {
   url: string;
   code: number;
   description: string;
+  environmentLabel?: string | undefined;
   onReload: () => void;
   move?: { readonly label: string; readonly onMove: () => void };
 }
@@ -51,9 +53,21 @@ export function PreviewFileNotShown({
   );
 }
 
-export function PreviewUnreachable({ url, code, description, onReload, move }: Props) {
+export function PreviewUnreachable({
+  url,
+  code,
+  description,
+  onReload,
+  move,
+  environmentLabel,
+}: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const host = safeHost(url) ?? url;
+  const port = environmentPortTargetFromUrl(url);
+  const refusedPort =
+    environmentLabel && port && (code === -102 || description === "ERR_CONNECTION_REFUSED")
+      ? `Nothing is listening on port ${port.port} in ${environmentLabel}`
+      : null;
   const friendly = describePreviewError(description);
   const errorLabel = description.length > 0 ? description : `ERR_${Math.abs(code) || "FAILED"}`;
 
@@ -62,10 +76,16 @@ export function PreviewUnreachable({ url, code, description, onReload, move }: P
       <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 py-12 sm:py-16">
         <ErrorIcon className="mb-6 size-12 text-muted-foreground/70" />
         <h1 className="mb-3 text-2xl font-semibold leading-tight text-foreground">
-          This site can&rsquo;t be reached
+          {refusedPort ?? "This site can’t be reached"}
         </h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-semibold text-foreground">{host}</span>: {friendly}.
+          {refusedPort ? (
+            "Start the dev server in that environment, then reload."
+          ) : (
+            <>
+              <span className="font-semibold text-foreground">{host}</span>: {friendly}.
+            </>
+          )}
         </p>
 
         {showDetails ? (

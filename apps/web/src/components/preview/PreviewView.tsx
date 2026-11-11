@@ -41,7 +41,10 @@ import {
   updatePreviewServerSnapshot,
   useThreadPreviewState,
 } from "~/previewStateStore";
-import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
+import {
+  requiresEnvironmentBrowser,
+  resolveDiscoveredServerUrl,
+} from "~/browser/browserTargetResolver";
 import { useEnvironmentSupportsServerBrowser } from "~/state/entities";
 import {
   useEnvironment,
@@ -244,7 +247,11 @@ export function PreviewView({
       rememberPreviewUrl(threadRef, resolvedUrl);
       return true;
     }
-    if (runtimeTabId && previewBridge) {
+    const needsEnvironmentBrowser = requiresEnvironmentBrowser(
+      threadRef.environmentId,
+      resolvedUrl,
+    );
+    if (!needsEnvironmentBrowser && runtimeTabId && previewBridge) {
       await previewBridge.navigate(runtimeTabId, resolvedUrl);
       rememberPreviewUrl(threadRef, resolvedUrl);
       return true;
@@ -260,12 +267,20 @@ export function PreviewView({
         });
       }
     }
+    if (result._tag === "Success" && needsEnvironmentBrowser) {
+      useRightPanelStore.getState().openBrowser(threadRef, result.value.tabId);
+      if (tabId && snapshot)
+        await closePreviewSession({ closePreview, snapshot, tabId, threadRef });
+    }
     return result._tag === "Success";
   };
 
   const handleSubmitUrl = async (next: string) => {
     try {
-      const resolved = resolveAddressBarInput(next, resolveSearchUrlTemplate(getClientSettings()));
+      const resolved = resolveDiscoveredServerUrl(
+        threadRef.environmentId,
+        resolveAddressBarInput(next, resolveSearchUrlTemplate(getClientSettings())),
+      );
       if (await navigateToResolvedUrl(resolved)) {
         recordVisitForThread(threadRef, resolved);
       }
@@ -919,6 +934,7 @@ export function PreviewView({
       ) : null}
       <PreviewChromeRow
         url={url}
+        environmentLabel={isServerTab ? environmentLabel : undefined}
         loading={loading || serverStreamPending}
         canGoBack={canGoBack && !serverInputDisabled}
         canGoForward={canGoForward && !serverInputDisabled}
@@ -1087,6 +1103,7 @@ export function PreviewView({
               url={navStatus.url}
               code={navStatus.code}
               description={navStatus.description}
+              environmentLabel={serverOwnsRendering ? environmentLabel : undefined}
               onReload={handleRefresh}
               {...(moveTarget === "server"
                 ? { move: { label: moveLabel, onMove: () => void handleMoveTab() } }
