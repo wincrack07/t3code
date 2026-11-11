@@ -2,6 +2,8 @@ import {
   McpCapabilityUnavailableError,
   OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
+  PrReviewError,
+  PR_REVIEW_EXECUTION_SHIPPED,
   PositiveInt,
   PullRequestReviewGuide,
   PullRequestReviewGuideRun,
@@ -20,6 +22,7 @@ import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as PullRequestReviewGuideService from "../../../pullRequest/PullRequestReviewGuideService.ts";
+import * as PrReviewBotService from "../../../prReviewBot/PrReviewBotService.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
@@ -178,6 +181,7 @@ export class PullRequestGuideFailedError extends Schema.TaggedError<PullRequestG
 
 export const PullRequestToolError = Schema.Union([
   OrchestratorMcpFailure,
+  PrReviewError,
   McpCapabilityUnavailableError,
   PullRequestUrlInvalidError,
   PullRequestTargetIncompleteError,
@@ -401,6 +405,35 @@ const UnwatchPullRequestTool = Tool.make("unwatch_pull_request", {
   .annotate(Tool.OpenWorld, false)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromSubagents);
 
+export const RequestPullRequestReviewResult = Schema.Struct({
+  repository: Schema.String,
+  number: Schema.Int,
+  headSha: Schema.String,
+  status: Schema.String,
+});
+
+const RequestPullRequestReviewTool = Tool.make("request_pr_review", {
+  description:
+    "Have this environment's PR review bot review a PR (linked to `threadId`, or `url`) and post the review on GitHub. Returns once started. Use only when the user asks for a T3 or bot review; to review a PR yourself, read its diff.",
+  parameters: Schema.Struct({
+    threadId: Schema.optional(ThreadId),
+    url: Schema.optional(Schema.String),
+    focus: Schema.optional(Schema.String),
+  }),
+  success: RequestPullRequestReviewResult,
+  failure: Schema.Union([PullRequestToolError, PrReviewError]),
+  dependencies: [...dependencies, PrReviewBotService.PrReviewBotService],
+})
+  .annotate(Tool.Title, "Request PR review")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.OpenWorld, true)
+  .annotate(
+    McpSchema.EnabledWhen,
+    () => PR_REVIEW_EXECUTION_SHIPPED && McpInvocationContext.hiddenFromSubagents(),
+  );
+
 const GuideTarget = Schema.Struct({
   url: PullRequestTargetInput.fields.url,
   repository: PullRequestTargetInput.fields.repository,
@@ -476,4 +509,5 @@ export const PullRequestsToolkit = Toolkit.make(
   UnwatchPullRequestTool,
   WritePullRequestGuidesTool,
   ReadPullRequestGuideTool,
+  RequestPullRequestReviewTool,
 );

@@ -247,6 +247,7 @@ import type { TelemetryOwner } from "./telemetry/Identify.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as TriageService from "./triage/TriageService.ts";
+import * as PrReviewBotService from "./prReviewBot/PrReviewBotService.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import * as PromptCompletion from "./promptCompletion/PromptCompletion.ts";
@@ -1560,6 +1561,7 @@ export const layerWsRpc = (
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const triage = yield* TriageService.TriageService;
+      const prReviews = yield* PrReviewBotService.PrReviewBotService;
       const hostResources = yield* HostResources.HostResources;
       const systemMonitor = yield* SystemMonitor.SystemMonitor;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
@@ -2760,6 +2762,11 @@ export const layerWsRpc = (
         [WS_METHODS.serverPolishPrompt]: (input) => promptPolish.polish(input),
         [WS_METHODS.serverCompletePrompt]: (input) => promptCompletion.complete(input),
         [WS_METHODS.serverPrepareTriage]: (input) => triage.prepare(input),
+        [WS_METHODS.prReviewsGetState]: () => prReviews.getState,
+        [WS_METHODS.prReviewsUpdateConfig]: (input) => prReviews.updateConfig(input),
+        [WS_METHODS.prReviewsSetPrivateKey]: (input) => prReviews.setPrivateKey(input.privateKey),
+        [WS_METHODS.prReviewsRequest]: (input) => prReviews.request(input),
+        [WS_METHODS.prReviewsRerun]: (input) => prReviews.rerun(input.recordId),
         [WS_METHODS.serverSignalProcess]: (input) => processDiagnostics.signal(input),
         [WS_METHODS.serverReportClientActivity]: (input, metadata) =>
           Ref.update(rpcClientIds, (clientIds) => {

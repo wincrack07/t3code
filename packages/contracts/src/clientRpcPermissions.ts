@@ -68,6 +68,12 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
 
   // Starts an agent session on this environment that can read its logs and database.
   [WS_METHODS.serverPrepareTriage]: AuthOrchestrationOperateScope,
+  // Review settings choose which GitHub identity posts, like Source Control credentials.
+  [WS_METHODS.prReviewsUpdateConfig]: AuthSettingsWriteScope,
+  [WS_METHODS.prReviewsSetPrivateKey]: AuthSettingsWriteScope,
+  // Starts an agent thread on this environment, as triage does.
+  [WS_METHODS.prReviewsRequest]: AuthOrchestrationOperateScope,
+  [WS_METHODS.prReviewsRerun]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksUpsert]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksSetEnabled]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,

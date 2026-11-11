@@ -33,6 +33,7 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react";
+import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { cn } from "../../lib/utils";
@@ -100,6 +101,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/browser": GlobeIcon,
   "/settings/devices": SmartphoneIcon,
   "/settings/scheduled-tasks": CalendarClockIcon,
+  "/settings/pr-reviews": PullRequestGlyph.pullRequest,
   "/settings/source-control": GitBranchIcon,
   "/settings/worktrees": FolderTreeIcon,
   "/settings/connections": ServerIcon,

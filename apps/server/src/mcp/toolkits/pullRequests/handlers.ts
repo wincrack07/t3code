@@ -14,6 +14,7 @@ import * as Option from "effect/Option";
 
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
+import * as PrReviewBotService from "../../../prReviewBot/PrReviewBotService.ts";
 import * as PullRequestReviewGuideService from "../../../pullRequest/PullRequestReviewGuideService.ts";
 import { pullRequestSyncKey } from "../../../pullRequest/pullRequestSyncKey.ts";
 import { sourceControlDefinitions } from "../../../sourceControl/sourceControlDefinitions.ts";
@@ -522,6 +523,28 @@ const make = Effect.gen(function* () {
     ),
     watch_pull_request: writesThread((input) => setWatching(input, true)),
     unwatch_pull_request: writesThread((input) => setWatching(input, false)),
+    request_pr_review: McpToolAccess.writesWithCapability((input) =>
+      Effect.gen(function* () {
+        const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
+        const threadId =
+          input.url === undefined ? (input.threadId ?? scope.thread?.threadId) : undefined;
+        if (input.url === undefined && threadId === undefined) {
+          return yield* new PullRequestThreadRequiredError();
+        }
+        const prReviews = yield* PrReviewBotService.PrReviewBotService;
+        const record = yield* prReviews.request({
+          ...(threadId === undefined ? {} : { threadId }),
+          ...(input.url === undefined ? {} : { url: input.url }),
+          ...(input.focus === undefined ? {} : { focus: input.focus }),
+        });
+        return {
+          repository: record.repository,
+          number: record.number,
+          headSha: record.headSha,
+          status: record.status,
+        };
+      }),
+    ),
     write_pull_request_guides: McpToolAccess.writesWithCapability((input) =>
       Effect.gen(function* () {
         const located = yield* locateAll(input.pullRequests);

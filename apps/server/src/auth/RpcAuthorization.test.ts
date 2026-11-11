@@ -54,10 +54,20 @@ describe("RPC authorization scopes", () => {
     }
   });
 
-  it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
-      AuthOrchestrationOperateScope,
-    );
+  it("keeps triage and PR reviews, which start agents, behind operate scope", () => {
+    for (const method of [
+      WS_METHODS.serverPrepareTriage,
+      WS_METHODS.prReviewsRequest,
+      WS_METHODS.prReviewsRerun,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    }
+  });
+
+  it("keeps the PR review identity, which picks who posts on GitHub, behind settings write", () => {
+    for (const method of [WS_METHODS.prReviewsUpdateConfig, WS_METHODS.prReviewsSetPrivateKey]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthSettingsWriteScope);
+    }
   });
 
   it("separates passive terminal observation from operations that can change a shell", () => {
