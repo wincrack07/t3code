@@ -19,6 +19,7 @@ export type SettingsPath =
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
+  | "/settings/monitor"
   | "/settings/voice"
   | "/settings/appearance"
   | "/settings/chat"
@@ -93,6 +94,7 @@ export interface SettingsSearchAvailability {
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/diagnostics": "Diagnostics",
+  "/settings/monitor": "Machine monitor",
   "/settings/projects": "Projects",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
@@ -158,7 +160,10 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   },
   {
     heading: null,
-    paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
+    paths: [
+      "/settings/monitor",
+      "/settings/maintenance",
+      "/settings/labs", "/settings/about", "/settings/archived"],
   },
 ];
 
@@ -888,6 +893,21 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["OTel OTLP telemetry export endpoints logs traces metrics Grafana"],
   },
   {
+    id: "machine-monitor",
+    title: "Machine monitor",
+    to: "/settings/monitor",
+    targetId: "machine-monitor",
+    scope: "environment",
+    searchTerms: ["system cpu ram memory disk storage network processes load health"],
+  },
+  {
+    id: "show-system-monitor",
+    title: "Show machine health in the sidebar",
+    to: "/settings/monitor",
+    targetId: "system-monitor",
+    searchTerms: ["system monitor sidebar footer indicator"],
+  },
+  {
     id: "diagnostics",
     title: "Diagnostics",
     to: "/settings/maintenance",
@@ -1336,6 +1356,7 @@ const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id,
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
+  "/settings/monitor": "environment",
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/voice": null,

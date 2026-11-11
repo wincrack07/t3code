@@ -358,18 +358,21 @@ its agent wakes itself for background work. It comes back early for an approval,
 a new question, a failed run, or a message or answer you send. You can snooze an existing
 question and answer when the thread wakes; the question stays unanswered.
 
-## System monitor
+## Machine monitor
 
-The sidebar shows CPU, RAM, free storage and network activity for the active environment.
-Open it, or choose **Open system monitor** in the command palette, to see history and the
-processes using the most RAM or CPU. General Settings lets you hide the sidebar indicator
-and choose another connected environment to inspect. Mobile shows the numbers in Settings > Diagnostics.
+The gauge icon in the sidebar footer opens **Settings > Machine monitor**. A dot on the icon
+means the active environment's machine is busy (amber), strained (red) or disconnected (grey);
+hover it for CPU, memory, disk and network numbers. The page shows the current state, recent
+history, and which T3 projects, threads and processes are using the machine. Pick another
+connected environment with the settings scope picker. Turn off **Show machine health in the
+sidebar** to keep the icon as a plain link. Mobile shows the same health summary in
+Settings > Diagnostics. You can also choose **Open machine monitor** in the command palette.
 
 Measurements describe the machine running the environment's server. Project totals include
 accessible processes whose working directory belongs to that project or a known worktree.
 Process RAM is resident memory, so process totals do not equal total machine RAM. macOS
 available RAM includes reclaimable file-backed and purgeable memory. History stays in memory
-and collects only while a monitor is open or its sidebar indicator is visible. The sidebar and
+and collects only while a monitor is open or sidebar machine health is on. The sidebar and
 mobile summary collect resource counters only. Process snapshots and attribution refresh every
 ten seconds while the full monitor view is open; closing its last viewer stops that work.
 Storage and macOS command counters refresh every ten seconds; CPU and Linux resource counters

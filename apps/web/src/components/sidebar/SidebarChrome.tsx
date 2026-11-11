@@ -1,4 +1,4 @@
-import { SystemMonitorIndicator } from "../SystemMonitor";
+import { SidebarMachineMonitorItem } from "../systemMonitor/SystemMonitorIndicator";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
@@ -251,6 +251,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/usage" });
   };
 
+  const handleMonitorClick = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/settings/monitor" });
+  };
+
   const handleBackClick = () => {
     closeMobileSidebar();
     void navigateToMainApp();
@@ -284,6 +289,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
+          <SidebarMachineMonitorItem onOpen={handleMonitorClick} />
         </>
       )}
       <SidebarThreadUndoNotice />
@@ -295,7 +301,6 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <SystemMonitorIndicator />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />

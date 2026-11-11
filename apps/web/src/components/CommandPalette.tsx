@@ -59,6 +59,7 @@ import {
   ArrowLeftIcon,
   BugIcon,
   ChartNoAxesColumnIcon,
+  GaugeIcon,
   CheckIcon,
   ChevronRightIcon,
   CornerLeftUpIcon,
@@ -1703,11 +1704,11 @@ function OpenCommandPaletteDialog(props: {
   actionItems.push({
     kind: "action",
     value: "action:system-monitor",
-    title: "Open system monitor",
+    title: "Open machine monitor",
     searchTerms: ["cpu", "ram", "memory", "network", "storage", "processes", "monitor"],
-    icon: <ChartNoAxesColumnIcon className={ITEM_ICON_CLASS} />,
+    icon: <GaugeIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
-      await navigate({ to: "/settings/general" });
+      await navigate({ to: "/settings/monitor" });
     },
   });
 

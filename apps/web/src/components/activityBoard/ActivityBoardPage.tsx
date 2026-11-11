@@ -27,6 +27,7 @@ import { ENVIRONMENT_MACHINE_KIND_LABELS, EnvironmentMachineIcon } from "../Envi
 import { ProjectFavicon } from "../ProjectFavicon";
 import { sidebarProviderEntriesAtom } from "../sidebar/sidebarProviderEntries";
 import type { SidebarProviderEntry } from "../sidebar/SidebarThreadRow";
+import { MachineMeter } from "../systemMonitor/MachineMeter";
 import { Badge } from "../ui/badge";
 import { SidebarInset } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -291,12 +292,6 @@ function NodeCapacity({ environmentId }: { environmentId: EnvironmentId }) {
   return <CapacityMeters capacity={capacity} />;
 }
 
-const LEVEL_BAR: Record<HostCapacity["level"], string> = {
-  ok: "bg-success",
-  busy: "bg-warning",
-  strained: "bg-destructive",
-};
-
 function CapacityMeters({ capacity }: { capacity: HostCapacity }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -319,46 +314,19 @@ function CapacityMeters({ capacity }: { capacity: HostCapacity }) {
           </Tooltip>
         )}
       </div>
-      <CapacityMeter
+      <MachineMeter
         label="CPU"
         share={capacity.cpu}
         detail={capacity.cpu === null ? "unknown" : `${Math.round(capacity.cpu * 100)}%`}
-        barClassName={LEVEL_BAR[capacity.level]}
+        level={capacity.level}
       />
-      <CapacityMeter
+      <MachineMeter
         label="Memory"
         share={capacity.memoryUsed}
         detail={`${formatBytes(capacity.usedMemoryBytes)} / ${formatBytes(capacity.totalMemoryBytes)}`}
-        barClassName={LEVEL_BAR[capacity.level]}
+        level={capacity.level}
       />
     </div>
   );
 }
 
-function CapacityMeter(props: {
-  label: string;
-  share: number | null;
-  detail: string;
-  barClassName: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-14 shrink-0 text-muted-foreground">{props.label}</span>
-      <div
-        role="meter"
-        aria-label={props.label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={props.share === null ? undefined : Math.round(props.share * 100)}
-        aria-valuetext={props.detail}
-        className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
-      >
-        <div
-          className={cn("h-full rounded-full", props.barClassName)}
-          style={{ width: `${Math.round((props.share ?? 0) * 100)}%` }}
-        />
-      </div>
-      <span className="shrink-0 text-muted-foreground tabular-nums">{props.detail}</span>
-    </div>
-  );
-}
