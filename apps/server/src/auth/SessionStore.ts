@@ -1,5 +1,7 @@
 import {
   AuthSessionId,
+  type AuthMcpClientAccess,
+  AuthOrchestrationOperateScope,
   AuthStandardClientScopes,
   AuthEnvironmentScopes,
   type AuthClientMetadata,
@@ -385,6 +387,10 @@ export class SessionStore extends Context.Service<
       readonly replaceActiveForSubjectAndMethod?: boolean;
       readonly replaceSessionId?: AuthSessionId;
     }) => Effect.Effect<IssuedSession, SessionCredentialInternalError>;
+    readonly renewPeer: (
+      token: string,
+      access: AuthMcpClientAccess,
+    ) => Effect.Effect<IssuedSession, SessionCredentialError>;
     readonly verify: (token: string) => Effect.Effect<VerifiedSession, SessionCredentialError>;
     readonly issueWebSocketToken: (
       sessionId: AuthSessionId,
@@ -1098,10 +1104,74 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const renewPeer = Effect.fn("SessionStore.renewPeer")(function* (
+    token: string,
+    access: AuthMcpClientAccess,
+  ) {
+    const previous = yield* verify(token);
+    const level = previous.scopes.includes(AuthOrchestrationOperateScope)
+      ? (previous.runtimeModeCeiling ?? "approval-required")
+      : "read-only";
+    if (
+      previous.subject !== "mcp-client" ||
+      previous.method !== "bearer-access-token" ||
+      previous.peerLink !== true ||
+      level !== access
+    ) {
+      return yield* new InvalidSessionTokenPayloadError({
+        cause: "Only a peer link at the same access can be renewed.",
+      });
+    }
+    const now = yield* DateTime.now;
+    const expiresAt = DateTime.add(now, { milliseconds: Duration.toMillis(DEFAULT_SESSION_TTL) });
+    const claims: SessionClaims = {
+      v: 1,
+      kind: "session",
+      sid: previous.sessionId,
+      sub: previous.subject,
+      scopes: previous.scopes,
+      method: previous.method,
+      plk: 1,
+      ...(previous.runtimeModeCeiling ? { rtc: previous.runtimeModeCeiling } : {}),
+      iat: now.epochMilliseconds,
+      exp: expiresAt.epochMilliseconds,
+    };
+    const payload = yield* encodeClaims(claims).pipe(
+      Effect.map(base64UrlEncode),
+      Effect.mapError(
+        (cause) => new SessionCredentialIssueError({ sessionId: previous.sessionId, cause }),
+      ),
+    );
+    const signature = yield* signer.sign(payload);
+    const renewed = yield* authSessions
+      .renew({ sessionId: previous.sessionId, now, expiresAt })
+      .pipe(
+        Effect.mapError(
+          (cause) => new SessionCredentialIssueError({ sessionId: previous.sessionId, cause }),
+        ),
+      );
+    if (!renewed) return yield* new UnknownSessionTokenError({ sessionId: previous.sessionId });
+    const current = yield* loadActiveSession(previous.sessionId).pipe(
+      Effect.mapError(
+        (cause) => new SessionCredentialIssueError({ sessionId: previous.sessionId, cause }),
+      ),
+    );
+    if (Option.isSome(current)) yield* emitUpsert(current.value);
+    return {
+      sessionId: previous.sessionId,
+      token: `${payload}.${signature}`,
+      method: previous.method,
+      client: previous.client,
+      expiresAt,
+      scopes: previous.scopes,
+    };
+  });
+
   return SessionStore.of({
     cookieName,
     legacyCookieName,
     issue,
+    renewPeer,
     verify,
     issueWebSocketToken,
     verifyWebSocketToken,

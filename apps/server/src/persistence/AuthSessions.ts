@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
@@ -116,6 +117,11 @@ export class AuthSessionRepository extends Context.Service<
     readonly revokeAllExcept: (
       input: RevokeOtherAuthSessionsInput,
     ) => Effect.Effect<ReadonlyArray<AuthSessionId>, AuthSessionRepositoryError>;
+    readonly renew: (input: {
+      readonly sessionId: AuthSessionId;
+      readonly now: DateTime.Utc;
+      readonly expiresAt: DateTime.Utc;
+    }) => Effect.Effect<boolean, AuthSessionRepositoryError>;
     readonly setLastConnectedAt: (
       input: SetAuthSessionLastConnectedAtInput,
     ) => Effect.Effect<void, AuthSessionRepositoryError>;
@@ -480,6 +486,23 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  const renew = Effect.fn("AuthSessionRepository.renew")(function* (
+    input: Parameters<AuthSessionRepository["Service"]["renew"]>[0],
+  ) {
+    const rows = yield* sql<{
+      session_id: string;
+    }>`UPDATE auth_sessions SET expires_at = ${DateTime.formatIso(input.expiresAt)} WHERE session_id = ${input.sessionId} AND revoked_at IS NULL AND expires_at > ${DateTime.formatIso(input.now)} RETURNING session_id`.pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "AuthSessionRepository.renew:query",
+          "AuthSessionRepository.renew:encodeRequest",
+          { sessionId: input.sessionId },
+        ),
+      ),
+    );
+    return rows.length > 0;
+  });
+
   return {
     create,
     createReplacingActive,
@@ -489,6 +512,7 @@ export const make = Effect.gen(function* () {
     revoke,
     revokeAllExcept,
     setLastConnectedAt,
+    renew,
   } satisfies AuthSessionRepository["Service"];
 });
 

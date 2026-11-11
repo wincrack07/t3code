@@ -37,7 +37,7 @@ export interface DeviceTabTarget {
 }
 
 export type RightPanelSurface =
-  | { id: `html-card:${string}`; kind: "html-card"; card: HtmlRenderReference }
+  | { id: `html-card:${string}`; kind: "html-card"; card: HtmlRenderReference; userOpened?: true }
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
   | { id: "device" | `device:${string}`; kind: "device"; target?: DeviceTabTarget; title?: string }
@@ -747,7 +747,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       openHtmlCard: (ref, card) =>
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) =>
-            upsertSurface(current, { id: `html-card:${card.id}`, kind: "html-card", card }),
+            upsertSurface(current, {
+              id: `html-card:${card.id}`,
+              kind: "html-card",
+              card,
+              userOpened: true,
+            }),
           ),
         ),
       openSideChat: (ref, threadId) =>
@@ -1292,33 +1297,23 @@ type PinnedHtmlCardRef = HtmlRenderReference & {
   readonly placement?: "panel" | "details" | undefined;
 };
 
-/** Panel cards open as tabs once; a details card keeps a tab only while the user has one open. */
+/** Pins only update tabs the user explicitly opened; pinning never opens a panel. */
 export function reconcileHtmlCards(
   current: ThreadRightPanelState,
   allCards: readonly PinnedHtmlCardRef[],
 ): ThreadRightPanelState {
-  const known = current.knownHtmlCardIds ?? [];
-  const cards = allCards.filter((card) => card.placement !== "details");
   const byId = new Map(allCards.map((card) => [`html-card:${card.id}`, card]));
   const surfaces = current.surfaces.flatMap<RightPanelSurface>((surface) => {
     if (surface.kind !== "html-card") return [surface];
+    if (!surface.userOpened) return [];
     const card = byId.get(surface.id);
     return card
       ? [htmlRenderReferencesEqual(surface.card, card) ? surface : { ...surface, card }]
       : [];
   });
-  for (const card of cards) {
-    if (
-      !known.includes(card.id) &&
-      !surfaces.some((surface) => surface.id === `html-card:${card.id}`)
-    )
-      surfaces.push({ id: `html-card:${card.id}`, kind: "html-card", card });
-  }
   if (
     surfaces.length === current.surfaces.length &&
-    surfaces.every((surface, index) => surface === current.surfaces[index]) &&
-    known.length === cards.length &&
-    known.every((id, index) => id === cards[index]?.id)
+    surfaces.every((surface, index) => surface === current.surfaces[index])
   )
     return current;
   const activeSurfaceId = surfaces.some((surface) => surface.id === current.activeSurfaceId)
@@ -1328,8 +1323,7 @@ export function reconcileHtmlCards(
     ...current,
     surfaces,
     activeSurfaceId,
-    knownHtmlCardIds: cards.map((card) => card.id),
-    isOpen:
-      surfaces.length > current.surfaces.length ? true : current.isOpen && surfaces.length > 0,
+    knownHtmlCardIds: [],
+    isOpen: current.isOpen && surfaces.length > 0,
   };
 }

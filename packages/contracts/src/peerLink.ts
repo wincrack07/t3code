@@ -39,6 +39,7 @@ export const PeerLinkCreateInput = Schema.Struct({
   alternateUrls: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   /** A pairing code from the peer (`t3 pair` there, or its Connections settings). */
   pairingCode: TrimmedNonEmptyString,
+  renewExisting: Schema.optionalKey(Schema.Boolean),
   access: AuthMcpClientAccess,
   /**
    * The environment the user means. Addresses that answer as another one are

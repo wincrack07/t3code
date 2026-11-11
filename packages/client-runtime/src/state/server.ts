@@ -1318,6 +1318,15 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:process-diagnostics",
       tag: WS_METHODS.serverGetProcessDiagnostics,
     }),
+    keepAwake: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:keep-awake",
+      tag: WS_METHODS.keepAwakeSubscribe,
+      idleTtlMs: 0,
+    }),
+    changeKeepAwake: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:keep-awake:change",
+      tag: WS_METHODS.keepAwakeChange,
+    }),
     hostResources: createEnvironmentQueryAtomFamily(runtime, {
       label: "environment-data:server:host-resources",
       idleTtlMs: 0,

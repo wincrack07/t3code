@@ -12,7 +12,7 @@ Previews can load public resources such as CDN scripts, but nothing on your loca
 
 ## Pinned cards
 
-Ask an agent to pin a page to the thread and update that same card as work progresses. On web and desktop it appears in the right panel. An agent can instead put a small card in the thread details card, where it shows live while the card is open; open it larger in the right panel, or remove it from the thread, with the buttons beside its title. Hide these cards with **Agent cards** in **Settings → Appearance → Thread details**. Mobile shows them only in the timeline. Close its tab to hide it, then use Open card on its timeline entry to reopen it. Ask the agent to unpin it to remove it from the thread's pinned cards. Earlier versions stay in the timeline, where mobile can also open them.
+Ask an agent to pin a page to the thread and update that same card as work progresses. On web and desktop, find pinned cards in **Thread Details → Agent cards**, with controls to open a card in the panel or remove it. On mobile, use **Agent cards** in the thread header to open or remove a card. Removing a pin keeps earlier versions in the timeline. The agent can also unpin a card or pin it again. Hide the web and desktop list with **Agent cards** in **Settings → Appearance → Thread details**.
 
 A page can offer an action that sends a message back to this thread. T3 Code shows the message and asks for confirmation before sending it.
 

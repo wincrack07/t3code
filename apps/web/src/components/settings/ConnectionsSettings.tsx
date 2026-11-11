@@ -1,3 +1,4 @@
+import { PeerLinkMeshSettings } from "./PeerLinkMeshSettings";
 import { SessionPermissions } from "./SessionPermissions";
 import { useSearch } from "@tanstack/react-router";
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
@@ -1641,6 +1642,7 @@ function ConnectionsSettingsContent({
           }}
         />
       ) : null}
+      <PeerLinkMeshSettings />
       {peerLinkHosts.map((environment, index) => (
         <LinkedEnvironmentsSettings
           key={environment.environmentId}
