@@ -2631,16 +2631,14 @@ code {
 }
 
 @container composer-surface (width < 32rem) {
-  .composer-quiet-row [data-resting-block] [data-composer-control-label],
+  .composer-quiet-row [data-composer-effort],
   .composer-quiet-row [data-composer-secondary-trait] {
     display: none;
   }
 }
 
 @container composer-surface (width < 22rem) {
-  .composer-quiet-row [data-composer-label],
-  .composer-quiet-row [data-composer-control-label],
-  .composer-quiet-row [data-chat-provider-model-picker-label] {
+  .composer-quiet-row [data-composer-label] {
     display: none;
   }
 }
@@ -2673,4 +2671,14 @@ html[data-theme-id="claude"] {
   top: 50%;
   width: 0.5rem;
   border-top: 1px solid var(--border);
+}
+
+.composer-quiet-row [data-chat-provider-model-picker] svg,
+.composer-quiet-row [data-chat-provider-model-picker-icon],
+.composer-quiet-row [data-resting-block] svg {
+  display: none;
+}
+
+.composer-quiet-row [data-chat-provider-model-picker-label] {
+  color: var(--foreground);
 }

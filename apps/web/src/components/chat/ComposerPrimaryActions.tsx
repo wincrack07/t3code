@@ -295,7 +295,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     return (
       <>
         {children}
-        {submit}
+        {hasSendableContent || showResume || isRunning || isSendBusy || isEditingQueuedMessage
+          ? submit
+          : null}
       </>
     );
   }

@@ -162,7 +162,11 @@ export function ComposerControlsBar(props: {
     promptUltrathink,
     onPromptEdit,
   });
-  const effort = describeComposerEffort(traitsInput, props.effortDisplay, controlSize);
+  const effort = describeComposerEffort(
+    traitsInput,
+    isMobileViewport ? props.effortDisplay : "label",
+    controlSize,
+  );
   const restingBlockDefs = showModeBlock
     ? [
         {

@@ -501,6 +501,10 @@ function useLabelsOverflow(): readonly [
     const measure = () => {
       // The committed attribute, not render state, so a stale closure cannot misread it.
       const compact = current.hasAttribute("data-compact");
+      if (window.matchMedia("(min-width: 640px)").matches) {
+        if (compact) setOverflows(false);
+        return;
+      }
       const stripWidth = current.clientWidth;
       if (stripWidth === 0) return;
       const stripStyle = getComputedStyle(current);
