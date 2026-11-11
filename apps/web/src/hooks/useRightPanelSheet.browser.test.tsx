@@ -49,11 +49,11 @@ it("uses the column's available width and updates only the presentation threshol
   });
   await expect.element(screen.getByRole("status")).toHaveTextContent("inline");
   await act(() => {
-    container.style.width = "719px";
+    container.style.width = "839px";
   });
   await expect.element(screen.getByRole("status")).toHaveTextContent("sheet");
   await act(() => {
-    container.style.width = "720px";
+    container.style.width = "840px";
   });
   await expect.element(screen.getByRole("status")).toHaveTextContent("inline");
 });

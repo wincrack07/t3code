@@ -201,10 +201,7 @@ export function RightPanelSurfaceContent(props: {
             key={surface.id}
             surface={surface}
             visible={visible}
-            onDismissSetup={() => {
-              props.onCloseSurface(surface);
-              useRightPanelStore.getState().show(threadRef);
-            }}
+            onDismissSetup={() => props.onCloseSurface(surface)}
           />
         </Suspense>
       );
