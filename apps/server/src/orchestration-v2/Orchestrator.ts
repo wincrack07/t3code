@@ -21,6 +21,7 @@ import {
 } from "../sourceControl/threadPullRequests.ts";
 import {
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
+  applyOpenQuestionsUpdate,
   type ChatAttachment,
   CommandId,
   type GuestMessageId,
@@ -4079,6 +4080,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                       ? []
                       : [pinnedHtmlCardUpdate(thread.pinnedHtmlCards, command.htmlCard.card)]),
                   ].slice(-8),
+                }),
+            ...(command.openQuestions === undefined
+              ? {}
+              : {
+                  openQuestions: applyOpenQuestionsUpdate(
+                    thread.openQuestions ?? [],
+                    command.openQuestions,
+                    DateTime.formatIso(now),
+                  ),
                 }),
             ...(command.title === undefined ? {} : { title: command.title }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
