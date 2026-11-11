@@ -122,19 +122,32 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     <Tooltip key="interrupt">
       <TooltipTrigger
         render={
-          <button
-            type="button"
-            className={cn(
-              "flex shrink-0 cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-control-highlight transition-colors duration-150 hover:bg-destructive active:inset-shadow-control-pressed active:shadow-none [&_svg]:pointer-events-none",
-              insidePendingAction ? "size-8 sm:size-7" : "size-8 sm:h-8 sm:w-8",
-            )}
-            {...pointerFocusProps}
-            disabled={!canOperateThread}
-            onClick={() => {
-              if (canOperateThread) onInterrupt();
-            }}
-            aria-label="Stop generation"
-          />
+          theme === "claude" ? (
+            <Button
+              size="icon-sm"
+              variant="message-action"
+              {...pointerFocusProps}
+              disabled={!canOperateThread}
+              onClick={() => {
+                if (canOperateThread) onInterrupt();
+              }}
+              aria-label="Stop generation"
+            />
+          ) : (
+            <button
+              type="button"
+              className={cn(
+                "flex shrink-0 cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-control-highlight transition-colors duration-150 hover:bg-destructive active:inset-shadow-control-pressed active:shadow-none [&_svg]:pointer-events-none",
+                insidePendingAction ? "size-8 sm:size-7" : "size-8 sm:h-8 sm:w-8",
+              )}
+              {...pointerFocusProps}
+              disabled={!canOperateThread}
+              onClick={() => {
+                if (canOperateThread) onInterrupt();
+              }}
+              aria-label="Stop generation"
+            />
+          )
         }
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
@@ -249,8 +262,8 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   const sendButton = (
     <Button
       type={showResume ? "button" : "submit"}
-      size="icon-xs"
-      variant={theme === "claude" ? "secondary" : "default"}
+      size={theme === "claude" ? "icon-sm" : "icon-xs"}
+      variant={theme === "claude" ? "message-action" : "default"}
       {...pointerFocusProps}
       onClick={showResume ? onResume : onSubmitMessage}
       disabled={

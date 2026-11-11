@@ -787,7 +787,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       ) : null}
       <div
         className={cn(
-          "relative w-fit min-w-0 max-w-[72%] rounded-2xl text-message-foreground",
+          "relative w-fit min-w-0 max-w-(--user-bubble-measure) rounded-(--user-bubble-radius) text-message-foreground",
           row.groupedWithPrevious && "rounded-tr-md",
           row.groupedWithNext && "rounded-br-md",
           BUBBLE_CHIP_CLASS_NAME,

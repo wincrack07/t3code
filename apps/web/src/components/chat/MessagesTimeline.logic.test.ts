@@ -2566,6 +2566,55 @@ describe("deriveMessagesTimelineRows", () => {
     expect(rows.map((row) => row.id)).toContain("live-activity-row");
   });
 
+  it("keeps a tool run whole around plan updates and shows only the plan's latest version", () => {
+    const tool = (index: number) => ({
+      id: `work-entry-${index}`,
+      kind: "work" as const,
+      createdAt: `2026-01-01T00:00:0${index}Z`,
+      entry: {
+        id: `work-${index}`,
+        createdAt: `2026-01-01T00:00:0${index}Z`,
+        label: "Ran command",
+        tone: "tool" as const,
+        toolLifecycleStatus: "completed" as const,
+      },
+    });
+    const plan = (index: number, done: number) => ({
+      id: `work-entry-${index}`,
+      kind: "work" as const,
+      createdAt: `2026-01-01T00:00:0${index}Z`,
+      entry: {
+        id: `work-${index}`,
+        createdAt: `2026-01-01T00:00:0${index}Z`,
+        label: `Tasks ${done}/2`,
+        tone: "info" as const,
+        itemType: "todo_list" as const,
+        projectedItem: {
+          item: {
+            type: "todo_list",
+            planId: "plan-1",
+            steps: [
+              { id: "a", text: "First", status: done > 0 ? "completed" : "running" },
+              { id: "b", text: "Second", status: done > 1 ? "completed" : "pending" },
+            ],
+          },
+        } as never,
+      },
+    });
+
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [tool(0), plan(1, 0), tool(2), plan(3, 1), tool(4)],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    });
+
+    expect(rows.map((row) => row.kind)).toEqual(["work-toggle", "work"]);
+    expect(rows[0]).toMatchObject({ hiddenCount: 3, summary: "Used 3 tools" });
+    expect(rows[1]).toMatchObject({ id: "work-entry-3" });
+  });
+
   it.each([
     ["the later success is hidden", ["failed", "completed", "info"], false],
     ["the later success is visible", ["failed", "info", "completed"], false],
@@ -2610,8 +2659,8 @@ describe("deriveMessagesTimelineRows", () => {
       expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
         hiddenCount: statuses.some((status) => status === "error") ? 2 : 3,
         summary: statuses.some((status) => status === "error")
-          ? "Received 1 update and used 1 tool"
-          : "Used 2 tools and received 1 update",
+          ? "Received 1 update, used 1 tool"
+          : "Used 2 tools, received 1 update",
         hasFailure,
       });
       if (statuses.some((status) => status === "error")) {

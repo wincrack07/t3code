@@ -3414,7 +3414,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             )}
           >
             {isMobileViewport ? null : (
-              <div className="col-start-1 row-start-1 self-end p-1">{composerAttachButton}</div>
+              <div className="col-start-1 row-start-1 self-end p-(--composer-control-inset)">
+                {composerAttachButton}
+              </div>
             )}
             {showCollapsedMobilePromptRow ? (
               <div className="col-span-3 flex items-center justify-between gap-2 px-3 py-2">
@@ -3478,7 +3480,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               className={cn(
                 isMobileViewport
                   ? "relative px-4 pb-2 pt-3.5 sm:pt-4"
-                  : "relative col-start-2 row-start-1 min-w-0 py-2",
+                  : "relative col-start-2 row-start-1 min-w-0 py-(--composer-body-pad-y)",
                 isComposerCollapsedMobile && "hidden",
               )}
             >
@@ -3663,7 +3665,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 className={cn(
                   isMobileViewport
                     ? "flex min-w-0 flex-nowrap items-center overflow-visible px-2 pb-2"
-                    : "col-start-3 row-start-1 flex min-w-0 flex-nowrap items-center self-end p-1",
+                    : "col-start-3 row-start-1 flex min-w-0 flex-nowrap items-center self-end p-(--composer-control-inset)",
                   pendingUserInputs.length > 0 && "pt-2",
                   showMobilePendingAnswerActions &&
                     speechInput.state.phase === "idle" &&

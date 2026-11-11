@@ -1208,7 +1208,7 @@ export const CLAUDE_THEME: ThemeDefinition = {
     text: "#1a1a1a",
     textMuted: "#666666",
     border: "#e3e3e3",
-    input: "#d6d6d6",
+    input: "#e6e6e6",
     focus: "#257de0",
     accent: "#1757ac",
     accentForeground: "#ffffff",
