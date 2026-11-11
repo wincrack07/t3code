@@ -1,3 +1,4 @@
+import { KeepAwakeControl } from "../KeepAwakeControl";
 import { SystemMonitorView } from "../SystemMonitor";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
@@ -2049,6 +2050,7 @@ export function MaintenanceSettingsPanel() {
 
       <SettingsSection id="background" title="Background activity">
         <BackgroundActivitySettingsRow />
+        <KeepAwakeSettings />
       </SettingsSection>
 
       <StorageCleanupSections />
@@ -2163,5 +2165,14 @@ export function AboutSettingsPanel() {
         />
       </SettingsSection>
     </SettingsPageContainer>
+  );
+}
+
+function KeepAwakeSettings() {
+  const { environment } = useSettingsScope();
+  return environment ? (
+    <KeepAwakeControl environmentId={environment.environmentId} settings />
+  ) : (
+    <p>Select one environment to configure Keep awake.</p>
   );
 }

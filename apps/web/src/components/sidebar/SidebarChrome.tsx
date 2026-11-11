@@ -1,3 +1,4 @@
+import { KeepAwakeControl } from "../KeepAwakeControl";
 import { SystemMonitorIndicator } from "../SystemMonitor";
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -286,6 +287,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           />
         </>
       )}
+      <SidebarMenuItem>
+        <KeepAwakeControl />
+      </SidebarMenuItem>
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
     </SidebarMenu>

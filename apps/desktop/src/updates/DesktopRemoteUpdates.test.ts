@@ -55,6 +55,7 @@ function runRemoteUpdatesTest(
         latest: Effect.succeedNone,
         changes: Stream.empty,
         encoded: Stream.empty,
+        encodedForSource: () => Stream.empty,
         handleControlForSource: () => Effect.void,
         removeControlSource: () => Effect.void,
         publishUpdateReport: (report) =>

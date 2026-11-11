@@ -1,3 +1,5 @@
+import { KeepAwakeSession, KeepAwakeStatus } from "@t3tools/contracts";
+import * as KeepAwake from "../../../keepAwake/KeepAwake.ts";
 import { MachineMonitorSnapshot } from "@t3tools/contracts";
 import * as SystemMonitor from "../../../systemMonitor/SystemMonitor.ts";
 import {
@@ -33,6 +35,7 @@ const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    KeepAwake.KeepAwake,
     SystemMonitor.SystemMonitor,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
@@ -71,4 +74,25 @@ const EnvironmentPreferencesTool = Tool.make("t3_environment_preferences_update"
   }),
   success: Schema.Struct(PreferenceFields),
 }).annotate(Tool.Destructive, true);
-export const EnvironmentToolkit = Toolkit.make(EnvironmentReadTool, EnvironmentPreferencesTool);
+const KeepAwakeRead = Tool.make("t3_keep_awake_read", {
+  ...shared,
+  description: "Read this environment’s keep-awake session and host support.",
+  parameters: Schema.Struct({ environmentId: OrchestratorMcpEnvironmentTarget }),
+  success: KeepAwakeStatus,
+}).annotate(Tool.Readonly, true);
+const KeepAwakeChange = Tool.make("t3_keep_awake_change", {
+  ...shared,
+  description:
+    "Start or stop keeping the agent host awake. Agents mode follows queued/running turns; off releases it.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    session: KeepAwakeSession,
+  }),
+  success: KeepAwakeStatus,
+}).annotate(Tool.Destructive, true);
+export const EnvironmentToolkit = Toolkit.make(
+  EnvironmentReadTool,
+  EnvironmentPreferencesTool,
+  KeepAwakeRead,
+  KeepAwakeChange,
+);

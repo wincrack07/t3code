@@ -1,3 +1,4 @@
+import { KeepAwakeControl } from "../KeepAwakeControl";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
 import { formatWorkingDurationLabel } from "@t3tools/client-runtime/state/models";
@@ -125,7 +126,10 @@ function ActivityColumn({ column }: { column: ActivityBoardColumn }) {
           ) : null}
         </div>
         {column.connected ? (
-          <NodeCapacity environmentId={environment.environmentId} />
+          <>
+            <KeepAwakeControl environmentId={environment.environmentId} pill />
+            <NodeCapacity environmentId={environment.environmentId} />
+          </>
         ) : (
           <p className="text-xs text-muted-foreground">{statusTitle}</p>
         )}
