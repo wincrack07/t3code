@@ -233,6 +233,7 @@ export const make = Effect.gen(function* () {
       threadSettlement: true,
       threadAutoSettlement: true,
       storageCleanup: true,
+      machineCleanup: hostPlatform !== "win32",
       storageCleanupRun: true,
       databaseStorage: true,
       otlpEndpointCheck: true,

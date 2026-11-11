@@ -8,6 +8,7 @@ export interface CleanupScope {
   readonly t3Home: string;
   readonly roots: readonly string[];
   readonly protectedPaths: readonly string[];
+  readonly exactPaths?: readonly string[];
 }
 
 const contains = (root: string, target: string) => {
@@ -58,6 +59,7 @@ export async function verifyCleanupPath(target: string, scope: CleanupScope): Pr
   const home = await canonical(scope.home);
   const resolved = await canonical(target);
   const roots = await Promise.all(scope.roots.map(canonical));
+  const exact = await Promise.all((scope.exactPaths ?? []).map(canonical));
   const denied = await Promise.all(
     [
       scope.t3Home,
@@ -90,7 +92,8 @@ export async function verifyCleanupPath(target: string, scope: CleanupScope): Pr
   if (
     forbidden(target) ||
     forbidden(resolved) ||
-    !roots.some((root) => contains(root, resolved) && root !== resolved)
+    (!roots.some((root) => contains(root, resolved) && root !== resolved) &&
+      !exact.some((root) => contains(root, resolved)))
   ) {
     throw new UnsafeCleanupPath({ target });
   }
@@ -98,12 +101,22 @@ export async function verifyCleanupPath(target: string, scope: CleanupScope): Pr
   return resolved;
 }
 
-export async function deleteCleanupPath(target: string, scope: CleanupScope): Promise<void> {
+export async function deleteCleanupPath(
+  target: string,
+  scope: CleanupScope,
+  operation?: (resolved: string) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
   const resolved = await verifyCleanupPath(target, scope);
   // Reject links throughout the tree, including links to protected files inside an allowed cache.
+  if (operation && !(await exists(resolved))) {
+    await operation(await verifyCleanupPath(resolved, scope));
+    return;
+  }
   const pending = [resolved];
   const checked: string[] = [];
   while (pending.length) {
+    signal?.throwIfAborted();
     const current = pending.pop()!;
     await verifyCleanupPath(current, scope);
     const stat = await NodeFSP.lstat(current);
@@ -113,7 +126,12 @@ export async function deleteCleanupPath(target: string, scope: CleanupScope): Pr
       for (const name of await NodeFSP.readdir(current)) pending.push(NodePath.join(current, name));
     }
   }
+  if (operation) {
+    await operation(await verifyCleanupPath(resolved, scope));
+    return;
+  }
   for (const current of checked.reverse()) {
+    signal?.throwIfAborted();
     await verifyCleanupPath(current, scope);
     const stat = await NodeFSP.lstat(current);
     if (stat.isSymbolicLink()) throw new UnsafeCleanupPath({ target: current });

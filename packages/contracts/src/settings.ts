@@ -1,3 +1,4 @@
+import { MachineCleanupSettings, MachineCleanupSettingsWithDefault } from "./machineCleanup.ts";
 import { DecisionSettings, DEFAULT_DECISION_SETTINGS } from "./decisions.ts";
 import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPolish.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
@@ -1375,6 +1376,7 @@ export const PromptCompletionDelayMs = Schema.Int.check(
 );
 
 export const ServerSettings = Schema.Struct({
+  machineCleanup: MachineCleanupSettingsWithDefault,
   autoUpdateServer: Schema.optionalKey(Schema.Boolean),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1853,6 +1855,7 @@ export const ServerSettingsPatch = Schema.Struct({
       ]),
     ),
   ),
+  machineCleanup: Schema.optionalKey(MachineCleanupSettings),
   storageCleanup: Schema.optionalKey(
     Schema.Struct({
       worktreeKeepWhen: Schema.optionalKey(WorktreeKeepWhen),

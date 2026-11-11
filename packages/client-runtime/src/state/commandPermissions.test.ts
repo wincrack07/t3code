@@ -159,6 +159,12 @@ describe("command permissions", () => {
   );
 
   it.effect.each([
+    { method: WS_METHODS.machineCleanupScan, scope: AuthEnvironmentMaintainScope },
+    { method: WS_METHODS.machineCleanupRunPhaseA, scope: AuthEnvironmentMaintainScope },
+    { method: WS_METHODS.machineCleanupDeleteApproved, scope: AuthEnvironmentMaintainScope },
+    { method: WS_METHODS.machineCleanupRunPhaseC, scope: AuthEnvironmentMaintainScope },
+    { method: WS_METHODS.machineCleanupCancel, scope: AuthEnvironmentMaintainScope },
+    { method: WS_METHODS.machineCleanupSubscribe, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.keepAwakeChange, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },

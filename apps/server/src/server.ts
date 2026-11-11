@@ -1,3 +1,4 @@
+import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as KeepAwakeRuntime from "./keepAwake/runtime.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as MachineSampler from "./systemMonitor/MachineSampler.ts";
@@ -666,6 +667,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
   layerIdleCompactionWorker,
+  MachineCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   DatabaseStorage.layer.pipe(
     Layer.provide(ProjectionMaintenance.layer),

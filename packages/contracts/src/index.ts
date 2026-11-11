@@ -83,3 +83,5 @@ export * from "./systemMonitor.ts";
 export * from "./decisions.ts";
 
 export * from "./keepAwake.ts";
+
+export * from "./machineCleanup.ts";
