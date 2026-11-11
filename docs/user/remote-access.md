@@ -353,6 +353,12 @@ makes the pairing code itself; otherwise paste one from that machine's
 **Settings → Sharing & access**. From a terminal, use
 `t3 environment link <address> --pairing-code <code> --access <mode>`.
 
+Plain HTTP peer links require loopback or Tailscale. For a Tailscale IPv4
+address, the linking machine must have a running local Tailscale daemon that
+lists the destination as a peer; the shared 100.64.0.0/10 range alone is not
+enough. Otherwise use HTTPS. Machines advertise their MagicDNS name and
+validated Tailscale HTTPS address ahead of raw IP addresses when available.
+
 You can also ask an agent to link a machine by name, such as "delegate this to
 my vps". It shows a card in the thread where you pick the machine the same way
 and the access, then approve.
