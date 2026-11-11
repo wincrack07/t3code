@@ -1898,7 +1898,8 @@ function ComposerPromptEditorTiptapInner(
             {isEmpty && contextRecords.size === 0 && placeholder ? (
               <div
                 className={cn(
-                  "pointer-events-none absolute inset-0 leading-relaxed text-placeholder",
+                  // One line tall from `sm` up: a wrapped placeholder would paint outside the box.
+                  "pointer-events-none absolute inset-0 leading-relaxed text-placeholder sm:truncate",
                   placeholderClassName,
                 )}
               >
