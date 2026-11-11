@@ -145,6 +145,8 @@ const TailscaleStatusSelf = Schema.Struct({
 
 const TailscaleStatusJson = Schema.Struct({
   Self: Schema.optional(TailscaleStatusSelf),
+  BackendState: Schema.optional(Schema.String),
+  Peer: Schema.optional(Schema.Record(Schema.String, TailscaleStatusSelf)),
 });
 
 export type TailscaleStatusJson = typeof TailscaleStatusJson.Type;
@@ -152,6 +154,7 @@ export type TailscaleStatusJson = typeof TailscaleStatusJson.Type;
 export interface TailscaleStatus {
   readonly magicDnsName: string | null;
   readonly tailnetIpv4Addresses: readonly string[];
+  readonly peerIpv4Addresses: readonly string[];
   /**
    * `tailscale serve --https` needs the `https` capability, which the control
    * plane grants once the tailnet enables HTTPS certificates. `null` when the
@@ -185,6 +188,7 @@ function normalizeMagicDnsName(status: TailscaleStatusJson): string | null {
 
 export function isTailscaleIpv4Address(address: string): boolean {
   const parts = address.split(".");
+  if (parts.some((part) => !/^\d{1,3}$/u.test(part))) return false;
   if (parts.length !== 4) {
     return false;
   }
@@ -220,6 +224,16 @@ export const parseTailscaleStatus = (
       const capMap = parsed.Self?.CapMap;
       return {
         magicDnsName: normalizeMagicDnsName(parsed),
+        peerIpv4Addresses:
+          parsed.BackendState === "Running"
+            ? Object.values(parsed.Peer ?? {}).flatMap((peer) =>
+                Array.isArray(peer.TailscaleIPs)
+                  ? peer.TailscaleIPs.filter(
+                      (ip): ip is string => typeof ip === "string" && isTailscaleIpv4Address(ip),
+                    )
+                  : [],
+              )
+            : [],
         tailnetIpv4Addresses,
         httpsServeEnabled:
           typeof capMap === "object" && capMap !== null && !Array.isArray(capMap)

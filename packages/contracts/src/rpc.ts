@@ -1,3 +1,4 @@
+import { KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";
 import {
   OrchestrationV2SearchThreadError,
@@ -516,6 +517,8 @@ export const WS_METHODS = {
   deviceAction: "device.action",
 
   serverProbe: "server.probe",
+  keepAwakeChange: "keepAwake.change",
+  keepAwakeSubscribe: "keepAwake.subscribe",
   serverGetConfig: "server.getConfig",
   serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
@@ -2126,7 +2129,21 @@ const WsSubscribeMachineMonitorRpc = Rpc.make(WS_METHODS.subscribeMachineMonitor
   stream: true,
 });
 
+const WsKeepAwakeChange = Rpc.make(WS_METHODS.keepAwakeChange, {
+  payload: KeepAwakeChange,
+  success: KeepAwakeStatus,
+  error: EnvironmentAuthorizationError,
+});
+const WsKeepAwakeSubscribe = Rpc.make(WS_METHODS.keepAwakeSubscribe, {
+  payload: Schema.Struct({}),
+  success: KeepAwakeStatus,
+  stream: true,
+  error: EnvironmentAuthorizationError,
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsKeepAwakeChange,
+  WsKeepAwakeSubscribe,
   WsSubscribeMachineMonitorRpc,
   WsGuestShareCreateRpc,
   WsServerProbeRpc,

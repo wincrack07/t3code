@@ -1,3 +1,4 @@
+import { KeepAwakeStatus, KeepAwakeSession } from "./keepAwake.ts";
 import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -334,7 +335,14 @@ export const DesktopShellEnvironmentSnapshot = Schema.Struct({
 });
 export type DesktopShellEnvironmentSnapshot = typeof DesktopShellEnvironmentSnapshot.Type;
 
+export const DesktopKeepAwakeChange = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("keepAwakeChange"),
+  session: KeepAwakeSession,
+});
+
 export const DesktopHostTelemetryMessage = Schema.Union([
+  DesktopKeepAwakeChange,
   DesktopHostTelemetryHello,
   DesktopShellEnvironmentSnapshot,
   DesktopHostTelemetrySnapshot,
@@ -384,6 +392,11 @@ export const DesktopTelemetryCancelDesktopUpdate = Schema.Struct({
 export type DesktopTelemetryCancelDesktopUpdate = typeof DesktopTelemetryCancelDesktopUpdate.Type;
 
 export const DesktopTelemetryControlMessage = Schema.Union([
+  Schema.Struct({
+    version: Schema.Literal(1),
+    type: Schema.Literal("keepAwakeStatus"),
+    status: KeepAwakeStatus,
+  }),
   DesktopTelemetrySetDiagnosticsDemand,
   DesktopTelemetrySetHostPowerIntervals,
   DesktopTelemetryRequestDesktopUpdate,
