@@ -164,7 +164,8 @@ export function machineCacheRules(platform: string): MachineCacheRule[] {
 }
 
 export const machineRuleEnabled = (settings: MachineCleanupSettings, rule: string) =>
-  settings.enabledRules.includes("*") || settings.enabledRules.includes(rule);
+  !settings.enabledRules.includes(`!${rule}`) &&
+  (settings.enabledRules.includes("*") || settings.enabledRules.includes(rule));
 
 export function cleanupMeasurementPath(platform: string, home: string) {
   return platform === "darwin" ? "/System/Volumes/Data" : home;

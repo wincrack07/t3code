@@ -540,6 +540,7 @@ function fallbackTextGenerationProvider(
 }
 
 const ATOMIC_SETTINGS_KEYS: ReadonlySet<string> = new Set([
+  "machineCleanup",
   "decisions",
   // Its base prompt and rules are required together, so a partial object cannot be stored.
   "promptPolish",

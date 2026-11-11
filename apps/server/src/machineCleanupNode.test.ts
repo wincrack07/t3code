@@ -61,7 +61,9 @@ it("scans without deletion and Phase A leaves B and C fixtures untouched", async
   const next = NodePath.join(f.project, ".next");
   const modules = NodePath.join(f.project, "node_modules");
   const avd = NodePath.join(f.home, ".android", "avd");
-  for (const directory of [next, modules, avd]) await NodeFSP.mkdir(directory, { recursive: true });
+  const npmCache = NodePath.join(f.home, ".npm");
+  for (const directory of [next, modules, avd, npmCache])
+    await NodeFSP.mkdir(directory, { recursive: true });
   await NodeFSP.utimes(NodePath.join(f.project, "package.json"), 1, 1);
   const signal = new AbortController().signal;
   const report = await f.backend.scan(f.settings, signal, () => {});
@@ -69,10 +71,24 @@ it("scans without deletion and Phase A leaves B and C fixtures untouched", async
     expect.arrayContaining(["A", "B", "C"]),
   );
   expect((await NodeFSP.stat(next)).isDirectory()).toBe(true);
+  const disabled = await f.backend.scan(
+    { ...f.settings, enabledRules: ["*", "!next"] },
+    signal,
+    () => {},
+  );
+  expect(disabled.items.some((item) => item.path === next && item.outcome === "pending")).toBe(
+    false,
+  );
   const result = await f.backend.execute(report, f.settings, ["A"], [], signal, () => {});
   expect(result.items.find((row) => row.path === next)?.outcome).toBe("removed");
   expect((await NodeFSP.stat(modules)).isDirectory()).toBe(true);
   expect((await NodeFSP.stat(avd)).isDirectory()).toBe(true);
+  expect(
+    f.calls.some(
+      (call) =>
+        call.command === "npm" && call.args.includes("--cache") && call.args.includes(npmCache),
+    ),
+  ).toBe(true);
   expect(result.freeBefore).toBe(12 * 1024 ** 3);
   expect(result.freeAfter).toBe(12 * 1024 ** 3);
   expect(f.measured.every((target) => target === f.home)).toBe(true);
