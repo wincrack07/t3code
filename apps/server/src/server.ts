@@ -1,3 +1,4 @@
+import * as KeepAwakeRuntime from "./keepAwake/runtime.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as MachineSampler from "./systemMonitor/MachineSampler.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -580,6 +581,12 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
+const layerKeepAwake = KeepAwakeRuntime.activityLayer.pipe(
+  Layer.provide(RuntimeLayer.layerEventSink),
+  Layer.provide(layerDesktopTelemetryReceiver),
+  Layer.provideMerge(KeepAwakeRuntime.layer),
+);
+
 const layerOrchestrationApplication = Layer.merge(
   CheckpointDiffQuery.layer,
   NativeChildWorkQuery.layer,
@@ -765,6 +772,7 @@ const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
 );
 
 const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
+  Layer.provideMerge(layerKeepAwake),
   Layer.provideMerge(layerUsage),
   Layer.provideMerge(layerBackground),
   Layer.provideMerge(layerResourceDiagnostics),

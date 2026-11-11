@@ -37,6 +37,13 @@ describe("RPC authorization scopes", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
   });
 
+  it("requires settings permission to change keep-awake sessions", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeChange)).toBe(AuthSettingsWriteScope);
+    expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeSubscribe)).toBe(
+      AuthOrchestrationReadScope,
+    );
+  });
+
   it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
     for (const method of [
       WS_METHODS.scheduledTasksListWebhookDeliveries,
@@ -430,45 +437,43 @@ it.effect("separates host file URLs from readable attachment URLs", () =>
   }).pipe(Effect.scoped),
 );
 
-it.effect("denies manual cleanup before the handler without settings permission", () =>
-  Effect.gen(function* () {
-    const group = WsRpcGroup.omit(
-      ...[...WsRpcGroup.requests.keys()].filter(
-        (
-          tag,
-        ): tag is Exclude<
-          keyof typeof RPC_REQUIRED_SCOPES,
-          typeof WS_METHODS.serverRunStorageCleanup
-        > => tag !== WS_METHODS.serverRunStorageCleanup,
-      ),
-    );
-    let handled = false;
-    const client = yield* RpcTest.makeClient(group).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          group.toLayerHandler(WS_METHODS.serverRunStorageCleanup, () =>
-            Effect.sync(() => {
-              handled = true;
-              return {
-                trigger: "manual" as const,
-                startedAt: "2026-10-09T12:00:00.000Z",
-                finishedAt: "2026-10-09T12:00:00.000Z",
-                entries: [],
-                counts: { removed: 0, kept: 0, failed: 0 },
-                omittedCount: 0,
-                bytesFreed: 0,
-              };
-            }),
+it.effect(
+  "denies manual cleanup and keep-awake changes before the handler without settings permission",
+  () =>
+    Effect.gen(function* () {
+      for (const method of [
+        WS_METHODS.serverRunStorageCleanup,
+        WS_METHODS.keepAwakeChange,
+      ] as const) {
+        const group = WsRpcGroup.omit(
+          ...[...WsRpcGroup.requests.keys()].filter(
+            (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> =>
+              tag !== method,
           ),
-          RpcAuthorization.layer([AuthOrchestrationReadScope]),
-        ),
-      ),
-    );
-    expect(yield* client[WS_METHODS.serverRunStorageCleanup]({}).pipe(Effect.flip)).toMatchObject({
-      requiredPermission: AuthSettingsWriteScope,
-    });
-    expect(handled).toBe(false);
-  }).pipe(Effect.scoped),
+        );
+        let handled = false;
+        const client = yield* RpcTest.makeClient(group).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              group.toLayerHandler(method, () =>
+                Effect.sync(() => {
+                  handled = true;
+                }).pipe(Effect.andThen(Effect.die("Unauthorized handler reached"))),
+              ),
+              RpcAuthorization.layer([AuthOrchestrationReadScope]),
+            ),
+          ),
+        );
+        const failure =
+          method === WS_METHODS.keepAwakeChange
+            ? yield* client[WS_METHODS.keepAwakeChange]({}).pipe(Effect.flip)
+            : yield* client[WS_METHODS.serverRunStorageCleanup]({}).pipe(Effect.flip);
+        expect(failure).toMatchObject({
+          requiredPermission: AuthSettingsWriteScope,
+        });
+        expect(handled).toBe(false);
+      }
+    }).pipe(Effect.scoped),
 );
 
 it.effect("guards persisted card removal with operate permission", () =>
