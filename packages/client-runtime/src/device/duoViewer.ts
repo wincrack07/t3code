@@ -30,6 +30,7 @@ import { duoViewSnaps, nearestDuoView, type DuoRestFace } from "./duoSnap.ts";
 import { createRenderScheduler } from "./renderScheduler.ts";
 import type { DeviceScreenSize } from "./stream.ts";
 import { duoScreenSettled, type DuoPose } from "./duoControl.ts";
+import { prefersReducedMotion } from "../reducedMotion.ts";
 
 export interface DuoViewer {
   readonly setScreen: (screen: DeviceScreenSize | null) => void;
@@ -189,8 +190,7 @@ export function createDuoViewer(options: {
   let presentationAngle = 180;
   let targetPresentation = new Quaternion();
   let lastTime = 0;
-  const reduced =
-    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduced = prefersReducedMotion();
   const applyPose = () => {
     if (!model) return;
     const before = hingeLeaf && appliedAngle !== angle ? model.leafRotation(hingeLeaf) : null;

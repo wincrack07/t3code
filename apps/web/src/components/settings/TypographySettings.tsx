@@ -26,17 +26,16 @@ import {
   resolveTerminalFontSizePreference,
   TYPOGRAPHY_ADVANCED_STORAGE_KEY,
 } from "../../appearanceFonts";
-import { AdvancedSettings } from "./AdvancedSettings";
 import { CodeFontPreview, PromptFontPreview, TerminalFontPreview } from "./SettingsFontPreviews";
-import { discoverInstalledFonts, FontFamilyPicker, useFontEnumeration } from "./FontFamilyPicker";
+import {
+  discoverInstalledFonts,
+  FontFamilyPicker,
+  type FontRecommendation,
+  useFontEnumeration,
+} from "./FontFamilyPicker";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
-import {
-  SettingResetButton,
-  SettingsRow,
-  SettingsSection,
-  useSettingsSearchTargetId,
-} from "./settingsLayout";
+import { SettingResetButton, SettingsRow, useSettingsSearchTargetId } from "./settingsLayout";
 import {
   isAdvancedTypographyTarget,
   revealSettingsSearchTarget,
@@ -65,6 +64,8 @@ function useFontDefaultFamilies() {
   };
 }
 
+const INTERFACE_FONT_RECOMMENDATIONS = [{ value: "system-ui", label: "System" }] as const;
+
 function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -74,6 +75,7 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
       {...searchableSetting("interface-font")}
       description="The interface and user messages."
       defaultFamily={defaults.sans}
+      recommended={INTERFACE_FONT_RECOMMENDATIONS}
       defaultValue={DEFAULT_UNIFIED_SETTINGS.fontFamilySans}
       value={settings.fontFamilySans}
       onValueChange={(fontFamilySans) => updateSettings({ fontFamilySans })}
@@ -288,33 +290,16 @@ function WordWrapRow() {
   );
 }
 
-function FontSettingsGroup() {
-  return (
-    <>
-      <InterfaceFontRow />
-      <ReplyFontRow />
-      <PromptFontRow />
-      <CodeFontRow />
-      <TerminalFontRow />
-    </>
-  );
-}
-
-function SeparateFontsRow({
-  checked,
-  onCheckedChange,
-}: {
-  readonly checked: boolean;
-  readonly onCheckedChange: (checked: boolean) => void;
-}) {
+function SeparateFontsRow() {
+  const [showAdvanced, setAdvanced] = useAdvancedTypography();
   return (
     <SettingsRow
       {...searchableSetting("separate-fonts")}
       description="Set the prompt, code, and terminal fonts separately instead of one monospace font."
       control={
         <Switch
-          checked={checked}
-          onCheckedChange={(next) => onCheckedChange(Boolean(next))}
+          checked={showAdvanced}
+          onCheckedChange={(next) => setAdvanced(Boolean(next))}
           aria-label="Separate fonts"
         />
       }
@@ -322,38 +307,8 @@ function SeparateFontsRow({
   );
 }
 
-function SimpleFontRows() {
-  const settings = useScopedSettings();
-  return (
-    <>
-      <InterfaceFontRow preview={<PromptFontPreview />} />
-      <ReplyFontRow />
-      <CodeFontRow
-        title="Monospace font"
-        description="Code blocks, diffs, file previews, and the terminal."
-        preview={
-          <>
-            <CodeFontPreview />
-            <TerminalFontPreview
-              family={resolveTerminalFontPreference({
-                advanced: false,
-                code: settings.fontFamilyCode,
-                terminal: settings.fontFamilyTerminal,
-              })}
-              size={resolveTerminalFontSizePreference({
-                advanced: false,
-                code: settings.fontSizeCode,
-                terminal: settings.fontSizeTerminal,
-              })}
-            />
-          </>
-        }
-      />
-    </>
-  );
-}
-
-export function TypographySection() {
+/** The separate-fonts flag, forced on while a search result targets one of its rows. */
+function useAdvancedTypography() {
   const [advanced, setAdvanced] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
     false,
@@ -369,17 +324,67 @@ export function TypographySection() {
   }, [searchTargetId]);
   const showAdvanced =
     advanced || (searchTargetId !== null && isAdvancedTypographyTarget(searchTargetId));
+  return [showAdvanced, setAdvanced] as const;
+}
+
+/** Appearance -> General: the interface font, then the prompt font once fonts are separate. */
+export function TypographyGeneralRows() {
+  const [showAdvanced] = useAdvancedTypography();
   return (
-    <SettingsSection id="typography" title="Typography">
-      {showAdvanced ? <FontSettingsGroup /> : <SimpleFontRows />}
+    <>
+      <InterfaceFontRow {...(showAdvanced ? {} : { preview: <PromptFontPreview /> })} />
+      <ReplyFontRow />
+      {showAdvanced ? <PromptFontRow /> : null}
+    </>
+  );
+}
+
+/** Appearance -> Code: one monospace font, or separate code and terminal fonts. */
+export function TypographyCodeRows() {
+  const [showAdvanced] = useAdvancedTypography();
+  const settings = useScopedSettings();
+  return (
+    <>
+      {showAdvanced ? (
+        <>
+          <CodeFontRow />
+          <TerminalFontRow />
+        </>
+      ) : (
+        <CodeFontRow
+          title="Monospace font"
+          description="Code blocks, diffs, file previews, and the terminal."
+          preview={
+            <>
+              <CodeFontPreview />
+              <TerminalFontPreview
+                family={resolveTerminalFontPreference({
+                  advanced: false,
+                  code: settings.fontFamilyCode,
+                  terminal: settings.fontFamilyTerminal,
+                })}
+                size={resolveTerminalFontSizePreference({
+                  advanced: false,
+                  code: settings.fontSizeCode,
+                  terminal: settings.fontSizeTerminal,
+                })}
+              />
+            </>
+          }
+        />
+      )}
       <WordWrapRow />
-      <AdvancedSettings
-        targetIds={[searchableSetting("separate-fonts").id, searchableSetting("font-smoothing").id]}
-      >
-        <SeparateFontsRow checked={showAdvanced} onCheckedChange={setAdvanced} />
-        <FontSmoothingRow />
-      </AdvancedSettings>
-    </SettingsSection>
+    </>
+  );
+}
+
+/** Rows for Appearance -> General's advanced block. */
+export function TypographyAdvancedRows() {
+  return (
+    <>
+      <SeparateFontsRow />
+      <FontSmoothingRow />
+    </>
   );
 }
 
@@ -394,6 +399,7 @@ function FontFamilySettingsRow({
   onValueChange,
   onReset,
   requireMonospace = false,
+  recommended,
   size,
 }: {
   id?: string;
@@ -406,6 +412,7 @@ function FontFamilySettingsRow({
   onValueChange: (value: string) => void;
   onReset: () => void;
   requireMonospace?: boolean;
+  recommended?: ReadonlyArray<FontRecommendation>;
   size: {
     label: string;
     min: number;
@@ -475,6 +482,7 @@ function FontFamilySettingsRow({
         defaultFamily={defaultFamily}
         selectedFamily={trimmed}
         requireMonospace={requireMonospace}
+        {...(recommended !== undefined ? { recommended } : {})}
         initialOpen={inputFocused}
         onSelect={onValueChange}
       />

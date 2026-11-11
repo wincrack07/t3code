@@ -7,6 +7,7 @@ import {
   type UiDensity,
   type EffortDisplay,
   type EnvironmentIdentificationMode,
+  type MotionPreference,
   MAX_APPEARANCE_CONTRAST,
   MAX_GLASS_OPACITY,
   MAX_PANEL_ANIMATION_DURATION_MS,
@@ -35,7 +36,13 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
-import { TypographySection } from "./TypographySettings";
+import {
+  TypographyAdvancedRows,
+  TypographyCodeRows,
+  TypographyGeneralRows,
+} from "./TypographySettings";
+import { CodeThemePreview } from "./SettingsFontPreviews";
+import { CODE_THEME_OPTIONS, resolveCodeThemeName } from "../../lib/codeThemes";
 import { ThreadDetailsItemsRow } from "./ThreadDetailsItemsRow";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
@@ -89,6 +96,108 @@ const EFFORT_DISPLAY_LABELS: Record<EffortDisplay, string> = {
   label: "Word",
   bars: "Bars",
 };
+
+const MOTION_LABELS: Record<MotionPreference, string> = {
+  system: "System",
+  full: "Full",
+  reduced: "Reduced",
+};
+
+function MotionRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      {...searchableSetting("motion")}
+      description="System follows your device's reduced motion setting."
+      resetAction={
+        settings.motionPreference !== DEFAULT_UNIFIED_SETTINGS.motionPreference ? (
+          <SettingResetButton
+            label="motion"
+            onClick={() =>
+              updateSettings({ motionPreference: DEFAULT_UNIFIED_SETTINGS.motionPreference })
+            }
+          />
+        ) : null
+      }
+      control={
+        <div className="w-full sm:w-40">
+          <Select
+            value={settings.motionPreference}
+            onValueChange={(value) => {
+              if (value === "system" || value === "full" || value === "reduced")
+                updateSettings({ motionPreference: value });
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Motion">
+              <SelectValue>{MOTION_LABELS[settings.motionPreference]}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              <SelectItem value="system">System (default)</SelectItem>
+              <SelectItem value="full">Full</SelectItem>
+              <SelectItem value="reduced">Reduced</SelectItem>
+            </SelectPopup>
+          </Select>
+        </div>
+      }
+    />
+  );
+}
+
+function CodeThemeRow({ appearance }: { appearance: "light" | "dark" }) {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const key = appearance === "light" ? "codeThemeLight" : "codeThemeDark";
+  const options = CODE_THEME_OPTIONS[appearance];
+  const themeName = resolveCodeThemeName(appearance, settings[key]);
+  const setPreference = (preference: string) =>
+    updateSettings(
+      appearance === "light" ? { codeThemeLight: preference } : { codeThemeDark: preference },
+    );
+  const label = options.find((option) => option.id === themeName)?.label ?? themeName;
+  return (
+    <SettingsRow
+      {...searchableSetting(appearance === "light" ? "code-theme-light" : "code-theme-dark")}
+      description={`Syntax colors in code blocks, diffs, and file previews in ${appearance} mode.`}
+      resetAction={
+        themeName !== options[0]!.id ? (
+          <SettingResetButton
+            label={`${appearance} code theme`}
+            onClick={() => setPreference(DEFAULT_UNIFIED_SETTINGS[key])}
+          />
+        ) : null
+      }
+      control={
+        <div className="w-full sm:w-56">
+          <Select
+            value={themeName}
+            onValueChange={(value) => {
+              if (typeof value === "string" && options.some((option) => option.id === value))
+                setPreference(value === options[0]!.id ? "" : value);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-full min-w-0"
+              aria-label={`Code theme (${appearance})`}
+            >
+              <SelectValue>{label}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {options.map((option, index) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {index === 0 ? `${option.label} (default)` : option.label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
+      }
+    >
+      <CodeThemePreview theme={themeName} />
+    </SettingsRow>
+  );
+}
 
 export function AppearanceSettingsPanel() {
   const {
@@ -150,25 +259,20 @@ export function AppearanceSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="appearance" title="Colors & themes" variant="plain" hideTitle>
-        <div id={searchableSetting("theme").id}>
-          <ThemeLibrary
-            appearanceMode={appearanceMode}
-            customThemes={customThemes}
-            initialAppearance={resolvedTheme}
-            refreshTheme={refreshTheme}
-            isImportOpen={isImportThemeOpen}
-            setAppearanceMode={setAppearanceMode}
-            setTheme={setTheme}
-            setThemeHalf={setThemeHalf}
-            theme={theme}
-            themeHalves={themeHalves}
-            onImportOpenChange={setIsImportThemeOpen}
-          />
-        </div>
-      </SettingsSection>
-
-      <SettingsSection id="appearance-interface" title="Interface">
+      <SettingsSection id="appearance" title="General">
+        <ThemeLibrary
+          appearanceMode={appearanceMode}
+          customThemes={customThemes}
+          initialAppearance={resolvedTheme}
+          refreshTheme={refreshTheme}
+          isImportOpen={isImportThemeOpen}
+          setAppearanceMode={setAppearanceMode}
+          setTheme={setTheme}
+          setThemeHalf={setThemeHalf}
+          theme={theme}
+          themeHalves={themeHalves}
+          onImportOpenChange={setIsImportThemeOpen}
+        />
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}
           description="Adjust the contrast of colors and borders across the interface."
@@ -263,37 +367,7 @@ export function AppearanceSettingsPanel() {
           }
         />
 
-        <SettingsRow
-          {...searchableSetting("ui-density")}
-          description="Tighten controls, rows, and text to fit more on screen."
-          resetAction={
-            settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? (
-              <SettingResetButton
-                label="density"
-                onClick={() => updateSettings({ uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity })}
-              />
-            ) : null
-          }
-          control={
-            <div className="w-full sm:w-40">
-              <Select
-                value={settings.uiDensity}
-                onValueChange={(value) => {
-                  if (value === "comfortable" || value === "compact")
-                    updateSettings({ uiDensity: value });
-                }}
-              >
-                <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Density">
-                  <SelectValue>{UI_DENSITY_LABELS[settings.uiDensity]}</SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem value="comfortable">Comfortable (default)</SelectItem>
-                  <SelectItem value="compact">Compact</SelectItem>
-                </SelectPopup>
-              </Select>
-            </div>
-          }
-        />
+        <TypographyGeneralRows />
         <SettingsRow
           {...searchableSetting("chat-width")}
           description="Set how wide messages and the composer can grow on large screens."
@@ -326,6 +400,38 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
+        <SettingsRow
+          {...searchableSetting("ui-density")}
+          description="Tighten controls, rows, and text to fit more on screen."
+          resetAction={
+            settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? (
+              <SettingResetButton
+                label="density"
+                onClick={() => updateSettings({ uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity })}
+              />
+            ) : null
+          }
+          control={
+            <div className="w-full sm:w-40">
+              <Select
+                value={settings.uiDensity}
+                onValueChange={(value) => {
+                  if (value === "comfortable" || value === "compact")
+                    updateSettings({ uiDensity: value });
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Density">
+                  <SelectValue>{UI_DENSITY_LABELS[settings.uiDensity]}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem value="comfortable">Comfortable (default)</SelectItem>
+                  <SelectItem value="compact">Compact</SelectItem>
+                </SelectPopup>
+              </Select>
+            </div>
+          }
+        />
+        <MotionRow />
         <ThreadDetailsItemsRow />
         <SettingsRow
           {...searchableSetting("effort-display")}
@@ -390,7 +496,9 @@ export function AppearanceSettingsPanel() {
             searchableSetting("panel-animations").id,
             searchableSetting("environment-identification").id,
             // Environment identification's search result lands on this section.
-            "appearance-interface",
+            "appearance",
+            searchableSetting("separate-fonts").id,
+            searchableSetting("font-smoothing").id,
           ]}
         >
           <SettingsRow
@@ -486,10 +594,15 @@ export function AppearanceSettingsPanel() {
               </Select>
             }
           />
+          <TypographyAdvancedRows />
         </AdvancedSettings>
       </SettingsSection>
 
-      <TypographySection />
+      <SettingsSection id="appearance-code" title="Code">
+        <CodeThemeRow appearance="light" />
+        <CodeThemeRow appearance="dark" />
+        <TypographyCodeRows />
+      </SettingsSection>
     </SettingsPageContainer>
   );
 }

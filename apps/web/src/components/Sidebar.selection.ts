@@ -1,3 +1,5 @@
+import { prefersReducedMotion } from "@t3tools/client-runtime/reduced-motion";
+
 const ACTIVE_ROW = '[data-sidebar-row][aria-current="page"]';
 export const SIDEBAR_SELECTION_PILL_ATTRIBUTE = "data-sidebar-selection-pill";
 const SLIDE_TIMING: KeyframeAnimationOptions = {
@@ -20,7 +22,6 @@ function findRow(list: HTMLElement, selector: string): HTMLElement | null {
  */
 export function createSidebarSelectionSlide(list: HTMLUListElement) {
   const view = list.ownerDocument.defaultView;
-  const reducedMotion = view?.matchMedia("(prefers-reduced-motion: reduce)");
   let selectedKey = findRow(list, ACTIVE_ROW)?.dataset.sidebarRow ?? null;
   let pill: HTMLElement | null = null;
   let animation: Animation | null = null;
@@ -87,7 +88,7 @@ export function createSidebarSelectionSlide(list: HTMLUListElement) {
     const previousKey = selectedKey;
     selectedKey = nextKey;
     stop();
-    if (active === null || previousKey === null || reducedMotion?.matches) return;
+    if (active === null || previousKey === null || prefersReducedMotion()) return;
     const previous = findRow(list, `[data-sidebar-row="${CSS.escape(previousKey)}"]`);
     // The old row left the list (archived, filtered, or inside a collapsed group): no origin.
     if (previous === null) return;

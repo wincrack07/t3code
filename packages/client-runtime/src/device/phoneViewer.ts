@@ -30,6 +30,7 @@ import { createDeviceFraming } from "./deviceFraming.ts";
 import { nearestDeviceView } from "./deviceViewSnap.ts";
 import type { DeviceScreenSize } from "./stream.ts";
 import { IOS_PHONE_SHAPE, type DeviceShapeProfile } from "./shapeProfile.ts";
+import { prefersReducedMotion } from "../reducedMotion.ts";
 
 export interface PhoneViewer {
   readonly setModel: (source: DeviceModelSource | null) => void;
@@ -130,8 +131,7 @@ export function createPhoneViewer(options: {
   });
   motion.setPose(rest, performance.now(), true);
   const framing = createDeviceFraming();
-  const reducedMotion = () =>
-    globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const reducedMotion = prefersReducedMotion;
   let viewport = { width: 0, height: 0, pixelRatio: 1 };
   let drawingBuffer = { width: 0, height: 0, pixelRatio: 0 };
 

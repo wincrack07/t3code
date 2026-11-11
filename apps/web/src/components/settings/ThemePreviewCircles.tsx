@@ -66,13 +66,6 @@ export const STANDARD_THEME_CARDS: ReadonlyArray<ThemeCardDefinition> = [
   },
 ];
 
-export function previewColorsOf(
-  card: ThemeCardDefinition,
-  mode: ThemeAppearance,
-): ThemeCardPreviewColors | null {
-  return card.previews.find((preview) => preview.mode === mode)?.colors ?? null;
-}
-
 export function getThemeCardDefinition(theme: ThemeDefinition): ThemeCardDefinition {
   return {
     id: theme.id,

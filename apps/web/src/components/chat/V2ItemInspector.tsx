@@ -15,7 +15,7 @@ import { memo, type ReactNode, Suspense, use } from "react";
 
 import { useRenderedAppearance } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
-import { resolveDiffThemeName } from "../../lib/diffRendering";
+import { useDiffThemeName } from "../../lib/diffRendering";
 import { getSyntaxHighlighterPromise } from "../../lib/syntaxHighlighting";
 import { useTurnItemDetail } from "../../state/queries";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
@@ -47,10 +47,11 @@ function SyntaxTokens({
   readonly language: "json" | "typescript" | "html";
 }) {
   const resolvedTheme = useRenderedAppearance();
+  const diffThemeName = useDiffThemeName(resolvedTheme);
   const highlighter = use(getSyntaxHighlighterPromise(language));
   const { tokens } = highlighter.codeToTokens(text, {
     lang: language,
-    theme: resolveDiffThemeName(resolvedTheme),
+    theme: diffThemeName,
   });
   return tokens.flatMap((line, lineIndex) => [
     lineIndex > 0 ? "\n" : "",

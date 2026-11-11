@@ -11,6 +11,23 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
+      // Appearance -> Motion, resolved before first paint so nothing animates at boot when
+      // reduced. Keep in sync with @t3tools/client-runtime/reduced-motion.
+      (() => {
+        let preference = null;
+        try {
+          preference = window.localStorage.getItem("t3code:motion-preference");
+        } catch {}
+        let systemReduced = false;
+        try {
+          systemReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch {}
+        const reduced =
+          preference === "reduced" ? true : preference === "full" ? false : systemReduced;
+        document.documentElement.dataset.motion = reduced ? "reduce" : "full";
+      })();
+    </script>
+    <script>
       (() => {
         const LIGHT_BACKGROUND = "#ffffff";
         const DARK_BACKGROUND = "#000000";

@@ -12,7 +12,7 @@ import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "../composerContextPresentation";
 import { terminalThemeFromApp } from "../ThreadTerminalDrawer";
 import { useRenderedAppearance, useTheme } from "../../hooks/useTheme";
 import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
-import { resolveDiffThemeName, type DiffThemeName } from "../../lib/diffRendering";
+import { useDiffThemeName, type DiffThemeName } from "../../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import { GhosttyTerminalSurface } from "~/terminal/ghostty/surface";
 
@@ -74,6 +74,30 @@ function loadDiffPreviewHtml(theme: DiffThemeName): Promise<readonly string[]> {
   }).then((results) => results.map((result) => result.prerenderedHTML));
 }
 
+const CODE_THEME_PREVIEW_PATCH = [
+  "diff --git a/greet.ts b/greet.ts",
+  "--- a/greet.ts",
+  "+++ b/greet.ts",
+  "@@ -1,3 +1,3 @@",
+  " export function greet(name: string) {",
+  '-  return "Hello " + name;',
+  "+  return `Hello, ${name}!`;",
+  " }",
+  "",
+].join("\n");
+
+function loadCodeThemePreviewHtml(theme: DiffThemeName): Promise<readonly string[]> {
+  return preloadPatchFile({
+    patch: CODE_THEME_PREVIEW_PATCH,
+    options: {
+      diffStyle: "unified",
+      disableFileHeader: true,
+      theme,
+      preferredHighlighter: PREFERRED_HIGHLIGHTER,
+    },
+  }).then((results) => results.map((result) => result.prerenderedHTML));
+}
+
 // Unlayered shadow-root rules override Pierre surfaces with app code tokens to match the diff panel.
 const DIFF_PREVIEW_THEME_BRIDGE = `
   :host {
@@ -92,14 +116,16 @@ const DIFF_PREVIEW_THEME_BRIDGE = `
 
 // Each host is keyed by its html, so the ref callback runs once per document.
 // React detaches a cleanup-less ref callback with null when an appearance switch drops the host.
-function StaticDiffHtml({ html }: { html: string }) {
+// Without the bridge the theme paints its own surface, as a code theme preview needs.
+function StaticDiffHtml({ html, bridge = true }: { html: string; bridge?: boolean }) {
   const attachHtml = (host: HTMLDivElement | null) => {
     if (host === null) return;
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
     shadow.innerHTML = html;
-    const bridge = document.createElement("style");
-    bridge.textContent = DIFF_PREVIEW_THEME_BRIDGE;
-    shadow.append(bridge);
+    if (!bridge) return;
+    const style = document.createElement("style");
+    style.textContent = DIFF_PREVIEW_THEME_BRIDGE;
+    shadow.append(style);
   };
   return <div ref={attachHtml} />;
 }
@@ -111,10 +137,35 @@ const diffPreviewHtmlAtom = Atom.family((theme: DiffThemeName) =>
   ),
 );
 
-export function CodeFontPreview() {
-  const resolvedTheme = useRenderedAppearance();
+const codeThemePreviewHtmlAtom = Atom.family((theme: DiffThemeName) =>
+  Atom.make(Effect.promise(() => loadCodeThemePreviewHtml(theme))).pipe(
+    Atom.keepAlive,
+    Atom.withLabel(`settings-code-theme-preview:${theme}`),
+  ),
+);
+
+/** A four-line diff painted entirely by one code theme. */
+export function CodeThemePreview({ theme }: { theme: DiffThemeName }) {
   const loadedHtml = AsyncResult.getOrElse(
-    useAtomValue(diffPreviewHtmlAtom(resolveDiffThemeName(resolvedTheme))),
+    useAtomValue(codeThemePreviewHtmlAtom(theme)),
+    () => null,
+  );
+  // Switching themes keeps the previous preview up while the next one renders.
+  const [htmlByFile, setHtmlByFile] = useState(loadedHtml);
+  if (loadedHtml !== null && loadedHtml !== htmlByFile) setHtmlByFile(loadedHtml);
+  return (
+    <div className="mt-1 mb-2 min-h-24 overflow-hidden rounded-lg border border-border">
+      {htmlByFile?.map((html) => (
+        <StaticDiffHtml bridge={false} key={html} html={html} />
+      ))}
+    </div>
+  );
+}
+
+export function CodeFontPreview() {
+  const themeName = useDiffThemeName(useRenderedAppearance());
+  const loadedHtml = AsyncResult.getOrElse(
+    useAtomValue(diffPreviewHtmlAtom(themeName)),
     () => null,
   );
   // An appearance switch keeps the previous theme's preview up while the new one renders.

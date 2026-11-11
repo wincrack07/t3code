@@ -343,7 +343,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "color-scheme",
     title: "Color scheme",
     to: "/settings/appearance",
-    searchTerms: ["appearance light dark system mode"],
+    searchTerms: ["appearance light dark system mode theme"],
     targetId: "appearance",
   },
   {
@@ -378,6 +378,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Density",
     to: "/settings/appearance",
     searchTerms: ["compact comfortable dense spacing padding size smaller tighter rows controls"],
+  },
+  {
+    id: "motion",
+    title: "Motion",
+    to: "/settings/appearance",
+    searchTerms: ["animation animations reduced reduce motion transitions accessibility"],
   },
   {
     id: "chat-width",
@@ -415,7 +421,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Environment identification",
     to: "/settings/appearance",
     searchTerms: ["dev nightly latest channel artwork pill label hide none"],
-    targetId: "appearance-interface",
+    targetId: "appearance",
   },
   {
     id: "interface-font",
@@ -459,6 +465,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
     searchTerms: ["typography text grayscale anti aliasing macos thin"],
     macOnly: true,
+  },
+  {
+    id: "code-theme-light",
+    title: "Code theme (light)",
+    to: "/settings/appearance",
+    searchTerms: ["syntax highlighting colors diffs code blocks shiki light mode"],
+  },
+  {
+    id: "code-theme-dark",
+    title: "Code theme (dark)",
+    to: "/settings/appearance",
+    searchTerms: ["syntax highlighting colors diffs code blocks shiki dark mode"],
   },
   {
     id: "word-wrap",
