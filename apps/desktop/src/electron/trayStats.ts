@@ -1,3 +1,4 @@
+import { formatMachineBytes } from "@t3tools/client-runtime/state/machine-monitor";
 import type { MachineSample, TrayStatsSettings } from "@t3tools/contracts";
 
 function number(value: number | null, width: number, decimals = 0, maximum = 100) {
@@ -9,8 +10,11 @@ function number(value: number | null, width: number, decimals = 0, maximum = 100
 }
 
 export function trayRate(bytes: number | null) {
-  const mb = bytes === null ? null : bytes / 1_000_000;
-  return number(mb !== null && mb < 0.1 ? 0 : mb, 7, 1, 99999.9);
+  if (bytes === null || !Number.isFinite(bytes)) return " n/a";
+  const mb = Math.max(0, bytes) / 1_000_000;
+  if (mb >= 999.5) return "999+";
+  const decimal = mb.toFixed(mb < 1 ? 2 : 1);
+  return (Number(decimal) >= 100 ? mb.toFixed(0) : decimal).padEnd(4, " ");
 }
 
 function percent(used: number | null, total: number | null) {
@@ -21,7 +25,7 @@ export function trayStatsTitle(settings: TrayStatsSettings, sample?: MachineSamp
   if (!settings.enabled) return "";
   return [
     settings.network
-      ? `↓${trayRate(sample?.networkDown ?? null)} ↑${trayRate(sample?.networkUp ?? null)} MB/s`
+      ? `↓ ${trayRate(sample?.networkDown ?? null)} ↑ ${trayRate(sample?.networkUp ?? null)} MB/s`
       : null,
     settings.cpu ? `CPU ${number(sample?.cpu ?? null, 3)}%` : null,
     settings.memory
@@ -47,13 +51,21 @@ export function changedTitle() {
 const gb = (value: number | null) =>
   value === null ? "n/a" : `${(value / 1_000_000_000).toFixed(1)} GB`;
 
+function menuRate(bytes: number | null) {
+  if (bytes === null || !Number.isFinite(bytes)) return "n/a";
+  const value = Math.max(0, bytes);
+  return value < 1_000_000
+    ? `${Math.round(value / 1000)} KB/s`
+    : `${(value / 1_000_000).toFixed(1)} MB/s`;
+}
+
 export function trayStatsRows(sample?: MachineSample) {
   return sample
     ? [
         `CPU: ${number(sample.cpu, 0)}% · Load: ${sample.load.map((n) => n.toFixed(2)).join(" / ")}`,
-        `Memory: ${gb(sample.memoryUsed)} / ${gb(sample.memoryTotal)} (${number(percent(sample.memoryUsed, sample.memoryTotal), 0)}%)`,
+        `Memory: ${formatMachineBytes(sample.memoryUsed)} / ${formatMachineBytes(sample.memoryTotal)} (${number(percent(sample.memoryUsed, sample.memoryTotal), 0)}%)`,
         `Disk: ${gb(sample.diskFree)} free / ${gb(sample.diskTotal)} (system volume)`,
-        `Network: ↓${trayRate(sample.networkDown).trim()} / ↑${trayRate(sample.networkUp).trim()} MB/s`,
+        `Network: ↓ ${menuRate(sample.networkDown)} / ↑ ${menuRate(sample.networkUp)}`,
       ]
     : ["Machine stats: waiting for local sample"];
 }
