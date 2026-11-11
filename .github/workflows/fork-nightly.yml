@@ -1,0 +1,286 @@
+name: Fork nightly
+
+# Fork-only: once a day, merges upstream (pingdotgg/t3code) main into this
+# fork's main, then builds and publishes a prerelease on this fork with:
+#   - t3-<version>-linux-x64.tar.gz + SHA256SUMS, the server runtime that
+#     self-hosted T3 servers install. Point a server at this fork's releases with
+#     T3CODE_RELEASE_BASE_URL=https://github.com/<owner>/<repo>/releases/download
+#   - an unsigned Apple Silicon DMG of the desktop app.
+# The version is <base>-nightly.<UTC date>.<9000 + run number>, so a fork build
+# always sorts above the same day's upstream nightly.
+#
+# A merge conflict with upstream stops the run and opens an issue; resolve it
+# by hand on main and the next run picks it up.
+# Upstream merges that touch .github/workflows need a token with the
+# `workflow` scope: add it as the FORK_SYNC_TOKEN secret. Without it the sync
+# uses GITHUB_TOKEN, which GitHub refuses for those merges.
+
+on:
+  schedule:
+    # 09:00 UTC = 04:00 in Panama.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      sync:
+        description: Merge upstream main into main before building.
+        type: boolean
+        default: true
+      ref:
+        description: Commit or branch to build instead of main (skips the sync).
+        required: false
+        default: ""
+      version:
+        description: Version to publish (default <base>-nightly.<date>.<9000+run>).
+        required: false
+        default: ""
+      build_mac:
+        description: Also build the macOS DMG.
+        type: boolean
+        default: true
+      force:
+        description: Build even when main has not changed since the last fork release.
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: fork-nightly
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Sync upstream and pick version
+    if: github.repository != 'pingdotgg/t3code'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+      version: ${{ steps.pick.outputs.version }}
+      build: ${{ steps.pick.outputs.build }}
+    env:
+      GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Merge upstream main
+        id: sync
+        if: github.event_name == 'schedule' || (inputs.sync && inputs.ref == '')
+        shell: bash
+        run: |
+          set -uo pipefail
+          out="$(gh api -X POST "repos/$REPO/merge-upstream" -f branch=main 2>&1)"
+          code=$?
+          echo "$out"
+          if [[ $code -eq 0 ]]; then
+            echo "Upstream sync: $(jq -r '.merge_type + " — " + .message' <<<"$out" 2>/dev/null || echo ok)"
+            exit 0
+          fi
+          title="Fork nightly: could not merge upstream main"
+          body=$(printf 'The daily sync of `pingdotgg/t3code` main into `main` failed in [run %s](%s/%s/actions/runs/%s).\n\n```\n%s\n```\n\nA conflict needs a manual merge on `main`. If the error mentions workflows, add a `FORK_SYNC_TOKEN` secret with the `repo` and `workflow` scopes.' \
+            "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$REPO" "$GITHUB_RUN_ID" "$out")
+          existing=$(GH_TOKEN="${{ github.token }}" gh issue list -R "$REPO" --state open --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [[ -n "$existing" ]]; then
+            GH_TOKEN="${{ github.token }}" gh issue comment "$existing" -R "$REPO" --body "$body"
+          else
+            GH_TOKEN="${{ github.token }}" gh issue create -R "$REPO" --title "$title" --body "$body"
+          fi
+          exit 1
+
+      - name: Resolve commit and version
+        id: pick
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          ref="${INPUT_REF:-main}"
+          sha=$(gh api "repos/$REPO/commits/$ref" -q .sha)
+          base=$(gh api "repos/$REPO/contents/package.json?ref=$sha" -q .content | base64 -d | jq -r .version | sed 's/-.*//')
+          version="${INPUT_VERSION:-$base-nightly.$(date -u +%Y%m%d).$((9000 + GITHUB_RUN_NUMBER))}"
+          last=$(gh release list -R "$REPO" --limit 1 --json tagName -q '.[0].tagName // empty')
+          last_sha=""
+          if [[ -n "$last" ]]; then
+            last_sha=$(gh api "repos/$REPO/commits/$last" -q .sha 2>/dev/null || true)
+          fi
+          build=true
+          if [[ "$FORCE" != "true" && -z "$INPUT_VERSION" && "$last_sha" == "$sha" ]]; then
+            build=false
+            echo "main ($sha) is already released as $last; nothing to build."
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Building $sha as $version (build=$build)"
+
+  linux_cli:
+    name: Server runtime linux-x64
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      # checkout's credential cleanup runs submodule foreach, which fails on the
+      # orphaned gitlinks in the vendored .repos tree.
+      - name: Checkout
+        shell: bash
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+
+      - name: Align package versions to release version
+        run: node scripts/update-release-package-versions.ts "$VERSION"
+
+      - name: Build JS bundle
+        env:
+          T3CODE_TELEMETRY_CHANNEL: dev
+        run: vp run build:desktop:bundle
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build resource monitor
+        run: cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml --target x86_64-unknown-linux-gnu
+
+      - name: Apply web client branding
+        run: node scripts/apply-web-brand-assets.ts nightly apps/server/dist/client
+
+      - name: Build CLI single-executable
+        env:
+          T3CODE_TELEMETRY_CHANNEL: dev
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Stage resource monitor for the CLI archive
+        run: |
+          set -euo pipefail
+          target_dir="$RUNNER_TEMP/cli-resource-monitor/linux-x64"
+          mkdir -p "$target_dir"
+          cp native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor "$target_dir/"
+
+      - name: Install patchelf
+        run: command -v patchelf || { sudo apt-get update && sudo apt-get install -y patchelf; }
+
+      - name: Build CLI archive
+        run: |
+          node scripts/build-cli-archive.ts \
+            --platform linux \
+            --arch x64 \
+            --version "$VERSION" \
+            --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" \
+            --output-dir release-cli
+
+      - name: Smoke-test CLI archive
+        run: node scripts/smoke-cli-archive.ts --archive release-cli/* --expect-version "$VERSION"
+
+      - name: Upload CLI archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cli-linux-x64
+          path: release-cli/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  mac_dmg:
+    name: Desktop macOS arm64 DMG
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true' && (github.event_name == 'schedule' || inputs.build_mac)
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        shell: bash
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install
+
+      - name: Build DMG
+        env:
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          T3CODE_DESKTOP_SIGNED: "false"
+        run: |
+          set -euo pipefail
+          unset GITHUB_REPOSITORY T3CODE_DESKTOP_UPDATE_REPOSITORY
+          node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64 --build-version "$BUILD_VERSION" --verbose
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: desktop-mac-arm64
+          path: release/*.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  publish:
+    name: Publish fork release
+    needs: [prepare, linux_cli, mac_dmg]
+    if: ${{ !cancelled() && needs.prepare.outputs.build == 'true' && needs.linux_cli.result == 'success' && needs.mac_dmg.result != 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SHA: ${{ needs.prepare.outputs.sha }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd assets
+          ls -la
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          upstream=$(gh api "repos/$GITHUB_REPOSITORY/compare/pingdotgg:t3code:main...$SHA" -q '"\(.ahead_by) commits ahead / \(.behind_by) behind upstream main"' 2>/dev/null || echo "")
+          notes=$(printf 'Fork build of `%s` (%s).\n\nServers: set `T3CODE_RELEASE_BASE_URL=%s/%s/releases/download` and update to `%s` from the app.\nThe DMG is unsigned: open it with right click → Open the first time.' \
+            "${SHA:0:12}" "$upstream" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$VERSION")
+          gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" \
+            --target "$SHA" --prerelease \
+            --title "T3 Code fork $VERSION" --notes "$notes" -- *
