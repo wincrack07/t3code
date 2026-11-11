@@ -22,6 +22,18 @@ Uninstalling the service leaves your projects, threads, and settings intact.
 Running `t3 service install` again repairs a service that `t3 service status`
 reports as broken.
 
+Background services with a custom GitHub release source check for newer releases on their
+current channel every six hours, including prereleases on Nightly. They verify the download
+and restart only when no turns, queued messages, background work, or due scheduled tasks remain.
+Set `"autoUpdateServer": false` in the server's `settings.json` to turn this off, or `true`
+to enable it for the standard release source. Without a custom source it defaults to off.
+A server needs one update to a release with this feature before it can update itself.
+
+The fork's Apple Silicon desktop build downloads updates from its fork releases and installs
+them when you quit; open the app again to use the new version. Install the first build with
+this feature manually in a writable Applications folder and approve it in macOS once.
+Updates keep your settings and conversations.
+
 `t3 update` downloads the newest release on your channel and switches `t3`
 and the service to it. Restarting interrupts running agent turns, terminals,
 and remote clients, so it asks first; answer no and the service keeps running

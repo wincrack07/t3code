@@ -294,3 +294,33 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
     });
   });
 });
+
+it("keeps fork highlights in order and leaves install instructions out of the update popover", () => {
+  const notes = normalizeDesktopUpdateReleaseNotes(
+    [
+      {
+        version: "1.2.3-nightly.20261111.9002",
+        note: [
+          "## In this update",
+          "v1.2.3-nightly.20261111.9002 · 1 fork commits · 215 upstream commits",
+          "### Fork changes",
+          "- feat: automatic updates",
+          "### From upstream (215 commits)",
+          "- fix: reconnect remote servers",
+          "<details><summary>Full changelog</summary>",
+          "Compare all changes",
+          "</details>",
+          "## Install and update",
+          "Approve the first install in macOS.",
+        ].join("\n"),
+      },
+    ],
+    "1.2.3-nightly.20261111.9002",
+    "nightly",
+  );
+  expect(notes.releaseNotes[0]?.items).toEqual([
+    "feat: automatic updates",
+    "fix: reconnect remote servers",
+  ]);
+  expect(notes.releaseNotes[0]?.stats).toBe("1 fork commits · 215 upstream commits");
+});

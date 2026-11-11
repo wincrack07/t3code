@@ -471,8 +471,12 @@ available.
 - `apps/desktop/src/main.ts` only wires the updater layers into the desktop runtime.
 - Update UX:
   - Background checks run on startup delay + interval.
-  - No automatic download or install.
+  - Standard builds require an explicit download and install.
   - The desktop UI shows a rocket update button when an update is available; click once to download, click again after download to restart/install.
+- Fork arm64 Mac builds can opt into `T3CODE_DESKTOP_UNSIGNED_MAC_UPDATES=true` with
+  `T3CODE_DESKTOP_SIGNED=false` and `T3CODE_DESKTOP_UPDATE_REPOSITORY=owner/repo`.
+  These builds use ad-hoc signing and a checksum-verified ZIP replacement on quit instead of
+  Squirrel.Mac. Publish the ZIP and `SHA256SUMS` before making the release public.
 - Provider: GitHub Releases (`provider: github`) configured at build time.
 - Repository slug source:
   - `T3CODE_DESKTOP_UPDATE_REPOSITORY` (format `owner/repo`), if set.

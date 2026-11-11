@@ -2825,10 +2825,24 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     }
   }
 
+  const unsignedMacUpdates = yield* Config.Boolean("T3CODE_DESKTOP_UNSIGNED_MAC_UPDATES").pipe(
+    Config.withDefault(false),
+  );
+  if (unsignedMacUpdates) {
+    if (platform !== "mac" || signed || arch !== "arm64")
+      throw new Error("Unsigned Mac updates require an unsigned arm64 Mac build.");
+    const publish = yield* resolveGitHubPublishConfig(updateChannel);
+    if (publish === undefined)
+      throw new Error("Unsigned Mac updates require a GitHub release repository.");
+    buildConfig.extraMetadata = {
+      t3UnsignedMacUpdateRepository: `${publish.owner}/${publish.repo}`,
+    };
+  }
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
     buildConfig.mac = {
+      ...(unsignedMacUpdates ? { identity: "-", hardenedRuntime: false, notarize: false } : {}),
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",

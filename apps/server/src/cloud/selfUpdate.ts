@@ -17,6 +17,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
+import * as Scope from "effect/Scope";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/http";
 
@@ -26,6 +28,11 @@ import {
   crossesReleaseTrack,
 } from "@t3tools/shared/cliRelease";
 
+import * as ServerSettings from "../serverSettings.ts";
+import { forkParked } from "../serverActivation.ts";
+import { resolveNewestVersion } from "./releaseDiscovery.ts";
+import { activateIdleServerUpdate } from "./automaticUpdate.ts";
+import { compareSemverVersions } from "@t3tools/shared/semver";
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
 import * as DesktopAppUpdate from "../desktopUpdate/DesktopAppUpdate.ts";
@@ -67,6 +74,11 @@ export class ServerSelfUpdate extends Context.Service<
       ) => Effect.Effect<void, ServerSelfUpdateError>,
       onHandoffAccepted?: () => Effect.Effect<void>,
     ) => Effect.Effect<ServerSelfUpdateResult, ServerSelfUpdateError>;
+    readonly startAutomaticUpdates: Effect.Effect<
+      void,
+      never,
+      Scope.Scope | SqlClient.SqlClient | ServerSettings.ServerSettingsService
+    >;
     readonly commitDesktopUpdate: (
       requestId: string,
       onHandoffAccepted?: () => Effect.Effect<void>,
@@ -136,7 +148,10 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
   const mirror = managedUpdateMirror(policy.document);
   const releaseBaseUrl =
     mirror?.feedUrl ??
-    Option.getOrUndefined(yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option));
+    (Option.getOrUndefined(
+      yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option),
+    )?.trim() ||
+      undefined);
   const inFlight = yield* Ref.make(false);
 
   yield* pruneRuntimesOnStart({ baseDir: serverConfig.baseDir, managed: launcher.managed }).pipe(
@@ -158,9 +173,22 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
       databaseMigration: () => databaseMigrationHead(serverConfig.dbPath),
     });
 
-  const update: ServerSelfUpdate["Service"]["update"] = Effect.fn(
-    "cloud.server_self_update.update",
-  )(function* (input, reportProgress = () => Effect.void, onHandoffAccepted = () => Effect.void) {
+  const update = Effect.fn("cloud.server_self_update.update")(function* (
+    input: ServerSelfUpdateInput,
+    reportProgress: NonNullable<Parameters<ServerSelfUpdate["Service"]["update"]>[1]> = () =>
+      Effect.void,
+    onHandoffAccepted: NonNullable<Parameters<ServerSelfUpdate["Service"]["update"]>[2]> = () =>
+      Effect.void,
+    activate: (
+      request: Parameters<typeof launcher.requestUpdate>[0],
+    ) => Effect.Effect<
+      string,
+      | ServiceLauncherClient.ServiceLauncherClientError
+      | ServiceLauncherClient.ServiceLauncherRejectedError
+      | ServerSelfUpdateError
+    > = (request: Parameters<typeof launcher.requestUpdate>[0]) =>
+      launcher.requestUpdate(request).pipe(Effect.uninterruptible),
+  ) {
     const policyRefusal = managedUpdateRefusal(
       policy.document,
       capability === "boot-service" ? cliReleaseChannelOf(input.targetVersion.trim()) : undefined,
@@ -306,18 +334,16 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
       );
 
       yield* reportProgress("installing");
-      const updateId = yield* Effect.uninterruptible(
-        launcher.requestUpdate({ targetVersion, dbPath: serverConfig.dbPath }).pipe(
-          Effect.mapError((error) =>
-            failWith(
-              error._tag === "ServiceLauncherRejectedError"
-                ? error.reason
-                : "Could not ask the service launcher to activate the prepared update.",
-              error,
-            ),
+      const updateId = yield* activate({ targetVersion, dbPath: serverConfig.dbPath }).pipe(
+        Effect.mapError((error) =>
+          failWith(
+            error._tag === "ServiceLauncherRejectedError"
+              ? error.reason
+              : "Could not ask the service launcher to activate the prepared update.",
+            error,
           ),
-          Effect.tap(() => onHandoffAccepted()),
         ),
+        Effect.tap(() => onHandoffAccepted()),
       );
 
       yield* Effect.logInfo("Server update prepared; handing off to the service launcher.", {
@@ -331,6 +357,56 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
 
   return ServerSelfUpdate.of({
     update,
+    startAutomaticUpdates: Effect.gen(function* () {
+      if (capability !== "boot-service" || mirror !== undefined) return;
+      const settings = yield* ServerSettings.ServerSettingsService;
+      const sql = yield* SqlClient.SqlClient;
+      const enabled = settings.getSettings.pipe(
+        Effect.map(
+          (value) =>
+            value.autoUpdateServer ?? (releaseBaseUrl !== undefined && mirror === undefined),
+        ),
+      );
+      const check = Effect.gen(function* () {
+        if (!(yield* enabled)) return;
+        const targetVersion = yield* resolveNewestVersion(
+          cliReleaseChannelOf(packageJson.version),
+          releaseBaseUrl,
+        ).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
+        if (compareSemverVersions(targetVersion, packageJson.version) <= 0) return;
+        yield* update({ targetVersion }, undefined, undefined, (request) =>
+          Effect.gen(function* () {
+            if (
+              !(yield* enabled.pipe(
+                Effect.mapError((cause) =>
+                  failWith("Could not read automatic update settings.", cause),
+                ),
+              ))
+            )
+              return yield* failWith("Automatic server updates are disabled.");
+            yield* activateIdleServerUpdate({
+              currentVersion: packageJson.version,
+              targetVersion,
+              activate: launcher
+                .requestUpdate(request)
+                .pipe(
+                  Effect.mapError((cause) => failWith("Automatic update handoff failed.", cause)),
+                ),
+            }).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+            return yield* failWith("The server has work to finish before updating.");
+          }),
+        );
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Automatic server update deferred.", { errorTag: error._tag }),
+        ),
+      );
+      yield* forkParked(
+        Effect.sleep("5 minutes").pipe(
+          Effect.andThen(check.pipe(Effect.andThen(Effect.sleep("6 hours")), Effect.forever)),
+        ),
+      );
+    }),
     commitDesktopUpdate: Effect.fn("ServerSelfUpdate.commitDesktopUpdate")(
       function (requestId, onHandoffAccepted) {
         return desktopAppUpdate.commit(requestId, onHandoffAccepted);

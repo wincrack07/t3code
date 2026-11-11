@@ -901,7 +901,9 @@ export const make = Effect.gen(function* () {
       }),
       Effect.forkScoped,
     );
-    yield* Effect.sleep(AUTO_UPDATE_POLL_INTERVAL).pipe(
+    yield* Effect.sleep(
+      electronUpdater.installOnQuitOnly === true ? "6 hours" : AUTO_UPDATE_POLL_INTERVAL,
+    ).pipe(
       Effect.andThen(checkForUpdates("poll")),
       Effect.forever,
       Effect.catchCause((cause) => {
@@ -1158,7 +1160,9 @@ export const make = Effect.gen(function* () {
       yield* Ref.set(updaterConfiguredRef, true);
 
       yield* electronUpdater.setAutoDownload(false);
-      yield* electronUpdater.setAutoInstallOnAppQuit(false);
+      yield* electronUpdater.setAutoInstallOnAppQuit(
+        electronUpdater.installOnQuitOnly === true && policy.mode === "auto",
+      );
       yield* applyAutoUpdaterChannel(settings.updateChannel);
       yield* electronUpdater.setDisableDifferentialDownload(
         isArm64HostRunningIntelBuild(environment.runtimeInfo),
@@ -1178,10 +1182,51 @@ export const make = Effect.gen(function* () {
         );
       });
       yield* electronUpdater.on("update-available", (info: unknown) => {
-        runEffect(handleUpdateAvailable(info));
+        runEffect(
+          handleUpdateAvailable(info).pipe(
+            Effect.andThen(
+              electronUpdater.installOnQuitOnly === true && policy.mode === "auto"
+                ? Effect.scoped(
+                    Effect.gen(function* () {
+                      const completions = yield* PubSub.subscribe(finishedUpdateActions);
+                      while (Option.contains(yield* activeUpdateAction, "check"))
+                        yield* PubSub.take(completions);
+                      yield* downloadAvailableUpdate;
+                    }),
+                  )
+                : Effect.void,
+            ),
+          ),
+        );
       });
-      yield* electronUpdater.on("update-not-available", () => {
-        runEffect(handleUpdateNotAvailable);
+      yield* electronUpdater.on("update-not-available", (raw: unknown) => {
+        runEffect(
+          handleUpdateNotAvailable.pipe(
+            Effect.andThen(
+              electronUpdater.installOnQuitOnly === true
+                ? decodeUpdateInfo(raw).pipe(
+                    Effect.flatMap((info) =>
+                      updateState((state) =>
+                        info.version === environment.appVersion && state.downloadedVersion === null
+                          ? {
+                              ...state,
+                              ...normalizeDesktopUpdateReleaseNotes(
+                                info.releaseNotes,
+                                info.version,
+                                state.channel,
+                                info.releaseDate,
+                              ),
+                            }
+                          : state,
+                      ),
+                    ),
+                    Effect.asVoid,
+                    Effect.ignore,
+                  )
+                : Effect.void,
+            ),
+          ),
+        );
       });
       yield* electronUpdater.on("error", (error: unknown) => {
         runEffect(handleUpdaterError(error));

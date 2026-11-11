@@ -23,6 +23,72 @@ import * as DesktopUpdates from "./DesktopUpdates.ts";
 import { flushCallbacks, makeHarness } from "./updatesTestHarness.ts";
 
 describe("DesktopUpdates", () => {
+  it.effect("automatically downloads an accepted fork update after the active check finishes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const checkStarted = yield* Deferred.make<void>();
+        const finishCheck = yield* Deferred.make<void>();
+        const downloaded = yield* Deferred.make<void>();
+        const harness = makeHarness({
+          installOnQuitOnly: true,
+          checkForUpdates: Deferred.succeed(checkStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishCheck)),
+          ),
+          downloadUpdate: Deferred.succeed(downloaded, undefined).pipe(Effect.asVoid),
+        });
+        yield* Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          const subscription = yield* updates.subscribe;
+          const checking = yield* updates.check("test").pipe(Effect.forkScoped);
+          yield* Deferred.await(checkStarted);
+          harness.emit("update-available", {
+            version: "1.2.4",
+            releaseNotes: "- Fork automatic updates",
+          });
+          yield* subscription.changes.pipe(
+            Stream.filter((state) => state.status === "available"),
+            Stream.runHead,
+          );
+          assert.equal(harness.downloadCount(), 0);
+          yield* Deferred.succeed(finishCheck, undefined);
+          yield* Deferred.await(downloaded);
+          yield* Fiber.join(checking);
+          assert.equal(harness.downloadCount(), 1);
+          assert.deepStrictEqual((yield* updates.getState).releaseNotes[0]?.items, [
+            "Fork automatic updates",
+          ]);
+        }).pipe(Effect.provide(harness.layer));
+      }),
+    ),
+  );
+
+  it.effect("retains the installed fork release notes after restart", () => {
+    const harness = makeHarness({ installOnQuitOnly: true });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const subscription = yield* updates.subscribe;
+        harness.emit("update-not-available", {
+          version: "1.2.3",
+          releaseNotes: "- Installed fork improvement",
+        });
+        const state = yield* subscription.changes.pipe(
+          Stream.filter((state) => state.releaseNotes.length > 0),
+          Stream.runHead,
+        );
+        assert.isTrue(Option.isSome(state));
+        if (Option.isSome(state)) {
+          assert.equal(state.value.status, "up-to-date");
+          assert.deepStrictEqual(state.value.releaseNotes[0]?.items, [
+            "Installed fork improvement",
+          ]);
+        }
+      }),
+    ).pipe(Effect.provide(harness.layer));
+  });
+
   it.effect("updates Linux .deb installs and leaves other non-AppImage installs off", () =>
     Effect.gen(function* () {
       const linuxState = (packageType: string | undefined) =>
