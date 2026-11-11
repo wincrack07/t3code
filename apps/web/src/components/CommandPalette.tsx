@@ -76,6 +76,7 @@ import {
   PinIcon,
   PinOffIcon,
   PlugIcon,
+  SquareKanbanIcon,
   SquarePenIcon,
   TextSearchIcon,
   UserPlusIcon,
@@ -1662,6 +1663,28 @@ function OpenCommandPaletteDialog(props: {
             ? paletteRouteTarget.threadRef.environmentId
             : null),
       );
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:activity-board",
+    searchTerms: [
+      "activity",
+      "board",
+      "kanban",
+      "running",
+      "nodes",
+      "machines",
+      "environments",
+      "capacity",
+      "cpu",
+      "memory",
+    ],
+    title: "Open activity board",
+    icon: <SquareKanbanIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/activity" });
     },
   });
 
