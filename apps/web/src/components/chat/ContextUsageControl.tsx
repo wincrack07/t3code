@@ -5,11 +5,12 @@ import { Popover, PopoverClose, PopoverPopup, PopoverTrigger } from "../ui/popov
 
 type ContextUsageTone = "normal" | "warning" | "danger";
 
-/** Calm below 75% of the window, a warning from 75%, danger from 90%. */
-function contextUsageTone(percentage: number | null): ContextUsageTone {
-  if (percentage === null) return "normal";
-  if (percentage >= 90) return "danger";
-  if (percentage >= 75) return "warning";
+function contextUsageTone(
+  percentage: number | null,
+  compactionSuggested: boolean,
+): ContextUsageTone {
+  if (percentage !== null && percentage >= 90) return "danger";
+  if (compactionSuggested || (percentage !== null && percentage >= 75)) return "warning";
   return "normal";
 }
 
@@ -29,12 +30,13 @@ const BAR_TONE_CLASS: Record<ContextUsageTone, string> = {
 export function ContextUsageControl(props: {
   tokens: number;
   percentage: number | null;
+  compactionSuggested: boolean;
   compactDisabled: boolean;
   onCompact: () => void;
 }) {
   const percent =
     props.percentage === null ? null : Math.min(100, Math.max(0, Math.round(props.percentage)));
-  const tone = contextUsageTone(percent);
+  const tone = contextUsageTone(percent, props.compactionSuggested);
   const used = formatContextWindowTokens(props.tokens);
   return (
     <Popover>

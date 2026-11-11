@@ -185,7 +185,6 @@ export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryA
   onInterrupt: () => void;
   compactBeforeSendTokens: number | null;
   keepFullHistory: boolean;
-  onToggleKeepFullHistory: () => void;
 }) {
   return (
     <>
@@ -213,7 +212,6 @@ export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryA
         onInterrupt={props.onInterrupt}
         compactBeforeSendTokens={props.compactBeforeSendTokens}
         keepFullHistory={props.keepFullHistory}
-        onToggleKeepFullHistory={props.onToggleKeepFullHistory}
       >
         {props.children}
       </ComposerPrimaryActions>

@@ -377,7 +377,6 @@ export interface ChatComposerProps {
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
-  onToggleKeepFullHistory: () => void;
   onUsageLimitsCommand?: (() => void) | undefined;
   sideChatAvailable?: boolean;
   sideChatDisabledReason?: string | null;
@@ -3722,7 +3721,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onInterrupt={handleInterruptPrimaryActionStable}
                     compactBeforeSendTokens={props.resumeCompactionTokens}
                     keepFullHistory={props.keepFullHistory}
-                    onToggleKeepFullHistory={props.onToggleKeepFullHistory}
                   >
                     {composerPolishButton}
                     {speechInput.available ? (
@@ -3823,6 +3821,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ContextUsageControl
                   tokens={props.contextTokens}
                   percentage={props.contextPercentage ?? null}
+                  compactionSuggested={props.resumeCompactionTokens !== null}
                   compactDisabled={compactDisabled || compactThreadUnavailable}
                   onCompact={compactThreadContextStable}
                 />
