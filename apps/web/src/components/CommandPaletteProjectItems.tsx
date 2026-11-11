@@ -27,6 +27,7 @@ const UNKNOWN_PROJECT_LOCATION: CommandPaletteProjectLocation = {
 
 interface ProjectItemsInput {
   readonly projects: ReadonlyArray<CommandPaletteProject>;
+  readonly folderNameByProjectKey?: ReadonlyMap<string, string>;
   readonly projectGroupByTargetKey: ReadonlyMap<string, SidebarProjectSnapshot>;
   readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, CommandPaletteProjectLocation>;
   readonly runProject: (project: CommandPaletteProject) => Promise<void>;
@@ -57,6 +58,14 @@ export function buildProjectSearchItems(input: ProjectItemsInput) {
         projects: members,
         locationByEnvironmentId: input.locationByEnvironmentId,
       });
+      const group = input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+      const folderName = group ? input.folderNameByProjectKey?.get(group.projectKey) : undefined;
+      if (folderName)
+        return (
+          <span className="truncate text-muted-foreground">
+            {folderName} · {metadata.environmentLabels.join(" · ")}
+          </span>
+        );
       return members.length > 1 ? (
         <span className="truncate">{metadata.environmentLabels.join(" · ")}</span>
       ) : (

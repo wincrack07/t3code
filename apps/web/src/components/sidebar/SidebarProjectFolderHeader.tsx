@@ -5,7 +5,6 @@ import { memo } from "react";
 
 import { cn } from "~/lib/utils";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
-import { useUiStateStore } from "../../uiStateStore";
 import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
@@ -37,15 +36,16 @@ export function sidebarFolderRowId(projectKey: string) {
  */
 export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHeader(props: {
   group: SidebarProjectSnapshot;
+  indented?: boolean;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
+  localLastVisitedAtById: Readonly<Record<string, string>>;
   onToggle: (group: SidebarProjectSnapshot) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
   onContextMenu: (group: SidebarProjectSnapshot, position: { x: number; y: number }) => void;
 }) {
-  const { group, collapsed, hiddenThreads } = props;
+  const { group, collapsed, hiddenThreads, localLastVisitedAtById } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
-  const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const dot = collapsed
     ? resolveSidebarFolderDot(
         hiddenThreads.map((thread) => ({
@@ -62,7 +62,10 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   return (
     <li
       data-testid="sidebar-project-folder"
-      className="group/project-folder relative mt-2 list-none first:mt-0"
+      className={cn(
+        "group/project-folder relative mt-2 list-none first:mt-0",
+        props.indented && "ms-4",
+      )}
     >
       <button
         type="button"
@@ -84,7 +87,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
             <span className="sr-only">{FOLDER_DOT_LABEL[dot]}</span>
           </span>
         ) : null}
-        {collapsed && hiddenThreads.length > 0 ? (
+        {collapsed ? (
           <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground group-hover/project-folder:invisible pointer-coarse:invisible">
             {hiddenThreads.length}
           </span>
