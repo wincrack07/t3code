@@ -182,6 +182,7 @@ import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { GuestPendingMessages } from "./chat/GuestShareControls";
 import { useDeviceState } from "~/state/device";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
+import { ComposerContextPermissions } from "./ComposerContextPermissions";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import { isEditableFocused } from "../lib/editableFocus";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
@@ -1744,7 +1745,7 @@ export default function ChatView(props: ChatViewProps) {
     !embedded &&
     shouldShowComposerContextStrip({
       isDraftHeroState,
-      persistInActiveThreads: true,
+      persistInActiveThreads: isMobileViewport ? settings.persistComposerContextStrip : true,
       hasActiveProject: activeProject !== null && !showProviderSubagentBar,
       isGitRepo,
       showEnvironmentIndicator: showComposerEnvironmentIndicator,
@@ -3572,50 +3573,65 @@ export default function ChatView(props: ChatViewProps) {
                             ) : null}
                             {!composerMounted ? null : (
                               <ChatComposer
-                                locationControls={showComposerContextStrip ? (
-                                  <BranchToolbar
-                                    forceNewWorktree={multipleModelSelections !== null}
-                                    ref={branchToolbarRef}
-                                    environmentId={activeThread.environmentId}
-                                    threadId={activeThread.id}
-                                    projectId={activeThread.projectId}
-                                    worktreePath={activeThread.worktreePath}
-                                    isServerThread={isServerThread}
-                                    showGitControls={isGitRepo}
-                                    {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                    onEnvModeChange={onEnvModeChangeStable}
-                                    startFromOrigin={startFromOrigin}
-                                    onStartFromOriginChange={onStartFromOriginChange}
-                                    envMode={envMode}
-                                    {...(canOverrideServerThreadEnvMode
-                                      ? {
-                                          activeThreadBranchOverride: activeThreadBranch,
-                                          onActiveThreadBranchOverrideChange:
-                                            setPendingServerThreadBranch,
-                                        }
-                                      : {})}
-                                    envLocked={envLocked}
-                                    onComposerFocusRequest={scheduleComposerFocusStable}
-                                    {...(canCheckoutPullRequestIntoThread
-                                      ? {
-                                          onCheckoutPullRequestRequest: openPullRequestDialogStable,
-                                        }
-                                      : {})}
-                                    {...(canChangeEnvironment
-                                      ? { onEnvironmentChange: onEnvironmentChangeStable }
-                                      : {})}
-                                    autoEnvironmentLabel={autoEnvironmentLabel}
-                                    onAutoEnvironment={
-                                      draftId &&
-                                      !envLocked &&
-                                      canAutoBalanceEnvironments &&
-                                      loadBalancingSettings.loadBalancingEnabled
-                                        ? onAutoEnvironmentStable
-                                        : undefined
-                                    }
-                                    availableEnvironments={logicalProjectEnvironments}
-                                  />
-                                ) : null}
+                                locationControls={
+                                  showComposerContextStrip ? (
+                                    <BranchToolbar
+                                      forceNewWorktree={multipleModelSelections !== null}
+                                      ref={branchToolbarRef}
+                                      environmentId={activeThread.environmentId}
+                                      threadId={activeThread.id}
+                                      projectId={activeThread.projectId}
+                                      worktreePath={activeThread.worktreePath}
+                                      isServerThread={isServerThread}
+                                      showGitControls={isGitRepo}
+                                      {...(routeKind === "draft" && draftId ? { draftId } : {})}
+                                      onEnvModeChange={onEnvModeChangeStable}
+                                      startFromOrigin={startFromOrigin}
+                                      onStartFromOriginChange={onStartFromOriginChange}
+                                      envMode={envMode}
+                                      {...(canOverrideServerThreadEnvMode
+                                        ? {
+                                            activeThreadBranchOverride: activeThreadBranch,
+                                            onActiveThreadBranchOverrideChange:
+                                              setPendingServerThreadBranch,
+                                          }
+                                        : {})}
+                                      envLocked={envLocked}
+                                      onComposerFocusRequest={scheduleComposerFocusStable}
+                                      {...(canCheckoutPullRequestIntoThread
+                                        ? {
+                                            onCheckoutPullRequestRequest:
+                                              openPullRequestDialogStable,
+                                          }
+                                        : {})}
+                                      {...(canChangeEnvironment
+                                        ? { onEnvironmentChange: onEnvironmentChangeStable }
+                                        : {})}
+                                      autoEnvironmentLabel={autoEnvironmentLabel}
+                                      onAutoEnvironment={
+                                        draftId &&
+                                        !envLocked &&
+                                        canAutoBalanceEnvironments &&
+                                        loadBalancingSettings.loadBalancingEnabled
+                                          ? onAutoEnvironmentStable
+                                          : undefined
+                                      }
+                                      availableEnvironments={logicalProjectEnvironments}
+                                      trailing={
+                                        isMobileViewport && !isServerThread ? (
+                                          <ComposerContextPermissions
+                                            environmentId={environmentId}
+                                            runtimeMode={runtimeMode}
+                                            supportedRuntimeModes={
+                                              activeProviderStatus?.supportedRuntimeModes
+                                            }
+                                            onRuntimeModeChange={handleRuntimeModeChangeStable}
+                                          />
+                                        ) : undefined
+                                      }
+                                    />
+                                  ) : null
+                                }
                                 contextTokens={activeContextWindow?.usedTokens ?? null}
                                 contextPercentage={activeContextWindow?.usedPercentage ?? null}
                                 canOperateThread={canOperateThread}
@@ -3733,7 +3749,9 @@ export default function ChatView(props: ChatViewProps) {
                                   (activeThreadShell ?? activeThread)?.pullRequests
                                 }
                                 onComposerOverlayHeightChange={publishComposerOverlayHeightStable}
-                                permissionsShownInStrip={false}
+                                permissionsShownInStrip={
+                                  isMobileViewport && showComposerContextStrip && !isServerThread
+                                }
                                 promptRef={promptRef}
                                 composerImagesRef={composerImagesRef}
                                 composerFilesRef={composerFilesRef}
