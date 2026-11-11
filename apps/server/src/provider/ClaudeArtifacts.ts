@@ -6,11 +6,15 @@ import {
   ProviderInstanceId,
   resolveProviderInstanceEnabled,
   type ClaudeArtifact,
+  type ClaudeArtifactsAccount,
+  type ClaudeArtifactsAccountsResult,
   type ClaudeArtifactsListInput,
   type ClaudeArtifactsListResult,
   type ProviderInstanceConfig,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+// A plain sha256 hex digest; the account key only needs to be stable and opaque.
+import { hashTelemetryId as sha256Hex } from "@t3tools/shared/telemetryId";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -41,6 +45,43 @@ const Credentials = Schema.Struct({
 });
 const decodeCredentials = Schema.decodeUnknownEffect(Schema.fromJsonString(Credentials));
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
+
+// Claude Code keeps the signed-in account beside its settings; ids only, no secrets.
+const AccountConfig = Schema.Struct({
+  oauthAccount: Schema.optional(
+    Schema.Struct({
+      accountUuid: Schema.optional(Schema.String),
+      organizationUuid: Schema.optional(Schema.String),
+      organizationName: Schema.optional(Schema.String),
+      emailAddress: Schema.optional(Schema.String),
+    }),
+  ),
+});
+const decodeAccountConfig = Schema.decodeUnknownOption(Schema.fromJsonString(AccountConfig));
+
+export interface ClaudeAccountIdentity {
+  readonly accountKey?: string;
+  readonly organizationName?: string;
+  readonly email?: string;
+}
+
+/** Derives a stable, opaque account key from Claude Code's `.claude.json`; `{}` when signed out. */
+export function claudeAccountIdentity(configJson: string): ClaudeAccountIdentity {
+  const account = Option.getOrUndefined(decodeAccountConfig(configJson))?.oauthAccount;
+  const accountId = account?.accountUuid?.trim();
+  const organizationId = account?.organizationUuid?.trim() ?? "";
+  const organizationName = account?.organizationName?.trim();
+  const email = account?.emailAddress?.trim();
+  return {
+    ...(accountId
+      ? {
+          accountKey: sha256Hex(`claude-account\0${accountId}\0${organizationId}`).slice(0, 32),
+        }
+      : {}),
+    ...(organizationName ? { organizationName } : {}),
+    ...(email ? { email } : {}),
+  };
+}
 
 // Only the identity fields are required; the rest are read leniently, like the CLI does.
 const FrameRow = Schema.Struct({
@@ -120,6 +161,7 @@ export class ClaudeArtifacts extends Context.Service<
     readonly list: (
       input: ClaudeArtifactsListInput,
     ) => Effect.Effect<ClaudeArtifactsListResult, ClaudeArtifactsError>;
+    readonly accounts: Effect.Effect<ClaudeArtifactsAccountsResult>;
   }
 >()("t3/provider/ClaudeArtifacts") {}
 
@@ -139,11 +181,20 @@ const make = Effect.gen(function* () {
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.mapError(() => fail("requestFailed")),
     );
+    return yield* resolveInstanceHome(settings.providerInstances, instanceId);
+  });
+
+  const resolveInstanceHome = Effect.fn("ClaudeArtifacts.resolveInstanceHome")(function* (
+    providerInstances: Record<string, ProviderInstanceConfig>,
+    instanceId: ProviderInstanceId,
+  ) {
+    const fail = (reason: ClaudeArtifactsError["reason"]) =>
+      new ClaudeArtifactsError({ instanceId, reason });
     const configured: ProviderInstanceConfig | undefined = Object.hasOwn(
-      settings.providerInstances,
+      providerInstances,
       instanceId,
     )
-      ? settings.providerInstances[instanceId]
+      ? providerInstances[instanceId]
       : instanceId === defaultInstanceIdForDriver(CLAUDE_DRIVER)
         ? { driver: CLAUDE_DRIVER }
         : undefined;
@@ -158,7 +209,16 @@ const make = Effect.gen(function* () {
       configured.environment,
       hostEnvironment,
     );
-    return yield* resolveClaudeHomePath(config.value, environment);
+    const configDir = yield* resolveClaudeHomePath(config.value, environment);
+    // Claude Code keeps `.claude.json` in the config dir only when one is chosen explicitly.
+    const explicit = config.value.homePath.trim() || environment.CLAUDE_CONFIG_DIR?.trim();
+    const home = yield* HostProcess.HomeDirectory;
+    return {
+      configDir,
+      accountConfigPath: explicit
+        ? path.join(configDir, ".claude.json")
+        : path.join(home, ".claude.json"),
+    };
   });
 
   // Reads only the access token, only from this instance's own login file, and never refreshes it:
@@ -183,7 +243,7 @@ const make = Effect.gen(function* () {
 
   const fetchListing = Effect.fn("ClaudeArtifacts.fetchListing")(
     function* (instanceId: ProviderInstanceId) {
-      const configDir = yield* resolveConfigDir(instanceId);
+      const { configDir } = yield* resolveConfigDir(instanceId);
       const token = yield* readAccessToken(instanceId, configDir);
       const requestFailed = (status?: number) =>
         new ClaudeArtifactsError({
@@ -256,7 +316,44 @@ const make = Effect.gen(function* () {
     },
   );
 
-  return ClaudeArtifacts.of({ list });
+  const describeInstance = Effect.fn("ClaudeArtifacts.describeInstance")(
+    function* (
+      providerInstances: Record<string, ProviderInstanceConfig>,
+      instanceId: ProviderInstanceId,
+    ) {
+      const home = yield* resolveInstanceHome(providerInstances, instanceId);
+      const identity = yield* fileSystem.readFileString(home.accountConfigPath).pipe(
+        Effect.map(claudeAccountIdentity),
+        Effect.orElseSucceed((): ClaudeAccountIdentity => ({})),
+      );
+      // Only checks that a token is present; it is not kept or returned.
+      const listable = yield* readAccessToken(instanceId, home.configDir).pipe(
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      );
+      return { instanceId, ...identity, listable } satisfies ClaudeArtifactsAccount;
+    },
+    Effect.provideService(FileSystem.FileSystem, fileSystem),
+    Effect.provideService(Path.Path, path),
+  );
+
+  const accounts: ClaudeArtifacts["Service"]["accounts"] = Effect.gen(function* () {
+    const settings = yield* serverSettings.getSettings.pipe(Effect.option);
+    if (Option.isNone(settings)) return { accounts: [] };
+    const providerInstances = settings.value.providerInstances;
+    const defaultId = defaultInstanceIdForDriver(CLAUDE_DRIVER);
+    const instanceIds = [
+      ...new Set([...(Object.keys(providerInstances) as ProviderInstanceId[]), defaultId]),
+    ];
+    const described = yield* Effect.forEach(
+      instanceIds,
+      (instanceId) => describeInstance(providerInstances, instanceId).pipe(Effect.option),
+      { concurrency: 4 },
+    );
+    return { accounts: described.flatMap((entry) => Option.toArray(entry)) };
+  }).pipe(Effect.withSpan("ClaudeArtifacts.accounts"));
+
+  return ClaudeArtifacts.of({ list, accounts });
 });
 
 export const layer = Layer.effect(ClaudeArtifacts, make);
