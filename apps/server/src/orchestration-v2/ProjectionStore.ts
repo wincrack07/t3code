@@ -1180,9 +1180,22 @@ const decodePullRequestThread = Schema.decodeUnknownEffect(
   Schema.fromJsonString(PullRequestThread),
 );
 
-const decodeThreadPayload = Schema.decodeUnknownEffect(
+const decodeStoredThreadPayload = Schema.decodeUnknownEffect(
   Schema.fromJsonString(OrchestrationV2AppThreadJsonSchema),
 );
+// Row decoding runs inside bulk reads; avoid a tracing span for every thread.
+const decodeThreadPayload = Effect.fnUntraced(function* (payload: string) {
+  const thread = yield* decodeStoredThreadPayload(payload);
+  return thread.pinnedHtmlCards?.some((card) => card.placement !== "details")
+    ? {
+        ...thread,
+        pinnedHtmlCards: thread.pinnedHtmlCards.map((card) => ({
+          ...card,
+          placement: "details" as const,
+        })),
+      }
+    : thread;
+});
 const decodeRunPayload = Schema.decodeUnknownEffect(
   Schema.fromJsonString(OrchestrationV2RunJsonSchema),
 );

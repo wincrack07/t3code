@@ -2,6 +2,7 @@ import * as NodeSqlite from "node:sqlite";
 
 import { assert, it, vi } from "@effect/vitest";
 import {
+  OrchestrationV2DomainEvent,
   EnvironmentId,
   EventId,
   CommandId,
@@ -76,6 +77,7 @@ const modelSelection = {
 } satisfies ModelSelection;
 const driver = ProviderDriverKind.make("codex");
 const providerInstanceId = modelSelection.instanceId;
+const decodeDomainEvent = Schema.decodeUnknownSync(OrchestrationV2DomainEvent);
 const encodeUnknownJsonString = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 const traceSqlStatements = () => {
@@ -272,6 +274,36 @@ const addRolledBackRecoveryCandidate = Effect.fn("addRolledBackRecoveryCandidate
 
   return threadId;
 });
+
+it.effect("decodes legacy pin events into details and persists their removal", () =>
+  Effect.gen(function* () {
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = yield* addRolledBackRecoveryCandidate("legacy-cards");
+    const projection = yield* store.getThreadProjection(threadId);
+    const card = { id: "status", attachmentId: "legacy-html", title: "Status", height: 200 };
+    for (const placement of [undefined, "panel"] as const) {
+      const event = {
+        id: EventId.make(`event:legacy-card:${placement ?? "default"}`),
+        type: "thread.metadata-updated" as const,
+        threadId,
+        occurredAt: projection.thread.updatedAt,
+        payload: {
+          ...projection.thread,
+          pinnedHtmlCards: [{ ...card, ...(placement ? { placement } : {}) }],
+        },
+      };
+      yield* store.apply(decodeDomainEvent(event));
+      const loaded = yield* store.getThreadProjection(threadId);
+      assert.deepEqual(loaded.thread.pinnedHtmlCards, [{ ...card, placement: "details" }]);
+      yield* store.apply({
+        ...event,
+        id: EventId.make(`event:legacy-card:remove:${placement ?? "default"}`),
+        payload: { ...loaded.thread, pinnedHtmlCards: [] },
+      });
+      assert.deepEqual((yield* store.getThreadProjection(threadId)).thread.pinnedHtmlCards, []);
+    }
+  }).pipe(Effect.provide(layerTest)),
+);
 
 it.effect("routes full projection reads to readers and retains uncommitted writer state", () =>
   Effect.gen(function* () {

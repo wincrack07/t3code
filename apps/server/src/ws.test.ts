@@ -1,3 +1,4 @@
+import * as KeepAwake from "./keepAwake/KeepAwake.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -789,6 +790,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(DeviceService.DeviceService)({}),
   Layer.mock(EnvironmentTheme.EnvironmentThemeService)({}),
   Layer.mock(GitWorkflowService.GitWorkflowService)({}),
+  Layer.mock(KeepAwake.KeepAwake)({}),
   Layer.mock(HostResources.HostResources)({}),
   Layer.mock(SystemMonitor.SystemMonitor)({}),
   Layer.mock(McpAppRequests.McpAppRequests)({}),

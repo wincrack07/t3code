@@ -1,5 +1,6 @@
 import {
-  PROMPT_POLISH_INSTRUCTIONS,
+  DEFAULT_PROMPT_POLISH_SETTINGS,
+  type PromptPolishSettings,
   TextGenerationError,
   type PromptPolishInput,
   type PromptPolishResult,
@@ -25,8 +26,16 @@ export class PromptPolish extends Context.Service<
 
 const isTextGenerationError = Schema.is(TextGenerationError);
 
-export function buildPromptPolishPrompt(draft: string): string {
-  return `${PROMPT_POLISH_INSTRUCTIONS}
+export function buildPromptPolishPrompt(
+  draft: string,
+  settings: PromptPolishSettings = DEFAULT_PROMPT_POLISH_SETTINGS,
+): string {
+  const rules = settings.rules
+    .filter((rule) => rule.enabled)
+    .map((rule) => rule.text)
+    .join(" ");
+  const instructions = [settings.basePrompt, rules].filter(Boolean).join("\n\n");
+  return `${instructions}
 
 <draft>
 ${draft}
@@ -50,7 +59,7 @@ const make = Effect.gen(function* () {
         // Providers expose one free-form text operation, named for its first use.
         const generated = yield* textGeneration.generateTranscriptionPostProcessing({
           cwd,
-          prompt: buildPromptPolishPrompt(input.prompt),
+          prompt: buildPromptPolishPrompt(input.prompt, settings.promptPolish),
           modelSelection: settings.textGenerationModelSelection,
         });
         const prompt = generated.transcription.trim();

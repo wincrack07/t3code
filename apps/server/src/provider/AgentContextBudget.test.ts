@@ -1,3 +1,4 @@
+import * as KeepAwake from "../keepAwake/KeepAwake.ts";
 import * as SystemMonitor from "../systemMonitor/SystemMonitor.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -49,6 +50,7 @@ import budget from "./agentContextBudget.json" with { type: "json" };
 
 // Registration only stores tool definitions, so the handlers' services are never called.
 const toolHandlerServices = Layer.mergeAll(
+  Layer.mock(KeepAwake.KeepAwake)({}),
   Layer.mock(SystemMonitor.SystemMonitor)({}),
   Layer.mock(AssetSigner)({}),
   Layer.mock(DeviceService)({}),

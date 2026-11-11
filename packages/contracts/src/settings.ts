@@ -1,3 +1,4 @@
+import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPolish.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
@@ -1512,6 +1513,9 @@ export const ServerSettings = Schema.Struct({
       }),
     ),
   ),
+  promptPolish: PromptPolishSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROMPT_POLISH_SETTINGS)),
+  ),
   threadTitleInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   branchNamingMode: BranchNamingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("static" as const)),
@@ -1896,6 +1900,7 @@ export const ServerSettingsPatch = Schema.Struct({
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   ghqCloneLayout: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  promptPolish: Schema.optionalKey(PromptPolishSettings),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
   branchNamePrefix: Schema.optionalKey(TrimmedString),
