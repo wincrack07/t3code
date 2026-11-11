@@ -464,6 +464,10 @@ function OpenCommandPaletteDialog(props: {
   const stopThreadSession = useAtomCommand(threadEnvironment.stopSession, {
     reportFailure: false,
   });
+  const requestPrReview = useAtomCommand(serverEnvironment.requestPrReview, {
+    label: "T3 PR review",
+    reportFailure: false,
+  });
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -695,6 +699,9 @@ function OpenCommandPaletteDialog(props: {
       .map((environment) => environment.environmentId),
     supportsTriage,
   });
+  const canRequestPrReview = useAtomValue(
+    serverEnvironment.requestPrReview.permissionAtom(activeThread?.environmentId ?? null),
+  );
   const canTriage =
     useAtomValue(serverEnvironment.prepareTriage.permissionAtom(triageEnvironmentId)) &&
     supportsTriage(triageEnvironmentId);
@@ -1466,6 +1473,39 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
       },
     });
+    if (canRequestPrReview) {
+      const environmentId = activeThread.environmentId;
+      const threadId = activeThread.id;
+      actionItems.push({
+        kind: "action",
+        value: "action:request-pr-review",
+        searchTerms: ["review", "pr review", "review bot", "github review", "code review"],
+        title: "Request T3 review of linked pull request",
+        description: "The PR review bot reviews it and posts on GitHub",
+        disabled: !visibleThreadPullRequests(activeThread.pullRequests).some(
+          (link) => link.host === "github.com",
+        ),
+        icon: <PullRequestGlyph.pullRequest className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          const result = await requestPrReview({ environmentId, input: { threadId } });
+          toastManager.add(
+            stackedThreadToast(
+              result._tag === "Success"
+                ? {
+                    type: "success",
+                    title: "T3 review started",
+                    description: `${result.value.repository}#${result.value.number} at ${result.value.headSha.slice(0, 7)}`,
+                  }
+                : {
+                    type: "error",
+                    title: "Could not start the review",
+                    description: String(squashAtomCommandFailure(result)),
+                  },
+            ),
+          );
+        },
+      });
+    }
   }
 
   if (activeThread !== null && canShareActiveThreadWithGuest) {

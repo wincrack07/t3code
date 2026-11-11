@@ -1329,6 +1329,12 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:process-resource-history",
       tag: WS_METHODS.serverGetProcessResourceHistory,
     }),
+    prReviewState: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:pr-reviews:state",
+      tag: WS_METHODS.prReviewsGetState,
+      idleTtlMs: 0,
+      refreshIntervalMs: 30_000,
+    }),
     scheduledTaskWebhookDeliveries: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:scheduled-task:webhook-deliveries",
       tag: WS_METHODS.scheduledTasksListWebhookDeliveries,
@@ -1571,6 +1577,27 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    updatePrReviewConfig: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:pr-reviews:update-config",
+      tag: WS_METHODS.prReviewsUpdateConfig,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    setPrReviewPrivateKey: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:pr-reviews:set-private-key",
+      tag: WS_METHODS.prReviewsSetPrivateKey,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    // Off the config lane: starting a review reads GitHub before it returns.
+    requestPrReview: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:pr-reviews:request",
+      tag: WS_METHODS.prReviewsRequest,
+    }),
+    rerunPrReview: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:pr-reviews:rerun",
+      tag: WS_METHODS.prReviewsRerun,
     }),
     upsertScheduledTask: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:upsert",
