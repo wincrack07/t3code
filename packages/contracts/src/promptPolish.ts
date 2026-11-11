@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 
+import { ModelSelection } from "./modelSelection.ts";
 import { ProjectId } from "./baseSchemas.ts";
 
 const MAX_PROMPT_POLISH_LENGTH = 20_000;
@@ -61,6 +62,7 @@ const DEFAULT_PROMPT_POLISH_RULES = [
 ] as const;
 
 export const PromptPolishSettings = Schema.Struct({
+  modelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
   basePrompt: Schema.String.check(Schema.isMaxLength(8000)),
   rules: Schema.Array(
     Schema.Struct({
@@ -72,6 +74,7 @@ export const PromptPolishSettings = Schema.Struct({
 });
 export type PromptPolishSettings = typeof PromptPolishSettings.Type;
 export const DEFAULT_PROMPT_POLISH_SETTINGS: PromptPolishSettings = {
+  modelSelection: null,
   basePrompt: DEFAULT_PROMPT_POLISH_BASE,
   rules: DEFAULT_PROMPT_POLISH_RULES,
 };

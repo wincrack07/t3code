@@ -568,6 +568,7 @@ export const WS_METHODS = {
   serverPolishPrompt: "server.polishPrompt",
   serverCompletePrompt: "server.completePrompt",
   serverDecide: "server.decide",
+  serverTestDecisionConnection: "server.testDecisionConnection",
   serverPrepareTriage: "server.prepareTriage",
   prReviewsGetState: "prReviews.getState",
   prReviewsUpdateConfig: "prReviews.updateConfig",
@@ -1018,6 +1019,12 @@ const WsServerListTextGeneratorModelsRpc = Rpc.make(WS_METHODS.serverListTextGen
   payload: ListTextGeneratorModelsInput,
   success: ListTextGeneratorModelsResult,
   error: Schema.Union([TextGeneratorError, EnvironmentAuthorizationError]),
+});
+
+const WsServerTestDecisionConnectionRpc = Rpc.make(WS_METHODS.serverTestDecisionConnection, {
+  payload: Schema.Struct({}),
+  success: Schema.Struct({ success: Schema.Boolean, message: Schema.String }),
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerDecideRpc = Rpc.make(WS_METHODS.serverDecide, {
@@ -2231,6 +2238,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerPolishPromptRpc,
   WsServerCompletePromptRpc,
   WsServerDecideRpc,
+  WsServerTestDecisionConnectionRpc,
   WsServerPrepareTriageRpc,
   WsPrReviewsGetStateRpc,
   WsPrReviewsUpdateConfigRpc,

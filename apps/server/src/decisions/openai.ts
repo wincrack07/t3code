@@ -16,11 +16,12 @@ export const requestOpenAiDecision = Effect.fn("Decisions.openai")(function* (
   apiKey: string,
   model: string,
   prompt: string,
+  baseUrl = "https://api.openai.com/v1",
 ) {
   const http = yield* HttpClient.HttpClient;
   const response = yield* http
     .execute(
-      HttpClientRequest.post("https://api.openai.com/v1/chat/completions").pipe(
+      HttpClientRequest.post(`${baseUrl.replace(/\/+$/, "")}/chat/completions`).pipe(
         HttpClientRequest.bearerToken(apiKey),
         HttpClientRequest.bodyJsonUnsafe({
           model,
@@ -38,7 +39,7 @@ export const requestOpenAiDecision = Effect.fn("Decisions.openai")(function* (
       Effect.provideService(HttpClient.TracerPropagationEnabled, false),
     );
   if (response.status < 200 || response.status >= 300)
-    return yield* Effect.fail("Decision API failed");
+    return yield* Effect.fail(`Decision API returned HTTP ${response.status}`);
   const completion = yield* response.json.pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Completion)),
   );

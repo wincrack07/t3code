@@ -92,6 +92,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverCheckOtlpEndpoint]: "server",
   [WS_METHODS.serverListTextGeneratorModels]: "server",
   [WS_METHODS.serverDecide]: "server",
+  [WS_METHODS.serverTestDecisionConnection]: "server",
   [WS_METHODS.serverPolishPrompt]: "server",
   [WS_METHODS.serverCompletePrompt]: "server",
   [WS_METHODS.serverPrepareTriage]: "server",

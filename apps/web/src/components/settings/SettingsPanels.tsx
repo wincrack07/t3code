@@ -103,6 +103,7 @@ import {
   SettingResetButton,
   SettingsPageContainer,
   SettingsRow,
+  SettingsSearchTarget,
   SettingsSection,
 } from "./settingsLayout";
 import { PromptSuggestionsSettings } from "./PromptSuggestionsSettings";
@@ -2160,13 +2161,15 @@ export function AboutSettingsPanel() {
 
 function KeepAwakeSettings() {
   const { environment } = useSettingsScope();
-  return (
-    <div id={searchableSetting("keep-awake").id}>
-      {environment ? (
-        <KeepAwakeControl environmentId={environment.environmentId} settings />
-      ) : (
-        <p>Select one environment to configure Keep awake.</p>
-      )}
-    </div>
+  return environment ? (
+    // KeepAwakeControl renders its own title, so this takes a row's padding instead of a SettingsRow.
+    <SettingsSearchTarget {...searchableSetting("keep-awake")} className="px-3 py-3 sm:px-4">
+      <KeepAwakeControl environmentId={environment.environmentId} settings />
+    </SettingsSearchTarget>
+  ) : (
+    <SettingsRow
+      {...searchableSetting("keep-awake")}
+      description="Select one environment to change its keep awake defaults."
+    />
   );
 }

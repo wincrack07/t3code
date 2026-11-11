@@ -1421,7 +1421,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
   );
 
   it.effect(
-    "uses the same secret lifecycle for provider config, environment, host tokens, and quota keys",
+    "uses the same secret lifecycle for provider config, environment, host tokens, quota keys, and Decisions",
     () =>
       Effect.gen(function* () {
         const service = yield* ServerSettingsModule.ServerSettingsService;
@@ -1430,6 +1430,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const store = yield* ServerSecretStore.ServerSecretStore;
         const instanceId = ProviderInstanceId.make("antigravity_secrets");
         const saved = yield* service.updateSettings({
+          decisions: {
+            ...DEFAULT_SERVER_SETTINGS.decisions,
+            source: "custom",
+            customBaseUrl: "https://example.test/v1",
+            customModel: "router",
+            customApiKey: "decision-secret",
+          },
           providerInstances: {
             [instanceId]: {
               driver: ProviderDriverKind.make("antigravity"),
@@ -1473,6 +1480,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           "gitcafe-secret",
           "quota-secret",
           "expo-secret",
+          "decision-secret",
         ];
         const client = ServerSettingsModule.redactServerSettingsForClient(saved, {
           secretReferences: true,
@@ -1753,7 +1761,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const hub = UsageLimitSourceId.make("hub");
         const router = ProviderInstanceId.make("openrouter");
         const withUsage = yield* serverSettings.updateSettings({
-          decisions: { ...DEFAULT_SERVER_SETTINGS.decisions, apiKey: "decision-api-fixture" },
+          decisions: {
+            ...DEFAULT_SERVER_SETTINGS.decisions,
+            apiKey: "decision-api-fixture",
+            customApiKey: usageReference,
+          },
           cloudSpeechCredentials: { openai: usageReference, xai: "literal-fixture" },
           textGenerators: {
             [router]: {
@@ -1810,6 +1822,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.notInclude(JSON.stringify(legacy), "op://");
         assert.notInclude(JSON.stringify(legacy), "decision-api-fixture");
         assert.equal(legacy.decisions.apiKey, SECRET_REDACTED);
+        assert.equal(legacy.decisions.customApiKey, SECRET_REDACTED);
         assert.deepEqual(legacy.cloudSpeechCredentials, {
           openai: SECRET_REDACTED,
           xai: SECRET_REDACTED,
@@ -1825,6 +1838,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.equal(configOf(legacy, antigravity)?.apiKey, SECRET_REDACTED);
         assert.equal(configOf(legacy, openCode)?.serverPassword, SECRET_REDACTED);
         const echoed = yield* serverSettings.updateSettings({
+          decisions: legacy.decisions,
           cloudSpeechCredentials: legacy.cloudSpeechCredentials,
           sourceControlHosts: legacy.sourceControlHosts,
           usageLimitSources: legacy.usageLimitSources,
@@ -1838,6 +1852,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           "github.com": gitHubReference,
           "ghe.acme.test": "ghp_ghe",
         });
+        assert.deepEqual(echoed.decisions.customApiKey, usageReference);
         assert.deepEqual(echoed.usageLimitSources[hub]?.managementKey, usageReference);
         assert.deepEqual(echoed.textGenerators[router]?.apiKey, usageReference);
         assert.deepEqual(echoed.cloudSpeechCredentials, {
@@ -1944,6 +1959,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         "cloudSpeechCredentials.openrouter",
         "easDeviceHosts.[].accessToken",
         "simlockDeviceHosts.[].agentToken",
+        "decisions.customApiKey",
         "decisions.apiKey",
         "usageLimitSources.*.managementKey",
         "textGenerators.*.apiKey",
