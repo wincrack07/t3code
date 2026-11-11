@@ -136,6 +136,18 @@ function strictSecretReferencePaths(
 }
 
 it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings", (it) => {
+  it.effect("saves a Polish prompt model without the rest of its settings changing", () =>
+    Effect.gen(function* () {
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+      const modelSelection = createModelSelection(ProviderInstanceId.make("codex"), "luna");
+      const saved = yield* service.updateSettings({
+        promptPolish: { ...DEFAULT_SERVER_SETTINGS.promptPolish, modelSelection },
+      });
+      assert.deepEqual(saved.promptPolish.modelSelection, modelSelection);
+      assert.equal(saved.promptPolish.basePrompt, DEFAULT_SERVER_SETTINGS.promptPolish.basePrompt);
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("serializes concurrent model preference edits without cancelling duplicate adds", () =>
     Effect.gen(function* () {
       const service = yield* ServerSettingsModule.ServerSettingsService;
