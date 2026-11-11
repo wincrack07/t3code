@@ -102,8 +102,6 @@ function createTimelineFollowStore() {
     follow: FOLLOWING,
   };
   const listeners = new Set<() => void>();
-  // Page keys read the overlay at keypress time; it changes no rendered state.
-  let composerOverlay: HTMLElement | null = null;
   const read = (visit: TimelineFollowVisit) =>
     snapshot.visit === visit ? snapshot.follow : initialTimelineFollow(visit.followEnd);
   return {
@@ -113,11 +111,6 @@ function createTimelineFollowStore() {
     },
     snapshot: () => snapshot,
     read,
-    /** Ref callback for the composer overlay. */
-    attachComposerOverlay: (element: HTMLElement | null) => {
-      composerOverlay = element;
-    },
-    readComposerOverlayHeight: () => composerOverlay?.getBoundingClientRect().height ?? 0,
     dispatch: (visit: TimelineFollowVisit, event: TimelineFollowEvent) => {
       const before = read(visit);
       const after = transitionTimelineFollow(before, event);
@@ -278,7 +271,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
   }
   const timelineRealContentOverflowsViewport = () =>
     timelineContentOverflowsViewport(legendListRef.current?.getState(), {
-      composerInset: composerTimelineInset,
+      composerInset: 0,
       anchorOffset: CHAT_TIMELINE_ANCHOR_OFFSET,
     });
   const pageScrollControllerRef = useRef<ReturnType<typeof createPageScrollController> | null>(
@@ -356,7 +349,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     const unsubscribe = viewport.subscribe(handleNavigationStable);
     const controller = createPageScrollController({
       getContainer: () => viewport.scrollNode,
-      getScrollPaddingBottomPx: followStore.readComposerOverlayHeight,
+      getScrollPaddingBottomPx: () => 0,
       onScrollStart: handlePageScrollStart,
     });
     pageScrollControllerRef.current = controller;
@@ -543,6 +536,5 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     onIsAtEndChangeStable,
     anchorNewTurn,
     attachTimelineViewport,
-    attachComposerOverlay: followStore.attachComposerOverlay,
   };
 }

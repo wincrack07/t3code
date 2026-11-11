@@ -92,6 +92,13 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 ]);
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
+export const DesktopWindowThemeSchema = Schema.Struct({
+  theme: DesktopThemeSchema,
+  light: Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/)),
+  dark: Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/)),
+});
+export type DesktopWindowTheme = typeof DesktopWindowThemeSchema.Type;
+
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
 export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Beta", "Dev", "Nightly"]);
 
@@ -1122,7 +1129,10 @@ export interface DesktopBridge {
   pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
   pickProjectFavicon: (initialPath?: string) => Promise<string | null>;
   pickThemeFiles: () => Promise<readonly PickedThemeFile[] | null>;
-  setTheme: (theme: DesktopTheme) => Promise<void>;
+  setTheme: (
+    theme: DesktopTheme,
+    colors?: Pick<DesktopWindowTheme, "light" | "dark">,
+  ) => Promise<void>;
   showContextMenu: <T extends string>(
     items: readonly ContextMenuItem<T>[],
     position?: { x: number; y: number },

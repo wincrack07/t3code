@@ -424,6 +424,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["typography family size system sans"],
   },
   {
+    id: "reply-font",
+    title: "Reply font",
+    to: "/settings/appearance",
+    searchTerms: ["typography family size assistant prose serif"],
+  },
+  {
     id: "prompt-font",
     title: "Prompt font",
     to: "/settings/appearance",
@@ -461,9 +467,10 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["long lines code blocks diffs file previews"],
   },
   {
-    id: "composer-context",
-    title: "Composer context",
-    to: "/settings/appearance",
+    id: "sidebar-display",
+    title: "Sidebar display",
+    to: "/settings/general",
+    searchTerms: ["compact comfortable density settled project grouping"],
   },
   {
     id: "project-grouping",

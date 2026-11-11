@@ -32,6 +32,8 @@ import {
   type SidebarSection,
   resolveSidebarDropVerb,
   groupSidebarThreadsByProject,
+  sidebarNestedThreads,
+  sidebarProjectIsOther,
   resolveSidebarFolderDot,
   sidebarFolderExpansionKeys,
 } from "./Sidebar.logic";
@@ -1567,6 +1569,81 @@ describe("sidebarFolderExpansionKeys", () => {
 });
 
 describe("groupSidebarThreadsByProject", () => {
+  it("keeps pinned, open, recently settled and recently active projects above Other projects", () => {
+    const old = "2026-10-01T00:00:00.000Z";
+    const now = "2026-11-11T00:00:00.000Z";
+    const thread = { updatedAt: old, latestUserMessageAt: old, settledAt: old, unsettledAt: null };
+    const input = {
+      pinned: false,
+      hasLooseThreads: false,
+      containsRoute: false,
+      projectUpdatedAt: old,
+      threads: [thread],
+      now,
+    };
+    expect(sidebarProjectIsOther(input)).toBe(true);
+    expect(sidebarProjectIsOther({ ...input, pinned: true })).toBe(false);
+    expect(sidebarProjectIsOther({ ...input, containsRoute: true })).toBe(false);
+    expect(sidebarProjectIsOther({ ...input, hasLooseThreads: true })).toBe(false);
+    expect(sidebarProjectIsOther({ ...input, threads: [{ ...thread, settledAt: now }] })).toBe(
+      false,
+    );
+    expect(
+      sidebarProjectIsOther({
+        ...input,
+        threads: [{ ...thread, latestUserMessageAt: "2026-10-28T00:00:00.000Z" }],
+      }),
+    ).toBe(false);
+    expect(
+      sidebarProjectIsOther({
+        ...input,
+        threads: [{ ...thread, latestUserMessageAt: "2026-10-27T23:59:59.000Z" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("indexes local lineage and delegated children without exposing archived or orphan rows", () => {
+    const parent = {
+      ...makeThread({ id: ThreadId.make("parent") }),
+      environmentId: localEnvironmentId,
+    };
+    const child = {
+      ...parent,
+      id: ThreadId.make("child"),
+      lineage: {
+        ...parent.lineage,
+        parentThreadId: parent.id,
+        relationshipToParent: "subagent" as const,
+      },
+    };
+    const remote = {
+      ...parent,
+      id: ThreadId.make("remote"),
+      environmentId: EnvironmentId.make("remote"),
+      delegatedFrom: {
+        environmentId: localEnvironmentId,
+        threadId: parent.id,
+        title: parent.title,
+      },
+    };
+    const archived = {
+      ...child,
+      id: ThreadId.make("archived"),
+      archivedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const orphan = {
+      ...child,
+      id: ThreadId.make("orphan"),
+      lineage: { ...child.lineage, parentThreadId: ThreadId.make("missing") },
+    };
+    expect(
+      [...sidebarNestedThreads([parent, child, remote, archived, orphan])].map(([key, rows]) => [
+        key,
+        rows.map((row) => row.id),
+      ]),
+    ).toEqual([[`${localEnvironmentId}:parent`, ["child", "remote"]]]);
+  });
+
   it("puts each thread in its project's folder and drops empty projects unless kept", () => {
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const t3code = ProjectId.make("t3code");

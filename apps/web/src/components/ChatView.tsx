@@ -279,7 +279,6 @@ import { ThreadTimeline } from "./chat/ThreadTimeline";
 import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
-import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
 import { useRemoteOpenState } from "~/remoteOpen";
@@ -721,7 +720,6 @@ export default function ChatView(props: ChatViewProps) {
   const [composerReservedHeight, setComposerReservedHeight] = useState(0);
   const composerReservedHeightRef = useRef(0);
   const composerExpandedHeightRef = useRef(0);
-  const [scrollToEndClearance, setScrollToEndClearance] = useState(0);
   const fanoutSelectionsAtom = draftFanoutSelectionsAtom(routeThreadKey);
   const { sendInFlight: sendInFlightRef } = draftSendState(routeThreadKey);
   const multipleModelSelections = useAtomValue(fanoutSelectionsAtom);
@@ -1745,7 +1743,7 @@ export default function ChatView(props: ChatViewProps) {
     !embedded &&
     shouldShowComposerContextStrip({
       isDraftHeroState,
-      persistInActiveThreads: isMobileViewport ? settings.persistComposerContextStrip : true,
+      persistInActiveThreads: false,
       hasActiveProject: activeProject !== null && !showProviderSubagentBar,
       isGitRepo,
       showEnvironmentIndicator: showComposerEnvironmentIndicator,
@@ -2106,7 +2104,6 @@ export default function ChatView(props: ChatViewProps) {
     onIsAtEndChangeStable,
     anchorNewTurn,
     attachTimelineViewport,
-    attachComposerOverlay: attachFollowComposerOverlay,
   } = useTimelineFollow({
     legendListRef,
     composerTimelineInset,
@@ -2255,26 +2252,6 @@ export default function ChatView(props: ChatViewProps) {
       composerReservedHeightRef.current = reservedHeight;
       setComposerReservedHeight(reservedHeight);
     }
-    const mainSurface = composerOverlayElement?.querySelector<HTMLElement>(
-      '[data-chat-composer-main-surface="true"]',
-    );
-    const button =
-      composerOverlayElement?.parentElement?.querySelector<HTMLElement>("[data-scroll-to-end]");
-    const clearance =
-      composerOverlayElement && mainSurface && button
-        ? resolveScrollToEndClearance({
-            overlayHeight: nextHeight,
-            mainSurfaceTop: mainSurface.getBoundingClientRect().top,
-            button: button.getBoundingClientRect(),
-            attachments: Array.from(
-              composerOverlayElement.querySelectorAll<HTMLElement>(
-                '[data-composer-banner-surface="attached"]',
-              ),
-              (element) => element.getBoundingClientRect(),
-            ),
-          })
-        : nextHeight;
-    setScrollToEndClearance(clearance);
   };
   const publishComposerOverlayHeightStable = useStableCallback(publishComposerOverlayHeight);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the composer overlay element before paint for a new thread or composer mount
@@ -3470,13 +3447,13 @@ export default function ChatView(props: ChatViewProps) {
                   anchorMessageId={timelineAnchorMessageId}
                   onAnchorReady={onTimelineAnchorReadyStable}
                   onAnchorSizeChanged={onTimelineAnchorSizeChangedStable}
-                  contentInsetEndAdjustment={composerTimelineInset}
+                  contentInsetEndAdjustment={0}
                   liveFollowEnabled={timelineLiveFollowEnabled}
                   onIsAtEndChange={onIsAtEndChangeStable}
                   onViewportAttach={attachTimelineViewport}
                   onFooterGrow={onTimelineFooterGrowStable}
                   hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
-                  emptyPlaceholderInset={composerReservedHeight}
+                  emptyPlaceholderInset={0}
                   topFadeEnabled={!hasTimelineTopBanner}
                   {...(threadHistoryControls === undefined
                     ? {}
@@ -3486,7 +3463,7 @@ export default function ChatView(props: ChatViewProps) {
 
               {showScrollToBottom && !isThreadFindActive && (
                 <ScrollToEndButton
-                  bottom={scrollToEndClearance + 4}
+                  bottom={4}
                   summary={scrollToEndSummary}
                   onScrollToEnd={() => scrollToEnd(true)}
                 />
@@ -3497,17 +3474,19 @@ export default function ChatView(props: ChatViewProps) {
               {...composerArea}
               ref={(overlay: HTMLDivElement | null) => {
                 setComposerOverlayElement(overlay);
-                attachFollowComposerOverlay(overlay);
               }}
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
               className={
                 isDraftHeroState
                   ? "pointer-events-none absolute inset-0 z-20 flex items-center [@media(max-height:34rem)]:items-end"
-                  : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
+                  : "relative shrink-0 bg-background pt-1.5 sm:pt-2"
               }
             >
-              <div ref={draftHeroTransitionGroupRef} className="chat-composer-lane w-full">
+              <div
+                ref={draftHeroTransitionGroupRef}
+                className="chat-composer-lane w-full bg-background"
+              >
                 <div
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"

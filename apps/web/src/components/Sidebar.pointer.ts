@@ -126,7 +126,7 @@ export class SidebarPointerSensor {
     this.document.removeEventListener("selectionchange", this.clearSelection);
     // Suppress the eventual click after cancellation; a fresh pointerdown clears suppression after
     // out-of-document release.
-    if (!aborted || cancelled) {
+    if (!aborted) {
       this.document.addEventListener("click", this.suppressClick, { capture: true });
       this.document.addEventListener("pointerdown", this.clearClickSuppression, { capture: true });
     }

@@ -10,7 +10,12 @@ import * as Semaphore from "effect/Semaphore";
 
 import * as Electron from "electron";
 
-import { type DesktopSnapShotEvent, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
+import {
+  type DesktopSnapShotEvent,
+  type DesktopTheme,
+  type DesktopWindowTheme,
+  DEFAULT_CLIENT_SETTINGS,
+} from "@t3tools/contracts";
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -139,6 +144,12 @@ export class DesktopWindow extends Context.Service<
     readonly zoomMain: (direction: MainWindowZoomDirection) => Effect.Effect<void>;
     readonly runMainContentsCommand: (command: MainWindowContentsCommand) => Effect.Effect<void>;
     readonly syncAppearance: Effect.Effect<void>;
+    readonly setTheme: (
+      theme: DesktopTheme | DesktopWindowTheme,
+    ) => Effect.Effect<
+      void,
+      DesktopAppSettings.DesktopSettingsWriteError | ElectronTheme.ElectronThemeSetSourceError
+    >;
   }
 >()("@t3tools/desktop/window/DesktopWindow") {}
 
@@ -157,8 +168,13 @@ function getIconOption(
   });
 }
 
-function getInitialWindowBackgroundColor(shouldUseDarkColors: boolean): string {
-  return shouldUseDarkColors ? "#000000" : "#ffffff";
+function getInitialWindowBackgroundColor(
+  shouldUseDarkColors: boolean,
+  theme: DesktopWindowTheme | null,
+): string {
+  return (
+    theme?.[shouldUseDarkColors ? "dark" : "light"] ?? (shouldUseDarkColors ? "#000000" : "#ffffff")
+  );
 }
 
 type DisplayBounds = Pick<Electron.Rectangle, "x" | "y" | "width" | "height">;
@@ -204,8 +220,11 @@ export function resolveInitialMainWindowBounds(
   return DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE;
 }
 
-function buildConnectingSplashDataUrl(shouldUseDarkColors: boolean): string {
-  const background = getInitialWindowBackgroundColor(shouldUseDarkColors);
+function buildConnectingSplashDataUrl(
+  shouldUseDarkColors: boolean,
+  theme: DesktopWindowTheme | null,
+): string {
+  const background = getInitialWindowBackgroundColor(shouldUseDarkColors, theme);
   const label = shouldUseDarkColors ? "#9ca3af" : "#6b7280";
   const accent = shouldUseDarkColors ? "#f8fafc" : "#1f2937";
   const track = shouldUseDarkColors ? "rgba(248,250,252,0.18)" : "rgba(31,41,55,0.18)";
@@ -289,13 +308,14 @@ function syncWindowAppearance(
   window: Electron.BrowserWindow,
   shouldUseDarkColors: boolean,
   platform: NodeJS.Platform,
+  theme: DesktopWindowTheme | null,
 ): Effect.Effect<void> {
   return Effect.sync(() => {
     if (window.isDestroyed()) {
       return;
     }
 
-    window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
+    window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors, theme));
     const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
     if (typeof titleBarOverlay === "object") {
       window.setTitleBarOverlay(titleBarOverlay);
@@ -338,6 +358,31 @@ export const make = Effect.gen(function* () {
   const backendReadyRef = yield* Ref.make(false);
   let backendHasStarted = false;
   let mainClosedDuringStartup = false;
+  const restoreWindowTheme = Effect.gen(function* () {
+    const settings = yield* desktopSettings.get;
+    if (settings.windowTheme !== null) {
+      yield* electronTheme
+        .setSource(settings.windowTheme.theme)
+        .pipe(
+          Effect.catch((error) =>
+            logWindowWarning("could not restore the saved window theme", { error }),
+          ),
+        );
+    }
+    return settings.windowTheme === null && settings.updateChannel === "nightly"
+      ? {
+          ...settings,
+          windowTheme: { theme: "system" as const, light: "#ffffff", dark: "#191919" },
+        }
+      : settings;
+  });
+  const syncAppearance = Effect.gen(function* () {
+    const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+    const settings = yield* desktopSettings.get;
+    yield* electronWindow.syncAllAppearance((window) =>
+      syncWindowAppearance(window, shouldUseDarkColors, environment.platform, settings.windowTheme),
+    );
+  }).pipe(Effect.withSpan("desktop.window.syncAppearance"));
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
   const runFork = Effect.runForkWith(context);
@@ -391,8 +436,8 @@ export const make = Effect.gen(function* () {
     const applicationUrl = getDesktopUrl(environment.isDevelopment);
     const iconPaths = yield* assets.iconPaths;
     const iconOption = getIconOption(iconPaths, environment.platform);
+    const persistedSettings = yield* restoreWindowTheme;
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
-    const persistedSettings = yield* desktopSettings.get;
     const persistedBounds = persistedSettings.mainWindowBounds;
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
@@ -423,7 +468,10 @@ export const make = Effect.gen(function* () {
       show: false,
       autoHideMenuBar: true,
       ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
-      backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors),
+      backgroundColor: getInitialWindowBackgroundColor(
+        shouldUseDarkColors,
+        persistedSettings.windowTheme,
+      ),
       ...iconOption,
       title: environment.displayName,
       ...getWindowTitleBarOptions(shouldUseDarkColors, environment.platform),
@@ -969,6 +1017,7 @@ export const make = Effect.gen(function* () {
     const existingWindow = yield* electronWindow.currentMainOrFirst;
     if (Option.isSome(existingWindow)) return;
 
+    const persistedSettings = yield* restoreWindowTheme;
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     if (yield* Ref.get(desktopState.quitting)) return;
     const splash = yield* electronWindow.create({
@@ -982,7 +1031,10 @@ export const make = Effect.gen(function* () {
       center: true,
       show: false,
       skipTaskbar: false,
-      backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors),
+      backgroundColor: getInitialWindowBackgroundColor(
+        shouldUseDarkColors,
+        persistedSettings.windowTheme,
+      ),
       title: environment.displayName,
       webPreferences: {
         contextIsolation: true,
@@ -1004,7 +1056,9 @@ export const make = Effect.gen(function* () {
         splash.show();
       }
     });
-    void splash.loadURL(buildConnectingSplashDataUrl(shouldUseDarkColors));
+    void splash.loadURL(
+      buildConnectingSplashDataUrl(shouldUseDarkColors, persistedSettings.windowTheme),
+    );
     yield* logWindowInfo("connecting splash shown");
   }).pipe(
     Effect.catch((error) =>
@@ -1114,12 +1168,13 @@ export const make = Effect.gen(function* () {
       else if (command === "forceReload") webContents.reloadIgnoringCache();
       else webContents.toggleDevTools();
     }),
-    syncAppearance: Effect.gen(function* () {
-      const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
-      yield* electronWindow.syncAllAppearance((window) =>
-        syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
-      );
-    }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
+    syncAppearance,
+    setTheme: Effect.fn("desktop.window.setTheme")(function* (input) {
+      const theme = typeof input === "string" ? input : input.theme;
+      if (typeof input !== "string") yield* desktopSettings.setWindowTheme(input);
+      yield* electronTheme.setSource(theme);
+      yield* syncAppearance;
+    }),
   });
 });
 

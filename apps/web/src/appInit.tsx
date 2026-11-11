@@ -95,6 +95,8 @@ function startClientAppearance(): void {
     }
     if (
       previous?.fontFamilySans !== settings.fontFamilySans ||
+      previous.fontFamilyReply !== settings.fontFamilyReply ||
+      previous.fontSizeReply !== settings.fontSizeReply ||
       previous.fontFamilyCode !== settings.fontFamilyCode ||
       previous.fontFamilyComposer !== settings.fontFamilyComposer ||
       previous.fontSizeInterface !== settings.fontSizeInterface ||
@@ -105,6 +107,8 @@ function startClientAppearance(): void {
     ) {
       applyAppearanceFontVariables(root, {
         sans: settings.fontFamilySans,
+        reply: settings.fontFamilyReply,
+        sizeReply: settings.fontSizeReply,
         code: settings.fontFamilyCode,
         composer: settings.fontFamilyComposer,
         sizeInterface: settings.fontSizeInterface,

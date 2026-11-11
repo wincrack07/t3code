@@ -1,4 +1,5 @@
 import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
+import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
 import { PromptPolishSettings } from "./PromptPolishSettings";
 import { KeepAwakeControl } from "../KeepAwakeControl";
 import { useAtomValue } from "@effect/atom-react";
@@ -519,10 +520,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Snooze options"]
       : []),
     ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
-    ...(settings.persistComposerContextStrip !==
-    DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
-      ? ["Composer context"]
-      : []),
     ...getChangedTypographySettingLabels(settings),
     ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
       ? ["Default diff file state"]
@@ -693,6 +690,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
+      fontFamilyReply: DEFAULT_UNIFIED_SETTINGS.fontFamilyReply,
+      fontSizeReply: DEFAULT_UNIFIED_SETTINGS.fontSizeReply,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
       fontFamilyCode: DEFAULT_UNIFIED_SETTINGS.fontFamilyCode,
       fontFamilyTerminal: DEFAULT_UNIFIED_SETTINGS.fontFamilyTerminal,
@@ -788,6 +787,11 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="sidebar" title="Sidebar">
+        <SettingsRow
+          {...searchableSetting("sidebar-display")}
+          description="Choose compact or comfortable rows and how settled threads are grouped."
+          control={<SidebarDisplayMenu />}
+        />
         <SettingsRow
           {...searchableSetting("project-grouping")}
           description="Combine matching repositories across environments."

@@ -24,10 +24,24 @@ of the selected theme.
 ## Composer context
 
 Git-backed projects show branch and worktree controls below the composer while you create a thread.
-The controls retreat as the composer docks after you send the first message.
+After the first message, use the thread details panel to view the environment, checkout, and branch.
+The composer keeps model, access, and context controls on one line.
 
-Turn on **Composer context** to keep those controls visible after the thread starts. This preference
-applies to the web and desktop clients.
+## Sidebar
+
+Use the display menu beside the sidebar's project filter, or **Settings → General → Sidebar**,
+to choose **Compact** or **Comfortable** rows and **All threads by project** or a **Global settled
+section**. Claude defaults to compact rows; Claude and nightly builds default to project grouping.
+Each project's settled sessions expand in pages. Pinned projects and projects active in the last
+14 days stay in the main list; older inactive projects appear under **Other projects**. Expansion
+is remembered on this device. Expand a thread's chevron to load its nested sessions.
+
+## Typography
+
+In **Settings → Appearance → Typography**, choose installed fonts and text sizes. **Reply font**
+changes assistant replies; user messages keep the interface font and code keeps the monospace font.
+Replies follow the interface by default. The Claude theme uses a serif reply stack; an explicit
+font choice overrides the theme. Fonts are used only when installed on your machine.
 
 ## Math
 
