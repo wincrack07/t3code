@@ -31,7 +31,7 @@ export function PromptSuggestionsSettings() {
         serverScoped
         settingKeys={["promptCompletionNextEnabled"]}
         {...searchableSetting("prompt-completion-next")}
-        description="After a reply finishes, show up to three likely next prompts as dimmed text in the empty input. Tab fills one in; Alt+] and Alt+[ switch between them. One small request per finished reply."
+        description="After a reply, show likely next prompts in the empty input. Tab fills one in, Alt+] and Alt+[ switch between them."
         control={
           <Switch
             checked={settings.promptCompletionNextEnabled}
@@ -46,7 +46,7 @@ export function PromptSuggestionsSettings() {
         serverScoped
         settingKeys={["promptCompletionInlineEnabled"]}
         {...searchableSetting("prompt-completion-inline")}
-        description="When you pause while typing, show a likely continuation after the caret. Tab accepts it, Alt or Ctrl+Right accepts one word, and Escape dismisses it. Costs a small request on each pause."
+        description="Show a likely continuation when you pause. Tab accepts it, Alt+Right or Ctrl+Right accepts one word, Escape dismisses it."
         control={
           <Switch
             checked={settings.promptCompletionInlineEnabled}
@@ -61,7 +61,7 @@ export function PromptSuggestionsSettings() {
         serverScoped
         settingKeys={["promptCompletionDelayMs"]}
         {...searchableSetting("prompt-completion-delay")}
-        description="How long the input stays still before a suggestion is requested."
+        description="How long you pause before a suggestion is requested."
         control={
           <Select
             value={String(settings.promptCompletionDelayMs)}
@@ -148,7 +148,7 @@ function SuggestionModelRow() {
       serverScoped
       settingKeys={["promptCompletionModelSelection"]}
       {...searchableSetting("prompt-completion-model")}
-      description="Pick a fast, cheap model for suggestions. When off, they use this environment's text generation model."
+      description="Use a separate fast model for suggestions. When off, suggestions use the text generation model."
       control={
         connectedEnvironments.length === 0 ? (
           <span className="text-sm text-muted-foreground">Connect an environment first.</span>

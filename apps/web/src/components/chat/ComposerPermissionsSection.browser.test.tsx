@@ -39,7 +39,7 @@ function OverflowMenu() {
   );
 }
 
-it("reaches Permissions with arrow keys, previews, and picks with Enter", async () => {
+it("reaches Permissions with arrow keys, describes each mode, and picks with Enter", async () => {
   await using screen = await render(<OverflowMenu />, { router: false }); // no routes involved
   const trigger = screen.getByRole("button", { name: "More" });
   await userEvent.tab();
@@ -50,13 +50,6 @@ it("reaches Permissions with arrow keys, previews, and picks with Enter", async 
   await expect
     .element(supervised)
     .toHaveAccessibleDescription("Ask before commands and file changes.");
-
-  await userEvent.keyboard("{ArrowRight}");
-  await expect
-    .element(page.getByRole("menuitemradio", { name: "Auto-accept edits" }))
-    .toHaveFocus();
-  await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
-  await expect.element(page.getByRole("menuitemradio", { name: "Supervised" })).toHaveFocus();
 
   await userEvent.keyboard("{ArrowDown}{Enter}");
   await expect.element(screen.getByRole("status")).toHaveTextContent("auto-accept-edits");

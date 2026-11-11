@@ -191,14 +191,17 @@ the input waits.
 
 ## Answer an agent's open questions
 
-When an agent finishes a reply with decisions left for you, it can attach them as cards under that
-reply: each has suggested answers, **Later**, and a field for a detail or your own answer. Pick
-answers for the ones you are ready to decide, then choose **Send answers**. T3 Code sends one
-ordinary message that pairs each answer with its question, such as
-`2 · Merge dev into main → Wait: do it on the 13th`. Questions you skip or mark **Later** stay open,
-and the thread shows **Awaiting Input** in the sidebar until none are left. Dismiss a question with
-its close button, and reopen an answered or dismissed one from its card. Typing a normal reply does
-not close any of them. Cards appear on web, desktop, and mobile for agents that use T3 Code's tools.
+When an agent finishes a reply with decisions left for you, on web and desktop they appear one at
+a time in a card above the composer: a line of context, the question, and its answers. The agent's
+recommended answer comes first; press ⌘↵ (Ctrl+Enter) to pick it while the composer is empty. To
+answer in your own words, type in the composer and send: your message answers the question the card
+shows. With several questions, the card pages through them, and your answers go out together as
+one message once you have picked the last one, such as
+`2 · Merge dev into main → Wait`. Choose **Send 1 answer now** (it counts them) to send early; the rest stay open.
+The ✕ dismisses a question without sending anything. Under the reply, the questions stay listed with
+their answers; choose an open one to bring it back to the card, or **Reopen** a settled one. The
+thread shows **Awaiting Input** in the sidebar until none are left. On mobile, questions still show
+as answer cards under the reply.
 
 ## Edit an earlier prompt
 
@@ -244,6 +247,10 @@ you type), to have the [text generation model](./text-generation.md) rewrite the
 whole draft as a clearer prompt before you send it. It keeps your language, file links, mentions, and
 skills. If you edit the draft while the rewrite runs, your edit wins. On web and
 desktop, **Undo** in the notice restores your original draft.
+
+In **Settings → Polish prompt**, choose a separate model and effort or keep
+**Same as text generation**. Save to apply your choice. If the chosen model becomes
+unavailable, polishing uses the shared text generation model.
 
 ## Voice input on web and desktop
 
@@ -475,8 +482,11 @@ Android opens a compatible installed file viewer.
 
 ## Automatic routing
 
-Enable Settings → Labs → Decisions, choose a configured provider model or enter an OpenAI API
-key and model, then add rules in priority order. A restrict rule narrows the choices; a decide
+Enable Settings → Labs → Decisions, choose a configured provider model, OpenAI API, or **Custom (OpenAI-compatible)**,
+then add rules in priority order. For a custom service, enter its API base URL (including
+any `/v1` prefix), API key, and model name, then use **Test connection**. Keys stay in
+the environment’s secret store. HTTP is allowed only for loopback and tailnet endpoints;
+other endpoints require HTTPS. A restrict rule narrows the choices; a decide
 rule selects the first matching usable choice. Provider-instance allowlists can separate
 personal and work accounts.
 
@@ -488,3 +498,19 @@ Auto. If a decision fails, your normal defaults are used.
 
 Test a prompt in Decisions settings previews routing for a project without starting work.
 Mobile does not yet offer Auto in its picker.
+
+## Send from Finder (macOS desktop)
+
+In **Settings → About → Finder integration**, choose **Install**. Select files or
+folders in Finder, right-click, and choose **Send to T3 Code** in Services or
+Quick Actions. If it is missing, enable it under **System Settings → Keyboard →
+Keyboard Shortcuts → Services**. Choose **Remove** in the same settings row to
+uninstall it. Reinstall after moving the app to a different location.
+
+Files inside a registered local project open a draft in the deepest matching
+project with `@file` references. Files from different projects get separate
+drafts; other files become attachments in a draft without a project, subject to
+the usual attachment limits. When viewing a remote thread, confirm uploading
+the files to a new draft in that thread's project instead. Folders ask to open
+as local projects; a new folder opens Add project with its path filled in.
+Nothing sends until you send the draft.

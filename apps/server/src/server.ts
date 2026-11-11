@@ -582,7 +582,16 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
+const layerSystemMonitor = SystemMonitor.layer.pipe(
+  Layer.provide(
+    MachineSampler.layer.pipe(
+      Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+    ),
+  ),
+);
+
 const layerKeepAwake = KeepAwakeRuntime.activityLayer.pipe(
+  Layer.provide(layerSystemMonitor),
   Layer.provide(RuntimeLayer.layerEventSink),
   Layer.provide(layerDesktopTelemetryReceiver),
   Layer.provideMerge(KeepAwakeRuntime.layer),
@@ -652,13 +661,7 @@ const layerServerRestart = Layer.effect(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
-  SystemMonitor.layer.pipe(
-    Layer.provide(
-      MachineSampler.layer.pipe(
-        Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
-      ),
-    ),
-  ),
+  layerSystemMonitor,
   AgentAwarenessRelay.layer,
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,

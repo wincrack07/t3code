@@ -24,10 +24,24 @@ of the selected theme.
 ## Composer context
 
 Git-backed projects show branch and worktree controls below the composer while you create a thread.
-The controls retreat as the composer docks after you send the first message.
+After the first message, use the thread details panel to view the environment, checkout, and branch.
+The composer keeps model, access, and context controls on one line.
 
-Turn on **Composer context** to keep those controls visible after the thread starts. This preference
-applies to the web and desktop clients.
+## Sidebar
+
+Use the display menu beside the sidebar's project filter, or **Settings → General → Sidebar**,
+to choose **Compact** or **Comfortable** rows and **All threads by project** or a **Global settled
+section**. Claude defaults to compact rows; Claude and nightly builds default to project grouping.
+Each project's settled sessions expand in pages. Pinned projects and projects active in the last
+14 days stay in the main list; older inactive projects appear under **Other projects**. Expansion
+is remembered on this device. Expand a thread's chevron to load its nested sessions.
+
+## Typography
+
+In **Settings → Appearance**, choose interface and reply fonts under **General**, and monospace
+fonts under **Code**. **Reply font** changes assistant replies; user messages keep the interface font and code keeps the monospace font.
+Replies follow the interface by default. The Claude theme uses a serif reply stack; an explicit
+font choice overrides the theme. Fonts are used only when installed on your machine.
 
 ## Math
 
@@ -43,10 +57,20 @@ preference is saved separately on each device.
 
 ## Motion
 
+**Motion** in **Settings → Appearance** defaults to **System**, which follows your operating
+system's reduced motion setting. **Reduced** turns off the app's transitions and animations even
+when the system allows them; **Full** keeps them even when the system asks for less.
+
 The main sidebar, right panel, and terminal drawer open and close immediately by default. Move the
-**Panel animations** slider above 0 ms to add motion, up to 400 ms, unless reduced motion is enabled
-in your operating system. Moving between threads always snaps to the selected thread's panel state
-without replaying its transitions.
+**Panel animations** slider above 0 ms to add motion, up to 400 ms, unless motion is reduced.
+Moving between threads always snaps to the selected thread's panel state without replaying its
+transitions.
+
+## Code themes
+
+Under **Settings → Appearance → Code**, pick a syntax theme for light mode and another for dark
+mode. Each shows a small diff preview, and the choice applies right away to code blocks, diffs, and
+file previews on web and desktop.
 
 ## Custom themes
 

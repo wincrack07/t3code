@@ -61,9 +61,44 @@ export const DecisionResult = Schema.Struct({
 });
 export type DecisionResult = typeof DecisionResult.Type;
 
+const DecisionBaseUrl = Schema.String.check(
+  Schema.makeFilter(
+    (value) => {
+      if (value === "") return true;
+      try {
+        const url = new URL(value);
+        if (url.username || url.password || url.search || url.hash) return false;
+        const host = url.hostname;
+        const octets = host.split(".").map(Number);
+        const local =
+          host === "localhost" ||
+          host.endsWith(".localhost") ||
+          host === "[::1]" ||
+          (octets.length === 4 && octets[0] === 127);
+        const tailnet =
+          host.endsWith(".ts.net") ||
+          (octets.length === 4 && octets[0] === 100 && octets[1]! >= 64 && octets[1]! <= 127) ||
+          host.startsWith("[fd7a:115c:a1e0:");
+        return url.protocol === "https:" || (url.protocol === "http:" && (local || tailnet));
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        "Use HTTPS, or HTTP on loopback or a tailnet, without credentials, query or fragment.",
+    },
+  ),
+);
+
 export const DecisionSettings = Schema.Struct({
   enabled: Schema.Boolean,
-  source: Schema.Literals(["provider", "openai"]),
+  source: Schema.Literals(["provider", "openai", "custom"]),
+  customBaseUrl: Schema.optional(DecisionBaseUrl),
+  customModel: Schema.optional(Schema.String),
+  customApiKey: Schema.optional(SettingsSecretValue).pipe(
+    Schema.annotateKey({ settingsSecret: true, settingsSecretReference: true }),
+  ),
   modelSelection: Schema.NullOr(ModelSelection),
   openaiModel: Schema.String,
   apiKey: SettingsSecretValue,
@@ -75,6 +110,9 @@ export type DecisionSettings = typeof DecisionSettings.Type;
 export const DEFAULT_DECISION_SETTINGS: DecisionSettings = {
   enabled: false,
   source: "provider",
+  customBaseUrl: "",
+  customModel: "",
+  customApiKey: "",
   modelSelection: null,
   openaiModel: "gpt-4.1-nano",
   apiKey: "",

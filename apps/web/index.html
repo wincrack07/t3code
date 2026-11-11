@@ -11,6 +11,23 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
+      // Appearance -> Motion, resolved before first paint so nothing animates at boot when
+      // reduced. Keep in sync with @t3tools/client-runtime/reduced-motion.
+      (() => {
+        let preference = null;
+        try {
+          preference = window.localStorage.getItem("t3code:motion-preference");
+        } catch {}
+        let systemReduced = false;
+        try {
+          systemReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch {}
+        const reduced =
+          preference === "reduced" ? true : preference === "full" ? false : systemReduced;
+        document.documentElement.dataset.motion = reduced ? "reduce" : "full";
+      })();
+    </script>
+    <script>
       (() => {
         const LIGHT_BACKGROUND = "#ffffff";
         const DARK_BACKGROUND = "#000000";
@@ -53,16 +70,16 @@
         const BUILT_IN_THEME_PALETTES = {
           claude: {
             light: {
-              background: "#faf9f5",
-              foreground: "#35332e",
-              accent: "#b44f30",
-              chrome: "#f0eee6",
+              background: "#ffffff",
+              foreground: "#1a1a1a",
+              accent: "#1757ac",
+              chrome: "#fafafa",
             },
             dark: {
               background: "#191919",
-              foreground: "#e5e5e2",
-              accent: "#d97757",
-              chrome: "#292928",
+              foreground: "#efefef",
+              accent: "#6aabf1",
+              chrome: "#1f1f1f",
             },
           },
           "t3-chat": {
@@ -382,6 +399,7 @@
                 ? DARK_BACKGROUND
                 : LIGHT_BACKGROUND;
           document.documentElement.style.backgroundColor = chromeColor;
+          document.documentElement.style.setProperty("--boot-chrome", chromeColor);
           if (hasSelection) {
             const splashColors = customSplash ?? builtInSplash ?? fallbackSplash;
             for (const [name, value] of Object.entries(splashColors)) {
@@ -438,6 +456,34 @@
       html[data-theme-selected="true"] #boot-shell {
         background: var(--boot-background);
         color: var(--boot-foreground);
+      }
+
+      #boot-sidebar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 256px;
+        background: var(--boot-chrome, inherit);
+      }
+
+      #boot-composer {
+        position: absolute;
+        right: 32px;
+        bottom: 32px;
+        left: 288px;
+        height: 60px;
+        border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+        border-radius: 14px;
+        opacity: 0.5;
+      }
+
+      @media (width < 640px) {
+        #boot-sidebar {
+          display: none;
+        }
+        #boot-composer {
+          left: 24px;
+          right: 24px;
+        }
       }
 
       #boot-shell-card {
@@ -690,6 +736,8 @@
   <body>
     <div id="root">
       <div id="boot-shell">
+        <div id="boot-sidebar" aria-hidden="true"></div>
+        <div id="boot-composer" aria-hidden="true"></div>
         <div id="boot-shell-card" aria-label="T3 Code splash screen">
           <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
         </div>

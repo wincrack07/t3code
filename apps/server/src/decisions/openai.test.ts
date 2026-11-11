@@ -7,8 +7,9 @@ import { requestOpenAiDecision } from "./openai.ts";
 it.effect("sends a strict compact request and reads only a complete answer", () =>
   Effect.gen(function* () {
     const requests: string[] = [];
+    const urls: string[] = [];
     const fake = HttpClient.make((request) => {
-      expect(request.url).toBe("https://api.openai.com/v1/chat/completions");
+      urls.push(request.url);
       if (request.body._tag === "Uint8Array")
         requests.push(new TextDecoder().decode(request.body.body));
       return Effect.succeed(
@@ -28,6 +29,17 @@ it.effect("sends a strict compact request and reads only a complete answer", () 
     const answer = yield* requestOpenAiDecision("fake-test-key", "test-model", "task").pipe(
       Effect.provideService(HttpClient.HttpClient, fake),
     );
+    yield* requestOpenAiDecision(
+      "fake-test-key",
+      "custom-model",
+      "task",
+      "http://100.64.1.2:8080/v1/",
+    ).pipe(Effect.provideService(HttpClient.HttpClient, fake));
+    expect(urls).toEqual([
+      "https://api.openai.com/v1/chat/completions",
+      "http://100.64.1.2:8080/v1/chat/completions",
+    ]);
+    expect(JSON.parse(requests[1]!)).toMatchObject({ model: "custom-model" });
     expect(answer).toBe('{"candidate":0,"reason":"Fast"}');
     expect(JSON.parse(requests[0]!)).toMatchObject({
       model: "test-model",

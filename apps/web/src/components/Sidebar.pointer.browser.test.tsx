@@ -84,5 +84,16 @@ describe("sidebar pointer lifecycle", () => {
     expect(drag.onCancel).toHaveBeenCalledOnce();
     expect(drag.onEnd).not.toHaveBeenCalled();
     expect(drag.onFinish).toHaveBeenCalledExactlyOnceWith(true);
+
+    document.dispatchEvent(pointer("pointerdown"));
+    const click = vi.fn();
+    document.addEventListener("click", click, { once: true });
+    const pending = gesture();
+    document.dispatchEvent(pointer("pointermove", { clientX: 13, clientY: 12 }));
+    document.dispatchEvent(pointer("pointermove", { buttons: 0, clientX: 13, clientY: 12 }));
+    document.dispatchEvent(pointer("pointerup", { buttons: 0, clientX: 13, clientY: 12 }));
+    document.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(pending.onStart).not.toHaveBeenCalled();
+    expect(click).toHaveBeenCalledOnce();
   });
 });

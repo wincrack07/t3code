@@ -1339,6 +1339,13 @@ export function createServerEnvironmentAtoms<R, E>(
         request(WS_METHODS.serverGetHostResources, input).pipe(Effect.timeout("5 seconds")),
     }),
     // The server caches each account's listing for a minute; this only avoids refetching on remount.
+    // Reads only local files on the server, so it is cheap to ask every environment.
+    claudeArtifactAccounts: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:claude-artifacts:accounts",
+      tag: WS_METHODS.claudeArtifactsAccounts,
+      staleTimeMs: 60_000,
+      idleTtlMs: 5 * 60_000,
+    }),
     claudeArtifacts: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:claude-artifacts:list",
       tag: WS_METHODS.claudeArtifactsList,
@@ -1680,6 +1687,10 @@ export function createServerEnvironmentAtoms<R, E>(
     listTextGeneratorModels: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:list-text-generator-models",
       tag: WS_METHODS.serverListTextGeneratorModels,
+    }),
+    testDecisionConnection: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:server:test-decision-connection",
+      tag: WS_METHODS.serverTestDecisionConnection,
     }),
     decide: createEnvironmentRpcCommand(runtime, {
       label: "environment-command:server:decide",

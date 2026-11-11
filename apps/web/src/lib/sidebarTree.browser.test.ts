@@ -77,6 +77,19 @@ describe("sidebar keyboard navigation", () => {
     expect(document.activeElement).toBe(group);
     press(group, "ArrowLeft");
     expect(group.getAttribute("aria-expanded")).toBe("false");
+
+    const disclosure = document.createElement("button");
+    disclosure.dataset.sidebarDisclosure = "";
+    disclosure.addEventListener("click", (event) => {
+      event.stopPropagation();
+      group.setAttribute("aria-expanded", "true");
+    });
+    group.append(disclosure);
+    const navigate = vi.fn();
+    group.addEventListener("click", navigate);
+    press(group, "ArrowRight");
+    expect(group.getAttribute("aria-expanded")).toBe("true");
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("opens the row menu on Shift+F10 release without moving focus", () => {

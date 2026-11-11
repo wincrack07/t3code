@@ -1,5 +1,4 @@
-import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
-import { formatContextWindowTokens } from "../../lib/contextWindow";
+import { ContextUsageControl } from "./ContextUsageControl";
 import { VoiceInputSetup } from "./VoiceInputSetup";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
@@ -119,6 +118,7 @@ import {
 import { ComposerBanner } from "./ComposerBanner";
 import { ComposerSurface } from "./ComposerSurface";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
+import { ComposerDecisionCard } from "./ComposerDecisionCard";
 import {
   attachmentsToReleaseOnUploadCapabilityLoss,
   composerOtherFilesForPresentation,
@@ -378,7 +378,6 @@ export interface ChatComposerProps {
   bannerItems: readonly ComposerBannerStackItem[];
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
-  onToggleKeepFullHistory: () => void;
   onUsageLimitsCommand?: (() => void) | undefined;
   sideChatAvailable?: boolean;
   sideChatDisabledReason?: string | null;
@@ -3351,6 +3350,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack items={shelfItems} />
+          {routeKind === "server" &&
+          canOperateThread &&
+          phase !== "running" &&
+          !showComposerTopDrawer &&
+          activePendingApproval === null ? (
+            <ComposerDecisionCard
+              threadRef={routeThreadRef}
+              draftTarget={composerDraftTarget}
+              cwd={gitCwd ?? undefined}
+            />
+          ) : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root data-chat-composer-top-drawer="true" variant="info">
@@ -3723,7 +3733,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onInterrupt={handleInterruptPrimaryActionStable}
                     compactBeforeSendTokens={props.resumeCompactionTokens}
                     keepFullHistory={props.keepFullHistory}
-                    onToggleKeepFullHistory={props.onToggleKeepFullHistory}
                   >
                     {composerPolishButton}
                     {speechInput.available ? (
@@ -3795,68 +3804,39 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         {isMobileViewport ? (
           props.locationControls
         ) : (
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1 text-xs text-muted-foreground">
-            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
-              {props.locationControls ? (
-                <span className="max-w-40 truncate px-1.5">{projectName}</span>
-              ) : null}
-              {props.locationControls}
-            </div>
+          <div
+            data-composer-quiet-row
+            className="composer-quiet-row flex min-w-0 items-center gap-1 pt-1 text-xs text-muted-foreground"
+          >
+            {props.locationControls ? (
+              <div className="flex min-w-0 flex-1 items-center gap-1">{props.locationControls}</div>
+            ) : null}
             <div
               ref={setInlineRestingControlsHost}
-              className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1"
+              className="ml-auto flex min-w-0 max-w-full shrink items-center justify-end gap-1"
             >
               <div
                 ref={attachRestingComposerControls}
                 data-controls-visible={restingControlsVisible}
+                className="min-w-0 flex-1"
               >
                 <div
                   ref={attachExpandedComposerControls}
                   data-chat-composer-controls="footer"
                   data-chat-composer-footer-controls="true"
-                  className="relative flex min-w-0 flex-1 flex-wrap items-center justify-end gap-0.5"
+                  className="relative flex min-w-0 flex-1 items-center justify-end gap-0.5"
                 >
                   {composerControls}
                 </div>
               </div>
               {props.contextTokens != null ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent disabled:opacity-50"
-                        aria-label="Compact context"
-                        disabled={compactDisabled || compactThreadUnavailable}
-                        onClick={compactThreadContextStable}
-                      />
-                    }
-                  >
-                    <svg className="size-3.5" viewBox="0 0 16 16" aria-hidden="true">
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="var(--primary)"
-                        strokeWidth="2"
-                        pathLength="100"
-                        strokeDasharray={`${props.contextPercentage ?? 0} 100`}
-                        transform="rotate(-90 8 8)"
-                      />
-                    </svg>
-                    {formatContextWindowTokens(props.contextTokens)}
-                  </TooltipTrigger>
-                  <TooltipPopup>Compact context</TooltipPopup>
-                </Tooltip>
+                <ContextUsageControl
+                  tokens={props.contextTokens}
+                  percentage={props.contextPercentage ?? null}
+                  compactionSuggested={props.resumeCompactionTokens !== null}
+                  compactDisabled={compactDisabled || compactThreadUnavailable}
+                  onCompact={compactThreadContextStable}
+                />
               ) : null}
             </div>
           </div>

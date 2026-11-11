@@ -79,11 +79,20 @@ export function useFontEnumeration(): FontEnumerationState {
   return useSyncExternalStore(subscribeToEnumeration, readEnumerationState);
 }
 
+/** A suggested value listed right after the default, such as a generic family. */
+export interface FontRecommendation {
+  readonly value: string;
+  readonly label: string;
+}
+
+const NO_RECOMMENDATIONS: ReadonlyArray<FontRecommendation> = [];
+
 export function FontFamilyPicker({
   ariaLabel,
   defaultFamily,
   selectedFamily,
   requireMonospace = false,
+  recommended = NO_RECOMMENDATIONS,
   initialOpen = false,
   onSelect,
 }: {
@@ -91,6 +100,7 @@ export function FontFamilyPicker({
   defaultFamily: string;
   selectedFamily: string;
   requireMonospace?: boolean;
+  recommended?: ReadonlyArray<FontRecommendation>;
   initialOpen?: boolean;
   onSelect: (family: string) => void;
 }) {
@@ -119,16 +129,19 @@ export function FontFamilyPicker({
   };
 
   const families = enumeration.status === "granted" ? enumeration.families : [];
+  const recommendedLabel = (value: string) =>
+    recommended.find((option) => option.value === value)?.label;
 
   const items = (() => {
     const trimmedQuery = query.trim().toLowerCase();
+    const matches = (label: string) =>
+      trimmedQuery.length === 0 || label.toLowerCase().includes(trimmedQuery);
     const result: string[] = [];
     if (trimmedQuery.length === 0) result.push(DEFAULT_FONT_VALUE);
     result.push(
-      ...families.filter(
-        (family) => trimmedQuery.length === 0 || family.toLowerCase().includes(trimmedQuery),
-      ),
+      ...recommended.filter((option) => matches(option.label)).map((option) => option.value),
     );
+    result.push(...families.filter((family) => matches(family) && !recommendedLabel(family)));
     return result;
   })();
 
@@ -156,7 +169,7 @@ export function FontFamilyPicker({
       <ComboboxItem hideIndicator index={index} key={item} value={item}>
         <div className="flex w-full min-w-0 items-center justify-between gap-2">
           <span className="min-w-0 truncate" style={{ fontFamily: family }}>
-            {family}
+            {recommendedLabel(item) ?? family}
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
             {isDefault ? <span className="text-3xs text-muted-foreground/60">default</span> : null}
@@ -169,7 +182,7 @@ export function FontFamilyPicker({
     );
   };
 
-  const extraData = { items, selectedValue, defaultFamily };
+  const extraData = { items, selectedValue, defaultFamily, recommended };
 
   return (
     <Combobox
@@ -189,7 +202,9 @@ export function FontFamilyPicker({
       }}
     >
       <ComboboxTrigger aria-label={ariaLabel} render={<SelectButton size="sm" />}>
-        {selectedFamily.length === 0 ? defaultFamily : selectedFamily}
+        {selectedFamily.length === 0
+          ? defaultFamily
+          : (recommendedLabel(selectedFamily) ?? selectedFamily)}
       </ComboboxTrigger>
       <ComboboxPopup align="end" className="flex w-72 flex-col">
         <ComboboxSearchInput

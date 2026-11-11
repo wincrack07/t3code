@@ -1,5 +1,10 @@
 import { MorphIcon as BaseMorphIcon, type MorphIconProps } from "morphicons/react";
 
-export function MorphIcon({ reducedMotion = "user", ...props }: MorphIconProps) {
-  return <BaseMorphIcon reducedMotion={reducedMotion} {...props} />;
+import { useReducedMotion } from "~/hooks/useReducedMotion";
+
+export function MorphIcon({ reducedMotion, ...props }: MorphIconProps) {
+  const reduced = useReducedMotion();
+  return (
+    <BaseMorphIcon reducedMotion={reducedMotion ?? (reduced ? "always" : "never")} {...props} />
+  );
 }

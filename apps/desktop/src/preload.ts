@@ -211,7 +211,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   pickProjectFavicon: (initialPath) =>
     ipcRenderer.invoke(IpcChannels.PICK_PROJECT_FAVICON_CHANNEL, initialPath),
   pickThemeFiles: () => ipcRenderer.invoke(IpcChannels.PICK_THEME_FILES_CHANNEL, undefined),
-  setTheme: (theme) => ipcRenderer.invoke(IpcChannels.SET_THEME_CHANNEL, theme),
+  setTheme: (theme, colors) =>
+    ipcRenderer.invoke(IpcChannels.SET_THEME_CHANNEL, colors ? { theme, ...colors } : theme),
   showContextMenu: (items, position) =>
     ipcRenderer.invoke(IpcChannels.CONTEXT_MENU_CHANNEL, {
       items,
@@ -310,6 +311,17 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
     };
   },
+  ...(clientPlatform === "darwin"
+    ? {
+        finderIntegration: {
+          getState: () => ipcRenderer.invoke(IpcChannels.FINDER_STATE_CHANNEL),
+          setInstalled: (installed: boolean) =>
+            ipcRenderer.invoke(IpcChannels.FINDER_INSTALL_CHANNEL, installed),
+          inspect: (url: string) => ipcRenderer.invoke(IpcChannels.FINDER_INSPECT_CHANNEL, url),
+          read: (id: string) => ipcRenderer.invoke(IpcChannels.FINDER_READ_CHANNEL, id),
+        },
+      }
+    : {}),
   webLinks: {
     setReady: (ready) => ipcRenderer.invoke(IpcChannels.WEB_LINK_READY_CHANNEL, ready),
     onOpen: (listener) => {

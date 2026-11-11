@@ -241,10 +241,18 @@ const make = Effect.gen(function* () {
     const remove = action === "remove";
     if (remove) {
       const current = yield* SubscriptionRef.get(state);
-      yield* change({ options: { ...current.options, lidClosed: false } });
+      yield* change({
+        options: { ...current.options, lidClosed: false },
+        defaults: {
+          ...current.defaults,
+          options: { ...current.defaults.options, lidClosed: false },
+        },
+      });
     }
     if (action === "refresh") yield* lid.refresh.pipe(Effect.ignore);
     else yield* lid.authorize(remove).pipe(Effect.ignore);
+    const current = yield* SubscriptionRef.get(state);
+    if (!current.active || !current.options.lidClosed) yield* lid.restore.pipe(Effect.ignore);
     const status = yield* lid.status;
     yield* SubscriptionRef.update(state, (s) => ({
       ...s,

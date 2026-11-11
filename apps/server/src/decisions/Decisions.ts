@@ -18,7 +18,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
-import { HttpClient } from "effect/http";
+import { HttpClient, HttpClientError } from "effect/http";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -31,6 +31,7 @@ import { requestOpenAiDecision } from "./openai.ts";
 export class Decisions extends Context.Service<
   Decisions,
   {
+    readonly testConnection: () => Effect.Effect<{ success: boolean; message: string }>;
     readonly route: (
       input: DecisionInput,
       selection: ModelSelection,
@@ -54,6 +55,7 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const http = yield* HttpClient.HttpClient;
   let previousApiKey: unknown;
+  let previousCustomApiKey: unknown;
   const cache = new Map<string, { at: number; result: DecisionResult }>();
   const decide = Effect.fn("Decisions.decide")(function* (
     input: DecisionInput,
@@ -74,9 +76,10 @@ const make = Effect.gen(function* () {
       } satisfies DecisionResult;
     const settings = yield* settingsService.getSettings;
     const config = settings.decisions;
-    if (previousApiKey !== config.apiKey) {
+    if (previousApiKey !== config.apiKey || previousCustomApiKey !== config.customApiKey) {
       cache.clear();
       previousApiKey = config.apiKey;
+      previousCustomApiKey = config.customApiKey;
     }
     if (!config.enabled) return fallback("Decisions is disabled; using normal defaults.");
     const project = yield* projects.get(input.projectId);
@@ -129,17 +132,25 @@ const make = Effect.gen(function* () {
       config.source,
       config.modelSelection,
       config.openaiModel,
+      config.customBaseUrl,
+      config.customModel,
       config.rules,
     ]);
     const cached = cache.get(key);
     if (cached && now - cached.at < 15_000) return cached.result;
     const generate = Effect.gen(function* () {
-      if (config.source === "openai") {
-        if (typeof config.apiKey !== "string" || !config.apiKey)
+      if (config.source !== "provider") {
+        if (config.source === "custom" && (!config.customBaseUrl || !config.customModel))
+          return yield* Effect.fail("Decision base URL or model is missing");
+        const apiKey = config.source === "custom" ? config.customApiKey : config.apiKey;
+        if (typeof apiKey !== "string" || !apiKey)
           return yield* Effect.fail("Decision API key is missing");
-        return yield* requestOpenAiDecision(config.apiKey, config.openaiModel, prompt).pipe(
-          Effect.provideService(HttpClient.HttpClient, http),
-        );
+        return yield* requestOpenAiDecision(
+          apiKey,
+          config.source === "custom" ? (config.customModel ?? "") : config.openaiModel,
+          prompt,
+          config.source === "custom" ? config.customBaseUrl : undefined,
+        ).pipe(Effect.provideService(HttpClient.HttpClient, http));
       }
       const provider = providers.find(
         (candidate) =>
@@ -222,7 +233,63 @@ const make = Effect.gen(function* () {
       : { ...fallback, routing: "auto" };
     return { modelSelection, routingDecision: decision };
   });
+  const testConnection = Effect.fn("Decisions.testConnection")(function* () {
+    const settings = yield* settingsService.getSettings.pipe(Effect.option);
+    if (Option.isNone(settings))
+      return { success: false, message: "Could not read decision settings." };
+    const config = settings.value.decisions;
+    const custom = config.source === "custom";
+    const apiKey = custom ? config.customApiKey : config.apiKey;
+    if (config.source === "provider")
+      return { success: false, message: "Select an API decision source first." };
+    if (typeof apiKey !== "string" || !apiKey)
+      return { success: false, message: "Decision API key is missing." };
+    if (custom && (!config.customBaseUrl || !config.customModel))
+      return { success: false, message: "Enter a base URL and model first." };
+    return yield* requestOpenAiDecision(
+      apiKey,
+      custom ? config.customModel! : config.openaiModel,
+      'Return {"candidate":0,"reason":"Connection successful"}.',
+      custom ? config.customBaseUrl : undefined,
+    ).pipe(
+      Effect.provideService(HttpClient.HttpClient, http),
+      Effect.timeout("4 seconds"),
+      Effect.map((answer) => {
+        const candidate: DecisionCandidate = {
+          providerInstanceId: "test",
+          driver: "test",
+          model: "test",
+          effort: null,
+          effortOptionId: null,
+          environmentId: "test",
+          projectId: "test",
+        };
+        const valid = parseDecisionAnswer(answer, [candidate]) !== undefined;
+        return {
+          success: valid,
+          message: valid ? "Connection successful." : "Decision API returned an invalid answer.",
+        };
+      }),
+      Effect.catch((error) =>
+        Effect.succeed({
+          success: false,
+          message:
+            typeof error === "string"
+              ? error
+              : typeof error === "object" &&
+                  error !== null &&
+                  "_tag" in error &&
+                  error._tag === "TimeoutError"
+                ? "Decision API timed out after 4 seconds."
+                : HttpClientError.isHttpClientError(error)
+                  ? `Decision API request failed (${error.reason._tag}).`
+                  : "Decision API returned an invalid response.",
+        }),
+      ),
+    );
+  });
   return Decisions.of({
+    testConnection,
     route: Effect.fn("Decisions.safeRoute")((input, selection) =>
       route(input, selection).pipe(
         Effect.orElseSucceed(() => ({

@@ -59,6 +59,8 @@ export function appearanceFontStack(custom: string, defaultStack: string): strin
 }
 
 export interface AppearanceFontPreferences {
+  readonly reply: string;
+  readonly sizeReply: number | null;
   readonly sans: string;
   readonly code: string;
   readonly composer: string;
@@ -76,6 +78,7 @@ export function applyAppearanceFontVariables(
 ): void {
   const families: ReadonlyArray<readonly [variable: string, custom: string, fallback: string]> = [
     ["--font-sans", preferences.sans, DEFAULT_SANS_FONT_STACK],
+    ["--font-reply", preferences.reply, "var(--font-sans)"],
     ["--font-mono", preferences.code, DEFAULT_CODE_FONT_STACK],
     ["--font-composer", preferences.separate ? preferences.composer : "", "var(--font-sans)"],
   ];
@@ -87,6 +90,10 @@ export function applyAppearanceFontVariables(
       root.style.setProperty(variable, `${list}, ${fallback}`);
     }
   }
+
+  if (preferences.sizeReply === null) root.style.removeProperty("--font-size-reply");
+  else
+    root.style.setProperty("--font-size-reply", `${clampPromptFontSize(preferences.sizeReply)}px`);
 
   root.style.fontSize = `${clampInterfaceFontSize(preferences.sizeInterface)}px`;
   root.style.setProperty(

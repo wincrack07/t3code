@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import { DesktopSnapShotId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -223,6 +223,7 @@ function layerTest(input: {
   readonly createCount: Ref.Ref<number>;
   readonly mainWindow: Ref.Ref<Option.Option<Electron.BrowserWindow>>;
   readonly createdWindowOptions?: Electron.BrowserWindowConstructorOptions[];
+  readonly shouldUseDarkColors?: boolean;
   readonly desktopSettings?: DesktopAppSettings.DesktopSettings;
   readonly mainWindowBoundsUpdates?: DesktopAppSettings.DesktopWindowBounds[];
   readonly mainWindowMaximizedUpdates?: boolean[];
@@ -243,6 +244,11 @@ function layerTest(input: {
   const layerDesktopAppSettings = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
     get: Effect.sync(() => desktopSettings),
     load: Effect.sync(() => desktopSettings),
+    setWindowTheme: (windowTheme) =>
+      Effect.sync(() => {
+        desktopSettings = { ...desktopSettings, windowTheme };
+        return { settings: desktopSettings, changed: true };
+      }),
     setMainWindowBounds: (bounds, isMaximized) =>
       Effect.gen(function* () {
         if (input.beforeMainWindowBoundsUpdate) {
@@ -327,7 +333,11 @@ function layerTest(input: {
           openSystemSettings: () => Effect.succeed(true),
           copyText: input.onCopyText ?? (() => Effect.void),
         } satisfies ElectronShell.ElectronShell["Service"]),
-        layerElectronTheme,
+        Layer.succeed(ElectronTheme.ElectronTheme, {
+          shouldUseDarkColors: Effect.succeed(input.shouldUseDarkColors ?? false),
+          setSource: () => Effect.void,
+          onUpdated: () => Effect.void,
+        }),
         layerElectronWindow,
         Layer.mock(PreviewPasskeys.PreviewPasskeys)({
           bridgeEnabled: false,
@@ -541,33 +551,43 @@ describe("DesktopWindow", () => {
     );
   });
 
-  it.effect(
-    "opens and reopens the window without backend readiness when local execution is disabled",
-    () =>
+  it.effect.each([false, true])(
+    "opens and reopens the window with the painted canvas while local execution is disabled (dark=%s)",
+    (dark) =>
       Effect.gen(function* () {
         const fakeWindow = makeFakeBrowserWindow();
         const createCount = yield* Ref.make(0);
         const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+        const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
         const layer = layerTest({
           window: fakeWindow.window,
           createCount,
           mainWindow,
-          createdWindowOptions: [],
+          createdWindowOptions,
+          shouldUseDarkColors: dark,
           desktopSettings: {
             ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
             localEnvironmentEnabled: false,
+            windowTheme: { theme: "system", light: "#ffffff", dark: "#191919" },
           },
         });
         yield* Effect.gen(function* () {
           const desktopWindow = yield* DesktopWindow.DesktopWindow;
           yield* desktopWindow.createMainIfBackendReady;
           assert.equal(yield* Ref.get(createCount), 1);
+          assert.equal(createdWindowOptions[0]?.backgroundColor, dark ? "#191919" : "#ffffff");
+          assert.equal(createdWindowOptions[0]?.show, false);
           yield* Ref.set(mainWindow, Option.none());
           yield* desktopWindow.activate;
           assert.equal(yield* Ref.get(createCount), 2);
           yield* Ref.set(mainWindow, Option.none());
           yield* desktopWindow.dispatchMenuAction("new-thread");
           assert.equal(yield* Ref.get(createCount), 3);
+          const windowTheme = { theme: "system", light: "#fafafa", dark: "#222222" } as const;
+          yield* desktopWindow.setTheme(windowTheme);
+          expect(fakeWindow.window.setBackgroundColor).toHaveBeenLastCalledWith(
+            dark ? "#222222" : "#fafafa",
+          );
         }).pipe(Effect.provide(layer));
       }),
   );

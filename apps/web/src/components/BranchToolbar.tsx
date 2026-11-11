@@ -68,6 +68,7 @@ import { ComposerSurface } from "./chat/ComposerSurface";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { cn } from "~/lib/utils";
 import { observeResize } from "~/lib/observeResize";
+import { prefersReducedMotion } from "@t3tools/client-runtime/reduced-motion";
 
 export interface BranchToolbarHandle {
   openBranchPicker: () => void;
@@ -454,7 +455,7 @@ function animateLabelWidths(
 ) {
   for (const animation of animations.values()) animation.cancel();
   animations.clear();
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (prefersReducedMotion()) return;
 
   for (const [label, previousRect] of previousRects) {
     if (!label.isConnected) continue;
@@ -501,6 +502,10 @@ function useLabelsOverflow(): readonly [
     const measure = () => {
       // The committed attribute, not render state, so a stale closure cannot misread it.
       const compact = current.hasAttribute("data-compact");
+      if (window.matchMedia("(min-width: 640px)").matches) {
+        if (compact) setOverflows(false);
+        return;
+      }
       const stripWidth = current.clientWidth;
       if (stripWidth === 0) return;
       const stripStyle = getComputedStyle(current);
@@ -678,12 +683,12 @@ export const BranchToolbar = memo(function BranchToolbar({
   const showEnvironmentPicker = hasMultipleEnvironments && onEnvironmentChange !== undefined;
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
-  // Started threads get no handler but still show which machine they run on,
-  // matching the strip visibility ChatView computes from the same inputs.
-  const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
-    activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments,
-  });
+  const showEnvironmentIndicator =
+    layout === "panel" &&
+    shouldShowEnvironmentIndicator({
+      activeEnvironment: activeEnvironmentOption,
+      canPickEnvironment: hasMultipleEnvironments,
+    });
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 
   if (!activeProject) return null;

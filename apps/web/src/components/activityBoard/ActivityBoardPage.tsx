@@ -120,6 +120,7 @@ function ActivityColumn({ column }: { column: ActivityBoardColumn }) {
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
             {environment.environmentLabel}
           </h2>
+          {column.connected ? <KeepAwakeControl environmentId={environment.environmentId} /> : null}
           {column.connected ? (
             <Badge variant={column.cardCount > 0 ? "info" : "secondary"} size="sm">
               {column.cardCount}
@@ -127,10 +128,7 @@ function ActivityColumn({ column }: { column: ActivityBoardColumn }) {
           ) : null}
         </div>
         {column.connected ? (
-          <>
-            <KeepAwakeControl environmentId={environment.environmentId} pill />
-            <NodeCapacity environmentId={environment.environmentId} />
-          </>
+          <NodeCapacity environmentId={environment.environmentId} />
         ) : (
           <p className="text-xs text-muted-foreground">{statusTitle}</p>
         )}

@@ -7,7 +7,7 @@ import {
   type SupportedLanguages,
 } from "@pierre/diffs";
 
-import { DIFF_THEME_NAMES } from "./diffRendering";
+import { resolveDiffThemeNames } from "./diffRendering";
 
 // Highlights has no lexer for these dialects, so they use their base language's.
 setCustomExtension("luau", "lua");
@@ -24,21 +24,23 @@ export const PREFERRED_HIGHLIGHTER: HighlighterTypes = "highlights";
 const highlighterPromiseCache = new Map<string, Promise<DiffsHighlighter>>();
 
 export function getSyntaxHighlighterPromise(language: string): Promise<DiffsHighlighter> {
-  const cached = highlighterPromiseCache.get(language);
+  const themes = resolveDiffThemeNames();
+  // The shared highlighter is one instance; the key only tracks which themes it has loaded.
+  const key = `${language}\u0000${themes.join("\u0000")}`;
+  const cached = highlighterPromiseCache.get(key);
   if (cached) return cached;
 
   const promise = getSharedHighlighter({
-    // Both palettes, so switching appearance never needs a new highlighter.
-    themes: Object.values(DIFF_THEME_NAMES),
+    themes: [...themes],
     langs: [language as SupportedLanguages],
     preferredHighlighter: PREFERRED_HIGHLIGHTER,
   }).catch((error) => {
     if (language === "text") {
-      highlighterPromiseCache.delete(language);
+      highlighterPromiseCache.delete(key);
       throw error;
     }
     return getSyntaxHighlighterPromise("text");
   });
-  highlighterPromiseCache.set(language, promise);
+  highlighterPromiseCache.set(key, promise);
   return promise;
 }

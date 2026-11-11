@@ -27,12 +27,14 @@ export const layer = Layer.effect(
     ) {
       const operation =
         file === "/usr/bin/osascript"
-          ? "administrator authorization"
+          ? "authorize lid-closed sessions"
           : args.includes("-l")
             ? "check authorization"
             : args.includes("-g")
-              ? "read SleepDisabled"
-              : `pmset disablesleep ${args.at(-1)}`;
+              ? "read the sleep setting"
+              : args.at(-1) === "1"
+                ? "disable sleep"
+                : "restore sleep";
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const child = yield* spawner.spawn(

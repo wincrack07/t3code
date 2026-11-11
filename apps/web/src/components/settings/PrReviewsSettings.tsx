@@ -16,7 +16,7 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
-import { PlusIcon, RotateCwIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, RotateCwIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
@@ -326,541 +326,557 @@ export function PrReviewsSettings() {
   return (
     <SettingsPageContainer>
       <SettingsSection
-        title="PR reviews"
-        variant="plain"
+        id="pr-reviews"
+        title="Reviewer environment"
         headerAction={
-          <Button size="xs" disabled={!dirty || saving || !canWrite} onClick={save}>
+          <Button size="sm" disabled={!dirty || saving || !canWrite} onClick={save}>
             Save
           </Button>
         }
       >
-        <SettingsSection title="Reviewer environment">
-          {connectedEnvironments.length > 1 ? (
+        {connectedEnvironments.length > 1 ? (
+          <SettingsRow
+            title="Environment"
+            description="Each environment keeps its own PR review settings."
+            control={
+              <Select
+                value={environmentId ?? ""}
+                onValueChange={(value) => value && setSelectedId(value as EnvironmentId)}
+              >
+                <SelectTrigger size="sm" aria-label="Environment">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup>
+                  {connectedEnvironments.map((entry) => (
+                    <SelectItem key={entry.environmentId} value={entry.environmentId}>
+                      {entry.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+        ) : null}
+        {config === null ? (
+          <SettingsRow title={query.error ?? "Loading…"} />
+        ) : (
+          <>
+            {PR_REVIEW_EXECUTION_SHIPPED ? (
+              <SettingsRow
+                title="Review pull requests from this environment"
+                description="Only environments with this on poll GitHub. With several, the lowest priority number reviews and the others take over if it does not claim the pull request in time."
+                control={
+                  <Switch
+                    checked={config.enabled}
+                    disabled={!canWrite}
+                    onCheckedChange={(enabled) => edit({ enabled })}
+                    aria-label="Review pull requests from this environment"
+                  />
+                }
+              />
+            ) : (
+              <SettingsRow
+                title="Reviews are not running yet"
+                description="Prepare the identity, repositories and rules now. A later update turns reviews on."
+              />
+            )}
             <SettingsRow
-              title="Environment"
-              description="Each environment keeps its own PR review settings."
+              title="Priority"
+              description="0 is the primary reviewer, 1 the first fallback, and so on."
+              control={
+                <Input
+                  size="sm"
+                  className="w-20"
+                  type="number"
+                  min={0}
+                  value={config.priority}
+                  disabled={!canWrite}
+                  onChange={(event) =>
+                    edit({ priority: Math.max(0, Math.floor(Number(event.target.value) || 0)) })
+                  }
+                />
+              }
+            />
+            <SettingsRow
+              title="Claim grace"
+              description="Seconds each fallback waits before it takes over."
+              control={
+                <Input
+                  size="sm"
+                  className="w-20"
+                  type="number"
+                  min={0}
+                  value={config.claimGraceSeconds}
+                  disabled={!canWrite}
+                  onChange={(event) =>
+                    edit({
+                      claimGraceSeconds: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                    })
+                  }
+                />
+              }
+            />
+          </>
+        )}
+      </SettingsSection>
+
+      {config !== null && state && environmentId !== null ? (
+        <>
+          <SettingsSection title="GitHub identity">
+            <SettingsRow
+              title="Post reviews as"
+              description={state.identity.detail}
+              status={
+                <Badge variant={state.identity.ready ? "default" : "outline"}>
+                  {state.identity.ready ? "Ready" : "Not ready"}
+                </Badge>
+              }
               control={
                 <Select
-                  value={environmentId ?? ""}
-                  onValueChange={(value) => value && setSelectedId(value as EnvironmentId)}
+                  value={config.identity.mode}
+                  onValueChange={(mode) =>
+                    (mode === "gh" || mode === "github-app") &&
+                    edit({ identity: { ...config.identity, mode } })
+                  }
                 >
-                  <SelectTrigger size="sm" aria-label="Environment">
+                  <SelectTrigger size="sm" aria-label="Identity">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectPopup>
-                    {connectedEnvironments.map((entry) => (
-                      <SelectItem key={entry.environmentId} value={entry.environmentId}>
-                        {entry.label}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="github-app">GitHub App (bot account)</SelectItem>
+                    <SelectItem value="gh">This environment's gh login</SelectItem>
                   </SelectPopup>
                 </Select>
               }
             />
-          ) : null}
-          {config === null ? (
-            <SettingsRow title={query.error ?? "Loading…"} />
-          ) : (
-            <>
-              {PR_REVIEW_EXECUTION_SHIPPED ? (
+            {config.identity.mode === "github-app" ? (
+              <>
                 <SettingsRow
-                  title="Review pull requests from this environment"
-                  description="Only designated environments poll GitHub. With several, the lowest priority number reviews; the others wait one grace period per step and take over only if it does not claim the pull request."
+                  title="Create the App"
+                  description="Reviews come from the App's own bot account. It needs no webhook."
+                >
+                  <div className="mt-3 max-w-2xl space-y-3 pb-3.5 text-xs leading-normal text-muted-foreground">
+                    <ol className="list-decimal space-y-1 ps-4">
+                      <li>
+                        Create it with the button, or by hand under GitHub Settings → Developer
+                        settings → GitHub Apps with Webhook off and these repository permissions:
+                        Pull requests read and write, Issues read and write, Contents read.
+                      </li>
+                      <li>Copy the App ID and generate a private key on the App's page.</li>
+                      <li>
+                        Install the App on the repositories to review; the installation ID is the
+                        number at the end of the installation page's URL.
+                      </li>
+                    </ol>
+                    <form
+                      method="post"
+                      action="https://github.com/settings/apps/new"
+                      target="_blank"
+                    >
+                      <input type="hidden" name="manifest" value={APP_MANIFEST} />
+                      <Button size="sm" variant="outline" type="submit">
+                        Create the App on GitHub
+                      </Button>
+                    </form>
+                  </div>
+                </SettingsRow>
+                <SettingsRow
+                  title="App ID"
                   control={
-                    <Switch
-                      checked={config.enabled}
+                    <Input
+                      size="sm"
+                      className="w-full sm:w-48"
+                      value={config.identity.appId}
                       disabled={!canWrite}
-                      onCheckedChange={(enabled) => edit({ enabled })}
+                      onChange={(event) =>
+                        edit({ identity: { ...config.identity, appId: event.target.value } })
+                      }
                     />
                   }
                 />
-              ) : (
                 <SettingsRow
-                  title="Reviews are not running yet"
-                  description="Prepare the identity, repositories and rules now. A later update turns reviews on."
+                  title="Installation ID"
+                  control={
+                    <Input
+                      size="sm"
+                      className="w-full sm:w-48"
+                      value={config.identity.installationId}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        edit({
+                          identity: { ...config.identity, installationId: event.target.value },
+                        })
+                      }
+                    />
+                  }
                 />
-              )}
-              <SettingsRow
-                title="Priority"
-                description="0 is the primary reviewer, 1 the first fallback, and so on."
-                control={
-                  <Input
-                    className="w-20"
-                    type="number"
-                    min={0}
-                    value={config.priority}
-                    disabled={!canWrite}
-                    onChange={(event) =>
-                      edit({ priority: Math.max(0, Math.floor(Number(event.target.value) || 0)) })
-                    }
-                  />
-                }
-              />
-              <SettingsRow
-                title="Claim grace"
-                description="Seconds each priority step waits."
-                control={
-                  <Input
-                    className="w-20"
-                    type="number"
-                    min={0}
-                    value={config.claimGraceSeconds}
-                    disabled={!canWrite}
-                    onChange={(event) =>
-                      edit({
-                        claimGraceSeconds: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                      })
-                    }
-                  />
-                }
-              />
-            </>
-          )}
-        </SettingsSection>
-
-        {config !== null && state && environmentId !== null ? (
-          <>
-            <SettingsSection title="GitHub identity">
-              <SettingsRow
-                title="Post reviews as"
-                description={state.identity.detail}
-                status={
-                  <Badge variant={state.identity.ready ? "default" : "outline"}>
-                    {state.identity.ready ? "Ready" : "Not ready"}
-                  </Badge>
-                }
-                control={
-                  <Select
-                    value={config.identity.mode}
-                    onValueChange={(mode) =>
-                      (mode === "gh" || mode === "github-app") &&
-                      edit({ identity: { ...config.identity, mode } })
-                    }
-                  >
-                    <SelectTrigger size="sm" aria-label="Identity">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectItem value="github-app">GitHub App (bot account)</SelectItem>
-                      <SelectItem value="gh">This environment's gh login</SelectItem>
-                    </SelectPopup>
-                  </Select>
-                }
-              />
-              {config.identity.mode === "github-app" ? (
-                <>
-                  <SettingsRow
-                    title="Create the App"
-                    description="Reviews then come from the App's own bot account. It needs no webhook and only the permissions below."
-                  >
-                    <div className="space-y-2 px-3 pb-3 text-xs text-muted-foreground sm:px-4">
-                      <ol className="list-decimal space-y-1 pl-4">
-                        <li>
-                          Create it with the button, or by hand under GitHub Settings → Developer
-                          settings → GitHub Apps with Webhook off and these repository permissions:
-                          Pull requests read and write, Issues read and write, Contents read.
-                        </li>
-                        <li>Copy the App ID and generate a private key on the App's page.</li>
-                        <li>
-                          Install the App on the repositories to review; the installation ID is the
-                          number at the end of the installation page's URL.
-                        </li>
-                      </ol>
-                      <form
-                        method="post"
-                        action="https://github.com/settings/apps/new"
-                        target="_blank"
-                      >
-                        <input type="hidden" name="manifest" value={APP_MANIFEST} />
-                        <Button size="xs" variant="outline" type="submit">
-                          Create the App on GitHub
-                        </Button>
-                      </form>
-                    </div>
-                  </SettingsRow>
-                  <SettingsRow
-                    title="App ID"
-                    control={
-                      <Input
-                        className="w-48"
-                        value={config.identity.appId}
-                        disabled={!canWrite}
-                        onChange={(event) =>
-                          edit({ identity: { ...config.identity, appId: event.target.value } })
-                        }
-                      />
-                    }
-                  />
-                  <SettingsRow
-                    title="Installation ID"
-                    control={
-                      <Input
-                        className="w-48"
-                        value={config.identity.installationId}
-                        disabled={!canWrite}
-                        onChange={(event) =>
-                          edit({
-                            identity: { ...config.identity, installationId: event.target.value },
-                          })
-                        }
-                      />
-                    }
-                  />
-                  <SettingsRow
-                    title="App name (slug)"
-                    description="Optional; read from GitHub when empty."
-                    control={
-                      <Input
-                        className="w-48"
-                        value={config.identity.appSlug}
-                        disabled={!canWrite}
-                        onChange={(event) =>
-                          edit({ identity: { ...config.identity, appSlug: event.target.value } })
-                        }
-                      />
-                    }
-                  />
-                  <SettingsRow
-                    title="Private key"
-                    description={
-                      state.identity.hasPrivateKey
-                        ? "Stored in this environment's secret store. Paste a new key to replace it, or save empty to remove it."
-                        : "Paste the .pem file's contents. It is stored in this environment's secret store and never sent back."
-                    }
-                  >
-                    <div className="flex flex-col gap-2 px-3 pb-3 sm:px-4">
-                      <Textarea
-                        value={privateKey}
-                        placeholder="-----BEGIN RSA PRIVATE KEY-----"
-                        disabled={!canWrite}
-                        onChange={(event) => setPrivateKeyText(event.target.value)}
-                      />
-                      <div>
-                        <Button size="xs" variant="outline" disabled={!canWrite} onClick={saveKey}>
-                          {privateKey.trim() === "" && state.identity.hasPrivateKey
-                            ? "Remove key"
-                            : "Store key"}
-                        </Button>
-                      </div>
-                    </div>
-                  </SettingsRow>
-                </>
-              ) : null}
-            </SettingsSection>
-
-            <SettingsSection title="Triggers">
-              <SettingsRow
-                title="Command"
-                description="A pull request comment containing this asks for a review; text after it is the reviewer's focus. Replying to one of the bot's comments with it asks the review thread a question."
-                control={
-                  <Input
-                    className="w-48"
-                    placeholder={DEFAULT_PR_REVIEW_COMMAND}
-                    value={config.command}
-                    disabled={!canWrite}
-                    onChange={(event) => edit({ command: event.target.value })}
-                  />
-                }
-              />
-              <SettingsRow
-                title="Review when requested as a reviewer"
-                description="GitHub App identity only: requesting the bot reviews the current head."
-                control={
-                  <Switch
-                    checked={config.reviewOnRequest}
-                    disabled={!canWrite}
-                    onCheckedChange={(reviewOnRequest) => edit({ reviewOnRequest })}
-                  />
-                }
-              />
-              <SettingsRow
-                title="Allowed users"
-                description="Comma-separated GitHub logins. Empty allows repository collaborators with write access."
-                control={
-                  <Input
-                    className="w-64"
-                    value={config.allowedLogins.join(", ")}
-                    disabled={!canWrite}
-                    onChange={(event) =>
-                      edit({
-                        allowedLogins: event.target.value
-                          .split(",")
-                          .map((login) => login.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                  />
-                }
-              />
-            </SettingsSection>
-
-            <SettingsSection
-              title="Repositories"
-              headerAction={
-                <Button
-                  size="xs"
-                  variant="ghost-muted"
-                  disabled={!canWrite || projects.length === 0}
-                  onClick={() =>
-                    edit({
-                      repositories: [
-                        ...config.repositories,
-                        {
-                          repository: "",
-                          projectId: projects[0]!.id,
-                          enabled: true,
-                          autoReview: false,
-                          instructions: "",
-                        },
-                      ],
-                    })
+                <SettingsRow
+                  title="App slug"
+                  description="Optional. Read from GitHub when empty."
+                  control={
+                    <Input
+                      size="sm"
+                      className="w-full sm:w-48"
+                      value={config.identity.appSlug}
+                      disabled={!canWrite}
+                      onChange={(event) =>
+                        edit({ identity: { ...config.identity, appSlug: event.target.value } })
+                      }
+                    />
+                  }
+                />
+                <SettingsRow
+                  title="Private key"
+                  description={
+                    state.identity.hasPrivateKey
+                      ? "Stored in this environment's secret store. Paste a new key to replace it, or save empty to remove it."
+                      : "Paste the .pem file's contents. It is stored in this environment's secret store and never sent back."
                   }
                 >
-                  <PlusIcon className="size-3" />
-                  Add
-                </Button>
-              }
-            >
-              {config.repositories.length === 0 ? (
-                <SettingsRow
-                  title="No repositories"
-                  description="Add the owner/name of a GitHub repository and the project that holds its checkout."
-                />
-              ) : null}
-              {config.repositories.map((repo, index) => {
-                const replace = (patch: Partial<typeof repo>) =>
-                  edit({
-                    repositories: config.repositories.map((entry, at) =>
-                      at === index ? { ...entry, ...patch } : entry,
-                    ),
-                  });
-                return (
-                  <SettingsRow
-                    key={`${repo.projectId}:${repo.repository}`}
-                    title={
-                      <Input
-                        className="w-56"
-                        placeholder="owner/name"
-                        aria-label="Repository"
-                        value={repo.repository}
-                        disabled={!canWrite}
-                        onChange={(event) => replace({ repository: event.target.value.trim() })}
-                      />
-                    }
-                    control={
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Select
-                          value={repo.projectId}
-                          onValueChange={(projectId) =>
-                            projectId && replace({ projectId: projectId as ProjectId })
-                          }
-                        >
-                          <SelectTrigger size="sm" aria-label="Project">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            {projects.map((project) => (
-                              <SelectItem key={project.id} value={project.id}>
-                                {project.title}
-                              </SelectItem>
-                            ))}
-                          </SelectPopup>
-                        </Select>
-                        <span className="text-xs text-muted-foreground">Auto-review</span>
-                        <Switch
-                          checked={repo.autoReview}
-                          disabled={!canWrite}
-                          onCheckedChange={(autoReview) => replace({ autoReview })}
-                        />
-                        <span className="text-xs text-muted-foreground">On</span>
-                        <Switch
-                          checked={repo.enabled}
-                          disabled={!canWrite}
-                          onCheckedChange={(enabled) => replace({ enabled })}
-                        />
-                        <Button
-                          size="icon-xs"
-                          variant="ghost-muted"
-                          aria-label="Remove repository"
-                          disabled={!canWrite}
-                          onClick={() =>
-                            edit({
-                              repositories: config.repositories.filter(
-                                (_entry, at) => at !== index,
-                              ),
-                            })
-                          }
-                        >
-                          <Trash2Icon className="size-3" />
-                        </Button>
-                      </div>
-                    }
-                  >
-                    <div className="px-3 pb-3 sm:px-4">
-                      <Textarea
-                        placeholder="Review instructions for this repository (replaces the default below)"
-                        value={repo.instructions}
-                        disabled={!canWrite}
-                        onChange={(event) => replace({ instructions: event.target.value })}
-                      />
+                  <div className="mt-3 max-w-2xl space-y-2 pb-3.5">
+                    <Textarea
+                      size="sm"
+                      aria-label="Private key"
+                      value={privateKey}
+                      placeholder="-----BEGIN RSA PRIVATE KEY-----"
+                      disabled={!canWrite}
+                      onChange={(event) => setPrivateKeyText(event.target.value)}
+                    />
+                    <div>
+                      <Button size="sm" variant="outline" disabled={!canWrite} onClick={saveKey}>
+                        {privateKey.trim() === "" && state.identity.hasPrivateKey
+                          ? "Remove key"
+                          : "Store key"}
+                      </Button>
                     </div>
-                  </SettingsRow>
-                );
-              })}
-            </SettingsSection>
+                  </div>
+                </SettingsRow>
+              </>
+            ) : null}
+          </SettingsSection>
 
-            <SettingsSection
-              title="Reviewer rules"
-              headerAction={
-                <Button
-                  size="xs"
-                  variant="ghost-muted"
+          <SettingsSection title="Triggers">
+            <SettingsRow
+              title="Command"
+              description="Comment this on a pull request to ask for a review. Text after it sets the focus. Reply with it to a bot comment to ask a question."
+              control={
+                <Input
+                  size="sm"
+                  className="w-full sm:w-48"
+                  placeholder={DEFAULT_PR_REVIEW_COMMAND}
+                  value={config.command}
                   disabled={!canWrite}
-                  onClick={() =>
+                  onChange={(event) => edit({ command: event.target.value })}
+                />
+              }
+            />
+            <SettingsRow
+              title="Review when requested as a reviewer"
+              description="GitHub App only. Requesting the bot reviews the latest commit."
+              control={
+                <Switch
+                  checked={config.reviewOnRequest}
+                  disabled={!canWrite}
+                  onCheckedChange={(reviewOnRequest) => edit({ reviewOnRequest })}
+                  aria-label="Review when requested as a reviewer"
+                />
+              }
+            />
+            <SettingsRow
+              title="Allowed users"
+              description="GitHub logins, comma separated. Leave empty to allow collaborators with write access."
+              control={
+                <Input
+                  size="sm"
+                  className="w-full sm:w-64"
+                  value={config.allowedLogins.join(", ")}
+                  disabled={!canWrite}
+                  onChange={(event) =>
                     edit({
-                      rules: [
-                        ...config.rules,
-                        {
-                          authorProvider:
-                            AUTHOR_PROVIDERS.map(([value]) => value).find(
-                              (value) =>
-                                !config.rules.some((rule) => rule.authorProvider === value),
-                            ) ?? "any",
-                          reviewer: config.defaultReviewer ?? {
-                            instanceId: ProviderInstanceId.make("claudeAgent"),
-                            model: "claude-opus-5-5",
-                          },
-                        },
-                      ],
+                      allowedLogins: event.target.value
+                        .split(",")
+                        .map((login) => login.trim())
+                        .filter(Boolean),
                     })
                   }
-                >
-                  <PlusIcon className="size-3" />
-                  Add rule
-                </Button>
+                />
               }
-            >
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title="Repositories"
+            headerAction={
+              <Button
+                size="xs"
+                variant="ghost-muted"
+                disabled={!canWrite || projects.length === 0}
+                onClick={() =>
+                  edit({
+                    repositories: [
+                      ...config.repositories,
+                      {
+                        repository: "",
+                        projectId: projects[0]!.id,
+                        enabled: true,
+                        autoReview: false,
+                        instructions: "",
+                      },
+                    ],
+                  })
+                }
+              >
+                <PlusIcon className="size-3" />
+                Add
+              </Button>
+            }
+          >
+            {config.repositories.length === 0 ? (
               <SettingsRow
-                title="How the author is found"
-                description="From the T3 thread that created or pushed the PR, else its commits' Co-Authored-By trailers. The first matching rule picks the reviewer."
+                title="No repositories"
+                description="Add the owner/name of a GitHub repository and the project that holds its checkout."
               />
-              {config.rules.map((rule, index) => (
+            ) : null}
+            {config.repositories.map((repo, index) => {
+              const replace = (patch: Partial<typeof repo>) =>
+                edit({
+                  repositories: config.repositories.map((entry, at) =>
+                    at === index ? { ...entry, ...patch } : entry,
+                  ),
+                });
+              return (
                 <SettingsRow
-                  key={`${rule.authorProvider}:${rule.reviewer.instanceId}:${rule.reviewer.model}`}
-                  title={
-                    <span className="flex items-center gap-2">
-                      If written by
-                      <Select
-                        value={rule.authorProvider}
-                        onValueChange={(authorProvider) =>
-                          authorProvider &&
+                  // oxlint-disable-next-line react/no-array-index-key -- Rows are controlled; a content key remounts the input on every keystroke.
+                  key={index}
+                  title={repo.repository || "New repository"}
+                  control={
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={repo.enabled}
+                        disabled={!canWrite}
+                        onCheckedChange={(enabled) => replace({ enabled })}
+                        aria-label={`Review ${repo.repository || "this repository"}`}
+                      />
+                      <Button
+                        size="icon-micro"
+                        variant="ghost-destructive"
+                        aria-label="Remove repository"
+                        disabled={!canWrite}
+                        onClick={() =>
                           edit({
-                            rules: config.rules.map((entry, at) =>
-                              at === index ? { ...entry, authorProvider } : entry,
-                            ),
+                            repositories: config.repositories.filter((_entry, at) => at !== index),
                           })
                         }
                       >
-                        <SelectTrigger size="sm" aria-label="Author provider">
+                        <XIcon className="size-3" />
+                      </Button>
+                    </div>
+                  }
+                >
+                  <div className="mt-3 min-w-0 max-w-2xl space-y-2 pb-3.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Input
+                          size="sm"
+                          font="mono"
+                          placeholder="owner/name"
+                          aria-label="Repository"
+                          value={repo.repository}
+                          disabled={!canWrite}
+                          onChange={(event) => replace({ repository: event.target.value.trim() })}
+                        />
+                      </div>
+                      <Select
+                        value={repo.projectId}
+                        onValueChange={(projectId) =>
+                          projectId && replace({ projectId: projectId as ProjectId })
+                        }
+                      >
+                        <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Project">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectPopup>
-                          {AUTHOR_PROVIDERS.map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
+                        <SelectPopup align="end" alignItemWithTrigger={false}>
+                          {projects.map((project) => (
+                            <SelectItem hideIndicator key={project.id} value={project.id}>
+                              {project.title}
                             </SelectItem>
                           ))}
                         </SelectPopup>
                       </Select>
-                      review with
-                    </span>
-                  }
-                  control={
-                    <div className="flex items-center gap-2">
-                      <ReviewerPicker
-                        environmentId={environmentId}
-                        projectId={null}
-                        value={rule.reviewer}
-                        onChange={(reviewer) =>
-                          edit({
-                            rules: config.rules.map((entry, at) =>
-                              at === index ? { ...entry, reviewer } : entry,
-                            ),
-                          })
-                        }
-                      />
-                      <Button
-                        size="icon-xs"
-                        variant="ghost-muted"
-                        aria-label="Remove rule"
-                        disabled={!canWrite}
-                        onClick={() =>
-                          edit({ rules: config.rules.filter((_entry, at) => at !== index) })
-                        }
-                      >
-                        <Trash2Icon className="size-3" />
-                      </Button>
                     </div>
-                  }
-                />
-              ))}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Switch
+                        size="sm"
+                        checked={repo.autoReview}
+                        disabled={!canWrite}
+                        onCheckedChange={(autoReview) => replace({ autoReview })}
+                        aria-label="Auto-review"
+                      />
+                      <span>Review new pull requests automatically</span>
+                    </div>
+                    <Textarea
+                      size="sm"
+                      aria-label="Repository review instructions"
+                      placeholder="Instructions for this repository. Replaces the default instructions."
+                      value={repo.instructions}
+                      disabled={!canWrite}
+                      onChange={(event) => replace({ instructions: event.target.value })}
+                    />
+                  </div>
+                </SettingsRow>
+              );
+            })}
+          </SettingsSection>
+
+          <SettingsSection
+            title="Reviewer rules"
+            headerAction={
+              <Button
+                size="xs"
+                variant="ghost-muted"
+                disabled={!canWrite}
+                onClick={() =>
+                  edit({
+                    rules: [
+                      ...config.rules,
+                      {
+                        authorProvider:
+                          AUTHOR_PROVIDERS.map(([value]) => value).find(
+                            (value) => !config.rules.some((rule) => rule.authorProvider === value),
+                          ) ?? "any",
+                        reviewer: config.defaultReviewer ?? {
+                          instanceId: ProviderInstanceId.make("claudeAgent"),
+                          model: "claude-opus-5-5",
+                        },
+                      },
+                    ],
+                  })
+                }
+              >
+                <PlusIcon className="size-3" />
+                Add rule
+              </Button>
+            }
+          >
+            <SettingsRow
+              title="How the author is found"
+              description="Read from the T3 thread that opened or pushed the pull request, otherwise from its Co-Authored-By trailers. The first matching rule picks the reviewer."
+            />
+            {config.rules.map((rule, index) => (
               <SettingsRow
-                title="Otherwise"
-                description="Used when no rule matches. Unset uses the environment's default model."
+                key={`${rule.authorProvider}:${rule.reviewer.instanceId}:${rule.reviewer.model}`}
+                title={`Rule ${index + 1}`}
                 control={
+                  <Button
+                    size="icon-micro"
+                    variant="ghost-destructive"
+                    aria-label="Remove rule"
+                    disabled={!canWrite}
+                    onClick={() =>
+                      edit({ rules: config.rules.filter((_entry, at) => at !== index) })
+                    }
+                  >
+                    <XIcon className="size-3" />
+                  </Button>
+                }
+              >
+                <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 pb-3.5 text-xs text-muted-foreground">
+                  <span>Written by</span>
+                  <Select
+                    value={rule.authorProvider}
+                    onValueChange={(authorProvider) =>
+                      authorProvider &&
+                      edit({
+                        rules: config.rules.map((entry, at) =>
+                          at === index ? { ...entry, authorProvider } : entry,
+                        ),
+                      })
+                    }
+                  >
+                    <SelectTrigger size="sm" aria-label="Author provider">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup alignItemWithTrigger={false}>
+                      {AUTHOR_PROVIDERS.map(([value, label]) => (
+                        <SelectItem hideIndicator key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                  <span>reviewed by</span>
                   <ReviewerPicker
                     environmentId={environmentId}
                     projectId={null}
-                    value={config.defaultReviewer}
-                    onChange={(defaultReviewer) => edit({ defaultReviewer })}
-                  />
-                }
-              />
-            </SettingsSection>
-
-            <SettingsSection title="Review instructions">
-              <SettingsRow
-                title="Default instructions"
-                description="Empty uses T3's: verified defects only, no style nits."
-              >
-                <div className="px-3 pb-3 sm:px-4">
-                  <Textarea
-                    value={config.instructions}
-                    disabled={!canWrite}
-                    onChange={(event) => edit({ instructions: event.target.value })}
+                    value={rule.reviewer}
+                    onChange={(reviewer) =>
+                      edit({
+                        rules: config.rules.map((entry, at) =>
+                          at === index ? { ...entry, reviewer } : entry,
+                        ),
+                      })
+                    }
                   />
                 </div>
               </SettingsRow>
-            </SettingsSection>
-
-            {PR_REVIEW_EXECUTION_SHIPPED ? (
-              <SettingsSection title="History">
-                <SettingsRow
-                  title="Polling"
-                  description={
-                    state.polling.lastError
-                      ? `Last poll failed: ${state.polling.lastError}`
-                      : state.polling.lastPollAt
-                        ? `Last polled ${formatRelativeTimeLabel(state.polling.lastPollAt)}.`
-                        : config.enabled
-                          ? "Waiting for the first poll."
-                          : "Off on this environment."
-                  }
+            ))}
+            <SettingsRow
+              title="Otherwise"
+              description="Used when no rule matches. Unset uses the environment's default model."
+              control={
+                <ReviewerPicker
+                  environmentId={environmentId}
+                  projectId={null}
+                  value={config.defaultReviewer}
+                  onChange={(defaultReviewer) => edit({ defaultReviewer })}
                 />
-                {state.history.length === 0 ? <SettingsRow title="No reviews yet" /> : null}
-                {state.history.map((record) => (
-                  <HistoryRow
-                    key={record.id}
-                    environmentId={environmentId}
-                    record={record}
-                    canOperate={canOperate}
-                  />
-                ))}
-              </SettingsSection>
-            ) : null}
-          </>
-        ) : null}
-      </SettingsSection>
+              }
+            />
+          </SettingsSection>
+
+          <SettingsSection title="Review instructions">
+            <SettingsRow
+              title="Default instructions"
+              description="Leave empty for T3's default: verified defects only, no style nits."
+            >
+              <div className="mt-3 max-w-2xl pb-3.5">
+                <Textarea
+                  aria-label="Default review instructions"
+                  value={config.instructions}
+                  disabled={!canWrite}
+                  onChange={(event) => edit({ instructions: event.target.value })}
+                />
+              </div>
+            </SettingsRow>
+          </SettingsSection>
+
+          {PR_REVIEW_EXECUTION_SHIPPED ? (
+            <SettingsSection title="History">
+              <SettingsRow
+                title="Polling"
+                description={
+                  state.polling.lastError
+                    ? `Last poll failed: ${state.polling.lastError}`
+                    : state.polling.lastPollAt
+                      ? `Last polled ${formatRelativeTimeLabel(state.polling.lastPollAt)}.`
+                      : config.enabled
+                        ? "Waiting for the first poll."
+                        : "Off on this environment."
+                }
+              />
+              {state.history.length === 0 ? <SettingsRow title="No reviews yet" /> : null}
+              {state.history.map((record) => (
+                <HistoryRow
+                  key={record.id}
+                  environmentId={environmentId}
+                  record={record}
+                  canOperate={canOperate}
+                />
+              ))}
+            </SettingsSection>
+          ) : null}
+        </>
+      ) : null}
     </SettingsPageContainer>
   );
 }

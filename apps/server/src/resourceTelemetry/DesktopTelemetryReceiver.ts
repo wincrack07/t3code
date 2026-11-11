@@ -1,3 +1,4 @@
+import type { MachineSample } from "@t3tools/contracts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeNet from "node:net";
@@ -189,6 +190,7 @@ export class DesktopTelemetryReceiver extends Context.Service<
     readonly keepAwakeChanges: Stream.Stream<KeepAwakeSession>;
     readonly reportKeepAwake: (
       status: KeepAwakeStatus,
+      sample?: MachineSample,
     ) => Effect.Effect<void, DesktopTelemetryControlError>;
     readonly setDiagnosticsDemand: (
       enabled: boolean,
@@ -728,8 +730,13 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     subscribeHealth: subscribeBeforeSnapshotWithoutMutex(healthChanges, Ref.get(health)),
     setDiagnosticsDemand,
     keepAwakeChanges: Stream.fromPubSub(keepAwakeChanges),
-    reportKeepAwake: Effect.fn("DesktopTelemetryReceiver.reportKeepAwake")((status) =>
-      sendControlMessage({ version: 1, type: "keepAwakeStatus", status }),
+    reportKeepAwake: Effect.fn("DesktopTelemetryReceiver.reportKeepAwake")((status, sample) =>
+      sendControlMessage({
+        version: 1,
+        type: "keepAwakeStatus",
+        status,
+        ...(sample ? { sample } : {}),
+      }),
     ),
     requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(
       function (requestId, trackSwitch) {

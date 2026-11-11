@@ -1,3 +1,5 @@
+import { readFinderLink } from "@t3tools/shared/finderIntegration";
+import { useFinderSelection } from "./useFinderSelection";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -80,6 +82,7 @@ function threadShowingBrowser(
 
 export function DesktopWebLinkCoordinator() {
   const router = useRouter();
+  const receiveFinderSelection = useFinderSelection();
   const primaryEnvironment = usePrimaryEnvironment();
   const openPullRequestsInApp = useClientSettings((settings) => settings.pullRequestLinksOpenInApp);
   const openChangeRequest = useOpenChangeRequestLink();
@@ -201,6 +204,11 @@ export function DesktopWebLinkCoordinator() {
   });
 
   const openLink = useEffectEvent(async (url: string) => {
+    if (readFinderLink(url) !== null) {
+      await projectsSettled();
+      await receiveFinderSelection(url);
+      return;
+    }
     const pairingUrl = readPairingAppLink(url);
     if (pairingUrl !== null) {
       await pairFromLink(pairingUrl);

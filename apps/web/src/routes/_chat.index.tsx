@@ -26,7 +26,7 @@ function ChatIndexRouteView() {
   const { environments, isReady } = useEnvironments();
 
   if (authGateState.status === "hosted-static") {
-    if (!isReady) return null;
+    if (!isReady) return <DraftStartPending />;
     if (environments.length === 0) return <HostedEmptyState />;
   }
 
@@ -84,10 +84,28 @@ function IndexDraftLanding() {
           }));
         }}
       />
-    ) : null;
+    ) : (
+      <DraftStartPending />
+    );
   }
   // A pending environment cannot prove the workspace is empty.
-  return bootstrapped ? <NoProjectsHero /> : null;
+  return bootstrapped ? <NoProjectsHero /> : <DraftStartPending />;
+}
+
+function DraftStartPending() {
+  return (
+    <SidebarInset
+      {...workspaceAreaProps("home", 1, "Home")}
+      role="main"
+      aria-busy="true"
+      className="h-dvh min-h-0 overflow-hidden overscroll-y-none"
+    >
+      {isElectron ? <WorkspacePageHeader electron /> : null}
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6" aria-hidden="true">
+        <div className="h-16 w-full max-w-3xl rounded-2xl border border-border/50" />
+      </div>
+    </SidebarInset>
+  );
 }
 
 function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {

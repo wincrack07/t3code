@@ -415,10 +415,25 @@ it.effect("persists open questions through declare, answer, undo, and a later de
       runId: first,
       questions: [
         { id: "fix", text: "Open the one-cent fix?", suggestions: ["Yes, open it", "No"] },
-        { id: "merge", text: "Merge dev into main?", suggestions: ["Do it now", "Wait"] },
+        {
+          id: "merge",
+          context: "CI is green on dev.",
+          text: "Merge dev into main?",
+          suggestions: ["Wait", "Do it now"],
+          recommended: "Do it now",
+        },
         { id: "audio", text: "Research credit sales?", suggestions: ["Yes", "No"] },
       ],
     });
+    const declared = (yield* projections.getThread(threadId)).openQuestions ?? [];
+    assert.deepEqual(
+      declared.map(({ context, recommended }) => ({ context, recommended })),
+      [
+        { context: undefined, recommended: undefined },
+        { context: "CI is green on dev.", recommended: "Do it now" },
+        { context: undefined, recommended: undefined },
+      ],
+    );
     yield* update({
       action: "set_status",
       updates: [

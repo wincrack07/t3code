@@ -72,7 +72,11 @@ export function browseInputEndPaddingClass(input: {
 export type SearchOverlayMode = "command" | "files" | "content";
 
 export type CommandPaletteOpenIntent =
-  | { readonly kind: "add-project" | "new-thread-in" | "change-theme" }
+  | {
+      readonly kind: "add-project";
+      readonly folder?: { readonly path: string; readonly environmentId: EnvironmentId };
+    }
+  | { readonly kind: "new-thread-in" | "change-theme" }
   | {
       readonly kind: "search";
       readonly query: string;
@@ -98,7 +102,10 @@ export type CommandPaletteUiAction =
       readonly query: string;
       readonly linkedThreads?: CommandPaletteLinkedThreads;
     }
-  | { readonly _tag: "OpenAddProject" }
+  | {
+      readonly _tag: "OpenAddProject";
+      readonly folder?: { readonly path: string; readonly environmentId: EnvironmentId };
+    }
   | { readonly _tag: "OpenNewThreadIn" }
   | { readonly _tag: "OpenChangeTheme" }
   | {
@@ -153,7 +160,10 @@ export function reduceCommandPaletteUiState(
         ...(action.linkedThreads ? { linkedThreads: action.linkedThreads } : {}),
       });
     case "OpenAddProject":
-      return openWithIntent({ kind: "add-project" });
+      return openWithIntent({
+        kind: "add-project",
+        ...(action.folder ? { folder: action.folder } : {}),
+      });
     case "OpenNewThreadIn":
       return openWithIntent({ kind: "new-thread-in" });
     case "OpenChangeTheme":
@@ -771,11 +781,55 @@ export function buildRootGroups(input: {
   if (input.recentThreadItems.length > 0) {
     groups.push({
       value: "recent-threads",
-      label: "Recent Threads",
+      label: "Recents",
       items: input.recentThreadItems,
     });
   }
   return groups;
+}
+
+export const COMMAND_PALETTE_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "threads", label: "Threads" },
+  { value: "projects", label: "Projects" },
+  { value: "actions", label: "Actions" },
+  { value: "settings", label: "Settings" },
+] as const;
+export type CommandPaletteFilter = (typeof COMMAND_PALETTE_FILTERS)[number]["value"];
+
+const FILTER_BY_GROUP: Readonly<Record<string, CommandPaletteFilter>> = {
+  "recent-threads": "threads",
+  "threads-search": "threads",
+  "threads-messages": "threads",
+  "projects-search": "projects",
+  actions: "actions",
+  "nested-search": "actions",
+  "settings-search": "settings",
+};
+
+export function cycleCommandPaletteFilter(
+  filter: CommandPaletteFilter,
+  step: 1 | -1,
+): CommandPaletteFilter {
+  const index = COMMAND_PALETTE_FILTERS.findIndex((entry) => entry.value === filter);
+  const count = COMMAND_PALETTE_FILTERS.length;
+  return COMMAND_PALETTE_FILTERS[(index + step + count) % count]?.value ?? "all";
+}
+
+/**
+ * Narrows the root results to one kind. With an empty query, `browseGroups`
+ * lists a kind the root view does not show until something is typed.
+ */
+export function filterCommandPaletteGroupsByKind(input: {
+  readonly groups: ReadonlyArray<CommandPaletteGroup>;
+  readonly filter: CommandPaletteFilter;
+  readonly browseGroups?: ReadonlyArray<CommandPaletteGroup>;
+}): ReadonlyArray<CommandPaletteGroup> {
+  if (input.filter === "all") return input.groups;
+  const ofKind = (group: CommandPaletteGroup) => FILTER_BY_GROUP[group.value] === input.filter;
+  const kept = input.groups.filter(ofKind);
+  if (kept.length > 0 || !input.browseGroups) return kept;
+  return input.browseGroups.filter((group) => ofKind(group) && group.items.length > 0);
 }
 
 export function getCommandPaletteInputPlaceholder(mode: CommandPaletteMode): string {

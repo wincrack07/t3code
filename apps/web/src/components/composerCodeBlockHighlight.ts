@@ -5,6 +5,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 
 import type { DiffThemeName } from "~/lib/diffRendering";
 import { languageOfInfoString } from "~/composer-code-languages";
+import { subscribeCodeThemes } from "~/lib/codeThemes";
 import { getSyntaxHighlighterPromise } from "~/lib/syntaxHighlighting";
 
 interface HighlightedBlock {
@@ -146,6 +147,7 @@ export function composerCodeBlockHighlight(options: {
             themeObserver.observe(document.documentElement, {
               attributeFilter: ["class"],
             });
+            const stopCodeThemes = subscribeCodeThemes(() => refresh(false));
 
             return {
               update: () => refresh(true),
@@ -153,6 +155,7 @@ export function composerCodeBlockHighlight(options: {
                 disposed = true;
                 clearTimeout(deferredRefresh);
                 themeObserver.disconnect();
+                stopCodeThemes();
               },
             };
           },

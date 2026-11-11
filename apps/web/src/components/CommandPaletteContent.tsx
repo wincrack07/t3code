@@ -1,8 +1,42 @@
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "lucide-react";
 import { type ComponentProps, type ReactNode, type RefObject } from "react";
 
+import { COMMAND_PALETTE_FILTERS, type CommandPaletteFilter } from "./CommandPalette.logic";
+import { Button } from "./ui/button";
 import { Command, CommandFooter, CommandInput, CommandPanel } from "./ui/command";
 import { Kbd, KbdGroup } from "./ui/kbd";
+
+/** Kind tabs under the search field. They never take focus, so typing keeps going to the input. */
+export function CommandPaletteFilterTabs(props: {
+  readonly value: CommandPaletteFilter;
+  readonly onSelect: (filter: CommandPaletteFilter) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Result type"
+      className="flex flex-wrap items-center gap-1 px-2 pb-2"
+    >
+      {COMMAND_PALETTE_FILTERS.map((filter) => {
+        const selected = filter.value === props.value;
+        return (
+          <Button
+            key={filter.value}
+            role="tab"
+            aria-selected={selected}
+            tabIndex={-1}
+            size="sm"
+            variant={selected ? "secondary" : "ghost"}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => props.onSelect(filter.value)}
+          >
+            {filter.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * A view replacing another inside an open dialog mounts with focus on the body,
@@ -41,6 +75,8 @@ function restorePendingSelection(
 type CommandPaletteContentProps = Omit<ComponentProps<typeof Command>, "children"> & {
   readonly children: ReactNode;
   readonly escapeLabel?: ReactNode;
+  /** Shown under the input; its presence also adds the "Change type" footer hint. */
+  readonly filterBar?: ReactNode;
   readonly footerActionLabel?: ReactNode;
   readonly footerTrailing?: ReactNode;
   readonly inputAccessory?: ReactNode;
@@ -54,6 +90,7 @@ type CommandPaletteContentProps = Omit<ComponentProps<typeof Command>, "children
 export function CommandPaletteContent({
   children,
   escapeLabel = "Close",
+  filterBar,
   footerActionLabel,
   footerTrailing,
   inputAccessory,
@@ -79,6 +116,7 @@ export function CommandPaletteContent({
           />
           {inputAccessory}
         </div>
+        {filterBar}
         <CommandPanel
           className={
             panelSize === "fill"
@@ -105,6 +143,17 @@ export function CommandPaletteContent({
               <KbdGroup>
                 <Kbd>Enter</Kbd>
                 <span>{footerActionLabel}</span>
+              </KbdGroup>
+            ) : null}
+            {filterBar ? (
+              <KbdGroup>
+                <Kbd>
+                  <ArrowLeftIcon />
+                </Kbd>
+                <Kbd>
+                  <ArrowRightIcon />
+                </Kbd>
+                <span>Change type</span>
               </KbdGroup>
             ) : null}
             {showBackHint ? (

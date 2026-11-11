@@ -89,9 +89,48 @@ describe("parseClaudeArtifactFrames", () => {
 
 const WORK = ProviderInstanceId.make("claude_work");
 
+const accountJson = (account: Record<string, string>) =>
+  JSON.stringify({ userID: "random", oauthAccount: account });
+const WORK_ACCOUNT = {
+  accountUuid: "acct-1",
+  organizationUuid: "org-work",
+  organizationName: "Work Org",
+  emailAddress: "me@example.com",
+};
+
+describe("claudeAccountIdentity", () => {
+  it("keys an account by its account and organization ids, not its e-mail", () => {
+    const work = ClaudeArtifacts.claudeAccountIdentity(accountJson(WORK_ACCOUNT));
+    const personal = ClaudeArtifacts.claudeAccountIdentity(
+      accountJson({ ...WORK_ACCOUNT, organizationUuid: "org-personal", organizationName: "Mine" }),
+    );
+    const sameElsewhere = ClaudeArtifacts.claudeAccountIdentity(
+      accountJson({ ...WORK_ACCOUNT, emailAddress: "renamed@example.com" }),
+    );
+    expect(work).toEqual({
+      accountKey: expect.stringMatching(/^[0-9a-f]{32}$/),
+      organizationName: "Work Org",
+      email: "me@example.com",
+    });
+    expect(personal.accountKey).not.toBe(work.accountKey);
+    expect(sameElsewhere.accountKey).toBe(work.accountKey);
+    expect(work.accountKey).not.toContain("acct-1");
+  });
+
+  it("has no key when signed out or unreadable", () => {
+    expect(ClaudeArtifacts.claudeAccountIdentity('{"userID":"x"}')).toEqual({});
+    expect(ClaudeArtifacts.claudeAccountIdentity("not json")).toEqual({});
+    expect(
+      ClaudeArtifacts.claudeAccountIdentity(accountJson({ emailAddress: "me@example.com" })),
+    ).toEqual({ email: "me@example.com" });
+  });
+});
+
 const withService = <A, E>(
   options: {
     readonly login?: string;
+    readonly account?: string;
+    readonly homeAccount?: string;
     readonly respond?: (request: { readonly url: string; readonly headers: object }) => Response;
   },
   use: (
@@ -103,8 +142,15 @@ const withService = <A, E>(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const directory = yield* fs.makeTempDirectoryScoped();
+    const home = yield* fs.makeTempDirectoryScoped();
     if (options.login !== undefined) {
       yield* fs.writeFileString(path.join(directory, ".credentials.json"), options.login);
+    }
+    if (options.account !== undefined) {
+      yield* fs.writeFileString(path.join(directory, ".claude.json"), options.account);
+    }
+    if (options.homeAccount !== undefined) {
+      yield* fs.writeFileString(path.join(home, ".claude.json"), options.homeAccount);
     }
     const requests: Array<{ url: string; authorization: string | undefined }> = [];
     const client = HttpClient.make((request) => {
@@ -134,8 +180,13 @@ const withService = <A, E>(
         ),
       ),
     );
-    return yield* use(service, requests);
-  }).pipe(Effect.provideService(HostProcess.Platform, "linux"));
+    return yield* use(service, requests).pipe(
+      Effect.provideService(HostProcess.HomeDirectory, home),
+    );
+  }).pipe(
+    Effect.provideService(HostProcess.Platform, "linux"),
+    Effect.provideService(HostProcess.Environment, {}),
+  );
 
 const LOGIN =
   '{"claudeAiOauth":{"accessToken":"work-token"},"mcpOAuth":{"x":{"accessToken":"other"}}}';
@@ -195,5 +246,37 @@ it.layer(NodeServices.layer)("ClaudeArtifacts.list", (it) => {
         yield* reasonOf({ login: LOGIN, respond: () => Response.json({ nope: true }) }),
       ).toEqual({ reason: "requestFailed", requests: 1 });
     }),
+  );
+  it.effect("describes each Claude instance without network requests or tokens", () =>
+    withService(
+      {
+        login: LOGIN,
+        account: accountJson(WORK_ACCOUNT),
+        homeAccount: accountJson({ ...WORK_ACCOUNT, organizationUuid: "org-personal" }),
+      },
+      (service, requests) =>
+        Effect.gen(function* () {
+          const { accounts } = yield* service.accounts;
+          expect(accounts).toEqual([
+            {
+              instanceId: WORK,
+              accountKey: expect.any(String),
+              organizationName: "Work Org",
+              email: "me@example.com",
+              listable: true,
+            },
+            {
+              instanceId: ProviderInstanceId.make("claudeAgent"),
+              accountKey: expect.any(String),
+              organizationName: "Work Org",
+              email: "me@example.com",
+              listable: false,
+            },
+          ]);
+          expect(accounts[0]?.accountKey).not.toBe(accounts[1]?.accountKey);
+          expect(JSON.stringify(accounts)).not.toContain("work-token");
+          expect(requests).toEqual([]);
+        }),
+    ),
   );
 });

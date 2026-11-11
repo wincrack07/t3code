@@ -236,6 +236,31 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
 
 export const SETTINGS_SEARCH_ITEMS = [
   {
+    id: "decisions",
+    title: "Decisions",
+    to: "/settings/labs",
+    searchTerms: ["routing custom OpenAI compatible source model"],
+  },
+  {
+    id: "peer-link-mesh",
+    title: "Link my environments",
+    to: "/settings/connections",
+    searchTerms: ["peer mesh link all renew unlink"],
+  },
+  {
+    id: "pr-reviews",
+    title: "PR reviews",
+    to: "/settings/pr-reviews",
+    searchTerms: ["pull request reviewer GitHub identity triggers instructions"],
+  },
+  {
+    id: "finder-integration",
+    title: "Finder integration",
+    to: "/settings/about",
+    desktopOnly: true,
+    searchTerms: ["Send to T3 Code quick action files folders install remove"],
+  },
+  {
     id: "storage-worktree-keep-when",
     targetId: "storage-worktrees",
     title: "Keep worktrees with local changes",
@@ -318,7 +343,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "color-scheme",
     title: "Color scheme",
     to: "/settings/appearance",
-    searchTerms: ["appearance light dark system mode"],
+    searchTerms: ["appearance light dark system mode theme"],
     targetId: "appearance",
   },
   {
@@ -347,6 +372,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Diff colors",
     to: "/settings/diffs",
     searchTerms: ["red green blue orange additions deletions changes counts palette colorblind"],
+  },
+  {
+    id: "ui-density",
+    title: "Density",
+    to: "/settings/appearance",
+    searchTerms: ["compact comfortable dense spacing padding size smaller tighter rows controls"],
+  },
+  {
+    id: "motion",
+    title: "Motion",
+    to: "/settings/appearance",
+    searchTerms: ["animation animations reduced reduce motion transitions accessibility"],
   },
   {
     id: "chat-width",
@@ -384,13 +421,19 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Environment identification",
     to: "/settings/appearance",
     searchTerms: ["dev nightly latest channel artwork pill label hide none"],
-    targetId: "appearance-interface",
+    targetId: "appearance",
   },
   {
     id: "interface-font",
     title: "Interface font",
     to: "/settings/appearance",
     searchTerms: ["typography family size system sans"],
+  },
+  {
+    id: "reply-font",
+    title: "Reply font",
+    to: "/settings/appearance",
+    searchTerms: ["typography family size assistant prose serif"],
   },
   {
     id: "prompt-font",
@@ -424,15 +467,28 @@ export const SETTINGS_SEARCH_ITEMS = [
     macOnly: true,
   },
   {
+    id: "code-theme-light",
+    title: "Code theme (light)",
+    to: "/settings/appearance",
+    searchTerms: ["syntax highlighting colors diffs code blocks shiki light mode"],
+  },
+  {
+    id: "code-theme-dark",
+    title: "Code theme (dark)",
+    to: "/settings/appearance",
+    searchTerms: ["syntax highlighting colors diffs code blocks shiki dark mode"],
+  },
+  {
     id: "word-wrap",
     title: "Word wrap",
     to: "/settings/appearance",
     searchTerms: ["long lines code blocks diffs file previews"],
   },
   {
-    id: "composer-context",
-    title: "Composer context",
-    to: "/settings/appearance",
+    id: "sidebar-display",
+    title: "Sidebar display",
+    to: "/settings/general",
+    searchTerms: ["compact comfortable density settled project grouping"],
   },
   {
     id: "project-grouping",
@@ -801,7 +857,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Keep awake",
     to: "/settings/maintenance",
     scope: "environment-defaults",
-    searchTerms: ["sleep inhibit amphetamine caffeine agents duration display lid"],
+    searchTerms: [
+      "sleep inhibit amphetamine caffeine agents duration display lid menu bar tray stats CPU memory disk network",
+    ],
   },
   {
     id: "background-activity",

@@ -134,6 +134,7 @@ const make = Effect.gen(function* () {
       const appleScript = `do shell script "${script.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n")}" with administrator privileges`;
       yield* host.run("/usr/bin/osascript", ["-e", appleScript]);
       yield* refresh();
+      if (!(yield* SubscriptionRef.get(state)).active) yield* restoreState();
       yield* SubscriptionRef.update(state, (s) => ({ ...s, error: null }));
     },
     lock.withPermits(1),

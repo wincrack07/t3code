@@ -1,8 +1,10 @@
 import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type * as Context from "effect/Context";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../test/render";
+import { installFakeEnvironment, type FakeDriver } from "../../test/fakeEnvironment";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
@@ -10,6 +12,15 @@ import { useProjects } from "../state/entities";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
 import { SidebarProvider } from "./ui/sidebar";
+
+vi.mock("../../../../packages/client-runtime/src/connection/driver.ts", async (importOriginal) => {
+  const [actual, { fakeDriver }, Layer] = await Promise.all([
+    importOriginal<{ readonly ConnectionDriver: Context.Key<unknown, FakeDriver> }>(),
+    import("../../test/fakeEnvironment"),
+    import("effect/Layer"),
+  ]);
+  return { ...actual, layer: Layer.succeed(actual.ConnectionDriver, fakeDriver) };
+});
 
 vi.mock("../state/entities", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
@@ -43,6 +54,7 @@ describe("sidebar header new thread", () => {
     { mode: "boring", count: 2, shift: true, picker: false },
     { mode: "boring", count: 1, shift: false, picker: false },
   ] as const)("$mode sidebar, $count projects, shift=$shift: picker=$picker", async (scenario) => {
+    using _environment = installFakeEnvironment([]);
     using stack = new DisposableStack();
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));

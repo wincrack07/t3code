@@ -204,6 +204,9 @@ import {
   type CommandPaletteSubmenuItem,
   type CommandPaletteView,
   filterCommandPaletteGroups,
+  filterCommandPaletteGroupsByKind,
+  cycleCommandPaletteFilter,
+  type CommandPaletteFilter,
   buildNestedSearchItems,
   filterPinnedBrowseEntries,
   getCommandPaletteInputPlaceholder,
@@ -224,7 +227,11 @@ import {
 } from "./CommandPalette.logic";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { isSidebarHiddenThread } from "./Sidebar.logic";
-import { CommandPaletteContent, type PendingInputSelection } from "./CommandPaletteContent";
+import {
+  CommandPaletteContent,
+  CommandPaletteFilterTabs,
+  type PendingInputSelection,
+} from "./CommandPaletteContent";
 import {
   selectCommandPaletteClientSettings,
   useEnvironmentLookups,
@@ -284,7 +291,8 @@ function openIntentView(intent: CommandPaletteOpenIntent | null): CommandPalette
     case "add-project":
       return {
         addonIcon: <FolderPlusIcon className={ADDON_ICON_CLASS} />,
-        groups: [{ value: ADD_PROJECT_ENTRY_GROUP, label: "", items: [] }],
+        groups: intent.folder ? [] : [{ value: ADD_PROJECT_ENTRY_GROUP, label: "", items: [] }],
+        ...(intent.folder ? { initialQuery: `${intent.folder.path}/` } : {}),
       };
     case "new-thread-in":
       return {
@@ -428,7 +436,7 @@ function OpenCommandPaletteDialog(props: {
   const [searchState, dispatchSearch] = useReducer(reduceCommandPaletteSearchState, null, () => {
     const view = props.initialContext ? null : openIntentView(props.openIntent);
     return view
-      ? { query: "", views: [{ view, parentQuery: "" }] }
+      ? { query: view.initialQuery ?? "", views: [{ view, parentQuery: "" }] }
       : createCommandPaletteSearchState(initialSearch.query);
   });
   const { query, views: viewStack } = searchState;
@@ -436,6 +444,7 @@ function OpenCommandPaletteDialog(props: {
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = deferredQuery.startsWith(">");
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
+  const [paletteFilter, setPaletteFilter] = useState<CommandPaletteFilter>("all");
   const resultListRef = useRef<LegendListRef | null>(null);
   // A pushed view drops the typed highlight until the user moves it again.
   const highlightClearedRef = useRef(viewStack.length > 0);
@@ -527,7 +536,9 @@ function OpenCommandPaletteDialog(props: {
   const [browseGeneration, setBrowseGeneration] = useState(0);
   const [browseNavigation] = useState(createBrowseNavigationCoordinator);
   const [addProjectEnvironmentId, setAddProjectEnvironmentId] = useState<EnvironmentId | null>(
-    null,
+    props.openIntent?.kind === "add-project"
+      ? (props.openIntent.folder?.environmentId ?? null)
+      : null,
   );
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<AddProjectCloneFlow | null>(null);
@@ -2535,7 +2546,22 @@ function OpenCommandPaletteDialog(props: {
           },
         ];
 
-  let displayedGroups: CommandPaletteView["groups"] = filteredGroups;
+  const showsPaletteFilters =
+    paletteMode === "root" && newProjectFlow === null && addProjectCloneFlow === null;
+  let displayedGroups: CommandPaletteView["groups"] = showsPaletteFilters
+    ? filterCommandPaletteGroupsByKind({
+        groups: filteredGroups,
+        filter: paletteFilter,
+        ...(deferredQuery.trim().length === 0
+          ? {
+              browseGroups: [
+                { value: "projects-search", label: "Projects", items: projectSearchItems },
+                { value: "settings-search", label: "Settings", items: settingsSearchItems },
+              ],
+            }
+          : {}),
+      })
+    : filteredGroups;
   if (newProjectFlow !== null) {
     displayedGroups = [
       ...(newProjectMachineGroup ? [newProjectMachineGroup] : []),
@@ -2750,6 +2776,26 @@ function OpenCommandPaletteDialog(props: {
       return;
     }
 
+    // Tab cycles the kind filter; ←/→ only while the query is empty, so they never steal caret moves.
+    const filterStep =
+      !showsPaletteFilters || event.ctrlKey || event.altKey || event.metaKey
+        ? null
+        : event.key === "Tab"
+          ? event.shiftKey
+            ? -1
+            : 1
+          : query === "" && !event.shiftKey && event.key === "ArrowRight"
+            ? 1
+            : query === "" && !event.shiftKey && event.key === "ArrowLeft"
+              ? -1
+              : null;
+    if (filterStep !== null && !event.nativeEvent.isComposing) {
+      (event as typeof event & { preventBaseUIHandler?: () => void }).preventBaseUIHandler?.();
+      event.preventDefault();
+      selectPaletteFilter(cycleCommandPaletteFilter(paletteFilter, filterStep));
+      return;
+    }
+
     if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
 
     if (event.key === "Tab" && isBrowsing && !relativePathNeedsActiveProject) {
@@ -2806,6 +2852,12 @@ function OpenCommandPaletteDialog(props: {
         executeItem(highlightedItem);
       }
     }
+  }
+
+  function selectPaletteFilter(filter: CommandPaletteFilter): void {
+    if (filter === paletteFilter) return;
+    clearTypedHighlight();
+    setPaletteFilter(filter);
   }
 
   function executeItem(item: CommandPaletteActionItem | CommandPaletteSubmenuItem): void {
@@ -3020,6 +3072,13 @@ function OpenCommandPaletteDialog(props: {
       footerActionLabel={footerActionLabel}
       footerTrailing={footerTrailing}
       inputAccessory={inputAccessory}
+      {...(showsPaletteFilters
+        ? {
+            filterBar: (
+              <CommandPaletteFilterTabs value={paletteFilter} onSelect={selectPaletteFilter} />
+            ),
+          }
+        : {})}
       inputProps={{
         className: hasHighlightedNewProjectItem
           ? "*:data-[slot=autocomplete-input]:pe-38!"

@@ -352,6 +352,13 @@ export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 
 export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
+export const UiDensity = Schema.Literals(["comfortable", "compact"]);
+export type UiDensity = typeof UiDensity.Type;
+/** System follows the OS reduced-motion preference; full and reduced override it. */
+export const MotionPreference = Schema.Literals(["system", "full", "reduced"]);
+export type MotionPreference = typeof MotionPreference.Type;
+/** A syntax theme id. Unknown ids fall back to the default on the client, so removing one is safe. */
+export const CodeThemePreference = Schema.String.check(Schema.isMaxLength(64));
 
 /** How the composer shows reasoning effort: the level's name, or rising bars. */
 export const EffortDisplay = Schema.Literals(["label", "bars"]);
@@ -410,6 +417,13 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("red-green" as const)),
   ),
   chatWidth: ChatWidth.pipe(Schema.withDecodingDefault(Effect.succeed("comfortable" as const))),
+  uiDensity: UiDensity.pipe(Schema.withDecodingDefault(Effect.succeed("comfortable" as const))),
+  motionPreference: MotionPreference.pipe(
+    Schema.withDecodingDefault(Effect.succeed("system" as const)),
+  ),
+  // Empty means the built-in default for that appearance.
+  codeThemeLight: CodeThemePreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  codeThemeDark: CodeThemePreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   effortDisplay: EffortDisplay.pipe(Schema.withDecodingDefault(Effect.succeed("label" as const))),
   loadBalancingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   loadBalancingWeights: LoadBalancingWeights.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -482,6 +496,9 @@ export const ClientSettingsSchema = Schema.Struct({
   fontSizeInterface: InterfaceFontSize.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
   ),
+  fontSizeReply: Schema.NullOr(PromptFontSize).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   fontSizePrompt: PromptFontSize.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROMPT_FONT_SIZE)),
   ),
@@ -493,6 +510,7 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   fontFamilyCode: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   fontFamilyComposer: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  fontFamilyReply: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   fontFamilySans: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   fontFamilyTerminal: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 
@@ -525,6 +543,12 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  sidebarDensity: Schema.Literals(["theme", "compact", "comfortable"]).pipe(
+    Schema.withDecodingDefault(Effect.succeed("theme" as const)),
+  ),
+  sidebarThreadGrouping: Schema.Literals(["theme", "project", "global"]).pipe(
+    Schema.withDecodingDefault(Effect.succeed("theme" as const)),
+  ),
   boringSidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   boringSidebarMultilineRows: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -2030,6 +2054,10 @@ export const ClientSettingsPatch = Schema.Struct({
   inAppNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
   diffColorScheme: Schema.optionalKey(DiffColorScheme),
   chatWidth: Schema.optionalKey(ChatWidth),
+  uiDensity: Schema.optionalKey(UiDensity),
+  motionPreference: Schema.optionalKey(MotionPreference),
+  codeThemeLight: Schema.optionalKey(CodeThemePreference),
+  codeThemeDark: Schema.optionalKey(CodeThemePreference),
   effortDisplay: Schema.optionalKey(EffortDisplay),
   loadBalancingEnabled: Schema.optionalKey(Schema.Boolean),
   loadBalancingWeights: Schema.optionalKey(LoadBalancingWeights),
@@ -2058,11 +2086,13 @@ export const ClientSettingsPatch = Schema.Struct({
   glassOpacity: Schema.optionalKey(GlassOpacity),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
   fontSizeInterface: Schema.optionalKey(InterfaceFontSize),
+  fontSizeReply: Schema.optionalKey(Schema.NullOr(PromptFontSize)),
   fontSizePrompt: Schema.optionalKey(PromptFontSize),
   fontSizeCode: Schema.optionalKey(CodeFontSize),
   fontSizeTerminal: Schema.optionalKey(TerminalFontSize),
   fontFamilyCode: Schema.optionalKey(FontFamilyPreference),
   fontFamilyComposer: Schema.optionalKey(FontFamilyPreference),
+  fontFamilyReply: Schema.optionalKey(FontFamilyPreference),
   fontFamilySans: Schema.optionalKey(FontFamilyPreference),
   fontFamilyTerminal: Schema.optionalKey(FontFamilyPreference),
   fontSmoothing: Schema.optionalKey(Schema.Boolean),
@@ -2078,6 +2108,8 @@ export const ClientSettingsPatch = Schema.Struct({
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
+  sidebarDensity: Schema.optionalKey(Schema.Literals(["theme", "compact", "comfortable"])),
+  sidebarThreadGrouping: Schema.optionalKey(Schema.Literals(["theme", "project", "global"])),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),
   boringSidebarMultilineRows: Schema.optionalKey(Schema.Boolean),
   toolCallVisibility: Schema.optionalKey(ToolCallVisibility),

@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from "@t3tools/client-runtime/reduced-motion";
 const MOUSE_WHEEL_SCROLL_MS = 150;
 const PRECISE_WHEEL_DELTA_RATIOS = [1, 3];
 
@@ -98,7 +99,7 @@ export function forwardWheelToTimeline(event: WheelEvent, timeline: HTMLElement)
         ? timeline.clientHeight
         : 1;
   const distance = event.deltaY * pixelsPerUnit;
-  if (isPreciseWheel(event) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (isPreciseWheel(event) || prefersReducedMotion()) {
     stopGlide(timeline);
     timeline.scrollBy({ top: distance });
     return;

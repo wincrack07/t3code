@@ -45,13 +45,19 @@ describe("DesktopWebLinks", () => {
     const { sent, revealed, layer } = makeWindow();
     return Effect.gen(function* () {
       const webLinks = yield* DesktopWebLinks.DesktopWebLinks;
-      yield* webLinks.receive("https://example.com/first");
+      yield* webLinks.receive("t3code://finder?path=%2Ftmp%2Fone&path=%2Ftmp%2Ftwo");
       yield* webLinks.receive("https://example.com/second");
       assert.deepStrictEqual(sent, []);
+      assert.strictEqual(revealed.length, 2);
 
       yield* webLinks.setRendererReady(true);
-      assert.deepStrictEqual(sent, ["https://example.com/first", "https://example.com/second"]);
-      assert.strictEqual(revealed.length, 1);
+      assert.deepStrictEqual(sent, [
+        "t3code://finder?path=%2Ftmp%2Fone&path=%2Ftmp%2Ftwo",
+        "https://example.com/second",
+      ]);
+      assert.strictEqual(revealed.length, 3);
+      yield* webLinks.setRendererReady(true);
+      assert.strictEqual(sent.length, 2);
 
       yield* webLinks.receive("https://example.com/third");
       assert.deepStrictEqual(sent.at(-1), "https://example.com/third");

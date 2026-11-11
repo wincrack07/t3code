@@ -38,6 +38,23 @@ export const ClaudeArtifactsListResult = Schema.Struct({
 });
 export type ClaudeArtifactsListResult = typeof ClaudeArtifactsListResult.Type;
 
+/** One Claude instance on this server and the claude.ai account it is signed in to. */
+export const ClaudeArtifactsAccount = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  /** Opaque hash of the account and organization ids; equal across servers for one account. */
+  accountKey: Schema.optional(Schema.String),
+  organizationName: Schema.optional(Schema.String),
+  email: Schema.optional(Schema.String),
+  /** This server can read the login, so listing through it can succeed. */
+  listable: Schema.Boolean,
+});
+export type ClaudeArtifactsAccount = typeof ClaudeArtifactsAccount.Type;
+
+export const ClaudeArtifactsAccountsResult = Schema.Struct({
+  accounts: Schema.Array(ClaudeArtifactsAccount),
+});
+export type ClaudeArtifactsAccountsResult = typeof ClaudeArtifactsAccountsResult.Type;
+
 const CLAUDE_ARTIFACTS_FAILURES = {
   instanceNotFound: "This Claude account is not configured on this server.",
   notClaude: "Artifacts are only available for Claude accounts.",

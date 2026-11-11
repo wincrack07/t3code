@@ -1,3 +1,5 @@
+import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
+import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
 import { PromptPolishSettings } from "./PromptPolishSettings";
 import { KeepAwakeControl } from "../KeepAwakeControl";
 import { useAtomValue } from "@effect/atom-react";
@@ -103,6 +105,7 @@ import {
   SettingResetButton,
   SettingsPageContainer,
   SettingsRow,
+  SettingsSearchTarget,
   SettingsSection,
 } from "./settingsLayout";
 import { PromptSuggestionsSettings } from "./PromptSuggestionsSettings";
@@ -426,6 +429,7 @@ function AboutVersionSection() {
         />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
+      <FinderIntegrationSettingsRow />
       {switchChannel === null ? null : (
         <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
       )}
@@ -464,6 +468,12 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Diff colors"]
       : []),
     ...(settings.chatWidth !== DEFAULT_UNIFIED_SETTINGS.chatWidth ? ["Chat width"] : []),
+    ...(settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? ["Density"] : []),
+    ...(settings.motionPreference !== DEFAULT_UNIFIED_SETTINGS.motionPreference ? ["Motion"] : []),
+    ...(settings.codeThemeLight !== DEFAULT_UNIFIED_SETTINGS.codeThemeLight ||
+    settings.codeThemeDark !== DEFAULT_UNIFIED_SETTINGS.codeThemeDark
+      ? ["Code themes"]
+      : []),
     ...(settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay
       ? ["Effort display"]
       : []),
@@ -515,10 +525,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Snooze options"]
       : []),
     ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
-    ...(settings.persistComposerContextStrip !==
-    DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
-      ? ["Composer context"]
-      : []),
     ...getChangedTypographySettingLabels(settings),
     ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
       ? ["Default diff file state"]
@@ -642,6 +648,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       appearanceContrast: DEFAULT_UNIFIED_SETTINGS.appearanceContrast,
       diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme,
       chatWidth: DEFAULT_UNIFIED_SETTINGS.chatWidth,
+      uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity,
+      motionPreference: DEFAULT_UNIFIED_SETTINGS.motionPreference,
+      codeThemeLight: DEFAULT_UNIFIED_SETTINGS.codeThemeLight,
+      codeThemeDark: DEFAULT_UNIFIED_SETTINGS.codeThemeDark,
       effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay,
       mathRenderingEnabled: DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled,
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
@@ -688,6 +698,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
+      fontFamilyReply: DEFAULT_UNIFIED_SETTINGS.fontFamilyReply,
+      fontSizeReply: DEFAULT_UNIFIED_SETTINGS.fontSizeReply,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
       fontFamilyCode: DEFAULT_UNIFIED_SETTINGS.fontFamilyCode,
       fontFamilyTerminal: DEFAULT_UNIFIED_SETTINGS.fontFamilyTerminal,
@@ -783,6 +795,11 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="sidebar" title="Sidebar">
+        <SettingsRow
+          {...searchableSetting("sidebar-display")}
+          description="Choose compact or comfortable rows and how settled threads are grouped."
+          control={<SidebarDisplayMenu />}
+        />
         <SettingsRow
           {...searchableSetting("project-grouping")}
           description="Combine matching repositories across environments."
@@ -2160,13 +2177,15 @@ export function AboutSettingsPanel() {
 
 function KeepAwakeSettings() {
   const { environment } = useSettingsScope();
-  return (
-    <div id={searchableSetting("keep-awake").id}>
-      {environment ? (
-        <KeepAwakeControl environmentId={environment.environmentId} settings />
-      ) : (
-        <p>Select one environment to configure Keep awake.</p>
-      )}
-    </div>
+  return environment ? (
+    // KeepAwakeControl renders its own title, so this takes a row's padding instead of a SettingsRow.
+    <SettingsSearchTarget {...searchableSetting("keep-awake")} className="px-3 py-3 sm:px-4">
+      <KeepAwakeControl environmentId={environment.environmentId} settings />
+    </SettingsSearchTarget>
+  ) : (
+    <SettingsRow
+      {...searchableSetting("keep-awake")}
+      description="Select one environment to change its keep awake defaults."
+    />
   );
 }
