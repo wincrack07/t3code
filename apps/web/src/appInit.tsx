@@ -1,4 +1,8 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  applyMotionPreference,
+  MOTION_PREFERENCE_STORAGE_KEY,
+} from "@t3tools/client-runtime/reduced-motion";
 import type { ClientSettings } from "@t3tools/contracts/settings";
 import { createBrowserHistory, createHashHistory } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
@@ -35,11 +39,14 @@ import { readLocalStorageValue, subscribeLocalStorageKey } from "./hooks/useLoca
 import { startHostEnvironmentLookup } from "./state/primaryEnvironment";
 import {
   getClientSettings,
+  isClientSettingsHydrated,
   startModelPreferencesMigration,
   subscribeClientSettings,
+  subscribeClientSettingsHydration,
 } from "./hooks/useSettings";
 import { syncBrowserChromeTheme } from "./hooks/useTheme";
 import { startThreadVisitedMigration } from "./hooks/useThreadVisitedMigration";
+import { setCodeThemePreferences } from "./lib/codeThemes";
 import { installDesktopPasteAsText } from "./lib/desktopPasteAsText";
 import {
   syncDocumentElectronPlatformClasses,
@@ -62,6 +69,7 @@ function startClientAppearance(): void {
   const root = document.documentElement;
   let applied: ClientSettings | null = null;
   let appliedSeparateFonts: boolean | null = null;
+  let appliedMotion: ClientSettings["motionPreference"] | null = null;
   const apply = () => {
     const settings = getClientSettings();
     const previous = applied;
@@ -82,6 +90,16 @@ function startClientAppearance(): void {
     if (previous?.uiDensity !== settings.uiDensity) {
       root.dataset.density = settings.uiDensity;
     }
+    // Until hydration the snapshot holds defaults; index.html already applied the saved choice.
+    if (isClientSettingsHydrated() && appliedMotion !== settings.motionPreference) {
+      appliedMotion = settings.motionPreference;
+      applyMotionPreference(settings.motionPreference);
+      // Hydration is async; index.html reads this copy to resolve motion before first paint.
+      try {
+        window.localStorage.setItem(MOTION_PREFERENCE_STORAGE_KEY, settings.motionPreference);
+      } catch {}
+    }
+    setCodeThemePreferences({ light: settings.codeThemeLight, dark: settings.codeThemeDark });
     if (previous?.appearanceContrast !== settings.appearanceContrast) {
       applyAppearanceContrast(root, settings.appearanceContrast);
     }
@@ -116,6 +134,7 @@ function startClientAppearance(): void {
     }
   };
   subscribeClientSettings(apply);
+  subscribeClientSettingsHydration(apply);
   subscribeLocalStorageKey(TYPOGRAPHY_ADVANCED_STORAGE_KEY, apply);
   apply();
 }

@@ -4,12 +4,13 @@ import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
 import * as Schema from "effect/Schema";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getRenderedAppearance, subscribeRenderedAppearance } from "../hooks/useTheme";
+import { subscribeCodeThemes } from "../lib/codeThemes";
 import { resolveDiffThemeName } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
 
 export class DiffWorkerError extends Schema.TaggedError<DiffWorkerError>()("DiffWorkerError", {
   operation: Schema.Literals(["create-worker", "get-render-options", "set-render-options"]),
-  themeName: Schema.Literals(["pierre-dark", "t3-light"]),
+  themeName: Schema.String,
   cause: Schema.Defect(),
 }) {
   override get message(): string {
@@ -72,7 +73,14 @@ function createDiffWorkerPool(poolSize: number) {
   );
   return {
     pool,
-    unsubscribeTheme: subscribeRenderedAppearance(() => applyDiffWorkerTheme(pool)),
+    unsubscribeTheme: (() => {
+      const stopAppearance = subscribeRenderedAppearance(() => applyDiffWorkerTheme(pool));
+      const stopCodeThemes = subscribeCodeThemes(() => applyDiffWorkerTheme(pool));
+      return () => {
+        stopAppearance();
+        stopCodeThemes();
+      };
+    })(),
     consumers: 0,
     idleTimer: undefined,
   };

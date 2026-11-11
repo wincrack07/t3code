@@ -36,6 +36,7 @@ import {
   type SettingInheritanceState,
   type SettingOverridingProject,
 } from "./SettingInheritance";
+import { prefersReducedMotion } from "@t3tools/client-runtime/reduced-motion";
 
 const EMPTY_SETTING_KEYS: readonly (keyof ServerSettings)[] = [];
 const EMPTY_MANAGED_PATHS: readonly string[] = [];
@@ -78,7 +79,7 @@ let pendingTargetScroll: AbortController | undefined;
 
 function scrollAndFocusSettingsTarget(target: HTMLElement, highlight = true): void {
   pendingTargetScroll?.abort();
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = prefersReducedMotion();
   const markedScrollTarget =
     typeof target.querySelector === "function"
       ? target.querySelector<HTMLElement>(":scope > [data-settings-scroll-target]")
@@ -91,7 +92,7 @@ function scrollAndFocusSettingsTarget(target: HTMLElement, highlight = true): vo
 
   const scroll = () =>
     scrollTarget.scrollIntoView({
-      behavior: prefersReducedMotion ? "auto" : "smooth",
+      behavior: reduceMotion ? "auto" : "smooth",
       block: "center",
     });
   scroll();
@@ -145,7 +146,7 @@ function scrollAndFocusSettingsTarget(target: HTMLElement, highlight = true): vo
   }
   target.focus({ preventScroll: true });
   target.classList.remove("settings-search-target-pulse");
-  if (!highlight || prefersReducedMotion) return;
+  if (!highlight || reduceMotion) return;
   void target.offsetWidth;
   target.classList.add("settings-search-target-pulse");
   target.addEventListener("blur", () => target.classList.remove("settings-search-target-pulse"), {

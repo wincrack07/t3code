@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { type PanelAnimationDurationMs } from "@t3tools/contracts/settings";
 
-import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useClientSettings } from "./hooks/useSettings";
+import { useReducedMotion } from "~/hooks/useReducedMotion";
 
 const PanelAnimationSuppressionContext = createContext(false);
 
@@ -33,7 +33,7 @@ export function usePanelAnimationSettings(): {
   durationMs: PanelAnimationDurationMs;
 } {
   const durationMs = useClientSettings((settings) => settings.panelAnimationDurationMs);
-  const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const prefersReducedMotion = useReducedMotion();
   const suppressed = useContext(PanelAnimationSuppressionContext);
   return { active: durationMs > 0 && !prefersReducedMotion && !suppressed, durationMs };
 }

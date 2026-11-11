@@ -468,6 +468,11 @@ export function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.chatWidth !== DEFAULT_UNIFIED_SETTINGS.chatWidth ? ["Chat width"] : []),
     ...(settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? ["Density"] : []),
+    ...(settings.motionPreference !== DEFAULT_UNIFIED_SETTINGS.motionPreference ? ["Motion"] : []),
+    ...(settings.codeThemeLight !== DEFAULT_UNIFIED_SETTINGS.codeThemeLight ||
+    settings.codeThemeDark !== DEFAULT_UNIFIED_SETTINGS.codeThemeDark
+      ? ["Code themes"]
+      : []),
     ...(settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay
       ? ["Effort display"]
       : []),
@@ -647,6 +652,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme,
       chatWidth: DEFAULT_UNIFIED_SETTINGS.chatWidth,
       uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity,
+      motionPreference: DEFAULT_UNIFIED_SETTINGS.motionPreference,
+      codeThemeLight: DEFAULT_UNIFIED_SETTINGS.codeThemeLight,
+      codeThemeDark: DEFAULT_UNIFIED_SETTINGS.codeThemeDark,
       effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay,
       mathRenderingEnabled: DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled,
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,

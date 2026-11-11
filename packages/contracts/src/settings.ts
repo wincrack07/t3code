@@ -354,6 +354,11 @@ export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
 export const UiDensity = Schema.Literals(["comfortable", "compact"]);
 export type UiDensity = typeof UiDensity.Type;
+/** System follows the OS reduced-motion preference; full and reduced override it. */
+export const MotionPreference = Schema.Literals(["system", "full", "reduced"]);
+export type MotionPreference = typeof MotionPreference.Type;
+/** A syntax theme id. Unknown ids fall back to the default on the client, so removing one is safe. */
+export const CodeThemePreference = Schema.String.check(Schema.isMaxLength(64));
 
 /** How the composer shows reasoning effort: the level's name, or rising bars. */
 export const EffortDisplay = Schema.Literals(["label", "bars"]);
@@ -413,6 +418,12 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   chatWidth: ChatWidth.pipe(Schema.withDecodingDefault(Effect.succeed("comfortable" as const))),
   uiDensity: UiDensity.pipe(Schema.withDecodingDefault(Effect.succeed("comfortable" as const))),
+  motionPreference: MotionPreference.pipe(
+    Schema.withDecodingDefault(Effect.succeed("system" as const)),
+  ),
+  // Empty means the built-in default for that appearance.
+  codeThemeLight: CodeThemePreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  codeThemeDark: CodeThemePreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   effortDisplay: EffortDisplay.pipe(Schema.withDecodingDefault(Effect.succeed("label" as const))),
   loadBalancingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   loadBalancingWeights: LoadBalancingWeights.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -2034,6 +2045,9 @@ export const ClientSettingsPatch = Schema.Struct({
   diffColorScheme: Schema.optionalKey(DiffColorScheme),
   chatWidth: Schema.optionalKey(ChatWidth),
   uiDensity: Schema.optionalKey(UiDensity),
+  motionPreference: Schema.optionalKey(MotionPreference),
+  codeThemeLight: Schema.optionalKey(CodeThemePreference),
+  codeThemeDark: Schema.optionalKey(CodeThemePreference),
   effortDisplay: Schema.optionalKey(EffortDisplay),
   loadBalancingEnabled: Schema.optionalKey(Schema.Boolean),
   loadBalancingWeights: Schema.optionalKey(LoadBalancingWeights),

@@ -68,6 +68,7 @@ import { ComposerSurface } from "./chat/ComposerSurface";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { cn } from "~/lib/utils";
 import { observeResize } from "~/lib/observeResize";
+import { prefersReducedMotion } from "@t3tools/client-runtime/reduced-motion";
 
 export interface BranchToolbarHandle {
   openBranchPicker: () => void;
@@ -454,7 +455,7 @@ function animateLabelWidths(
 ) {
   for (const animation of animations.values()) animation.cancel();
   animations.clear();
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (prefersReducedMotion()) return;
 
   for (const [label, previousRect] of previousRects) {
     if (!label.isConnected) continue;

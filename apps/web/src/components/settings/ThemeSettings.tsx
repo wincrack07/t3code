@@ -1,6 +1,7 @@
 import {
   CheckIcon,
   CopyIcon,
+  MonitorIcon,
   MoonIcon,
   PaintbrushIcon,
   PenLineIcon,
@@ -41,19 +42,19 @@ import {
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { ThemeImportDialog } from "./ThemeImportDialog";
+import { SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useThemeEditorStore } from "./themeEditorStore";
 import {
   STANDARD_THEME_CARDS,
   getThemeCardDefinition,
-  previewColorsOf,
   ThemePreviewCircles,
   ThemePreviewCircle,
   type ThemeCardDefinition,
   type ThemeMode,
 } from "./ThemePreviewCircles";
-import { ThemeWireframe } from "./ThemeWireframe";
 
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
   T3_CHAT_THEME,
@@ -626,17 +627,6 @@ export function ThemeLibrary({
   const activeThemeForAppearance =
     getThemeDefinition((initialAppearance === "light" ? lightOwner : darkOwner) ?? "") ?? null;
 
-  const cardDefById = (id: string | null): ThemeCardDefinition => {
-    if (id === null) return STANDARD_THEME_CARDS[0]!;
-    const definition = getThemeDefinition(id);
-    return definition ? getThemeCardDefinition(definition) : STANDARD_THEME_CARDS[0]!;
-  };
-
-  const pickColors = (id: string | null, appearance: ThemeAppearance) => {
-    const card = cardDefById(id);
-    return previewColorsOf(card, appearance) ?? card.previews[0]!.colors;
-  };
-
   const setMode = (mode: ThemeMode) => {
     if (!setAppearanceMode(mode)) notifyThemeSaveFailure();
   };
@@ -652,57 +642,6 @@ export function ThemeLibrary({
     if (darkOwner === cardId) rings.push("dark");
     return rings;
   };
-
-  const wireframeColors = (appearance: ThemeAppearance) =>
-    pickColors(appearance === "light" ? lightOwner : darkOwner, appearance);
-
-  const renderWireframe = (mode: ThemeMode) => (
-    <ThemeWireframe
-      className="h-[8.75rem]"
-      panes={
-        mode === "system"
-          ? [
-              { clip: "left", colors: wireframeColors("light") },
-              { clip: "right", colors: wireframeColors("dark") },
-            ]
-          : [{ colors: wireframeColors(mode === "dark" ? "dark" : "light") }]
-      }
-    />
-  );
-
-  const renderModeTiles = () => (
-    <div aria-label="Appearance mode" className="grid w-full grid-cols-3 gap-3" role="group">
-      {(["system", "light", "dark"] as const).map((mode) => {
-        const isActive = appearanceMode === mode;
-        return (
-          <button
-            aria-label={mode === "system" ? "Follow the system appearance" : `Use ${mode} mode`}
-            aria-pressed={isActive}
-            className={cn(
-              // The accent ring marks the picked tile; focus is a neutral ring set inside it with a gap.
-              "flex cursor-pointer flex-col items-stretch gap-1.5 rounded-xl border p-2 outline-none transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-7 focus-visible:outline-foreground/60",
-              isActive
-                ? "border-transparent bg-accent/30 ring-2 ring-inset ring-ring"
-                : "border-border/70 bg-card/60 hover:bg-accent/10",
-            )}
-            key={mode}
-            onClick={() => setMode(mode)}
-            type="button"
-          >
-            {renderWireframe(mode)}
-            <span
-              className={cn(
-                "flex items-center justify-center text-xs font-medium",
-                isActive ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {mode === "system" ? "System" : mode === "light" ? "Light" : "Dark"}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   const customThemeCollections = [
     ...customThemes
@@ -828,38 +767,60 @@ export function ThemeLibrary({
   );
 
   return (
-    <div className="space-y-3">
-      <h3 className="flex min-h-7 items-center px-3 text-base font-semibold text-foreground sm:px-4">
-        {searchableSetting("color-scheme").title}
-      </h3>
-      {renderModeTiles()}
-      <div className="flex min-h-8 flex-wrap items-center justify-between gap-3 px-3 pt-5 sm:px-4">
-        <h3 className="text-base font-semibold text-foreground">
-          {searchableSetting("theme").title}
-        </h3>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() =>
-              openThemeEditor({
-                editingThemeId: null,
-                seedThemeId: activeThemeForAppearance?.id ?? null,
-                seedName: null,
-                initialAppearance,
-              })
-            }
+    <>
+      <SettingsRow
+        {...searchableSetting("color-scheme")}
+        description="Follow the system, or always use light or dark."
+        control={
+          <ToggleGroup
+            aria-label="Color scheme"
+            value={[appearanceMode]}
+            onValueChange={(next) => {
+              const mode = next[0];
+              if (mode === "system" || mode === "light" || mode === "dark") setMode(mode);
+            }}
           >
-            <PaintbrushIcon />
-            Create theme
-          </Button>
-          <Button size="xs" variant="outline" onClick={() => onImportOpenChange(true)}>
-            <PlusIcon />
-            Add theme
-          </Button>
-        </div>
-      </div>
-      {renderPairGrid()}
+            <Toggle aria-label="System" title="System" value="system">
+              <MonitorIcon />
+            </Toggle>
+            <Toggle aria-label="Light" title="Light" value="light">
+              <SunIcon />
+            </Toggle>
+            <Toggle aria-label="Dark" title="Dark" value="dark">
+              <MoonIcon />
+            </Toggle>
+          </ToggleGroup>
+        }
+      />
+      <SettingsRow
+        {...searchableSetting("theme")}
+        description="Pick the palette each color scheme uses."
+        control={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() =>
+                openThemeEditor({
+                  editingThemeId: null,
+                  seedThemeId: activeThemeForAppearance?.id ?? null,
+                  seedName: null,
+                  initialAppearance,
+                })
+              }
+            >
+              <PaintbrushIcon />
+              Create theme
+            </Button>
+            <Button size="xs" variant="outline" onClick={() => onImportOpenChange(true)}>
+              <PlusIcon />
+              Add theme
+            </Button>
+          </div>
+        }
+      >
+        <div className="pb-3">{renderPairGrid()}</div>
+      </SettingsRow>
       <ThemeImportDialog
         onImportedMany={(importedThemes, { updated }) => {
           if (updated) refreshTheme();
@@ -979,6 +940,6 @@ export function ThemeLibrary({
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
-    </div>
+    </>
   );
 }

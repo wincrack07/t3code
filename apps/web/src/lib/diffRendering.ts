@@ -1,18 +1,24 @@
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs/types";
-import { READABLE_LIGHT_THEME_NAME } from "./readableSyntaxTheme";
+import { useSyncExternalStore } from "react";
+import { getCodeThemePreferences, resolveCodeThemeName, subscribeCodeThemes } from "./codeThemes";
 
-// Light mode uses a darker pierre-light so syntax stays readable on every code surface.
-export const DIFF_THEME_NAMES = {
-  light: READABLE_LIGHT_THEME_NAME,
-  dark: "pierre-dark",
-} as const;
-
-export type DiffThemeName = (typeof DIFF_THEME_NAMES)[keyof typeof DIFF_THEME_NAMES];
+/** A Highlights theme id, chosen per appearance in Settings -> Appearance -> Code. */
+export type DiffThemeName = string;
 
 export function resolveDiffThemeName(theme: "light" | "dark"): DiffThemeName {
-  return DIFF_THEME_NAMES[theme];
+  return resolveCodeThemeName(theme, getCodeThemePreferences()[theme]);
+}
+
+/** Both appearances' themes, so switching appearance never needs a new highlighter. */
+export function resolveDiffThemeNames(): readonly [DiffThemeName, DiffThemeName] {
+  return [resolveDiffThemeName("light"), resolveDiffThemeName("dark")];
+}
+
+/** resolveDiffThemeName that re-renders when the code theme settings change. */
+export function useDiffThemeName(theme: "light" | "dark"): DiffThemeName {
+  return useSyncExternalStore(subscribeCodeThemes, () => resolveDiffThemeName(theme));
 }
 
 const FNV_OFFSET_BASIS_32 = 0x811c9dc5;

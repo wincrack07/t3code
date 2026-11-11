@@ -43,10 +43,20 @@ preference is saved separately on each device.
 
 ## Motion
 
+**Motion** in **Settings → Appearance** defaults to **System**, which follows your operating
+system's reduced motion setting. **Reduced** turns off the app's transitions and animations even
+when the system allows them; **Full** keeps them even when the system asks for less.
+
 The main sidebar, right panel, and terminal drawer open and close immediately by default. Move the
-**Panel animations** slider above 0 ms to add motion, up to 400 ms, unless reduced motion is enabled
-in your operating system. Moving between threads always snaps to the selected thread's panel state
-without replaying its transitions.
+**Panel animations** slider above 0 ms to add motion, up to 400 ms, unless motion is reduced.
+Moving between threads always snaps to the selected thread's panel state without replaying its
+transitions.
+
+## Code themes
+
+Under **Settings → Appearance → Code**, pick a syntax theme for light mode and another for dark
+mode. Each shows a small diff preview, and the choice applies right away to code blocks, diffs, and
+file previews on web and desktop.
 
 ## Custom themes
 

@@ -104,6 +104,7 @@ import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
 import { surfaceShortcutKey } from "~/lib/surfaceShortcutKey";
+import { prefersReducedMotion } from "@t3tools/client-runtime/reduced-motion";
 
 export interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -1087,7 +1088,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
   const scrollTabs = (direction: -1 | 1) => {
     const viewport = tabScrollViewport(tabListRef.current);
     if (!viewport) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion = prefersReducedMotion();
     viewport.scrollBy({
       left: direction * Math.max(120, viewport.clientWidth * 0.75),
       behavior: reduceMotion ? "auto" : "smooth",
