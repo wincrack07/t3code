@@ -191,14 +191,17 @@ the input waits.
 
 ## Answer an agent's open questions
 
-When an agent finishes a reply with decisions left for you, it can attach them as cards under that
-reply: each has suggested answers, **Later**, and a field for a detail or your own answer. Pick
-answers for the ones you are ready to decide, then choose **Send answers**. T3 Code sends one
-ordinary message that pairs each answer with its question, such as
-`2 · Merge dev into main → Wait: do it on the 13th`. Questions you skip or mark **Later** stay open,
-and the thread shows **Awaiting Input** in the sidebar until none are left. Dismiss a question with
-its close button, and reopen an answered or dismissed one from its card. Typing a normal reply does
-not close any of them. Cards appear on web, desktop, and mobile for agents that use T3 Code's tools.
+When an agent finishes a reply with decisions left for you, on web and desktop they appear one at
+a time in a card above the composer: a line of context, the question, and its answers. The agent's
+recommended answer comes first; press ⌘↵ (Ctrl+Enter) to pick it while the composer is empty. To
+answer in your own words, type in the composer and send: your message answers the question the card
+shows. With several questions, the card pages through them, and your answers go out together as
+one message once you have picked the last one, such as
+`2 · Merge dev into main → Wait`. Choose **Send 1 answer now** (it counts them) to send early; the rest stay open.
+The ✕ dismisses a question without sending anything. Under the reply, the questions stay listed with
+their answers; choose an open one to bring it back to the card, or **Reopen** a settled one. The
+thread shows **Awaiting Input** in the sidebar until none are left. On mobile, questions still show
+as answer cards under the reply.
 
 ## Edit an earlier prompt
 

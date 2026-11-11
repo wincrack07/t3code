@@ -2,6 +2,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   assembleOpenQuestionAnswers,
   openQuestionAnswer,
+  openQuestionOptions,
   runOpenQuestions,
   type OpenQuestionDraft,
   type OpenQuestionDrafts,
@@ -156,13 +157,16 @@ function OpenQuestionCard(props: {
           </Text>
         ) : null}
       </View>
+      {isOpen && question.context ? (
+        <Text className="font-sans text-xs text-foreground-muted">{question.context}</Text>
+      ) : null}
       {question.status === "answered" && question.answer ? (
         <Text className="font-sans text-xs text-foreground-muted">→ {question.answer}</Text>
       ) : null}
       {props.interactive && isOpen ? (
         <>
           <View className="flex-row flex-wrap gap-1.5">
-            {question.suggestions.map((suggestion) => (
+            {openQuestionOptions(question).map((suggestion) => (
               <Chip
                 key={suggestion}
                 size="small"

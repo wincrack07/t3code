@@ -118,6 +118,7 @@ import {
 import { ComposerBanner } from "./ComposerBanner";
 import { ComposerSurface } from "./ComposerSurface";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
+import { ComposerDecisionCard } from "./ComposerDecisionCard";
 import {
   attachmentsToReleaseOnUploadCapabilityLoss,
   composerOtherFilesForPresentation,
@@ -3349,6 +3350,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack items={shelfItems} />
+          {routeKind === "server" &&
+          canOperateThread &&
+          phase !== "running" &&
+          !showComposerTopDrawer &&
+          activePendingApproval === null ? (
+            <ComposerDecisionCard
+              threadRef={routeThreadRef}
+              draftTarget={composerDraftTarget}
+              cwd={gitCwd ?? undefined}
+            />
+          ) : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root data-chat-composer-top-drawer="true" variant="info">
