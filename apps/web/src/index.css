@@ -2607,3 +2607,40 @@ code {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+
+.composer-quiet-row [data-slot="composer-context-strip"] {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+.composer-quiet-row [data-resting-block] {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.composer-quiet-row [data-resting-block] button {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.composer-quiet-row [data-composer-control-label] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container composer-surface (width < 32rem) {
+  .composer-quiet-row [data-resting-block] [data-composer-control-label],
+  .composer-quiet-row [data-composer-secondary-trait] {
+    display: none;
+  }
+}
+
+@container composer-surface (width < 22rem) {
+  .composer-quiet-row [data-composer-label],
+  .composer-quiet-row [data-composer-control-label],
+  .composer-quiet-row [data-chat-provider-model-picker-label] {
+    display: none;
+  }
+}
