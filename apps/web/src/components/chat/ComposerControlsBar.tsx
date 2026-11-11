@@ -1,3 +1,4 @@
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ChatComposerProps } from "./ChatComposer";
 import type { PromptUltrathink } from "./TraitsPicker";
 import type { ProviderInstanceEntry } from "../../providerInstances";
@@ -130,6 +131,7 @@ export function ComposerControlsBar(props: {
     modelPickerIconClassName,
     getModelDisabledReason,
   } = props;
+  const isMobileViewport = useMediaQuery("max-sm");
   const accessMatchesDefault = compatibleRuntimeMode === defaultRuntimeMode;
   const {
     accessDisplay,
@@ -139,11 +141,11 @@ export function ComposerControlsBar(props: {
     overflowShowsPermissions,
     pickerOwnsModeShortcut,
   } = resolveComposerControlsOwnership({
-    matchesDefault: false,
+    matchesDefault: isMobileViewport && (accessMatchesDefault || props.permissionsShownInStrip),
     collapsed: composerControlsCollapsed,
     measuredHiddenBlockCount,
   });
-  const controlSize = "xs";
+  const controlSize = isMobileViewport && !composerControlsCollapsed ? "sm" : "xs";
   const applyThreadModelPick = useApplyThreadModelPick();
   const applyRouteThreadModelPick = useStableCallback(() => applyThreadModelPick(routeThreadRef));
   const traitsInput = resolveComposerTraitsInput({
