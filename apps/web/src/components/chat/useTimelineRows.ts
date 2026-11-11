@@ -30,6 +30,8 @@ export function useStableHandoffRuns(
           ordinal: run.ordinal,
           providerInstanceId: run.providerInstanceId,
           modelSelection: run.modelSelection,
+          ...(run.routingDecision ? { routingDecision: run.routingDecision } : {}),
+          ...(run.userMessageId ? { userMessageId: run.userMessageId } : {}),
         }));
   setState({ source: runs, signature, value });
   return value;

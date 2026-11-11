@@ -1,3 +1,4 @@
+import { DecisionSettings, DEFAULT_DECISION_SETTINGS } from "./decisions.ts";
 import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPolish.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
@@ -1519,6 +1520,9 @@ export const ServerSettings = Schema.Struct({
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   /** Clones default to `<addProjectBaseDirectory>/<host>/<owner>/<repo>`, like ghq. */
   ghqCloneLayout: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  decisions: DecisionSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DECISION_SETTINGS)),
+  ),
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -1923,6 +1927,7 @@ export const ServerSettingsPatch = Schema.Struct({
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   ghqCloneLayout: Schema.optionalKey(Schema.Boolean),
+  decisions: Schema.optionalKey(DecisionSettings),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   promptPolish: Schema.optionalKey(PromptPolishSettings),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),

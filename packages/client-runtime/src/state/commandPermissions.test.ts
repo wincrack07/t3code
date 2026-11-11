@@ -209,6 +209,7 @@ describe("command permissions", () => {
     WS_METHODS.scheduledTasksDelete,
     ORCHESTRATION_V2_WS_METHODS.stopWorkflow,
     WS_METHODS.serverPolishPrompt,
+    WS_METHODS.serverDecide,
   ])("uses the target grant for both availability and execution of %s", (method) =>
     Effect.scoped(
       Effect.gen(function* () {

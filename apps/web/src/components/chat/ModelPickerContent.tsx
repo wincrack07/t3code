@@ -1,5 +1,7 @@
+import { useServerConfigs } from "../../state/entities";
 import { useLegendListRef } from "~/hooks/useLegendListRef";
 import {
+  AUTO_MODEL,
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
   type EnvironmentId,
@@ -88,6 +90,7 @@ export function resolveModelPickerSelectedModel(input: {
   model: string;
   options: ReadonlyArray<ModelEsque>;
 }) {
+  if (input.model === AUTO_MODEL) return { slug: AUTO_MODEL, name: "Auto" };
   if (input.driverKind === "antigravity" && input.model === ANTIGRAVITY_DEFAULT_MODEL) {
     const availableModels = input.options.filter(
       (option) => option.slug !== ANTIGRAVITY_DEFAULT_MODEL && !option.isUnavailable,
@@ -322,6 +325,7 @@ function WindowKeyDownListener({ onKeyDown }: { onKeyDown: (event: KeyboardEvent
 }
 
 export const ModelPickerContent = memo(function ModelPickerContent(props: {
+  allowAuto?: boolean;
   environmentId: EnvironmentId | null;
   activeInstanceId: ProviderInstanceId;
   model: string;
@@ -714,7 +718,17 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     .filter((model) => !getModelDisabledReason?.(model.instanceId, model.slug))
     .slice(0, MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.length)
     .map((model) => modelPickerModelKey(model.instanceId, model.slug));
+  const configs = useServerConfigs();
+  const autoEnabled =
+    props.allowAuto === true &&
+    props.environmentId !== null &&
+    configs.get(props.environmentId)?.settings.decisions.enabled === true &&
+    props.selectedModels === undefined;
+  const autoKey = modelPickerModelKey(props.activeInstanceId, AUTO_MODEL);
+  const showAuto =
+    autoEnabled && (!searchQuery.trim() || "auto".includes(searchQuery.trim().toLowerCase()));
   const allItemKeys = ((): string[] => [
+    ...(autoEnabled ? [autoKey] : []),
     ...flatModels.map((model) => modelPickerModelKey(model.instanceId, model.slug)),
     ...new Set(
       flatModels
@@ -727,7 +741,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       modelPickerModelKey(model.instanceId, model.slug),
     );
     // The toggle trails the list, so expanding it reveals older models above it.
-    return legacySection ? [...modelKeys, legacySection.key] : modelKeys;
+    const keys = legacySection ? [...modelKeys, legacySection.key] : modelKeys;
+    return showAuto ? [autoKey, ...keys] : keys;
   })();
   const filteredModelByKey = ((): ReadonlyMap<string, ModelPickerItem> =>
     new Map(
@@ -990,6 +1005,15 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               itemKeys={filteredItemKeys}
               extraData={modelListExtraData}
               renderItem={({ item: modelKey, index }) => {
+                if (modelKey === autoKey)
+                  return (
+                    <ComboboxItem index={index} value={autoKey}>
+                      <span>Auto</span>
+                      <span className="text-xs text-muted-foreground">
+                        Choose provider, model and effort for this task
+                      </span>
+                    </ComboboxItem>
+                  );
                 if (legacySection?.key === modelKey) {
                   return (
                     <ComboboxItem

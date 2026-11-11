@@ -1,3 +1,4 @@
+import { AUTO_MODEL } from "@t3tools/contracts";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   DEFAULT_TEXT_GENERATION_MODEL,
@@ -252,6 +253,7 @@ export function resolveAppModelSelection(
   providers: ReadonlyArray<ServerProvider>,
   selectedModel: string | null | undefined,
 ): string {
+  if (selectedModel === AUTO_MODEL) return AUTO_MODEL;
   const resolvedProvider = resolveSelectableProvider(providers, provider);
   const options = getAppModelOptions(settings, providers, resolvedProvider, selectedModel);
   return (
@@ -267,6 +269,7 @@ export function resolveAppModelSelectionForInstance(
   selectedModel: string | null | undefined,
   resolutionOptions?: { readonly preserveUnavailableSelection?: boolean },
 ): string | null {
+  if (selectedModel === AUTO_MODEL) return AUTO_MODEL;
   const entry = deriveProviderInstanceEntries(providers).find(
     (candidate) => candidate.instanceId === instanceId,
   );

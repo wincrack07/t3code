@@ -27,8 +27,10 @@ it.effect("ModelSelection prefers explicit instanceId over legacy provider", () 
       provider: "codex",
       instanceId: "codex_personal",
       model: "gpt-5-codex",
+      routing: "auto",
     });
     assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"));
+    assert.strictEqual((yield* encodeModelSelection(parsed)).routing, "auto");
   }),
 );
 

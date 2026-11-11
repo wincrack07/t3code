@@ -13,7 +13,8 @@
     "prompt-completion": "node --env-file-if-exists=../.env prompt-completion/run.ts",
     "test-signal": "node --env-file-if-exists=../.env test-signal/run.ts",
     "typecheck": "effect-tsgo tsrs --noEmit",
-    "test": "vp test run --config ../vite.config.ts --dir ."
+    "test": "vp test run --config ../vite.config.ts --dir .",
+    "decisions": "node --env-file-if-exists=../.env decisions/run.ts"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",

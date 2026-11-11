@@ -540,6 +540,7 @@ function fallbackTextGenerationProvider(
 }
 
 const ATOMIC_SETTINGS_KEYS: ReadonlySet<string> = new Set([
+  "decisions",
   "backgroundActivity",
   "automaticGitFetchInterval",
   "providerHealthRefreshInterval",

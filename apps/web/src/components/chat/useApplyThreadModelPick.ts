@@ -1,3 +1,4 @@
+import { AUTO_MODEL } from "@t3tools/contracts";
 import { RegistryContext } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
@@ -24,7 +25,13 @@ export function useApplyThreadModelPick() {
     if (!draft?.modelSelectionExplicit || !draft.activeProvider) return;
     const pick = draft.modelSelectionByProvider[draft.activeProvider];
     const thread = registry.get(environmentThreadShells.threadShellAtom(target));
-    if (!pick || !thread || store.draftThreadsByThreadKey[scopedThreadKey(target)]) return;
+    if (
+      !pick ||
+      pick.model === AUTO_MODEL ||
+      !thread ||
+      store.draftThreadsByThreadKey[scopedThreadKey(target)]
+    )
+      return;
     // Another instance replaces the live session, which may hold an open question; that pick
     // still waits for a sent message.
     if (pick.instanceId !== thread.modelSelection.instanceId) return;

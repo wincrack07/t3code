@@ -1753,6 +1753,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const hub = UsageLimitSourceId.make("hub");
         const router = ProviderInstanceId.make("openrouter");
         const withUsage = yield* serverSettings.updateSettings({
+          decisions: { ...DEFAULT_SERVER_SETTINGS.decisions, apiKey: "decision-api-fixture" },
           cloudSpeechCredentials: { openai: usageReference, xai: "literal-fixture" },
           textGenerators: {
             [router]: {
@@ -1807,6 +1808,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           secretReferences: false,
         });
         assert.notInclude(JSON.stringify(legacy), "op://");
+        assert.notInclude(JSON.stringify(legacy), "decision-api-fixture");
+        assert.equal(legacy.decisions.apiKey, SECRET_REDACTED);
         assert.deepEqual(legacy.cloudSpeechCredentials, {
           openai: SECRET_REDACTED,
           xai: SECRET_REDACTED,
@@ -1941,6 +1944,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         "cloudSpeechCredentials.openrouter",
         "easDeviceHosts.[].accessToken",
         "simlockDeviceHosts.[].agentToken",
+        "decisions.apiKey",
         "usageLimitSources.*.managementKey",
         "textGenerators.*.apiKey",
       ]);

@@ -1,3 +1,4 @@
+import { draftModelPickMatchesThread } from "@t3tools/shared/model";
 import { PrimaryConnectionTarget } from "@t3tools/client-runtime/connection";
 import { createEnvironmentThreadShellAtoms } from "@t3tools/client-runtime/state/threads";
 import {
@@ -2654,4 +2655,40 @@ describe("composerDraftStore attachment references", () => {
       prompt,
     );
   });
+});
+
+it("keeps Auto selected after a resolved turn", () => {
+  const threadModelSelection = {
+    instanceId: CODEX_INSTANCE,
+    model: "resolved-model",
+    routing: "auto" as const,
+  };
+  expect(
+    draftModelPickMatchesThread(
+      { instanceId: CODEX_INSTANCE, model: "resolved-model" },
+      threadModelSelection,
+    ),
+  ).toBe(false);
+  const defaults = {
+    providers: [],
+    selectedProvider: CODEX_DRIVER,
+    selectedInstanceId: CODEX_INSTANCE,
+    threadModelSelection,
+    projectModelSelection: null,
+    settings: DEFAULT_UNIFIED_SETTINGS,
+  };
+  expect(deriveEffectiveComposerModelState({ ...defaults, draft: null }).selectedModel).toBe(
+    "t3:auto",
+  );
+  expect(
+    deriveEffectiveComposerModelState({
+      ...defaults,
+      draft: {
+        activeProvider: CODEX_INSTANCE,
+        modelSelectionByProvider: {
+          [CODEX_INSTANCE]: { instanceId: CODEX_INSTANCE, model: "t3:auto" },
+        },
+      },
+    }).selectedModel,
+  ).toBe("t3:auto");
 });

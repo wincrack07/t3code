@@ -1808,3 +1808,53 @@ it.effect("dispatch records the command outcome and its duration", () =>
     assert.strictEqual((yield* durations).count - durationsBefore, 1);
   }).pipe(Effect.provide(layerTest)),
 );
+
+it.effect("persists an automatic routing decision with its preparing run and replays it", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = ThreadId.make("thread:auto-routing");
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("create:auto-routing"),
+      threadId,
+      projectId: ProjectId.make("project:auto-routing"),
+      title: "Auto routing",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const routingDecision = {
+      choice: null,
+      source: "fallback" as const,
+      reason: "Decision timed out; use defaults",
+      ruleIds: [],
+    };
+    const command = {
+      type: "message.dispatch" as const,
+      commandId: CommandId.make("message:auto-routing"),
+      threadId,
+      messageId: MessageId.make("message:auto-routing"),
+      text: "Implement the task",
+      attachments: [],
+      modelSelection: { ...modelSelection, routing: "auto" as const },
+      routingDecision,
+      dispatchMode: { type: "defer_start" as const },
+      createdBy: "user" as const,
+      creationSource: "web" as const,
+    };
+    yield* orchestrator.dispatch(command);
+    const stored = yield* projections.getThreadProjection(threadId);
+    assert.deepEqual(stored.runs[0]?.routingDecision, routingDecision);
+    assert.equal(stored.runs[0]?.modelSelection.routing, "auto");
+    assert.isTrue((yield* orchestrator.dispatch(command)).replayed);
+    assert.deepEqual(
+      (yield* projections.getThreadProjection(threadId)).runs[0]?.routingDecision,
+      routingDecision,
+    );
+  }).pipe(Effect.provide(layerTest)),
+);

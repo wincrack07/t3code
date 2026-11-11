@@ -78,5 +78,6 @@ export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
 
 export * from "./systemMonitor.ts";
+export * from "./decisions.ts";
 
 export * from "./keepAwake.ts";

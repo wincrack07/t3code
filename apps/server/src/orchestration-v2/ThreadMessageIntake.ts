@@ -1,3 +1,6 @@
+import { AUTO_MODEL } from "@t3tools/contracts";
+import * as Decisions from "../decisions/Decisions.ts";
+import * as Option from "effect/Option";
 import { remapComposerContextAttachments } from "@t3tools/shared/composerContextReferences";
 import { appendUserInputAttachmentPaths } from "../provider/userInputAttachments.ts";
 import type { ChatAttachment, OrchestrationV2Command } from "@t3tools/contracts";
@@ -85,8 +88,30 @@ const withGuestAttachments = Effect.fn("ThreadMessageIntake.withGuestAttachments
 export const dispatchCommand = Effect.fn("ThreadMessageIntake.dispatchCommand")(function* (
   incoming: OrchestrationV2Command,
 ) {
-  const command =
+  let command =
     incoming.type === "message.dispatch" ? yield* withGuestAttachments(incoming) : incoming;
+  if (
+    command.type === "message.dispatch" &&
+    (command.modelSelection?.model === AUTO_MODEL || command.modelSelection?.routing === "auto")
+  ) {
+    const decisions = yield* Effect.serviceOption(Decisions.Decisions);
+    if (Option.isSome(decisions)) {
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const projection = yield* threads.getThreadRecords(command.threadId, ["runs"]);
+      const messageId = command.messageId;
+      const existing = projection.runs.find((run) => run.userMessageId === messageId);
+      const routed = existing
+        ? {
+            modelSelection: existing.modelSelection,
+            ...(existing.routingDecision ? { routingDecision: existing.routingDecision } : {}),
+          }
+        : yield* decisions.value.route(
+            { projectId: projection.thread.projectId, prompt: command.text },
+            command.modelSelection!,
+          );
+      command = { ...command, ...routed };
+    }
+  }
   const threads = yield* ThreadManagement.ThreadManagementService;
   if (command.type === "runtime-request.respond" && command.attachmentsByQuestionId) {
     const config = yield* ServerConfig.ServerConfig;
@@ -211,6 +236,17 @@ export const launchThread = Effect.fn("ThreadMessageIntake.launchThread")(functi
   input: ThreadLaunch.ThreadLaunchInput,
 ) {
   const launches = yield* ThreadLaunch.ThreadLaunchService;
+  if (input.modelSelection.model === AUTO_MODEL || input.modelSelection.routing === "auto") {
+    const decisions = yield* Effect.serviceOption(Decisions.Decisions);
+    if (Option.isSome(decisions))
+      input = {
+        ...input,
+        ...(yield* decisions.value.route(
+          { projectId: input.projectId, prompt: input.initialMessage?.text ?? input.title },
+          input.modelSelection,
+        )),
+      };
+  }
   yield* AttachmentClaims.validateAttachmentLimits(input.initialMessage?.attachments ?? []);
   if (!input.initialMessage?.attachments.some(AttachmentClaims.attachmentIsPendingUpload)) {
     return yield* launches.launch(input);

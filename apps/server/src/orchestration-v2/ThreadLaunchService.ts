@@ -85,6 +85,7 @@ export interface ThreadLaunchInput {
   readonly title: string;
   readonly generateTitle?: boolean;
   readonly modelSelection: ModelSelection;
+  readonly routingDecision?: import("@t3tools/contracts").DecisionResult;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly workspaceStrategy: ThreadLaunchWorkspaceStrategy;
@@ -985,6 +986,7 @@ const make = Effect.gen(function* () {
               threadId,
               messageId,
               text: input.initialMessage.text,
+              ...(input.routingDecision ? { routingDecision: input.routingDecision } : {}),
               ...(input.initialMessage.scheduledTaskId === undefined
                 ? {}
                 : { scheduledTaskId: input.initialMessage.scheduledTaskId }),

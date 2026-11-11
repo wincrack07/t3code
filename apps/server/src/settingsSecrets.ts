@@ -1,5 +1,6 @@
 import {
   AntigravitySettings,
+  DecisionSettings,
   ClaudeSettings,
   CloudSpeechCredentials,
   CodexSettings,
@@ -48,6 +49,7 @@ const providerSecretFields = new Map([
 ]);
 const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
 const textGeneratorSecretFields = secretSettingsFields(TextGeneratorConfig);
+const decisionSecretFields = secretSettingsFields(DecisionSettings);
 const voiceSecretFields = secretSettingsFields(CloudSpeechCredentials);
 const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const simlockDeviceHostSecretFields = secretSettingsFields(SimlockDeviceHostConfig);
@@ -249,6 +251,11 @@ function mapSecretFieldGroups(
 
   return {
     ...settings,
+    decisions: mapFields(
+      settings.decisions,
+      decisionSecretFields,
+      (field) => `decisions-${field}`,
+    ) as ServerSettings["decisions"],
     cloudSpeechCredentials: mapFields(
       settings.cloudSpeechCredentials,
       voiceSecretFields,
