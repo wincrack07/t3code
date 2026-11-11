@@ -61,7 +61,9 @@ export function presentMachineHealth(sample: MachineSample): MachineHealth {
   const cpu = sample.cpu === null ? null : Math.min(1, Math.max(0, sample.cpu / 100));
   const memory = share(sample.memoryUsed, sample.memoryTotal);
   const disk =
-    sample.diskFree === null ? null : share(sample.diskTotal! - sample.diskFree, sample.diskTotal);
+    sample.diskFree === null || sample.diskTotal === null
+      ? null
+      : share(sample.diskTotal - sample.diskFree, sample.diskTotal);
   const cpuLevel = byLimit(cpu, BUSY_CPU, STRAINED_CPU);
   const pressureLevel: MachineHealthLevel =
     sample.pressure === "critical" ? "strained" : sample.pressure === "warning" ? "busy" : "ok";

@@ -163,7 +163,10 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     paths: [
       "/settings/monitor",
       "/settings/maintenance",
-      "/settings/labs", "/settings/about", "/settings/archived"],
+      "/settings/labs",
+      "/settings/about",
+      "/settings/archived",
+    ],
   },
 ];
 

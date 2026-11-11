@@ -72,10 +72,7 @@ function LiveItem({ onOpen }: { onOpen: () => void }) {
   const health = presentMachineHealth(sample);
   const headline = connected ? health.headline : "Disconnected, last sample";
   const rows: [string, string][] = [
-    [
-      "CPU",
-      formatMachinePercent(health.cpu),
-    ],
+    ["CPU", formatMachinePercent(health.cpu)],
     [
       "Memory",
       `${formatMachineBytes(sample.memoryUsed)} of ${formatMachineBytes(sample.memoryTotal)} (${formatMachinePercent(health.memory)})`,

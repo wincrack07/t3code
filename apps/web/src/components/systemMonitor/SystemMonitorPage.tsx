@@ -98,17 +98,15 @@ function NowPanel({
   const level = health && connected ? health.level : "unknown";
   const headline =
     health === null ? "Reading machine" : connected ? health.headline : "Disconnected";
+  const alsoStrained = health?.reasons.slice(1).map((reason) => reason.label) ?? [];
   const detail =
     sample === null
       ? "Waiting for the first sample"
-      : connected
-        ? health!.reasons.length > 1
-          ? `Also: ${health!.reasons
-              .slice(1)
-              .map((r) => r.label)
-              .join(", ")}`
-          : `Up ${formatMachineUptime(sample.uptime)} · sampled every 2 s`
-        : `Showing the last sample, from ${clock(sample.at)}`;
+      : !connected
+        ? `Showing the last sample, from ${clock(sample.at)}`
+        : alsoStrained.length > 0
+          ? `Also: ${alsoStrained.join(", ")}`
+          : `Up ${formatMachineUptime(sample.uptime)} · sampled every 2 s`;
   return (
     <div className="flex flex-col">
       <div className="flex items-center gap-3 px-4 py-4">
@@ -483,9 +481,7 @@ function ProcessList(props: {
               <span className="text-right font-mono text-xs text-muted-foreground tabular-nums">
                 {p.pid}
               </span>
-              <span
-                className={cn("text-right tabular-nums", headClass("memory"))}
-              >
+              <span className={cn("text-right tabular-nums", headClass("memory"))}>
                 {formatMachineBytes(p.rss)}
               </span>
               <span className={cn("text-right tabular-nums", headClass("cpu"))}>
