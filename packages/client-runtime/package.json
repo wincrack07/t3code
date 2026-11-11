@@ -207,6 +207,10 @@
       "types": "./src/state/itemSupport.ts",
       "default": "./src/state/itemSupport.ts"
     },
+    "./state/machine-monitor": {
+      "types": "./src/state/machineMonitor.ts",
+      "default": "./src/state/machineMonitor.ts"
+    },
     "./state/models": {
       "types": "./src/state/models.ts",
       "default": "./src/state/models.ts"

@@ -1,5 +1,5 @@
+import { SidebarMachineMonitorItem } from "../systemMonitor/SystemMonitorIndicator";
 import { KeepAwakeControl } from "../KeepAwakeControl";
-import { SystemMonitorIndicator } from "../SystemMonitor";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -263,6 +263,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/artifacts" });
   };
 
+  const handleMonitorClick = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/settings/monitor" });
+  };
+
   const handleBackClick = () => {
     closeMobileSidebar();
     void navigateToMainApp();
@@ -301,6 +306,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Artifacts"
             onClick={handleArtifactsClick}
           />
+          <SidebarMachineMonitorItem onOpen={handleMonitorClick} />
         </>
       )}
       <SidebarMenuItem>
@@ -315,7 +321,6 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <SystemMonitorIndicator />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />
