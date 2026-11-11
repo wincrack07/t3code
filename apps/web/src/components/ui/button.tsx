@@ -58,6 +58,8 @@ const buttonVariants = cva(
         link: "border-transparent underline-offset-4 [:hover,[data-pressed]]:underline",
         "media-close":
           "[--control-icon-color:currentColor] border-transparent bg-black/65 text-white shadow-sm ring-1 ring-white/20 [--focus-ring-color:var(--color-white)] [:hover,[data-pressed]]:bg-black/80",
+        "message-action":
+          "[--control-icon-color:currentColor] border-transparent bg-message-action text-message-action-foreground [:hover,[data-pressed]]:bg-message-action-hover",
         "media-navigation":
           "[--control-icon-color:currentColor] absolute top-1/2 z-20 -translate-y-1/2 border-transparent text-white/90 [:hover,[data-pressed]]:bg-white/10 [:hover,[data-pressed]]:text-white [--focus-ring-color:var(--color-white)] [--focus-ring-gap:transparent]",
         outline:
@@ -65,6 +67,8 @@ const buttonVariants = cva(
         overlay: "border-transparent bg-black/70 text-white/65 [:hover,[data-pressed]]:bg-black/90",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90",
+        "tile-remove":
+          "[--control-icon-color:currentColor] rounded-full border-transparent bg-card text-muted-foreground shadow-[0_0_0_1px_var(--border)] before:rounded-full [:hover,[data-pressed]]:text-foreground",
         "warning-outline":
           "border-warning/32 bg-warning-surface text-warning-foreground shadow-xs/5 [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:border-warning/40 [:hover,[data-pressed]]:bg-warning/16 dark:[:hover,[data-pressed]]:bg-warning/24",
       },

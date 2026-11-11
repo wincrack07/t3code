@@ -143,6 +143,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --scroll-shadow-color: rgb(0 0 0 / 6%);
   --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
   --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
+  --composer-line-height: 1.625;
+  --composer-control-inset: calc(var(--spacing) * 1);
+  --composer-body-pad-y: calc(var(--spacing) * 2);
+  --composer-tile-radius: var(--radius);
   /* The prompt on phones: iOS zooms into any input under 16px on focus. */
   --font-size-prompt-touch: max(var(--font-size-prompt, 1rem), 16px);
   /* Horizontal gutter shared by the page header and the chat column, clear of
@@ -1811,6 +1815,40 @@ html[data-theme-id="claude"] :is([data-sidebar-control], [data-sidebar-history])
 
 html[data-theme-id="claude"] [data-sidebar-history] button:disabled {
   opacity: 0.4;
+}
+
+/* Claude's composer is one 14px card: a single hairline, a soft lift that
+   deepens on focus, and 28px controls centred on the text row with an 8px inset. */
+html[data-theme-id="claude"] {
+  --composer-ring-color: rgb(0 0 0 / 12%);
+  --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
+  --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
+  --composer-line-height: round(calc(var(--font-size-prompt, var(--text-sm)) * 1.4), 1px);
+  --composer-control-inset: 0.5rem;
+  --composer-body-pad-y: calc(0.5rem + (1.75rem - var(--composer-line-height)) / 2);
+  --composer-tile-radius: 0.625rem;
+
+  @variant dark {
+    --composer-ring-color: rgb(255 255 255 / 8%);
+    --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
+    --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
+  }
+}
+
+html[data-theme-id="claude"] [data-slot="composer-shell"] {
+  --chat-composer-glass-surface: var(--app-theme-surface);
+}
+
+html[data-theme-id="claude"]
+  [data-slot="composer-shell"]:not(:has([data-composer-banner-surface="attached"]))
+  [data-chat-composer-main-surface] {
+  padding: 0;
+  border-color: var(--composer-ring-color);
+  border-radius: 0.875rem;
+
+  & > [data-chat-composer-surface] {
+    border-radius: calc(0.875rem - 1px);
+  }
 }
 
 /* Recompute contrast wherever a subtree owns its own semantic color palette. */
