@@ -168,6 +168,17 @@ thread and near usage limits. Codex needs version 0.165 or later; if T3 Code man
 Codex, update it in Settings > Providers. Codex follows a change to the setting at once; open Claude
 threads follow it after they restart. Suggestions show on web and desktop.
 
+## Answer an agent's open questions
+
+When an agent finishes a reply with decisions left for you, it can attach them as cards under that
+reply: each has suggested answers, **Later**, and a field for a detail or your own answer. Pick
+answers for the ones you are ready to decide, then choose **Send answers**. T3 Code sends one
+ordinary message that pairs each answer with its question, such as
+`2 · Merge dev into main → Wait: do it on the 13th`. Questions you skip or mark **Later** stay open,
+and the thread shows **Awaiting Input** in the sidebar until none are left. Dismiss a question with
+its close button, and reopen an answered or dismissed one from its card. Typing a normal reply does
+not close any of them. Cards appear on web, desktop, and mobile for agents that use T3 Code's tools.
+
 ## Edit an earlier prompt
 
 On web and desktop, choose **Edit from here** beneath a sent message to rewind

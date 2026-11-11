@@ -6,6 +6,7 @@ import { type ChatMessage, type TurnDiffSummary } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
 import { GitForkIcon } from "lucide-react";
 import { Button } from "../ui/button";
+import { OpenQuestionCards } from "./OpenQuestionCards";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { HtmlRenderFrame } from "./HtmlRenderFrame";
 import { McpAppFrame } from "./McpAppFrame";
@@ -60,6 +61,9 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             />
           </AssistantCitationSource>
         </div>
+        {row.showAssistantMeta && row.message.runId ? (
+          <OpenQuestionCards runId={row.message.runId} />
+        ) : null}
         {ctx.onOpenTurnDiff ? (
           <AssistantChangedFilesSection
             turnSummary={row.assistantTurnDiffSummary}

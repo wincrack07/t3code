@@ -8,6 +8,11 @@ import {
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { THREAD_STATUS_TEXT_MAX_LENGTH } from "./orchestrationV2.ts";
+import {
+  OPEN_QUESTIONS_STORED_MAX,
+  OpenQuestionId,
+  OpenQuestionDeclarations,
+} from "./threadOpenQuestions.ts";
 import { ThreadLinkedPullRequest } from "./threadPullRequest.ts";
 import { ThreadTitleRegeneration } from "./threadTitle.ts";
 
@@ -83,3 +88,33 @@ export const ThreadMetadataMcpUpdateResult = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type ThreadMetadataMcpUpdateResult = typeof ThreadMetadataMcpUpdateResult.Type;
+
+export const ThreadOpenQuestionsMcpInput = Schema.Struct({
+  action: Schema.Literals(["declare", "resolve"]),
+  questions: Schema.optional(
+    OpenQuestionDeclarations.annotate({
+      description: "Required for declare: the decisions left to the user, in reply order.",
+    }),
+  ),
+  ids: Schema.optional(
+    Schema.Array(OpenQuestionId)
+      .check(Schema.isMinLength(1), Schema.isMaxLength(OPEN_QUESTIONS_STORED_MAX))
+      .annotate({ description: "Required for resolve: ids now settled without the user." }),
+  ),
+  clientRequestId: Schema.optional(ThreadMetadataClientRequestId),
+}).check(
+  Schema.makeFilter((input) =>
+    (input.action === "declare") !== (input.questions !== undefined)
+      ? "Only declare takes questions, and declare requires them."
+      : (input.action === "resolve") !== (input.ids !== undefined)
+        ? "Only resolve takes ids, and resolve requires them."
+        : true,
+  ),
+);
+export type ThreadOpenQuestionsMcpInput = typeof ThreadOpenQuestionsMcpInput.Type;
+
+export const ThreadOpenQuestionsMcpResult = Schema.Struct({
+  threadId: ThreadId,
+  open: Schema.Array(OpenQuestionId),
+});
+export type ThreadOpenQuestionsMcpResult = typeof ThreadOpenQuestionsMcpResult.Type;

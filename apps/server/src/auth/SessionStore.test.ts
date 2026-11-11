@@ -359,6 +359,72 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("SessionStore.lay
       expect((yield* sessions.verify(uncapped.token)).runtimeModeCeiling).toBeUndefined();
     }).pipe(Effect.provide(layerSessionStore())),
   );
+  it.effect(
+    "renews a peer's live session without changing its fence or access and never revives revocation or expiry",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* SessionStore.SessionStore;
+        const original = yield* sessions.issue({
+          subject: "mcp-client",
+          method: "bearer-access-token",
+          peerLink: true,
+          runtimeModeCeiling: "auto",
+        });
+        const ordinary = yield* sessions.issue({
+          subject: "mcp-client",
+          method: "bearer-access-token",
+          runtimeModeCeiling: "auto",
+        });
+        const cookie = yield* sessions.issue({
+          subject: "mcp-client",
+          method: "browser-session-cookie",
+          peerLink: true,
+          runtimeModeCeiling: "auto",
+        });
+        expect((yield* sessions.renewPeer(cookie.token, "auto").pipe(Effect.flip))._tag).toBe(
+          "InvalidSessionTokenPayloadError",
+        );
+        expect((yield* sessions.renewPeer(ordinary.token, "auto").pipe(Effect.flip))._tag).toBe(
+          "InvalidSessionTokenPayloadError",
+        );
+        expect(
+          (yield* sessions.renewPeer(original.token, "full-access").pipe(Effect.flip))._tag,
+        ).toBe("InvalidSessionTokenPayloadError");
+        yield* TestClock.adjust(Duration.days(26));
+        const renewed = yield* sessions.renewPeer(original.token, "auto");
+        expect(renewed.sessionId).toBe(original.sessionId);
+        expect(renewed.scopes).toEqual(original.scopes);
+        expect(yield* sessions.verify(renewed.token)).toMatchObject({
+          sessionId: original.sessionId,
+          peerLink: true,
+          runtimeModeCeiling: "auto",
+        });
+        yield* TestClock.adjust(Duration.days(5));
+        expect((yield* sessions.verify(original.token).pipe(Effect.flip))._tag).toBe(
+          "SessionTokenExpiredError",
+        );
+        expect((yield* sessions.verify(renewed.token)).sessionId).toBe(original.sessionId);
+        expect((yield* sessions.listActive()).map((session) => session.sessionId)).toEqual([
+          original.sessionId,
+        ]);
+        yield* sessions.revoke(original.sessionId);
+        expect((yield* sessions.renewPeer(renewed.token, "auto").pipe(Effect.flip))._tag).toBe(
+          "SessionTokenRevokedError",
+        );
+        const expiring = yield* sessions.issue({
+          subject: "mcp-client",
+          method: "bearer-access-token",
+          peerLink: true,
+          runtimeModeCeiling: "auto",
+          ttl: Duration.days(1),
+        });
+        yield* TestClock.adjust(Duration.days(1));
+        expect((yield* sessions.renewPeer(expiring.token, "auto").pipe(Effect.flip))._tag).toBe(
+          "SessionTokenExpiredError",
+        );
+      }).pipe(Effect.provide(layerSessionStore())),
+  );
+
   it.effect("takes scopes from the session record", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;

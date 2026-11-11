@@ -46,6 +46,7 @@ import { AuthMcpClientAccess } from "./auth.ts";
 import { ChatAttachment } from "./chatAttachment.ts";
 import { ThreadGuestShare } from "./guestShare.ts";
 import { StoredThreadTags, ThreadTag } from "./threadTags.ts";
+import { OpenQuestionsUpdate, StoredOpenQuestions } from "./threadOpenQuestions.ts";
 import {
   OrchestrationSearchThreadsInput,
   OrchestrationSearchThreadsResult,
@@ -87,7 +88,7 @@ import {
 } from "./providerRuntime.ts";
 import { ThreadTokenUsageSnapshot } from "./providerRuntime.ts";
 
-/** Where a pinned card shows: a right-panel tab (the default) or a Thread Details section. */
+/** Panel is a legacy alias for details; retained so old events and callers still decode. */
 export const PinnedHtmlCardPlacement = Schema.Literals(["panel", "details"]);
 export type PinnedHtmlCardPlacement = typeof PinnedHtmlCardPlacement.Type;
 
@@ -98,6 +99,7 @@ const PinnedHtmlCard = Schema.Struct({
   height: Schema.Number,
   heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
   placement: Schema.optional(PinnedHtmlCardPlacement),
+  updatedAt: Schema.optional(Schema.String),
 });
 
 export const THREAD_STATUS_TEXT_MAX_LENGTH = 120;
@@ -475,6 +477,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
   statusText: Schema.optional(ThreadStatusText),
+  /** Non-blocking questions the agent left for the user. Absent when there are none. */
+  openQuestions: Schema.optional(StoredOpenQuestions),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -2132,6 +2136,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
   statusText: Schema.optional(ThreadStatusText),
+  /** Non-blocking questions the agent left for the user. Absent when there are none. */
+  openQuestions: Schema.optional(StoredOpenQuestions),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -3115,6 +3121,7 @@ export const OrchestrationV2Command = Schema.Union([
     ),
     /** Set (string) or clear (null) the agent's status line; absent leaves it unchanged. */
     statusText: Schema.optional(Schema.NullOr(ThreadStatusText)),
+    openQuestions: Schema.optional(OpenQuestionsUpdate),
     title: Schema.optional(TrimmedNonEmptyString),
     regenerateTitle: Schema.optional(Schema.Boolean),
     branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),

@@ -131,6 +131,7 @@ export const make = Effect.gen(function* () {
   yield* Effect.forkDetach(onCloudVm);
 
   const servedEndpoint = yield* Ref.make<Option.Option<string>>(Option.none());
+  const magicDnsEndpoint = yield* Ref.make<Option.Option<string>>(Option.none());
   const resolveAvailable = Effect.fn("DirectEndpoints.resolveAvailable")(function* () {
     const endpoints = [
       ...resolveBoundEndpoints({
@@ -142,15 +143,42 @@ export const make = Effect.gen(function* () {
       }),
     ];
     const servedUrl = yield* Ref.get(servedEndpoint);
-    if (Option.isSome(servedUrl)) endpoints.push({ kind: "tailnet", httpBaseUrl: servedUrl.value });
+    const magicDnsUrl = yield* Ref.get(magicDnsEndpoint);
+    if (Option.isSome(magicDnsUrl))
+      endpoints.unshift({ kind: "tailnet", httpBaseUrl: magicDnsUrl.value });
+    if (Option.isSome(servedUrl))
+      endpoints.unshift({ kind: "tailnet", httpBaseUrl: servedUrl.value });
     return endpoints;
   });
 
   const resolve = Effect.gen(function* () {
+    const status = yield* readTailscaleStatus.pipe(
+      Effect.timeoutOption(TAILSCALE_ENDPOINT_TIMEOUT),
+      Effect.orElseSucceed(() => Option.none()),
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+    );
+    const name = Option.isSome(status) ? status.value.magicDnsName : null;
+    const bound = resolveBoundEndpoints({
+      platform,
+      host: config.host,
+      port: config.port,
+      interfaces: NodeOS.networkInterfaces(),
+    });
+    yield* Ref.set(
+      magicDnsEndpoint,
+      name !== null &&
+        bound.some(
+          (endpoint) =>
+            endpoint.kind === "tailnet" ||
+            (Option.isSome(status) &&
+              status.value.tailnetIpv4Addresses.includes(new URL(endpoint.httpBaseUrl).hostname)),
+        )
+        ? Option.some(`http://${name}:${config.port}/`)
+        : Option.none(),
+    );
     // Serve setup can fail without stopping startup; advertise only after it answers as this server.
     if (config.tailscaleServeEnabled) {
-      const servedUrl = yield* readTailscaleStatus.pipe(
-        Effect.map((status) => status.magicDnsName),
+      const servedUrl = yield* Effect.succeed(name).pipe(
         Effect.flatMap((magicDnsName) => {
           if (magicDnsName === null) return Effect.succeed(null);
           const httpBaseUrl = buildTailscaleHttpsBaseUrl({

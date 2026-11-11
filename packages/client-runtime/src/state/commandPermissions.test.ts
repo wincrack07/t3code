@@ -160,6 +160,7 @@ describe("command permissions", () => {
 
   it.effect.each([
     { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
+    { method: WS_METHODS.keepAwakeChange, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },
   ])("requires the destination $scope grant for $method", ({ method, scope }) =>
     Effect.scoped(
@@ -466,7 +467,12 @@ it.effect(
         );
         setAccess(false);
         expect(yield* readLinks).toEqual({ links: [] });
-        const linkInput = { url: peer.urls[0]!, pairingCode: "test-code", access: peer.access };
+        const linkInput = {
+          url: peer.urls[0]!,
+          pairingCode: "test-code",
+          access: peer.access,
+          renewExisting: true,
+        };
         const link = Effect.promise(() =>
           peerLinks.link.run(registry, { environmentId: env, input: linkInput }),
         );
