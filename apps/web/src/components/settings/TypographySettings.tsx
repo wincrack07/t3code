@@ -1,3 +1,5 @@
+import { useTheme } from "../../hooks/useTheme";
+import { resolveThemeHalf } from "../../themePalette";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
@@ -99,8 +101,13 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
 }
 
 function ReplyFontRow() {
+  const { theme, themeHalves, resolvedTheme } = useTheme();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
+  const activeTheme = resolveThemeHalf(theme, themeHalves, resolvedTheme);
+  const defaultSize =
+    settings.fontSizeInterface *
+    (activeTheme === "claude" ? 15 / 16 : settings.uiDensity === "compact" ? 13 / 16 : 14 / 16);
   return (
     <FontFamilySettingsRow
       {...searchableSetting("reply-font")}
@@ -114,8 +121,8 @@ function ReplyFontRow() {
         label: "Reply font size",
         min: MIN_PROMPT_FONT_SIZE,
         max: MAX_PROMPT_FONT_SIZE,
-        value: settings.fontSizeReply ?? Math.round(settings.fontSizeInterface * 0.875),
-        defaultValue: Math.round(settings.fontSizeInterface * 0.875),
+        value: settings.fontSizeReply ?? defaultSize,
+        defaultValue: defaultSize,
         onChange: (fontSizeReply) => updateSettings({ fontSizeReply }),
       }}
     />

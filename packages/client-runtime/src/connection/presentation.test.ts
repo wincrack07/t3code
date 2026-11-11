@@ -10,6 +10,7 @@ import {
 import {
   BearerConnectionTarget,
   ConnectionTransientError,
+  connectionProjectionPhase,
   RelayConnectionTarget,
   type SupervisorConnectionState,
 } from "./model.ts";
@@ -50,6 +51,17 @@ function supervisorState(overrides: Partial<SupervisorConnectionState>): Supervi
 }
 
 describe("connection presentation", () => {
+  it("keeps failed reconnect probes disconnected until a session starts synchronizing", () => {
+    for (const stage of ["preparing", "opening"] as const) {
+      expect(connectionProjectionPhase(supervisorState({ attempt: 3, generation: 1, stage }))).toBe(
+        "disconnected",
+      );
+    }
+    expect(connectionProjectionPhase(supervisorState({ attempt: 3, stage: "synchronizing" }))).toBe(
+      "synchronizing",
+    );
+    expect(connectionProjectionPhase(supervisorState({}))).toBe("synchronizing");
+  });
   it("copies the T3 Connect MCP address first, then the route this device is connected over", () => {
     const route = (connectionId: string, httpBaseUrl: string): ConnectionRoute => {
       const target = new BearerConnectionTarget({ ...TARGET, connectionId });

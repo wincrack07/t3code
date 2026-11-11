@@ -184,7 +184,11 @@ export function connectionProjectionPhase(
 ): ConnectionProjectionPhase {
   switch (state.phase) {
     case "connecting":
-      return "synchronizing";
+      // A reachability probe cannot refresh cached data; only a session can.
+      return state.stage === "synchronizing" ||
+        (state.attempt === 1 && state.generation === 0 && state.lastFailure === null)
+        ? "synchronizing"
+        : "disconnected";
     case "connected":
       return "ready";
     case "available":
