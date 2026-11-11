@@ -1103,6 +1103,22 @@ export default function ChatView(props: ChatViewProps) {
   const rightPanelMaximized =
     !embedded && canMaximizeRightPanel && rightPanelState.maximized === true;
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
+  const sheetPresentationRef = useRef(shouldUsePlanSidebarSheet);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a window narrowing into the drawer layout closes a panel that only shows the empty picker
+  useEffect(() => {
+    const becameSheet = shouldUsePlanSidebarSheet && !sheetPresentationRef.current;
+    sheetPresentationRef.current = shouldUsePlanSidebarSheet;
+    if (!becameSheet || embedded || !activeThreadRef) return;
+    if (rightPanelOpen && activeRightPanelSurface === null) {
+      useRightPanelStore.getState().close(activeThreadRef);
+    }
+  }, [
+    activeRightPanelSurface,
+    activeThreadRef,
+    embedded,
+    rightPanelOpen,
+    shouldUsePlanSidebarSheet,
+  ]);
   const [threadPanelPopoverHandle] = useState(PopoverCreateHandle);
   const [chatCanvasStore] = useState(createChatCanvasStore);
 
@@ -3260,12 +3276,11 @@ export default function ChatView(props: ChatViewProps) {
           state={deviceState}
         />
       )}
-      {rightPanelControlsAtRoot && !embedded ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
-          rightPanelOpen && !shouldUsePlanSidebarSheet && !rightPanelMaximized && "min-w-90",
+          rightPanelOpen && !shouldUsePlanSidebarSheet && !rightPanelMaximized && "min-w-120",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
         data-chat-column
@@ -3288,12 +3303,6 @@ export default function ChatView(props: ChatViewProps) {
               COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
             )}
           >
-            {isElectron && rightPanelControlsAtRoot ? (
-              <span
-                aria-hidden
-                className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
-              />
-            ) : null}
             {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
             {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
             <ChatHeader
@@ -3913,6 +3922,7 @@ export default function ChatView(props: ChatViewProps) {
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
           sheetAnimationDurationMs={panelAnimationsActive ? panelAnimationDurationMs : 0}
           onCloseSheet={closePreviewPanelStable}
+          onClosePanel={closePreviewPanelStable}
           open={rightPanelOpen}
           keybindings={keybindings}
           getShortcutContext={getShortcutContextStable}
@@ -3969,6 +3979,9 @@ export default function ChatView(props: ChatViewProps) {
           {rightPanelContent}
         </ChatRightPanel>
       ) : null}
+      {/* After the header and panel tab bar: Electron applies app regions in document order,
+          so these controls' no-drag must come after the drag regions they sit on. */}
+      {rightPanelControlsAtRoot && !embedded ? panelLayoutControls : null}
 
       <RevertConfirmHost threadKey={routeThreadKey} onConfirm={onConfirmRevertStable} />
       {embedded ? null : <LinkPullRequestDialogHost />}

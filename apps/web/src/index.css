@@ -2056,11 +2056,19 @@ code {
   }
 }
 
+/* Anything clickable inside a drag region must cut itself out of it, or the
+   window swallows the click to start a drag. */
 .drag-region button,
 .drag-region input,
 .drag-region textarea,
 .drag-region select,
-.drag-region a {
+.drag-region a,
+.drag-region label,
+.drag-region [role="button"],
+.drag-region [role="tab"],
+.drag-region [role="menuitem"],
+.drag-region [role="separator"],
+.drag-region [contenteditable]:not([contenteditable="false"]) {
   -webkit-app-region: no-drag;
 }
 
