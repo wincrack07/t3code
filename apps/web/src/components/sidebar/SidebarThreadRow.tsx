@@ -1402,6 +1402,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   return (
     <li
       data-thread-item={threadKey}
+      onClick={(event) => {
+        if (!(event.target instanceof Element && event.target.closest("[data-sidebar-row]"))) {
+          handleClick(event);
+        }
+      }}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
