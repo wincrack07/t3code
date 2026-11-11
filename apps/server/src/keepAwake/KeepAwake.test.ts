@@ -1,3 +1,5 @@
+import * as LidSleep from "./LidSleep.ts";
+import { fixture as lidFixture } from "./LidSleep.testkit.ts";
 import { updateRunActivity } from "./activity.ts";
 import { expect, it } from "@effect/vitest";
 import { DEFAULT_KEEP_AWAKE } from "@t3tools/contracts";
@@ -21,7 +23,9 @@ const fixture = Effect.fn("TestKeepAwake.fixture")(function* (supported = true) 
   const saved = yield* Ref.make(DEFAULT_KEEP_AWAKE);
   const testScope = yield* Scope.make();
   yield* Effect.addFinalizer(() => Scope.close(testScope, Exit.void));
+  const lid = yield* lidFixture();
   const deps = Layer.mergeAll(
+    LidSleep.layer.pipe(Layer.provide(Layer.succeed(LidSleep.LidSleepHost, lid.host))),
     Layer.succeed(KeepAwake.KeepAwakePreferences, {
       load: Ref.get(saved),
       save: (defaults) => Ref.set(saved, defaults),
@@ -48,6 +52,7 @@ const fixture = Effect.fn("TestKeepAwake.fixture")(function* (supported = true) 
     testScope,
     deps,
     saved,
+    lid,
   };
 });
 
@@ -193,5 +198,24 @@ it.effect("saves startup defaults without replacing the current session", () =>
     const status = yield* Context.get(restarted, KeepAwake.KeepAwake).status;
     expect(status.mode).toBe("off");
     expect(status.options.batteryCutoff).toBe(40);
+  }),
+);
+
+it.effect("restores lid sleep on session end, option off, and low battery", () =>
+  Effect.gen(function* () {
+    const { service, lid, level } = yield* fixture();
+    const options = { ...DEFAULT_KEEP_AWAKE.options, lidClosed: true };
+    yield* service.change({ session: { mode: "indefinite" }, options });
+    expect(yield* Ref.get(lid.value)).toBe(true);
+    yield* service.change({ options: { ...options, lidClosed: false } });
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    yield* service.change({ options });
+    yield* service.change({ session: { mode: "off" } });
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    yield* service.change({ session: { mode: "indefinite" } });
+    yield* Ref.set(level, 10);
+    yield* TestClock.adjust("1 minute");
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    expect(yield* Ref.get(lid.marker)).toBe(false);
   }),
 );

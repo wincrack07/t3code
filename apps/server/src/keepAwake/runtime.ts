@@ -1,3 +1,5 @@
+import * as LidSleep from "./LidSleep.ts";
+import * as LidSleepHost from "./LidSleepHost.ts";
 import { updateRunActivity } from "./activity.ts";
 import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
 import { DEFAULT_KEEP_AWAKE, KeepAwakeDefaults } from "@t3tools/contracts";
@@ -41,6 +43,7 @@ const preferences = Layer.effect(
 
 export const layer = KeepAwake.layer.pipe(
   Layer.provide(SleepInhibitor.layer),
+  Layer.provide(LidSleep.layer.pipe(Layer.provide(LidSleepHost.layer))),
   Layer.provide(preferences),
 );
 

@@ -35,6 +35,18 @@ export const KeepAwakeChange = Schema.Struct({
   defaults: Schema.optionalKey(KeepAwakeDefaults),
 });
 export type KeepAwakeChange = typeof KeepAwakeChange.Type;
+export const KeepAwakeLidStatus = Schema.Struct({
+  authorized: Schema.Boolean,
+  active: Schema.Boolean,
+  error: Schema.NullOr(Schema.String),
+  nativeAuthorization: Schema.Boolean,
+  installCommand: Schema.String,
+  removeCommand: Schema.String,
+});
+export type KeepAwakeLidStatus = typeof KeepAwakeLidStatus.Type;
+export const KeepAwakeAuthorize = Schema.Struct({
+  action: Schema.Literals(["install", "remove", "refresh"]),
+});
 export const KeepAwakeStatus = Schema.Struct({
   supported: Schema.Boolean,
   active: Schema.Boolean,
@@ -43,6 +55,7 @@ export const KeepAwakeStatus = Schema.Struct({
   endsAt: Schema.NullOr(Schema.Number),
   reason: Schema.NullOr(Schema.String),
   lidClosedSupported: Schema.Boolean,
+  lid: Schema.optionalKey(KeepAwakeLidStatus),
   options: KeepAwakeOptions,
   defaults: KeepAwakeDefaults,
 });
