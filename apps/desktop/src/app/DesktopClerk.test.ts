@@ -213,15 +213,22 @@ describe("DesktopClerk", () => {
     },
   );
 
-  it.effect("delivers each queued startup link once, before later links", () => {
+  it.effect.each([
+    {
+      first: "t3code://new?prompt=first",
+      launchPair: "t3code://pair?pairingUrl=https%3A%2F%2Fvps.example.com%2F%23token%3Dabc",
+    },
+    {
+      first: "t3code://finder?path=%2Ftmp%2Ffirst&path=%2Ftmp%2Fsecond",
+      launchPair: "t3code://finder?path=%2Ftmp%2Fcold-start",
+    },
+  ])("delivers each queued startup link once, before later links: %j", ({ first, launchPair }) => {
     storageMock.mockReturnValue(storageAdapter);
     createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: true });
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const received: string[] = [];
-    const first = "t3code://new?prompt=first";
     const second = "t3code://threads/env-1/thread-1";
     const later = "t3code://new?prompt=later";
-    const launchPair = "t3code://pair?pairingUrl=https%3A%2F%2Fvps.example.com%2F%23token%3Dabc";
     const delivered = Promise.withResolvers<void>();
     const electronApp = {
       on: (name: string, listener: (...args: unknown[]) => void) =>

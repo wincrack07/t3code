@@ -488,3 +488,19 @@ Auto. If a decision fails, your normal defaults are used.
 
 Test a prompt in Decisions settings previews routing for a project without starting work.
 Mobile does not yet offer Auto in its picker.
+
+## Send from Finder (macOS desktop)
+
+In **Settings → About → Finder integration**, choose **Install**. Select files or
+folders in Finder, right-click, and choose **Send to T3 Code** in Services or
+Quick Actions. If it is missing, enable it under **System Settings → Keyboard →
+Keyboard Shortcuts → Services**. Choose **Remove** in the same settings row to
+uninstall it. Reinstall after moving the app to a different location.
+
+Files inside a registered local project open a draft in the deepest matching
+project with `@file` references. Files from different projects get separate
+drafts; other files become attachments in a draft without a project, subject to
+the usual attachment limits. When viewing a remote thread, confirm uploading
+the files to a new draft in that thread's project instead. Folders ask to open
+as local projects; a new folder opens Add project with its path filled in.
+Nothing sends until you send the draft.

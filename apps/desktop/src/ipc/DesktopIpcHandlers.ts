@@ -1,3 +1,4 @@
+import * as FinderIpc from "./methods/finderIntegration.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -92,6 +93,10 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(AppActivationIpc.setReady);
   yield* ipc.handle(AppActivationIpc.complete);
   yield* ipc.handle(WebLinksIpc.setReady);
+  yield* ipc.handle(FinderIpc.state);
+  yield* ipc.handle(FinderIpc.install);
+  yield* ipc.handle(FinderIpc.inspect);
+  yield* ipc.handle(FinderIpc.read);
 
   yield* ipc.handleSync(takeLegacyLocalStorage);
   yield* ipc.handle(completeLegacyLocalStorage);

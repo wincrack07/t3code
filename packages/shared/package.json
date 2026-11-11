@@ -546,6 +546,10 @@
     "./decisionRules": {
       "types": "./src/decisionRules.ts",
       "import": "./src/decisionRules.ts"
+    },
+    "./finderIntegration": {
+      "types": "./src/finderIntegration.ts",
+      "import": "./src/finderIntegration.ts"
     }
   },
   "scripts": {

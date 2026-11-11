@@ -310,6 +310,17 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
     };
   },
+  ...(clientPlatform === "darwin"
+    ? {
+        finderIntegration: {
+          getState: () => ipcRenderer.invoke(IpcChannels.FINDER_STATE_CHANNEL),
+          setInstalled: (installed: boolean) =>
+            ipcRenderer.invoke(IpcChannels.FINDER_INSTALL_CHANNEL, installed),
+          inspect: (url: string) => ipcRenderer.invoke(IpcChannels.FINDER_INSPECT_CHANNEL, url),
+          read: (id: string) => ipcRenderer.invoke(IpcChannels.FINDER_READ_CHANNEL, id),
+        },
+      }
+    : {}),
   webLinks: {
     setReady: (ready) => ipcRenderer.invoke(IpcChannels.WEB_LINK_READY_CHANNEL, ready),
     onOpen: (listener) => {
