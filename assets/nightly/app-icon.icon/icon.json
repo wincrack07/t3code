@@ -6,6 +6,15 @@
     {
       "layers": [
         {
+          "glass": false,
+          "image-name": "sally.svg",
+          "name": "Sally",
+          "position": {
+            "scale": 3.45,
+            "translation-in-points": [320, 320]
+          }
+        },
+        {
           "glass": true,
           "image-name": "text.svg",
           "name": "Text",
