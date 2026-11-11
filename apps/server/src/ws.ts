@@ -1,3 +1,4 @@
+import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -1551,6 +1552,7 @@ export const layerWsRpc = (
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const triage = yield* TriageService.TriageService;
       const hostResources = yield* HostResources.HostResources;
+      const systemMonitor = yield* SystemMonitor.SystemMonitor;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const relayClient = yield* RelayClient.RelayClient;
@@ -3505,6 +3507,7 @@ export const layerWsRpc = (
               );
             }),
           ),
+        [WS_METHODS.subscribeMachineMonitor]: () => systemMonitor.stream,
         [WS_METHODS.subscribeResourceTelemetry]: (_input) =>
           Stream.unwrap(
             Effect.map(resourceTelemetry.subscribe, ({ latest, changes }) =>

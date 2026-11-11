@@ -1,3 +1,4 @@
+import { MachineMonitorSnapshot } from "./systemMonitor.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -626,6 +627,7 @@ export const WS_METHODS = {
   subscribeServerConfig: "subscribeServerConfig",
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
+  subscribeMachineMonitor: "subscribeMachineMonitor",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
 } as const;
 
@@ -2073,7 +2075,15 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
   { error: EnvironmentAuthorizationError },
 ) {}
 
+const WsSubscribeMachineMonitorRpc = Rpc.make(WS_METHODS.subscribeMachineMonitor, {
+  payload: Schema.Struct({}),
+  success: MachineMonitorSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsSubscribeMachineMonitorRpc,
   WsGuestShareCreateRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,

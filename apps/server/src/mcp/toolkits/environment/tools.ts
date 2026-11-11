@@ -1,3 +1,5 @@
+import { MachineMonitorSnapshot } from "@t3tools/contracts";
+import * as SystemMonitor from "../../../systemMonitor/SystemMonitor.ts";
 import {
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
@@ -31,6 +33,7 @@ const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    SystemMonitor.SystemMonitor,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ServerEnvironment.ServerEnvironment,
@@ -41,13 +44,14 @@ const shared = {
 const EnvironmentReadTool = Tool.make("t3_environment_read", {
   ...shared,
   description:
-    "Read this server's identity and preferences. Providers and models: `orchestrator_capabilities`.",
+    "Read this server's identity, preferences and current CPU, memory, storage, network and top processes. Providers and models: `orchestrator_capabilities`.",
   parameters: Schema.Struct({ environmentId: OrchestratorMcpEnvironmentTarget }),
   success: Schema.Struct({
     environmentId: ExecutionEnvironmentDescriptor.fields.environmentId,
     label: Schema.String,
     serverVersion: Schema.String,
     platform: ExecutionEnvironmentDescriptor.fields.platform,
+    machine: MachineMonitorSnapshot,
     preferences: Schema.Struct(PreferenceFields),
   }),
 })

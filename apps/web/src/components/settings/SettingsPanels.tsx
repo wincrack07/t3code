@@ -1,3 +1,4 @@
+import { SystemMonitorView } from "../SystemMonitor";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -764,6 +765,20 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="system-monitor" title="System monitor">
+        <SettingsRow
+          title="Show system monitor in sidebar"
+          description="Monitor the active environment’s machine."
+          control={
+            <Switch
+              checked={settings.showSystemMonitor}
+              onCheckedChange={(checked) => updateSettings({ showSystemMonitor: checked })}
+              aria-label="Show system monitor"
+            />
+          }
+        />
+        <SystemMonitorView />
+      </SettingsSection>
       <SettingsSection id="notifications" title="Notifications">
         <NotificationSettings />
         <SettingsRow

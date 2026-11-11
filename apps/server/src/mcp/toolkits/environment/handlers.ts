@@ -1,3 +1,4 @@
+import * as SystemMonitor from "../../../systemMonitor/SystemMonitor.ts";
 import { OrchestratorMcpFailure, type ServerSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
@@ -50,6 +51,7 @@ export const layer = McpToolAccess.toLayer(EnvironmentToolkit, {
         label: descriptor.label,
         serverVersion: descriptor.serverVersion,
         platform: descriptor.platform,
+        machine: yield* (yield* SystemMonitor.SystemMonitor).current,
         preferences: preferences(current),
       };
     }),

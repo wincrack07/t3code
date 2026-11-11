@@ -1,3 +1,4 @@
+import { MachineMonitor } from "./MachineMonitor";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import * as Application from "expo-application";
@@ -101,6 +102,7 @@ export function SettingsDiagnosticsRouteScreen() {
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-4 pb-[18px]"
       >
+        <MachineMonitor />
         {crashReportingAvailable ? <CrashReportsSetting /> : null}
 
         <SettingsSection title="Startup crashes">

@@ -1,4 +1,5 @@
 import {
+  type MachineMonitorSnapshot,
   type EnvironmentId,
   type ProviderInstanceId,
   type ServerConfig,
@@ -1364,6 +1365,24 @@ export function createServerEnvironmentAtoms<R, E>(
               ),
           ),
         ),
+    }),
+    machineMonitor: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:machine-monitor",
+      tag: WS_METHODS.subscribeMachineMonitor,
+      transform: (stream) =>
+        stream.pipe(
+          Stream.scan(
+            () => undefined as MachineMonitorSnapshot | undefined,
+            (previous, value) => ({
+              ...value,
+              history: value.history.length
+                ? value.history
+                : [...(previous?.history ?? []), value.sample].slice(-738),
+            }),
+          ),
+          Stream.filter((value): value is MachineMonitorSnapshot => value !== undefined),
+        ),
+      idleTtlMs: 0,
     }),
     resourceTelemetry: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:resource-telemetry",

@@ -352,3 +352,18 @@ A snoozed thread keeps working and stays hidden until its wake time, even while
 its agent wakes itself for background work. It comes back early for an approval,
 a new question, a failed run, or a message or answer you send. You can snooze an existing
 question and answer when the thread wakes; the question stays unanswered.
+
+## System monitor
+
+The sidebar shows CPU, RAM, free storage and network activity for the active environment.
+Open it, or choose **Open system monitor** in the command palette, to see history and the
+processes using the most RAM or CPU. General Settings lets you hide the sidebar indicator
+and choose another connected environment to inspect. Mobile shows the numbers in Settings > Diagnostics.
+
+Measurements describe the machine running the environment's server. Project totals include
+accessible processes whose working directory belongs to that project or a known worktree.
+Process RAM is resident memory, so process totals do not equal total machine RAM. macOS
+available RAM includes reclaimable file-backed and purgeable memory. History stays in memory
+and collects only while a monitor is open or its sidebar indicator is visible. Process, storage
+and macOS command counters refresh every ten seconds; CPU and Linux resource counters refresh
+every two seconds. The monitor has no process controls.
