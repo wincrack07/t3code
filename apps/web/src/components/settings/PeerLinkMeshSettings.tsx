@@ -23,56 +23,61 @@ export function PeerLinkMeshSettings() {
   const progress = useAtomValue(peerMeshProgressAtom);
   if (hosts.length < 2 && settings.managed.length === 0) return null;
   return (
-    <SettingsSection title="Link all my environments to each other">
+    <SettingsSection title="Link my environments">
       <SettingsRow
-        title="Link every connected machine in both directions"
-        description="Uses this app's sessions to create one pairing code per direction. Links that last more than five days are kept. Failed directions can be retried independently by linking again."
+        title="Link every environment"
+        description="Links each connected environment to every other one, in both directions. Run it again to retry any that failed."
+        control={
+          <Button
+            size="sm"
+            disabled={busy || !permissions.link}
+            onClick={() => void runPeerMesh(false, access)}
+          >
+            {busy ? "Linking…" : "Link all"}
+          </Button>
+        }
       >
-        <div className="space-y-4">
+        <div className="mt-3 max-w-2xl pb-3.5">
           <LinkAccessPicker value={access} onChange={setAccess} disabled={busy} />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={busy || !permissions.link}
-              onClick={() => void runPeerMesh(false, access)}
-            >
-              {busy ? "Working…" : "Link all my environments to each other"}
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive-outline"
-              disabled={busy || !permissions.unlink}
-              onClick={() => void runPeerMesh(false, access, true)}
-            >
-              Unlink all
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Unlink all stops renewal and forgets links between connected machines. Offline machines
-            keep their links until you connect and unlink them. Revoke sessions in the destination's
-            Sharing & access to end access there too.
-          </p>
         </div>
       </SettingsRow>
       <SettingsRow
         title="Keep links renewed"
-        description="Renew this app’s links in their last five days while both machines are connected. Access and thread ownership stay the same. Forgotten, revoked or expired links need a fresh click."
-      >
-        <Switch
-          checked={settings.enabled}
-          disabled={busy}
-          onCheckedChange={(enabled) => setSettings((current) => ({ ...current, enabled }))}
-          aria-label="Keep links renewed"
-        />
-      </SettingsRow>
+        description="Renews links in their last five days while both environments are connected. Forgotten, revoked or expired links need linking again."
+        control={
+          <Switch
+            checked={settings.enabled}
+            disabled={busy}
+            onCheckedChange={(enabled) => setSettings((current) => ({ ...current, enabled }))}
+            aria-label="Keep links renewed"
+          />
+        }
+      />
+      <SettingsRow
+        title="Unlink all"
+        description="Stops renewal and forgets links between connected environments. Offline ones keep their links until they reconnect. To end access on the other side too, revoke the session in its Sharing & access."
+        control={
+          <Button
+            size="sm"
+            variant="destructive-outline"
+            disabled={busy || !permissions.unlink}
+            onClick={() => void runPeerMesh(false, access, true)}
+          >
+            Unlink all
+          </Button>
+        }
+      />
       {progress.length > 0 ? (
-        <div className="space-y-2 p-4" role="status" aria-live="polite">
-          {progress.map((pair) => (
-            <p key={pair.key} className="text-xs">
-              <span className="font-medium">{pair.label}</span>: {pair.status}
-            </p>
-          ))}
-        </div>
+        <SettingsRow title="Progress">
+          <ul className="mt-2 space-y-1 pb-2.5 text-xs" role="status" aria-live="polite">
+            {progress.map((pair) => (
+              <li key={pair.key} className="text-muted-foreground">
+                <span className="text-foreground">{pair.label}</span>
+                <span className="ps-2">{pair.status}</span>
+              </li>
+            ))}
+          </ul>
+        </SettingsRow>
       ) : null}
     </SettingsSection>
   );
