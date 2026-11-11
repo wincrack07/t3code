@@ -27,6 +27,15 @@ Git-backed projects show branch and worktree controls below the composer while y
 After the first message, use the thread details panel to view the environment, checkout, and branch.
 The composer keeps model, access, and context controls on one line.
 
+## Sidebar
+
+Use the display menu beside the sidebar's project filter, or **Settings → General → Sidebar**,
+to choose **Compact** or **Comfortable** rows and **All threads by project** or a **Global settled
+section**. Claude defaults to compact rows; Claude and nightly builds default to project grouping.
+Each project's settled sessions expand in pages. Pinned projects and projects active in the last
+14 days stay in the main list; older inactive projects appear under **Other projects**. Expansion
+is remembered on this device. Expand a thread's chevron to load its nested sessions.
+
 ## Math
 
 Turn on **Render math** in **Settings → Appearance** to typeset LaTeX in messages and Markdown

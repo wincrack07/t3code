@@ -941,6 +941,62 @@ export function sidebarFolderExpansionKeys(group: {
  * input order. A project with no threads gets a folder only when `keepEmpty` says so.
  * A thread whose project is in no group has no folder and is left out.
  */
+export function sidebarProjectIsOther(input: {
+  readonly pinned: boolean;
+  readonly hasLooseThreads: boolean;
+  readonly containsRoute: boolean;
+  readonly projectUpdatedAt: string;
+  readonly threads: ReadonlyArray<
+    Pick<SidebarThreadSummary, "updatedAt" | "latestUserMessageAt" | "settledAt" | "unsettledAt">
+  >;
+  readonly now: string;
+}): boolean {
+  if (input.pinned || input.hasLooseThreads || input.containsRoute) return false;
+  const timestamps = [
+    input.projectUpdatedAt,
+    ...input.threads.flatMap((thread) => [
+      thread.updatedAt,
+      thread.latestUserMessageAt,
+      thread.settledAt,
+      thread.unsettledAt,
+    ]),
+  ];
+  const latest = Math.max(
+    ...timestamps
+      .flatMap((value) => (value == null ? [] : [Date.parse(value)]))
+      .filter(Number.isFinite),
+  );
+  return latest < Date.parse(input.now) - 14 * 24 * 60 * 60_000;
+}
+
+export function sidebarNestedThreads<
+  T extends Pick<
+    SidebarThreadSummary,
+    "id" | "environmentId" | "lineage" | "delegatedFrom" | "deletedAt" | "archivedAt"
+  >,
+>(threads: readonly T[]): Map<string, T[]> {
+  const parents = new Map<string, T[]>();
+  const known = new Set(
+    threads.map((thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+  );
+  for (const thread of threads) {
+    if (thread.deletedAt !== null || thread.archivedAt !== null) continue;
+    const parent =
+      thread.delegatedFrom ??
+      (thread.lineage.parentThreadId === null
+        ? null
+        : { environmentId: thread.environmentId, threadId: thread.lineage.parentThreadId });
+    if (parent === null) continue;
+    const key = scopedThreadKey(scopeThreadRef(parent.environmentId, parent.threadId));
+    if (!known.has(key) || key === scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)))
+      continue;
+    const children = parents.get(key) ?? [];
+    children.push(thread);
+    parents.set(key, children);
+  }
+  return parents;
+}
+
 export function groupSidebarThreadsByProject<
   TGroup extends {
     readonly memberProjectRefs: ReadonlyArray<{

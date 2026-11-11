@@ -34,6 +34,7 @@ import {
 
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
+  CloudIcon,
   AlarmClockIcon,
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
@@ -261,6 +262,7 @@ function SidebarThreadTooltip({
   terminalProcessCount: number;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
+  const diff = latestRunDiff(thread);
   const previousProviderNames = thread.providerInstanceHistory
     .filter((instanceId) => instanceId !== modelInstanceId)
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
@@ -296,6 +298,17 @@ function SidebarThreadTooltip({
           <div className="flex min-w-0 items-center gap-2">
             <GitBranchIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <MiddleTruncate value={thread.branch} className="flex" />
+          </div>
+        ) : null}
+        {thread.worktreePath ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <GitBranchIcon className="size-3 shrink-0" />
+            <MiddleTruncate value={thread.worktreePath} />
+          </div>
+        ) : null}
+        {diff ? (
+          <div className="text-xs text-muted-foreground">
+            Changes: +{formatDiffCount(diff.insertions)} −{formatDiffCount(diff.deletions)}
           </div>
         ) : null}
         {branchMismatch ? (
@@ -539,6 +552,8 @@ type SidebarThreadRowProps = {
   // "folder-multiline" adds the card's branch and PR line under it.
   variant: "card" | "slim" | "folder" | "folder-multiline";
   navigationParent?: string | undefined;
+  nestedSessionToggle?: ReactNode;
+  nestedExpanded?: boolean | undefined;
   variantAction: SidebarSweepAction;
   settlementSupported: boolean;
   snoozeSupported: boolean;
@@ -1206,6 +1221,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return (
       <li
         data-thread-item={threadKey}
+        onClick={(event) => {
+          if (!(event.target instanceof Element && event.target.closest("[data-sidebar-row]")))
+            handleClick(event);
+        }}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
@@ -1225,13 +1244,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 data-sidebar-parent={props.navigationParent}
                 aria-label={accessibility.label}
                 aria-current={accessibility.current}
+                aria-expanded={props.nestedExpanded}
                 data-testid={inFolder ? "sidebar-row-folder" : "sidebar-row-slim"}
                 aria-busy={isRegeneratingTitle || undefined}
                 className={cn(
                   rowSurfaceClassName,
                   multiline
                     ? "flex flex-col justify-center px-2.5 py-1.5"
-                    : "flex h-9 items-center gap-2.5 px-2.5",
+                    : "flex h-8 items-center gap-1.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
                   inFolder && "ps-9",
                 )}
@@ -1260,9 +1280,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {draftIndicator}
               {title}
-              {multiline ? titleLineIcons : null}
+              {props.nestedSessionToggle}
+              {multiline ? titleLineIcons : prBadge}
+              {!multiline && isRemote ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        className="inline-flex shrink-0 text-sidebar-muted-foreground"
+                        aria-label={props.environmentLabel ?? "Remote environment"}
+                      />
+                    }
+                  >
+                    <CloudIcon className="size-3.5" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipPopup>{props.environmentLabel ?? "Remote environment"}</TooltipPopup>
+                </Tooltip>
+              ) : null}
               {pinIndicator}
-              {multiline ? null : terminalStatusIcon}
+
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title
@@ -1316,7 +1352,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         )}
                       >
                         <TopStatusIcon icon={topStatus.icon} className="size-3" />
-                        {topStatus.label}
+                        <span className="sr-only">{topStatus.label}</span>
                       </span>
                     ) : (
                       <span className="text-xs">

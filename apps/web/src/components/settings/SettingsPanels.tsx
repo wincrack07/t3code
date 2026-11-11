@@ -1,3 +1,4 @@
+import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
 import { PromptPolishSettings } from "./PromptPolishSettings";
 import { KeepAwakeControl } from "../KeepAwakeControl";
 import { useAtomValue } from "@effect/atom-react";
@@ -779,6 +780,11 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="sidebar" title="Sidebar">
+        <SettingsRow
+          {...searchableSetting("sidebar-display")}
+          description="Choose compact or comfortable rows and how settled threads are grouped."
+          control={<SidebarDisplayMenu />}
+        />
         <SettingsRow
           {...searchableSetting("project-grouping")}
           description="Combine matching repositories across environments."

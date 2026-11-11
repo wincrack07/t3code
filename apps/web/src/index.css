@@ -2644,3 +2644,16 @@ code {
     display: none;
   }
 }
+
+.sidebar-nested-sessions > [data-thread-item] {
+  position: relative;
+}
+
+.sidebar-nested-sessions > [data-thread-item]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -0.25rem;
+  top: 50%;
+  width: 0.5rem;
+  border-top: 1px solid var(--border);
+}

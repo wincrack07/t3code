@@ -430,6 +430,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["long lines code blocks diffs file previews"],
   },
   {
+    id: "sidebar-display",
+    title: "Sidebar display",
+    to: "/settings/general",
+    searchTerms: ["compact comfortable density settled project grouping"],
+  },
+  {
     id: "project-grouping",
     title: "Project grouping",
     to: "/settings/general",
