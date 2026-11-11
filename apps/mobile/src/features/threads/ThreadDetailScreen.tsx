@@ -746,6 +746,7 @@ function ThreadDetailBody(
   const pendingBackgroundWork = presentPendingBackgroundWork(
     props.selectedThread.pendingBackgroundTasks,
   );
+  const agentStatusText = props.selectedThread.statusText;
   const extensionStatus = props.extensionStatuses?.length
     ? {
         label: `Pi · ${props.extensionStatuses.map((status) => status.text).join(" · ")}`,
@@ -821,13 +822,18 @@ function ThreadDetailBody(
       return { kind: "compacting" };
     }
     if (props.activeWorkStartedAt !== null && contentPresentationKind === "ready") {
-      return { kind: "working", startedAt: props.activeWorkStartedAt };
+      return {
+        kind: "working",
+        startedAt: props.activeWorkStartedAt,
+        ...(agentStatusText ? { statusText: agentStatusText } : {}),
+      };
     }
     if (pendingBackgroundWork !== null && contentPresentationKind === "ready") {
+      const label = agentStatusText ?? pendingBackgroundWork.title;
       return {
         kind: "background",
-        label: pendingBackgroundWork.title,
-        accessibilityLabel: `${pendingBackgroundWork.title}: ${pendingBackgroundWork.items
+        label,
+        accessibilityLabel: `${label}: ${pendingBackgroundWork.items
           .map((item) => item.label)
           .join(", ")}`,
         waiting: pendingBackgroundWork.waiting,
@@ -873,6 +879,9 @@ function ThreadDetailBody(
             void runStatusAction(lifecycleSnoozed ? "wake" : settled ? "unsettle" : "dismiss"),
         },
       };
+    }
+    if (agentStatusText && contentPresentationKind === "ready") {
+      return { kind: "agent-status", label: agentStatusText };
     }
     if (props.selectedThread.goal !== null && contentPresentationKind === "ready") {
       const goal = presentProviderGoal(props.selectedThread.goal, false);

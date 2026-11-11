@@ -305,6 +305,11 @@ Select a server to open it in the browser panel. **Stop** ends the server's job
 and keeps the agent, the terminal, and T3 Code running. Stop needs terminal
 access to the environment and is not available on Windows.
 
+An agent can set a one-line status for its thread, such as how far a long
+migration has got. It shows above the composer on web, desktop, and mobile, in
+place of the generic line for background work, and clears when you send the next
+message.
+
 To choose what the thread details card shows, right-click the card or open
 **Settings → Appearance → Thread details**. Hidden rows keep their keyboard
 shortcuts, such as Open in editor and project scripts. **Reset to default** brings

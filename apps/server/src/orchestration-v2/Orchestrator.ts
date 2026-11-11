@@ -4064,8 +4064,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                     snooze: command.limitRecovery.snooze ?? previousRecovery?.snooze ?? false,
                     requestId: command.commandId,
                   };
+          const { statusText: _statusText, ...withoutStatus } = thread;
           return {
-            ...thread,
+            ...(command.statusText === null ? withoutStatus : thread),
+            ...(command.statusText == null ? {} : { statusText: command.statusText }),
             ...(command.htmlCard === undefined
               ? {}
               : {
@@ -6036,6 +6038,27 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         providerInstanceId: thread.providerInstanceId,
         occurredAt: now,
         payload: thread,
+      });
+      projection = applyToProjection(projection, event);
+    }
+    // The agent's status line describes the turn the user is now replacing.
+    if (
+      projection.thread.statusText !== undefined &&
+      command.createdBy === "user" &&
+      !automaticWake &&
+      !isNativeMaintenanceCommand(command)
+    ) {
+      const now = yield* DateTime.now;
+      const { statusText: _statusText, ...thread } = projection.thread;
+      const event = yield* emit(
+        events,
+        command,
+      )({
+        type: "thread.metadata-updated",
+        threadId: command.threadId,
+        providerInstanceId: thread.providerInstanceId,
+        occurredAt: now,
+        payload: { ...thread, updatedAt: now },
       });
       projection = applyToProjection(projection, event);
     }

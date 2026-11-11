@@ -8,7 +8,8 @@ export interface FloatingStatusAction {
 }
 
 export type FloatingWorkingStatus =
-  | { readonly kind: "working"; readonly startedAt: string }
+  | { readonly kind: "working"; readonly startedAt: string; readonly statusText?: string }
+  | { readonly kind: "agent-status"; readonly label: string }
   | { readonly kind: "syncing"; readonly label: string }
   | { readonly kind: "compacting" }
   | {

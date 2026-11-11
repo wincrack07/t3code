@@ -185,6 +185,7 @@ export interface EnvironmentThreadShell {
   readonly activeOrderKey: string | null;
   readonly pullRequests: ReadonlyArray<import("@t3tools/contracts").ThreadPullRequestLink>;
   readonly pinnedHtmlCards?: OrchestrationV2ThreadShell["pinnedHtmlCards"];
+  readonly statusText?: string;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
   readonly branchPullRequest?: ThreadLinkedPullRequest | null;
   /**
@@ -295,6 +296,7 @@ export function presentThreadShell(
     worktreePath: thread.worktreePath,
     pullRequests: threadPullRequestsOf(thread),
     ...(thread.pinnedHtmlCards?.length ? { pinnedHtmlCards: thread.pinnedHtmlCards } : {}),
+    ...(thread.statusText === undefined ? {} : { statusText: thread.statusText }),
     linkedPullRequest: thread.linkedPullRequest ?? null,
     branchPullRequest: thread.branchPullRequest ?? null,
     lineage: thread.lineage,

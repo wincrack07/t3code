@@ -100,6 +100,13 @@ const PinnedHtmlCard = Schema.Struct({
   placement: Schema.optional(PinnedHtmlCardPlacement),
 });
 
+export const THREAD_STATUS_TEXT_MAX_LENGTH = 120;
+/** One line an agent sets on its own thread's status line. */
+export const ThreadStatusText = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(THREAD_STATUS_TEXT_MAX_LENGTH),
+  Schema.isPattern(/^[^\p{Cc}]*$/u),
+);
+
 export const OrchestrationV2Actor = Schema.Literals(["user", "agent", "system"]);
 export type OrchestrationV2Actor = typeof OrchestrationV2Actor.Type;
 
@@ -467,6 +474,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
+  statusText: Schema.optional(ThreadStatusText),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -2123,6 +2131,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
+  statusText: Schema.optional(ThreadStatusText),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -3104,6 +3113,8 @@ export const OrchestrationV2Command = Schema.Union([
         card: Schema.NullOr(PinnedHtmlCard),
       }),
     ),
+    /** Set (string) or clear (null) the agent's status line; absent leaves it unchanged. */
+    statusText: Schema.optional(Schema.NullOr(ThreadStatusText)),
     title: Schema.optional(TrimmedNonEmptyString),
     regenerateTitle: Schema.optional(Schema.Boolean),
     branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
