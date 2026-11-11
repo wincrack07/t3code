@@ -1762,7 +1762,67 @@ html[data-theme-id="t3-chat"] [data-app-sidebar] {
    token is that wash over the canvas. */
 html[data-theme-id="claude"]:not([data-theme-id=""]),
 html[data-theme-id="claude"] [data-app-sidebar] {
-  --accent: color-mix(in srgb, var(--app-theme-text) 7%, transparent);
+  --accent: color-mix(in srgb, var(--app-theme-text) 5%, transparent);
+
+  @variant dark {
+    --accent: color-mix(in srgb, var(--app-theme-text) 7.5%, transparent);
+  }
+}
+
+/* Controls: outline buttons are the app's secondary button (a translucent fill
+   with a hairline in light, a brighter fill alone in dark), primary hovers one
+   step lighter, and on-states (switch, checkbox, radio) use the blue fill. */
+html[data-theme-id="claude"] [data-slot="button"][data-variant="outline"] {
+  border-color: color-mix(in srgb, var(--app-theme-text) 10%, transparent);
+  background: color-mix(in srgb, var(--app-theme-text) 5%, transparent);
+  box-shadow: none;
+
+  &::before {
+    box-shadow: none;
+  }
+
+  &:is(:hover, [data-pressed]) {
+    background: color-mix(in srgb, var(--app-theme-text) 7.5%, transparent);
+  }
+
+  @variant dark {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--app-theme-text) 15%, transparent);
+
+    &:is(:hover, [data-pressed]) {
+      background: color-mix(in srgb, var(--app-theme-text) 21.6%, transparent);
+    }
+  }
+}
+
+html[data-theme-id="claude"]
+  [data-slot="button"][data-variant="default"]:is(:hover, [data-pressed]) {
+  background: var(--app-theme-message-action-hover);
+}
+
+html[data-theme-id="claude"] [data-slot="switch"][data-checked],
+html[data-theme-id="claude"]
+  :is([data-slot="checkbox-indicator"], [data-slot="radio-indicator"])[data-checked] {
+  background: var(--app-theme-focus);
+  color: var(--color-white);
+}
+
+html[data-theme-id="claude"] [data-slot="switch-thumb"] {
+  background: var(--color-white);
+}
+
+html[data-theme-id="claude"] [data-slot="radio-indicator"][data-checked]::before {
+  background: var(--color-white);
+}
+
+html[data-theme-id="claude"] [data-slot="switch"][data-checked]:hover:not([data-disabled]) {
+  background: color-mix(in srgb, var(--app-theme-focus) 92%, black);
+}
+
+@media (min-width: 40rem) {
+  html[data-theme-id="claude"] [data-slot="switch"][data-size="default"] {
+    --thumb-size: 1.125rem;
+  }
 }
 
 /* Menus and popovers are solid raised panels with a 14px corner, a 6px gutter
