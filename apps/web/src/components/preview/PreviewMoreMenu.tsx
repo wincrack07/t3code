@@ -1,5 +1,6 @@
-import type { DesktopPreviewColorScheme } from "@t3tools/contracts";
+import type { BrowserExtension, DesktopPreviewColorScheme } from "@t3tools/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -37,6 +38,9 @@ export interface PreviewMoreMenuActions {
   readonly clearCache: () => void;
   readonly openDevTools?: () => void;
   readonly toggleNativePictureInPicture?: () => void;
+  /** Desktop tabs only: installed extensions, read each time the menu opens. */
+  readonly listExtensions?: () => Promise<ReadonlyArray<BrowserExtension>>;
+  readonly openExtensionPopup?: (extensionId: string) => void;
 }
 
 interface Props {
@@ -79,8 +83,17 @@ export function PreviewMoreMenu({
 }: Props) {
   const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
   const disabled = !enabled;
+  const [extensions, setExtensions] = useState<ReadonlyArray<BrowserExtension>>([]);
+  const popupExtensions = extensions.filter((extension) => extension.enabled && extension.hasPopup);
+  const { listExtensions, openExtensionPopup } = actions;
   return (
-    <Menu>
+    <Menu
+      onOpenChange={(open) => {
+        if (open && listExtensions) {
+          void listExtensions().then(setExtensions, () => setExtensions([]));
+        }
+      }}
+    >
       <MenuTriggerButton />
       <MenuPopup align="end" sideOffset={6}>
         <MenuItem onClick={actions.hardReload} disabled={disabled}>
@@ -171,6 +184,23 @@ export function PreviewMoreMenu({
           <MenuItem onClick={actions.clearCookies}>Clear cookies</MenuItem>
           <MenuItem onClick={actions.clearCache}>Clear cache</MenuItem>
         </MenuGroup>
+        {openExtensionPopup && popupExtensions.length > 0 ? (
+          <>
+            <MenuSeparator />
+            <MenuGroup>
+              <MenuGroupLabel>Extensions</MenuGroupLabel>
+              {popupExtensions.map((extension) => (
+                <MenuItem
+                  key={extension.id}
+                  disabled={disabled}
+                  onClick={() => openExtensionPopup(extension.id)}
+                >
+                  <span className="max-w-56 truncate">{extension.name}</span>
+                </MenuItem>
+              ))}
+            </MenuGroup>
+          </>
+        ) : null}
       </MenuPopup>
     </Menu>
   );

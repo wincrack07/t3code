@@ -157,6 +157,8 @@ export class BrowserSession extends Context.Service<
     readonly clearCache: (
       partitions?: ReadonlyArray<string>,
     ) => Effect.Effect<void, BrowserSessionCacheClearError>;
+    /** Runs `setup` on every persistent session, now and as each new one is created. */
+    readonly onPersistentSession: (setup: (session: Session) => void) => Effect.Effect<void>;
   }
 >()("@t3tools/desktop/preview/BrowserSession") {}
 
@@ -258,6 +260,7 @@ export const make = Effect.gen(function* BrowserSessionMake() {
     );
   };
   const sessionsRef = yield* SynchronizedRef.make<ReadonlyMap<string, Session>>(new Map());
+  const persistentSessionSetups: Array<(session: Session) => void> = [];
 
   const getPartition = Effect.fn("BrowserSession.getPartition")(function* (
     scope = "shared",
@@ -361,6 +364,7 @@ export const make = Effect.gen(function* BrowserSessionMake() {
               });
             },
           );
+          if (persistent) for (const setup of persistentSessionSetups) setup(browserSession);
           const next = new Map(sessions);
           next.set(partition, browserSession);
           return [browserSession, next] as const;
@@ -399,6 +403,15 @@ export const make = Effect.gen(function* BrowserSessionMake() {
           }),
         { concurrency: "unbounded", discard: true },
       );
+    }),
+    onPersistentSession: Effect.fn("BrowserSession.onPersistentSession")(function* (setup) {
+      yield* SynchronizedRef.update(sessionsRef, (sessions) => {
+        persistentSessionSetups.push(setup);
+        for (const [partition, browserSession] of sessions) {
+          if (partition.startsWith(PREVIEW_PARTITION_PREFIX)) setup(browserSession);
+        }
+        return sessions;
+      });
     }),
     clearCache: Effect.fn("BrowserSession.clearCache")(function* (partitions?) {
       const sessions = yield* SynchronizedRef.get(sessionsRef);
