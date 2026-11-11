@@ -339,6 +339,39 @@ describe("listSourceProfiles", () => {
   );
 });
 
+describe("Aside", () => {
+  it.effect("finds profiles at its folder's root with pre-Network/ cookie jars", () =>
+    run(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const context = yield* withSourceHome();
+        const aside = BROWSER_IMPORT_SOURCES.find((source) => source.id === "aside")!;
+        const root = context.path.join(context.home, "Library", "Application Support", "Aside");
+        assert.equal(aside.userDataDirectory(context), root);
+        assert.isFalse(yield* isSourceInstalled(aside, context));
+
+        yield* fileSystem.makeDirectory(`${root}/Default`, { recursive: true });
+        yield* fileSystem.makeDirectory(`${root}/Profile 3`, { recursive: true });
+        yield* fileSystem.writeFileString(
+          `${root}/Local State`,
+          `{"profile":{"info_cache":{"Default":{"name":"Personal"},"Profile 3":{"name":"Work"}}}}`,
+        );
+        yield* writeCookieDatabase(`${root}/Profile 3/Cookies`, 3);
+
+        assert.isTrue(yield* isSourceInstalled(aside, context));
+        assert.deepEqual(yield* listSourceProfiles(aside, context), [
+          { directory: "Default", name: "Personal" },
+          { directory: "Profile 3", name: "Work", cookieCount: 3 },
+        ]);
+        assert.equal(
+          yield* resolveCookieDatabase(aside, context, "Profile 3"),
+          `${root}/Profile 3/Cookies`,
+        );
+      }),
+    ),
+  );
+});
+
 describe("cookieDatabaseCandidatePaths", () => {
   it.effect("resolves the live Network/ jar over a leftover root Cookies", () =>
     run(
