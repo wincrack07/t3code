@@ -252,7 +252,6 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
-import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { usePanelAnimationSettings } from "../../panelAnimations";
@@ -274,6 +273,8 @@ import {
 } from "./preparingComposerImages";
 import { ComposerControlsBar } from "./ComposerControlsBar";
 import { composerCommandKeyHandler } from "./composerCommandKey";
+import { PromptSuggestionHint } from "./PromptSuggestionHint";
+import { usePromptCompletion } from "./usePromptCompletion";
 import { usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
 
@@ -2305,7 +2306,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // After /clear the next message starts a fresh session that cannot see what the suggestion refers to.
   const freshSessionArmed = useFreshSessionArmed(scopedThreadKey(routeThreadRef));
   // Offered only where the default placeholder would show, so it never hides a pending question.
-  const offeredPromptSuggestion =
+  const promptSuggestionsAllowed =
     phase !== "running" &&
     !isSendBusy &&
     !freshSessionArmed &&
@@ -2314,9 +2315,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     !isComposerApprovalState &&
     !activePendingProgress &&
     !projectSelectionRequired &&
-    !showProviderUnavailable
-      ? promptSuggestion
-      : null;
+    !showProviderUnavailable;
+  const offeredPromptSuggestion = promptSuggestionsAllowed ? promptSuggestion : null;
+  const promptCompletion = usePromptCompletion({
+    environmentId,
+    thread: activeThread,
+    draft: prompt,
+    caretAtEnd:
+      composerCursor ===
+      collapseExpandedComposerCursor(prompt, prompt.length, isLiteralPendingAnswer),
+    menuOpen: composerMenuOpen,
+    busy:
+      isSendBusy ||
+      freshSessionArmed ||
+      speechInput.freezesEditor ||
+      isComposerApprovalState ||
+      Boolean(activePendingProgress) ||
+      projectSelectionRequired ||
+      showProviderUnavailable,
+    nextAllowed: promptSuggestionsAllowed,
+    providerSuggestion: offeredPromptSuggestion,
+  });
+  const emptyComposerSuggestion = promptSuggestionsAllowed ? promptCompletion.next : null;
 
   const onComposerCommandKey = (key: string, event: KeyboardEvent, isTaskItem?: boolean) =>
     composerCommandKeyHandler({
@@ -2353,8 +2373,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       readComposerSnapshot,
       applyPromptReplacement,
       submitComposer,
-      promptSuggestion: offeredPromptSuggestion,
-      dismissPromptSuggestion,
+      promptSuggestion: emptyComposerSuggestion,
+      dismissPromptSuggestion: () => {
+        dismissPromptSuggestion();
+        promptCompletion.dismiss();
+      },
+      cyclePromptSuggestion: promptCompletion.cycleNext,
+      inlineCompletion: promptCompletion.inline,
+      takeInlineCompletionWord: promptCompletion.takeInlineWord,
+      dismissInlineCompletion: promptCompletion.dismiss,
     })(key, event, isTaskItem);
 
   const {
@@ -2671,6 +2698,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const addComposerFoldersStable = useStableCallback(addComposerFolders);
 
   const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    promptCompletion.notePaste();
     const { files, folders } = splitTransferredFiles(event.clipboardData);
     const plainText = event.clipboardData.getData("text/plain");
     const bypassAutoAttachment = consumePasteAsTextShortcut(pasteAsTextShortcutUntilRef);
@@ -3539,15 +3567,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             ? "Choose a project above to start a thread"
                             : showProviderUnavailable
                               ? "Enable a provider in Settings to send a message"
-                              : (offeredPromptSuggestion ?? DEFAULT_COMPOSER_PLACEHOLDER)
+                              : (emptyComposerSuggestion ?? DEFAULT_COMPOSER_PLACEHOLDER)
                     }
                     placeholderSuffix={
-                      offeredPromptSuggestion !== null ? (
-                        <span className="ml-2 inline-flex align-[1px]">
-                          <Kbd variant="outline">⇥ Tab</Kbd>
-                        </span>
+                      emptyComposerSuggestion !== null ? (
+                        <PromptSuggestionHint position={promptCompletion.nextPosition} />
                       ) : undefined
                     }
+                    ghostText={promptCompletion.inline}
                     disabled={
                       projectSelectionRequired ||
                       isChoiceOnlyPendingQuestion ||

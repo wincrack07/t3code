@@ -131,6 +131,7 @@ export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly title?: string;
   /** Removes the agent's pinned card with this id from the thread. */
   readonly unpinHtmlCard?: string;
+  readonly openQuestions?: import("@t3tools/contracts").OpenQuestionsUpdate;
   readonly modelSelection?: ModelSelection;
   readonly branch?: string | null;
   readonly worktreePath?: string | null;
@@ -621,7 +622,8 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
       input.regenerateTitle !== undefined ||
       input.linkedPullRequest !== undefined ||
       input.limitRecovery !== undefined ||
-      input.unpinHtmlCard !== undefined
+      input.unpinHtmlCard !== undefined ||
+      input.openQuestions !== undefined
     ) {
       result = yield* dispatch({
         type: "thread.metadata.update",
@@ -629,6 +631,7 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
         ...(input.unpinHtmlCard === undefined
           ? {}
           : { htmlCard: { id: input.unpinHtmlCard, card: null } }),
+        ...(input.openQuestions === undefined ? {} : { openQuestions: input.openQuestions }),
         commandId,
         threadId: input.threadId,
         ...(input.title === undefined ? {} : { title: input.title }),

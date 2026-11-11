@@ -264,6 +264,7 @@ export function resolveThreadListV2Status(
     | "hasPendingUserInput"
     | "pendingSubagentRequest"
     | "pendingGuestMessageCount"
+    | "openQuestionCount"
     | "runtime"
     | "blockedOnThreadWait"
   >,
@@ -286,6 +287,10 @@ export function resolveThreadListV2Status(
     ["preparing", "queued", "starting", "running", "waiting"].includes(thread.runtime.status)
   ) {
     return "working";
+  }
+  // Questions the agent left on a finished reply wait on the user like a blocking one.
+  if ((thread.openQuestionCount ?? 0) > 0) {
+    return "input";
   }
   if (thread.runtime?.status === "idle") {
     return "waiting";

@@ -168,6 +168,15 @@ const handlers = {
         return yield* service.update(scope, input);
       }),
   ),
+  t3_open_questions: McpToolAccess.writesThreads(
+    () => [undefined],
+    (input) =>
+      Effect.gen(function* () {
+        const scope = yield* McpInvocationContext.McpInvocationContext;
+        const service = yield* ThreadMetadataMcpService.ThreadMetadataMcpService;
+        return yield* service.openQuestions(scope, input);
+      }),
+  ),
   t3_thread_send: McpToolAccess.writesThreads(
     (input) => [input.threadId],
     (input) =>

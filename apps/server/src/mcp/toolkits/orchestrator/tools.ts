@@ -36,6 +36,8 @@ import {
   OrchestratorMcpThreadWaitResult,
   ThreadMetadataMcpUpdateInput,
   ThreadMetadataMcpUpdateResult,
+  ThreadOpenQuestionsMcpInput,
+  ThreadOpenQuestionsMcpResult,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import { McpSchema, Tool, Toolkit } from "effect/ai";
@@ -268,6 +270,19 @@ const ThreadUpdateTool = Tool.make("t3_thread_update", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.Idempotent, false);
 
+const OpenQuestionsTool = Tool.make("t3_open_questions", {
+  description:
+    "Show decisions you leave to the user as answer cards under your final reply. Non-blocking: the user answers in a later message. `declare` with `questions` (id, Markdown text, 2-4 short answers); a new declare replaces this turn's. `resolve` with `ids` once one is settled another way.",
+  parameters: ThreadOpenQuestionsMcpInput,
+  success: ThreadOpenQuestionsMcpResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: threadMetadataDependencies,
+})
+  .annotate(Tool.Title, "Leave open questions for the user")
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true);
+
 const ThreadSendTool = Tool.make("t3_thread_send", {
   description:
     "Send a message to any thread. The target cannot run with broader modes than yours. `mode:'auto'` starts an idle thread, steers a running turn, or queues. `queue`: new turn. `steer`: mid-turn update. `restart`: interrupt and restart. A send to a finished child thread starts a fresh task and returns its `taskId`. In your reply, name it as its `link` verbatim.",
@@ -364,6 +379,7 @@ export const OrchestratorToolkit = Toolkit.make(
   ThreadListTool,
   ThreadReadTool,
   ThreadUpdateTool,
+  OpenQuestionsTool,
   ThreadSendTool,
   ThreadWaitTool,
   ThreadInterruptTool,

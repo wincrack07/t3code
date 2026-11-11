@@ -60,6 +60,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
+import { OpenQuestionCards } from "./OpenQuestionCards";
 import { renderAssistantCitationsAsText } from "@t3tools/shared/assistantCitations";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
 import { hostedThreadLink, parseThreadLinkHref } from "@t3tools/shared/threadLinks";
@@ -2233,6 +2234,13 @@ function renderFeedEntry(
               skills={props.skills}
             />
           </MarkdownImageAvailableWidthContext>
+        ) : null}
+        {showAssistantMeta && message.runId ? (
+          <OpenQuestionCards
+            environmentId={props.environmentId}
+            threadId={props.threadId}
+            runId={message.runId}
+          />
         ) : null}
         <MessageAttachmentList
           attachments={attachments}

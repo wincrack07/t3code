@@ -171,6 +171,19 @@ export function resolveSpeechPostProcessingModelSelection(
     : settings.textGenerationModelSelection;
 }
 
+/** Prompt suggestions follow the text generation model unless their own usable model is set. */
+export function resolvePromptCompletionModelSelection(
+  settings: ServerSettings,
+  providers?: ReadonlyArray<ServerProvider>,
+): ModelSelection {
+  const selection = settings.promptCompletionModelSelection;
+  return selection &&
+    isModelSelectionProviderEnabled(settings, selection) &&
+    isTextGenerationTargetUsable(settings, providers, selection.instanceId)
+    ? selection
+    : settings.textGenerationModelSelection;
+}
+
 export interface PersistedServerObservabilitySettings {
   readonly otlpTracesUrl: string | undefined;
   readonly otlpMetricsUrl: string | undefined;
@@ -605,6 +618,9 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.speechPostProcessingModelSelection !== undefined
       ? { speechPostProcessingModelSelection: patch.speechPostProcessingModelSelection }
+      : {}),
+    ...(patch.promptCompletionModelSelection !== undefined
+      ? { promptCompletionModelSelection: patch.promptCompletionModelSelection }
       : {}),
     ...(patch.defaultProjectScripts !== undefined
       ? { defaultProjectScripts: patch.defaultProjectScripts }

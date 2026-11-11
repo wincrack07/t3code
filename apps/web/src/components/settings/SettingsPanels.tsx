@@ -106,6 +106,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { PromptSuggestionsSettings } from "./PromptSuggestionsSettings";
 import { searchableSetting } from "./settingsSearch";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { AdvancedSettings } from "./AdvancedSettings";
@@ -1186,6 +1187,8 @@ export function ChatSettingsPanel() {
           <SavedPromptsRow />
         </SettingsSection>
       )}
+
+      {scope.kind === "project" || scope.kind === "checkout" ? null : <PromptSuggestionsSettings />}
 
       <SettingsSection id="follow-ups" title="Follow-ups">
         <SettingsRow

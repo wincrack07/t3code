@@ -6,6 +6,8 @@ import {
   type ThreadMetadataMcpAction,
   type ThreadMetadataMcpUpdateInput,
   type ThreadMetadataMcpUpdateResult,
+  type ThreadOpenQuestionsMcpInput,
+  type ThreadOpenQuestionsMcpResult,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -25,6 +27,11 @@ export class ThreadMetadataMcpService extends Context.Service<
       scope: McpInvocationScope,
       input: ThreadMetadataMcpUpdateInput,
     ) => Effect.Effect<ThreadMetadataMcpUpdateResult, OrchestratorMcpFailure>;
+    /** Attaches or closes non-blocking questions on the caller's own thread. */
+    readonly openQuestions: (
+      scope: McpInvocationScope,
+      input: ThreadOpenQuestionsMcpInput,
+    ) => Effect.Effect<ThreadOpenQuestionsMcpResult, OrchestratorMcpFailure>;
   }
 >()("t3/mcp/ThreadMetadataMcpService") {}
 
@@ -43,7 +50,7 @@ function stablePart(value: string): string {
 function commandId(input: {
   readonly scope: McpInvocationScope;
   readonly threadId: ThreadId;
-  readonly action: ThreadMetadataMcpAction;
+  readonly action: ThreadMetadataMcpAction | "open-questions";
   readonly requestKey: string;
 }): CommandId {
   return CommandId.make(
@@ -220,7 +227,72 @@ const make = Effect.gen(function* () {
     });
   });
 
-  return ThreadMetadataMcpService.of({ update });
+  const openQuestions = Effect.fn("ThreadMetadataMcpService.openQuestions")(function* (
+    scope: McpInvocationScope,
+    input: ThreadOpenQuestionsMcpInput,
+  ) {
+    if (!scope.capabilities.has("orchestration")) {
+      return yield* failure(
+        "capability_denied",
+        "This MCP credential does not grant orchestration capabilities.",
+      );
+    }
+    const threadId = scope.thread?.threadId;
+    if (threadId === undefined) {
+      return yield* failure(
+        "target_required",
+        "Open questions attach to your own thread; this MCP client is not running inside one.",
+      );
+    }
+    const shell = yield* threadManagement
+      .getThreadShell(threadId)
+      .pipe(Effect.mapError((error) => failure("orchestration_error", errorMessage(error))));
+    if (shell === null || shell.deletedAt !== null) {
+      return yield* threadNotFound(threadManagement, threadId, `Thread ${threadId} was not found.`);
+    }
+    const known = new Set((shell.openQuestions ?? []).map((question) => question.id));
+    const unknown = (input.ids ?? []).filter((id) => !known.has(id));
+    if (unknown.length > 0) {
+      return yield* failure("invalid_request", `No open question with id ${unknown.join(", ")}.`);
+    }
+    const requestKey =
+      input.clientRequestId === undefined ? yield* random.uuidV4() : input.clientRequestId;
+    const dispatched = yield* threadManagement
+      .dispatch({
+        type: "thread.metadata.update",
+        commandId: commandId({ scope, threadId, action: "open-questions", requestKey }),
+        threadId,
+        openQuestions:
+          input.action === "declare"
+            ? {
+                action: "declare",
+                runId: shell.activeRunId ?? shell.latestRunId,
+                questions: input.questions ?? [],
+              }
+            : {
+                action: "set_status",
+                updates: (input.ids ?? []).map((id) => ({ id, status: "resolved" as const })),
+              },
+      })
+      .pipe(Effect.mapError((error) => failure("orchestration_error", errorMessage(error))));
+    const event = dispatched.storedEvents.find(
+      (stored) => stored.event.type === "thread.metadata-updated",
+    );
+    const thread =
+      event?.event.type === "thread.metadata-updated"
+        ? event.event.payload
+        : yield* threadManagement
+            .getThreadShell(threadId)
+            .pipe(Effect.mapError((error) => failure("orchestration_error", errorMessage(error))));
+    return {
+      threadId,
+      open: (thread?.openQuestions ?? [])
+        .filter((question) => question.status === "open")
+        .map((question) => question.id),
+    };
+  });
+
+  return ThreadMetadataMcpService.of({ update, openQuestions });
 });
 
 export const layer: Layer.Layer<

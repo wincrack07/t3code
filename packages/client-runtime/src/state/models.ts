@@ -186,6 +186,9 @@ export interface EnvironmentThreadShell {
   readonly pullRequests: ReadonlyArray<import("@t3tools/contracts").ThreadPullRequestLink>;
   readonly pinnedHtmlCards?: OrchestrationV2ThreadShell["pinnedHtmlCards"];
   readonly statusText?: string;
+  readonly openQuestions?: OrchestrationV2ThreadShell["openQuestions"];
+  /** Questions the agent left that the user has not answered or dismissed. */
+  readonly openQuestionCount?: number;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
   readonly branchPullRequest?: ThreadLinkedPullRequest | null;
   /**
@@ -199,6 +202,10 @@ export interface EnvironmentThreadShell {
   readonly titleRegeneration?: { readonly requestId: string; readonly startedAt: string } | null;
   readonly deletedAt: string | null;
   readonly source: OrchestrationV2ThreadShell;
+}
+
+function countOpenQuestions(questions: OrchestrationV2ThreadShell["openQuestions"]): number {
+  return questions?.filter((question) => question.status === "open").length ?? 0;
 }
 
 function iso(value: DateTime.Utc): string {
@@ -297,6 +304,8 @@ export function presentThreadShell(
     pullRequests: threadPullRequestsOf(thread),
     ...(thread.pinnedHtmlCards?.length ? { pinnedHtmlCards: thread.pinnedHtmlCards } : {}),
     ...(thread.statusText === undefined ? {} : { statusText: thread.statusText }),
+    ...(thread.openQuestions?.length ? { openQuestions: thread.openQuestions } : {}),
+    openQuestionCount: countOpenQuestions(thread.openQuestions),
     linkedPullRequest: thread.linkedPullRequest ?? null,
     branchPullRequest: thread.branchPullRequest ?? null,
     lineage: thread.lineage,

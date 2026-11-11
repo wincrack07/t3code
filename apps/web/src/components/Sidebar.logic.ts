@@ -661,6 +661,7 @@ type ThreadStatusInput = Pick<
   | "hasPendingUserInput"
   | "pendingSubagentRequest"
   | "pendingGuestMessageCount"
+  | "openQuestionCount"
   | "interactionMode"
   | "latestRun"
   | "runtime"
@@ -1153,6 +1154,16 @@ export function resolveThreadStatusPill(input: {
       label: "Waiting",
       colorClass: "text-sidebar-muted-foreground",
       dotClass: "bg-sidebar-muted-foreground",
+      pulse: false,
+    };
+  }
+
+  // Questions the agent left at the end of a finished reply wait on the user like a blocking one.
+  if ((thread.openQuestionCount ?? 0) > 0 && isLatestRunSettled(thread.latestRun, thread.runtime)) {
+    return {
+      label: "Awaiting Input",
+      colorClass: "text-indigo-600 dark:text-indigo-300/90",
+      dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
       pulse: false,
     };
   }

@@ -471,6 +471,24 @@ describe("resolveThreadStatusPill", () => {
     ).toMatchObject({ label: "Plan Ready", pulse: false });
   });
 
+  it("shows awaiting input for open questions only once the run has settled", () => {
+    const settled = {
+      ...baseThread,
+      openQuestionCount: 2,
+      latestRun: makeLatestRun(),
+      lastVisitedAt: "2026-03-09T10:04:00.000Z",
+      runtime: { ...baseThread.runtime, status: "completed" as const, activeRunId: null },
+    };
+    expect(resolveThreadStatusPill({ thread: settled })).toMatchObject({
+      label: "Awaiting Input",
+    });
+    expect(
+      resolveThreadStatusPill({
+        thread: { ...settled, runtime: { ...settled.runtime, status: "running" } },
+      }),
+    ).toMatchObject({ label: "Working" });
+  });
+
   it("does not manufacture completed state without a client visit marker", () => {
     expect(
       resolveThreadStatusPill({

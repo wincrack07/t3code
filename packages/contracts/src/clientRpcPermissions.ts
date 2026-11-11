@@ -30,6 +30,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.serverListTextGeneratorModels]: AuthSettingsWriteScope,
   // Runs a model on this environment's providers, as sending a prompt does.
   [WS_METHODS.serverPolishPrompt]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverCompletePrompt]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsRunAction]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsUpdate]: AuthSourceControlWriteScope,

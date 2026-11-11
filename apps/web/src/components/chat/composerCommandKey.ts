@@ -85,6 +85,13 @@ export function composerCommandKeyHandler(input: {
   /** Predicted next prompt that Tab fills into an empty composer; Escape dismisses it. */
   readonly promptSuggestion: string | null;
   readonly dismissPromptSuggestion: () => void;
+  /** Alt+] and Alt+[ step through several empty-composer suggestions; false when there is one. */
+  readonly cyclePromptSuggestion?: (direction: 1 | -1) => boolean;
+  /** Suggested continuation after the caret: Tab takes it, modifier+Right takes a word, Escape drops it. */
+  readonly inlineCompletion?: string | null;
+  /** The completion's next word, keeping the rest on show for the longer draft. */
+  readonly takeInlineCompletionWord?: () => string | null;
+  readonly dismissInlineCompletion?: () => void;
 }) {
   const {
     keybindings,
@@ -122,6 +129,10 @@ export function composerCommandKeyHandler(input: {
     submitComposer,
     promptSuggestion,
     dismissPromptSuggestion,
+    cyclePromptSuggestion,
+    inlineCompletion = null,
+    takeInlineCompletionWord,
+    dismissInlineCompletion,
   } = input;
 
   // The composer persists across threads. A recall from thread A must not
@@ -215,6 +226,47 @@ export function composerCommandKeyHandler(input: {
     const { trigger } = resolveActiveComposerTrigger();
     const menuIsActive =
       !isLiteralPendingAnswer && (composerMenuOpenRef.current || trigger !== null);
+    const composing = event.isComposing || event.keyCode === 229;
+    const plainKey = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    // The ghost only draws with a collapsed caret at the end of the draft; keys follow it.
+    const end =
+      inlineCompletion !== null && !menuIsActive && !composing && promptRef.current.length > 0
+        ? readComposerSnapshot().value.length
+        : null;
+    const selection = end === null ? undefined : composerEditorRef.current?.readSelectionRange();
+    if (
+      end !== null &&
+      inlineCompletion !== null &&
+      selection?.start === end &&
+      selection.end === end
+    ) {
+      if (key === "Tab" && plainKey) {
+        return applyPromptReplacement(end, end, inlineCompletion);
+      }
+      if (
+        key === "ArrowRight" &&
+        !event.shiftKey &&
+        (event.altKey || event.metaKey || event.ctrlKey)
+      ) {
+        const word = takeInlineCompletionWord?.() ?? inlineCompletion;
+        return applyPromptReplacement(end, end, word);
+      }
+      if (key === "Escape" && plainKey) {
+        dismissInlineCompletion?.();
+        return true;
+      }
+    }
+    if (
+      promptSuggestion !== null &&
+      promptRef.current.length === 0 &&
+      !menuIsActive &&
+      event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      (event.code === "BracketRight" || event.code === "BracketLeft")
+    ) {
+      return cyclePromptSuggestion?.(event.code === "BracketRight" ? 1 : -1) ?? false;
+    }
     if (key === "Escape") {
       if (event.isComposing || event.keyCode === 229) return false;
       if (!menuIsActive && promptSuggestion !== null && promptRef.current.length === 0) {
