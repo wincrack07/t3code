@@ -280,6 +280,7 @@ import {
   withUsageLimitsCommands,
 } from "@t3tools/shared/usageLimits";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
+import * as ClaudeArtifacts from "./provider/ClaudeArtifacts.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import { requestUrl } from "./requestUrl.ts";
@@ -1489,6 +1490,7 @@ export const layerWsRpc = (
         yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const projectEnrichment = yield* ProjectEnrichmentService.ProjectEnrichmentService;
       const agentSessionScanner = yield* AgentSessionScanner.AgentSessionScanner;
+      const claudeArtifacts = yield* ClaudeArtifacts.ClaudeArtifacts;
       const agentSessionImporter = yield* AgentSessionImporter.AgentSessionImporter;
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const nativeChildWork = yield* NativeChildWorkQuery.NativeChildWorkQuery;
@@ -3074,6 +3076,10 @@ export const layerWsRpc = (
         [WS_METHODS.agentSessionsScan]: () => agentSessionScanner.scan,
         [WS_METHODS.agentSessionsImport]: (input) =>
           agentSessionImporter.importRecentAgentThreads(input),
+        [WS_METHODS.claudeArtifactsList]: (input) =>
+          Effect.annotateCurrentSpan({ instanceId: input.instanceId }).pipe(
+            Effect.andThen(claudeArtifacts.list(input)),
+          ),
         [WS_METHODS.assetsCreateUrl]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(function* (input) {
@@ -3548,6 +3554,7 @@ export const layer = Layer.unwrap(
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const npmRelease = yield* NpmRelease.NpmRelease;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const claudeArtifacts = yield* ClaudeArtifacts.ClaudeArtifacts;
     const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
     const peerLinks = yield* PeerLinks.PeerLinks;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
@@ -3631,6 +3638,8 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
               // Share server-lifetime PR caches so WS mutations invalidate every client's HTTP diffs.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              // One listing cache for every client, so reopening the gallery does not refetch.
+              Layer.provide(Layer.succeed(ClaudeArtifacts.ClaudeArtifacts, claudeArtifacts)),
               Layer.provide(OtlpEndpointCheck.layer),
               Layer.provide(PromptPolish.layer),
               Layer.provide(PromptCompletion.layer),

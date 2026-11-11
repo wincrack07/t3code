@@ -1334,6 +1334,13 @@ export function createServerEnvironmentAtoms<R, E>(
       execute: (input: EnvironmentRpcInput<typeof WS_METHODS.serverGetHostResources>) =>
         request(WS_METHODS.serverGetHostResources, input).pipe(Effect.timeout("5 seconds")),
     }),
+    // The server caches each account's listing for a minute; this only avoids refetching on remount.
+    claudeArtifacts: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:claude-artifacts:list",
+      tag: WS_METHODS.claudeArtifactsList,
+      staleTimeMs: 60_000,
+      idleTtlMs: 5 * 60_000,
+    }),
     processResourceHistory: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:process-resource-history",
       tag: WS_METHODS.serverGetProcessResourceHistory,

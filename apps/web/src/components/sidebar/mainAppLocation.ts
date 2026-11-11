@@ -10,7 +10,10 @@ export function isAppModalPage(pathname: string) {
 
 export function isSidebarUtilityPage(pathname: string) {
   return (
-    pathname.startsWith("/projects/") || pathname === "/pull-requests" || pathname === "/activity"
+    pathname.startsWith("/projects/") ||
+    pathname === "/pull-requests" ||
+    pathname === "/activity" ||
+    pathname === "/artifacts"
   );
 }
 
