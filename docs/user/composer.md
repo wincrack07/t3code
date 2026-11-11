@@ -440,3 +440,15 @@ including filenames or folders containing `#` or `?`.
 
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.
+
+## Preview automatic routing
+
+Settings → Labs → Decisions lets you test routing prompts without starting work. Enable the
+preview, choose a configured provider model or enter an OpenAI API key and model, then add rules
+in priority order. A restrict rule narrows the choices; a decide rule selects the first matching
+usable choice. Provider-instance allowlists can separate personal and work accounts.
+
+Enter a project ID and task in Test a prompt to see the proposed provider, model, effort,
+environment, and reason. The preview currently considers the selected server's providers.
+Failed or invalid model answers return a fallback result. The preview does not change composer
+selections or start tasks.
