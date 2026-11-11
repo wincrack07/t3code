@@ -1,5 +1,4 @@
-import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
-import { formatContextWindowTokens } from "../../lib/contextWindow";
+import { ContextUsageControl } from "./ContextUsageControl";
 import { VoiceInputSetup } from "./VoiceInputSetup";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
@@ -3820,43 +3819,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 </div>
               </div>
               {props.contextTokens != null ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent disabled:opacity-50"
-                        aria-label="Compact context"
-                        disabled={compactDisabled || compactThreadUnavailable}
-                        onClick={compactThreadContextStable}
-                      />
-                    }
-                  >
-                    <svg className="size-3.5" viewBox="0 0 16 16" aria-hidden="true">
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="var(--primary)"
-                        strokeWidth="2"
-                        pathLength="100"
-                        strokeDasharray={`${props.contextPercentage ?? 0} 100`}
-                        transform="rotate(-90 8 8)"
-                      />
-                    </svg>
-                    {formatContextWindowTokens(props.contextTokens)}
-                  </TooltipTrigger>
-                  <TooltipPopup>Compact context</TooltipPopup>
-                </Tooltip>
+                <ContextUsageControl
+                  tokens={props.contextTokens}
+                  percentage={props.contextPercentage ?? null}
+                  compactDisabled={compactDisabled || compactThreadUnavailable}
+                  onCompact={compactThreadContextStable}
+                />
               ) : null}
             </div>
           </div>

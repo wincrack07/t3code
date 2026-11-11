@@ -22,6 +22,7 @@ import {
 } from "../../session-logic";
 import {
   type ChatFileAttachment,
+  type ChatImageAttachment,
   isFileAttachment,
   isImageAttachment,
   isVideoAttachment,
@@ -175,15 +176,7 @@ function UserFileCard({
   );
 }
 
-function UserVideoAttachment({
-  file,
-  standalone = false,
-  cornerClassName,
-}: {
-  readonly file: ChatFileAttachment;
-  readonly standalone?: boolean;
-  readonly cornerClassName?: string | undefined;
-}) {
+function UserVideoAttachment({ file }: { readonly file: ChatFileAttachment }) {
   const ctx = use(TimelineRowCtx);
   // Row updates rebuild attachment objects, so the asset follows only the
   // fields it reads.
@@ -200,20 +193,13 @@ function UserVideoAttachment({
 
   if (asset === null && src === null) {
     return (
-      <div
-        className={cn(
-          "flex aspect-[4/3] w-full items-center justify-center bg-black px-2 py-3 text-center text-2xs text-white/70",
-          standalone
-            ? cn(MEDIA_EDGE_CLASS_NAME, "rounded-2xl", cornerClassName)
-            : "rounded-lg border border-border/80",
-        )}
-      >
+      <div className="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-border/80 bg-black px-2 py-3 text-center text-2xs text-white/70">
         {file.name}
       </div>
     );
   }
 
-  const player = (
+  return (
     <MediaVideoPlayer
       src={src}
       sourceFailed={
@@ -226,24 +212,44 @@ function UserVideoAttachment({
         if (preview) ctx.onImageExpand(preview);
       }}
       className="block aspect-[4/3] w-full"
-      videoClassName={cn(
-        "aspect-auto size-full",
-        !standalone && "rounded-lg border border-border/80",
-      )}
-      stateClassName={cn(
-        "aspect-auto min-h-full bg-black text-white",
-        !standalone && "rounded-lg border border-border/80",
-      )}
+      videoClassName="aspect-auto size-full rounded-lg border border-border/80"
+      stateClassName="aspect-auto min-h-full rounded-lg border border-border/80 bg-black text-white"
       onRetry={asset ? refreshAssetUrl : undefined}
       actionsSource={asset ? { kind: "video", name: file.name, src, asset } : undefined}
     />
   );
-  return standalone ? (
-    <div className={cn(MEDIA_EDGE_CLASS_NAME, "overflow-hidden rounded-2xl", cornerClassName)}>
-      {player}
-    </div>
-  ) : (
-    player
+}
+
+function ImageThumbnailButton({
+  image,
+  onOpen,
+  fit,
+}: {
+  readonly image: ChatImageAttachment;
+  readonly onOpen: () => void;
+  readonly fit: "tile" | "frame";
+}) {
+  return (
+    <button
+      type="button"
+      className="flex size-full cursor-zoom-in items-center justify-center"
+      aria-label={`Preview ${image.name}`}
+      onClick={onOpen}
+    >
+      {/* Isolate the thumbnail raster from nearby activity repaints in Chromium. */}
+      <AttachmentImage
+        name={image.name}
+        mimeType={image.mimeType}
+        src={image.previewUrl ?? ""}
+        alt={image.name}
+        decoding="async"
+        loading="lazy"
+        className={cn(
+          "block h-auto w-auto transform-gpu object-contain",
+          fit === "tile" ? "max-h-full max-w-full" : "max-h-48 max-w-full",
+        )}
+      />
+    </button>
   );
 }
 
@@ -497,26 +503,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     unchippedFiles.length === 0 &&
     unknownAttachments.length === 0 &&
     regularImages.length + userVideos.length > 0;
-  // Media sent with words sits above the bubble as its own shape, like a chat app.
-  const mediaAboveText =
-    !folded &&
-    userMessage.attribution !== "guest" &&
-    !mediaOnly &&
-    regularImages.length + userVideos.length > 0;
-  const standaloneMedia = mediaOnly || mediaAboveText;
-  // A lone image keeps its own shape; a 4:3 crop hides most of a wide screenshot.
-  const loneImage = standaloneMedia && userVideos.length === 0 && regularImages.length === 1;
-  // Several images share one rounded shape, split by hairlines.
-  const collage =
-    standaloneMedia &&
-    userVideos.length === 0 &&
-    regularImages.length > 1 &&
-    regularImages.every((image) => image.source?.kind !== "snap-shot");
-  // Corners that touch the bubble or a neighbouring message tighten, like the bubble's.
-  const mediaCornerClassName = cn(
-    row.groupedWithPrevious && "rounded-tr-md",
-    (mediaAboveText || row.groupedWithNext) && "rounded-br-md",
-  );
   // Files sent without words show as cards, not as a bubble around a name chip.
   const fileCardsOnly =
     !folded &&
@@ -662,124 +648,70 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     );
   };
 
+  // Thumbnails show each image at its own size inside a fixed tile, so a small
+  // screenshot is never blown up and the row height is known before it loads.
   const mediaBlock =
     regularImages.length > 0 || userVideos.length > 0 ? (
-      <div
-        className={cn(
-          "grid",
-          !standaloneMedia
-            ? "mb-2 max-w-[210px] grid-cols-2 gap-2"
-            : loneImage
-              ? "max-w-full"
-              : collage
-                ? cn(
-                    MEDIA_EDGE_CLASS_NAME,
-                    "w-80 max-w-full gap-px overflow-hidden rounded-2xl bg-black/9 dark:bg-white/12",
-                    mediaCornerClassName,
-                    regularImages.length === 2
-                      ? "auto-rows-[12rem] grid-cols-2"
-                      : regularImages.length === 3
-                        ? "auto-rows-[calc(6rem-0.5px)] grid-cols-[3fr_2fr]"
-                        : "auto-rows-[6rem] grid-cols-2",
-                  )
-                : regularImages.length + userVideos.length === 1
-                  ? "w-80 max-w-full"
-                  : "w-80 max-w-full grid-cols-2 gap-2",
-        )}
-      >
-        {regularImages.map((image, index) => (
-          <div
-            key={image.id}
-            className={cn(
-              "bg-background/70",
-              image.source?.kind === "snap-shot" && image.previewUrl
-                ? cn(
-                    "col-span-2",
-                    standaloneMedia
-                      ? cn(
-                          MEDIA_EDGE_CLASS_NAME,
-                          "min-h-16 justify-self-end overflow-hidden rounded-2xl",
-                          loneImage && mediaCornerClassName,
-                        )
-                      : SNAP_SHOT_ATTACHMENT_FRAME_CLASS,
-                  )
-                : loneImage
-                  ? cn(MEDIA_EDGE_CLASS_NAME, "overflow-hidden rounded-2xl", mediaCornerClassName)
-                  : collage
-                    ? cn(
-                        "overflow-hidden bg-background",
-                        regularImages.length === 3 && index === 0 && "row-span-2",
-                        regularImages.length > 3 &&
-                          regularImages.length % 2 === 1 &&
-                          index === regularImages.length - 1 &&
-                          "col-span-2",
-                      )
-                    : standaloneMedia
-                      ? cn(MEDIA_EDGE_CLASS_NAME, "aspect-[4/3] overflow-hidden rounded-2xl")
-                      : "aspect-[4/3] overflow-hidden rounded-lg border border-border/80",
-            )}
-          >
-            {image.previewUrl ? (
-              <button
-                type="button"
-                className="block h-full w-full cursor-zoom-in"
-                aria-label={`Preview ${image.name}`}
-                onClick={() => {
+      <div className={cn("flex flex-wrap gap-2", !mediaOnly && "mb-2")}>
+        {regularImages.map((image) =>
+          image.source?.kind === "snap-shot" && image.previewUrl ? (
+            <div
+              key={image.id}
+              className={cn(SNAP_SHOT_ATTACHMENT_FRAME_CLASS, "w-80 max-w-full bg-background/70")}
+            >
+              <ImageThumbnailButton
+                image={image}
+                onOpen={() => {
                   const preview = buildExpandedImagePreview(regularImages, image.id);
-                  if (!preview) return;
-                  ctx.onImageExpand(preview);
+                  if (preview) ctx.onImageExpand(preview);
                 }}
-              >
-                {/* Isolate the thumbnail raster from nearby activity repaints in Chromium. */}
-                <AttachmentImage
-                  name={image.name}
-                  mimeType={image.mimeType}
-                  src={image.previewUrl}
-                  alt={image.name}
-                  decoding="async"
-                  loading="lazy"
-                  className={cn(
-                    "block transform-gpu",
-                    standaloneMedia && image.source?.kind === "snap-shot"
-                      ? "h-auto max-h-48 w-auto min-w-24 max-w-full object-contain"
-                      : loneImage
-                        ? "h-48 w-auto min-w-24 max-w-full object-cover"
-                        : "size-full object-cover",
-                  )}
-                />
-              </button>
-            ) : (
-              <div
-                className={cn(
-                  "flex min-h-[72px] items-center justify-center px-2 py-3 text-center text-2xs text-muted-foreground/70",
-                  loneImage && "h-48 w-64 max-w-full",
-                  collage && "h-full",
-                )}
-              >
-                {image.name}
-              </div>
-            )}
-            {image.previewUrl && image.source?.kind === "snap-shot" ? (
+                fit="frame"
+              />
               <SnapShotAttachmentDetails source={image.source} />
-            ) : null}
-          </div>
-        ))}
+            </div>
+          ) : (
+            <div
+              key={image.id}
+              className={cn(
+                MEDIA_EDGE_CLASS_NAME,
+                "flex h-30 w-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-background/60",
+              )}
+            >
+              {image.previewUrl ? (
+                <ImageThumbnailButton
+                  image={image}
+                  onOpen={() => {
+                    const preview = buildExpandedImagePreview(regularImages, image.id);
+                    if (preview) ctx.onImageExpand(preview);
+                  }}
+                  fit="tile"
+                />
+              ) : (
+                <span className="truncate px-2 text-center text-2xs text-muted-foreground/70">
+                  {image.name}
+                </span>
+              )}
+            </div>
+          ),
+        )}
         {userVideos.map((file) => (
-          <UserVideoAttachment
-            key={file.id}
-            file={file}
-            standalone={standaloneMedia}
-            cornerClassName={
-              regularImages.length + userVideos.length === 1 ? mediaCornerClassName : undefined
-            }
-          />
+          <div key={file.id} className="w-40 shrink-0">
+            <UserVideoAttachment file={file} />
+          </div>
         ))}
       </div>
     ) : null;
 
   // Touch shows actions all the time, and narrow lanes have no room beside the
   // bubble, so both keep the actions on their own line.
-  const floatActions = row.groupedWithNext === true && !coarsePointer;
+  const steerIntent =
+    (row.message.inputIntent === "steer" ||
+      row.message.inputIntent === "promoted_queued_to_steer") &&
+    !row.continuesSteer
+      ? row.message.inputIntent
+      : null;
+  // A marker has to stay readable, so its row keeps the meta line under the bubble.
+  const floatActions = row.groupedWithNext === true && !coarsePointer && steerIntent === null;
   const messageActions = (
     <div
       className={cn(
@@ -787,6 +719,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         floatActions ? "flex-wrap" : "shrink-0",
       )}
     >
+      {steerIntent ? <UserMessageIntentMarker intent={steerIntent} /> : null}
       {folded && senderThreadId ? (
         <InlineButton onClick={() => ctx.onOpenThread(senderThreadId)} tone="muted">
           Open thread
@@ -800,7 +733,12 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
         </TooltipPopup>
       </Tooltip>
-      <div className={cn("flex items-center gap-0.5", floatActions && "flex-wrap justify-end")}>
+      <div
+        className={cn(
+          "flex items-center gap-0.5",
+          floatActions ? "flex-wrap justify-end" : ACTIONS_REVEAL_CLASS_NAME,
+        )}
+      >
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
         )}
@@ -847,41 +785,27 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           <GuestMessageName name={userMessage.guestName} />
         </div>
       ) : null}
-      {(row.message.inputIntent === "steer" ||
-        row.message.inputIntent === "promoted_queued_to_steer") &&
-      !row.continuesSteer ? (
-        <UserMessageIntentMarker intent={row.message.inputIntent} />
-      ) : null}
-      {mediaAboveText ? (
-        <div className="flex max-w-[80%] justify-end">
-          {/* The heading leads the media so screen readers reach it before the images. */}
-          <MessageAuthorHeading>You</MessageAuthorHeading>
-          {mediaBlock}
-        </div>
-      ) : null}
       <div
         className={cn(
-          "relative min-w-0 max-w-[80%] rounded-2xl text-message-foreground",
-          (mediaAboveText || row.groupedWithPrevious) && "rounded-tr-md",
+          "relative w-fit min-w-0 max-w-[72%] rounded-2xl text-message-foreground",
+          row.groupedWithPrevious && "rounded-tr-md",
           row.groupedWithNext && "rounded-br-md",
           BUBBLE_CHIP_CLASS_NAME,
           userMessage.attribution === "guest"
             ? guestBubbleClassName(false)
-            : !mediaOnly && !fileCardsOnly && !audioOnly && "bg-message",
-          !folded && !mediaOnly && !fileCardsOnly && !audioOnly && "p-3",
+            : !fileCardsOnly && !audioOnly && "bg-message",
+          !folded && !fileCardsOnly && !audioOnly && (mediaOnly ? "p-2" : "px-4 py-3"),
           folded && expanded && "w-full",
         )}
       >
         {/* Outside the fold so a collapsed message still has a heading to navigate to. */}
-        {mediaAboveText ? null : (
-          <MessageAuthorHeading>
-            {folded
-              ? senderLabel
-              : userMessage.guestName === undefined
-                ? "You"
-                : `${userMessage.guestName} (guest)`}
-          </MessageAuthorHeading>
-        )}
+        <MessageAuthorHeading>
+          {folded
+            ? senderLabel
+            : userMessage.guestName === undefined
+              ? "You"
+              : `${userMessage.guestName} (guest)`}
+        </MessageAuthorHeading>
         {folded ? (
           <FoldedMessageHeader
             icon={MessagesSquareIcon}
@@ -902,7 +826,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               folded && !ctx.findActive && "max-h-96 overflow-auto",
             )}
           >
-            {!mediaAboveText && mediaBlock}
+            {mediaBlock}
             {userAudio.length > 0 ? (
               <div className={cn("flex max-w-full flex-col gap-1", !audioOnly && "mb-2")}>
                 {userAudio.map((file) => (
@@ -1036,9 +960,8 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       {!folded || expanded ? (
         <div
           className={cn(
-            "flex w-full max-w-[80%] justify-end pe-1",
+            "flex w-full max-w-[72%] items-center justify-end pe-1 text-xs tabular-nums",
             floatActions && "@min-[37rem]:hidden",
-            ACTIONS_REVEAL_CLASS_NAME,
           )}
         >
           {messageActions}
