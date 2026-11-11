@@ -66,6 +66,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  LayoutGridIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -1697,6 +1698,17 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "usage.open",
     run: async () => {
       await navigate({ to: "/usage" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:artifacts",
+    searchTerms: ["artifacts", "claude", "gallery", "pages", "published", "claude.ai"],
+    title: "Open Claude artifacts",
+    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/artifacts" });
     },
   });
 

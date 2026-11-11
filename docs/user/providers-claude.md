@@ -85,6 +85,18 @@ Claude Code holds the turn until that window reopens, so it can keep showing as
 working. Wait for the reset, or stop the turn and continue later. The warning's
 timestamp shows when the displayed wait started.
 
+## Artifacts
+
+**Artifacts** in the sidebar, or "Open Claude artifacts" in the command palette,
+shows the claude.ai artifacts of each Claude account on the server. Pick one
+account or all of them, then filter by yours or shared with you. Clicking a card
+opens it on claude.ai in your browser.
+
+The list uses the account's claude.ai login. On macOS, where Claude keeps that
+login in the Keychain, the list is not available yet. If the login has expired,
+run a Claude turn with that account to refresh it. New artifacts can take a
+minute to appear.
+
 ## Skills
 
 Claude skills come from the config directory's `skills` folder and the project's
