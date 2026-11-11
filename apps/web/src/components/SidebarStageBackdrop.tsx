@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentIdentificationMode } from "@t3tools/contracts";
 import { useId } from "react";
 
+import sally from "../assets/sally.svg";
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
@@ -56,6 +57,9 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
       className="sidebar-stage-backdrop pointer-events-none absolute inset-x-0 top-0 z-0 h-20 select-none overflow-hidden"
     >
       <StageBackdropArt variant={variant} />
+      {variant === "nightly" && (
+        <img src={sally} alt="" className="absolute right-2 bottom-[-8px] h-10 w-10 opacity-80" />
+      )}
     </div>
   );
 }
