@@ -147,6 +147,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --composer-control-inset: calc(var(--spacing) * 1);
   --composer-body-pad-y: calc(var(--spacing) * 2);
   --composer-tile-radius: var(--radius);
+  --user-bubble-radius: calc(var(--radius) + 8px);
+  --user-bubble-measure: 72%;
   /* The prompt on phones: iOS zooms into any input under 16px on focus. */
   --font-size-prompt-touch: max(var(--font-size-prompt, 1rem), 16px);
   /* Horizontal gutter shared by the page header and the chat column, clear of
@@ -1969,6 +1971,26 @@ html[data-theme-id="claude"] {
     --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
     --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
   }
+}
+
+/* Messages: 15/21 replies, a 12px user bubble up to 85% wide, 13/19 code in
+   12px blocks. A reply size chosen in Appearance still wins (inline style). */
+html[data-theme-id="claude"] {
+  --font-size-reply: 0.9375rem;
+  --user-bubble-radius: 0.75rem;
+  --user-bubble-measure: 85%;
+}
+
+html[data-theme-id="claude"] [data-assistant-reply] .chat-markdown {
+  line-height: 1.4;
+}
+
+html[data-theme-id="claude"] .chat-markdown pre {
+  line-height: 1.4615;
+}
+
+html[data-theme-id="claude"] :is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock {
+  border-radius: 0.75rem;
 }
 
 html[data-theme-id="claude"] [data-slot="composer-shell"] {
