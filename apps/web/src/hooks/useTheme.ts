@@ -41,7 +41,7 @@ type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 const STORAGE_KEY = "t3code:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
-  theme: "system",
+  theme: import.meta.env.VITE_RELEASE_CHANNEL === "nightly" ? "claude" : "system",
   resolvedTheme: "light",
   systemDark: false,
   followSystem: true,
@@ -152,7 +152,7 @@ function readStoredFollowSystem(theme: Theme): boolean {
     if (raw === "false") return false;
   } catch {}
 
-  return theme === "system";
+  return theme === "system" || theme === "claude";
 }
 
 function isThemePreferenceMode(value: string | null): value is ThemePreferenceMode {

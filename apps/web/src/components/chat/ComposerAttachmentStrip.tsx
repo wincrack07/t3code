@@ -6,7 +6,7 @@ import type {
   SnapShotSource,
 } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { CircleAlertIcon, PaperclipIcon, PlayIcon, XIcon } from "lucide-react";
+import { CircleAlertIcon, PlusIcon, PlayIcon, XIcon } from "lucide-react";
 import { type ComponentProps, useLayoutEffect, useRef } from "react";
 
 import {
@@ -31,6 +31,7 @@ import { AttachmentFilePreview } from "../files/AttachmentFilePreview";
 import { AttachmentImage } from "../media/AttachmentImage";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
+import { Menu, MenuTrigger, MenuPopup, MenuItem } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { composerFloatingLayerProps } from "./composerEventScope";
@@ -694,24 +695,18 @@ export function ComposerAttachButton({
           });
         }}
       />
-      <Tooltip>
-        <TooltipTrigger
+      <Menu>
+        <MenuTrigger
           render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => inputRef.current?.click()}
-              aria-label="Attach files"
-            />
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="Add to message" />
           }
         >
-          {/* The clip's weight sits in its upper loop; 1px down reads as centered on the row. */}
-          <PaperclipIcon className="translate-y-px" />
-        </TooltipTrigger>
-        <TooltipPopup>Attach files</TooltipPopup>
-      </Tooltip>
+          <PlusIcon />
+        </MenuTrigger>
+        <MenuPopup align="start" {...composerFloatingLayerProps}>
+          <MenuItem onClick={() => inputRef.current?.click()}>Attach files</MenuItem>
+        </MenuPopup>
+      </Menu>
     </>
   );
 }

@@ -139,11 +139,11 @@ export function ComposerControlsBar(props: {
     overflowShowsPermissions,
     pickerOwnsModeShortcut,
   } = resolveComposerControlsOwnership({
-    matchesDefault: accessMatchesDefault || props.permissionsShownInStrip,
+    matchesDefault: false,
     collapsed: composerControlsCollapsed,
     measuredHiddenBlockCount,
   });
-  const controlSize = composerControlsCollapsed ? "xs" : "sm";
+  const controlSize = "xs";
   const applyThreadModelPick = useApplyThreadModelPick();
   const applyRouteThreadModelPick = useStableCallback(() => applyThreadModelPick(routeThreadRef));
   const traitsInput = resolveComposerTraitsInput({
