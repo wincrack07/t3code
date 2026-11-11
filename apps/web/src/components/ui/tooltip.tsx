@@ -148,6 +148,7 @@ function TooltipPopup({
             className,
           )}
           data-slot="tooltip-popup"
+          data-variant={variant}
           {...props}
         >
           <div className="min-w-0 px-2 py-1" data-slot="tooltip-viewport">
