@@ -1745,7 +1745,7 @@ export default function ChatView(props: ChatViewProps) {
     !embedded &&
     shouldShowComposerContextStrip({
       isDraftHeroState,
-      persistInActiveThreads: settings.persistComposerContextStrip,
+      persistInActiveThreads: isMobileViewport ? settings.persistComposerContextStrip : true,
       hasActiveProject: activeProject !== null && !showProviderSubagentBar,
       isGitRepo,
       showEnvironmentIndicator: showComposerEnvironmentIndicator,
@@ -3573,6 +3573,67 @@ export default function ChatView(props: ChatViewProps) {
                             ) : null}
                             {!composerMounted ? null : (
                               <ChatComposer
+                                locationControls={
+                                  showComposerContextStrip ? (
+                                    <BranchToolbar
+                                      forceNewWorktree={multipleModelSelections !== null}
+                                      ref={branchToolbarRef}
+                                      environmentId={activeThread.environmentId}
+                                      threadId={activeThread.id}
+                                      projectId={activeThread.projectId}
+                                      worktreePath={activeThread.worktreePath}
+                                      isServerThread={isServerThread}
+                                      showGitControls={isGitRepo}
+                                      {...(routeKind === "draft" && draftId ? { draftId } : {})}
+                                      onEnvModeChange={onEnvModeChangeStable}
+                                      startFromOrigin={startFromOrigin}
+                                      onStartFromOriginChange={onStartFromOriginChange}
+                                      envMode={envMode}
+                                      {...(canOverrideServerThreadEnvMode
+                                        ? {
+                                            activeThreadBranchOverride: activeThreadBranch,
+                                            onActiveThreadBranchOverrideChange:
+                                              setPendingServerThreadBranch,
+                                          }
+                                        : {})}
+                                      envLocked={envLocked}
+                                      onComposerFocusRequest={scheduleComposerFocusStable}
+                                      {...(canCheckoutPullRequestIntoThread
+                                        ? {
+                                            onCheckoutPullRequestRequest:
+                                              openPullRequestDialogStable,
+                                          }
+                                        : {})}
+                                      {...(canChangeEnvironment
+                                        ? { onEnvironmentChange: onEnvironmentChangeStable }
+                                        : {})}
+                                      autoEnvironmentLabel={autoEnvironmentLabel}
+                                      onAutoEnvironment={
+                                        draftId &&
+                                        !envLocked &&
+                                        canAutoBalanceEnvironments &&
+                                        loadBalancingSettings.loadBalancingEnabled
+                                          ? onAutoEnvironmentStable
+                                          : undefined
+                                      }
+                                      availableEnvironments={logicalProjectEnvironments}
+                                      trailing={
+                                        isMobileViewport && !isServerThread ? (
+                                          <ComposerContextPermissions
+                                            environmentId={environmentId}
+                                            runtimeMode={runtimeMode}
+                                            supportedRuntimeModes={
+                                              activeProviderStatus?.supportedRuntimeModes
+                                            }
+                                            onRuntimeModeChange={handleRuntimeModeChangeStable}
+                                          />
+                                        ) : undefined
+                                      }
+                                    />
+                                  ) : null
+                                }
+                                contextTokens={activeContextWindow?.usedTokens ?? null}
+                                contextPercentage={activeContextWindow?.usedPercentage ?? null}
                                 canOperateThread={canOperateThread}
                                 reportedModelSelection={reportedModelSelection}
                                 multipleModelSelections={multipleModelSelections}
@@ -3689,7 +3750,7 @@ export default function ChatView(props: ChatViewProps) {
                                 }
                                 onComposerOverlayHeightChange={publishComposerOverlayHeightStable}
                                 permissionsShownInStrip={
-                                  showComposerContextStrip && !isServerThread
+                                  isMobileViewport && showComposerContextStrip && !isServerThread
                                 }
                                 promptRef={promptRef}
                                 composerImagesRef={composerImagesRef}
@@ -3732,71 +3793,6 @@ export default function ChatView(props: ChatViewProps) {
                             )}
                           </div>
                         </ComposerSurface.Host>
-                        <div className="min-h-0">
-                          <div
-                            data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
-                            className="relative z-0"
-                          >
-                            {showComposerContextStrip && (
-                              <div className="pointer-events-auto">
-                                <BranchToolbar
-                                  forceNewWorktree={multipleModelSelections !== null}
-                                  ref={branchToolbarRef}
-                                  environmentId={activeThread.environmentId}
-                                  threadId={activeThread.id}
-                                  projectId={activeThread.projectId}
-                                  worktreePath={activeThread.worktreePath}
-                                  isServerThread={isServerThread}
-                                  showGitControls={isGitRepo}
-                                  {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                  onEnvModeChange={onEnvModeChangeStable}
-                                  startFromOrigin={startFromOrigin}
-                                  onStartFromOriginChange={onStartFromOriginChange}
-                                  envMode={envMode}
-                                  {...(canOverrideServerThreadEnvMode
-                                    ? {
-                                        activeThreadBranchOverride: activeThreadBranch,
-                                        onActiveThreadBranchOverrideChange:
-                                          setPendingServerThreadBranch,
-                                      }
-                                    : {})}
-                                  envLocked={envLocked}
-                                  onComposerFocusRequest={scheduleComposerFocusStable}
-                                  {...(canCheckoutPullRequestIntoThread
-                                    ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
-                                    : {})}
-                                  {...(canChangeEnvironment
-                                    ? { onEnvironmentChange: onEnvironmentChangeStable }
-                                    : {})}
-                                  autoEnvironmentLabel={autoEnvironmentLabel}
-                                  onAutoEnvironment={
-                                    draftId &&
-                                    !envLocked &&
-                                    canAutoBalanceEnvironments &&
-                                    loadBalancingSettings.loadBalancingEnabled
-                                      ? onAutoEnvironmentStable
-                                      : undefined
-                                  }
-                                  availableEnvironments={logicalProjectEnvironments}
-                                  {...(isServerThread
-                                    ? {}
-                                    : {
-                                        trailing: (
-                                          <ComposerContextPermissions
-                                            environmentId={environmentId}
-                                            runtimeMode={runtimeMode}
-                                            supportedRuntimeModes={
-                                              activeProviderStatus?.supportedRuntimeModes
-                                            }
-                                            onRuntimeModeChange={handleRuntimeModeChangeStable}
-                                          />
-                                        ),
-                                      })}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
                       </ComposerSurface.Shell>
                       {isDraftHeroState && composerBannerItems.length > 0 ? (
                         // Out of flow, like the headline, so a notice never moves the centered composer.

@@ -40,6 +40,7 @@ function runBootScript(options: {
   storage?: Record<string, string>;
   storageThrows?: boolean;
   prefersDark: boolean;
+  channel?: string;
 }): BootResult {
   const classes = new Set<string>();
   const bootVariables: Record<string, string> = {};
@@ -87,7 +88,12 @@ function runBootScript(options: {
       property === "color" && toCanonicalThemeColor(value) !== null,
   };
 
-  new Function("window", "document", "CSS", bootScript)(fakeWindow, fakeDocument, fakeCss);
+  new Function(
+    "window",
+    "document",
+    "CSS",
+    bootScript.replaceAll("%VITE_RELEASE_CHANNEL%", options.channel ?? "stable"),
+  )(fakeWindow, fakeDocument, fakeCss);
 
   return {
     isDark: classes.has("dark"),
@@ -146,6 +152,22 @@ const CHARCOAL_DARK_ONLY = {
 };
 
 describe("index.html boot script", () => {
+  it("defaults only unselected nightly installs to Claude and follows the OS", () => {
+    for (const prefersDark of [false, true]) {
+      const boot = runBootScript({ channel: "nightly", prefersDark });
+      expect(boot.themeId).toBe("claude");
+      expect(boot.isDark).toBe(prefersDark);
+      expect(boot.backgroundColor).toBe(prefersDark ? "#191919" : "#faf9f5");
+      for (const theme of ["system", "grove", "t3-chat"]) {
+        const stored = { [THEME_STORAGE_KEY]: theme };
+        expect(runBootScript({ channel: "nightly", prefersDark, storage: stored })).toEqual(
+          runBootScript({ channel: "stable", prefersDark, storage: stored }),
+        );
+      }
+    }
+    expect(runBootScript({ channel: "stable", prefersDark: false }).themeId).toBeUndefined();
+  });
+
   const parityCases: ReadonlyArray<{
     name: string;
     storage: Record<string, string>;

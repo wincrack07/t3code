@@ -21,6 +21,7 @@ import {
   resolveThemeAppearance,
   serializeThemeFile,
   T3_CHAT_THEME,
+  CLAUDE_THEME,
   GROVE_THEME,
   updateCustomTheme,
   updateThemeColorFamily,
@@ -70,6 +71,23 @@ describe("theme files", () => {
     const night = parseThemeFile({ ...file, name: "夜" });
     expect(parseThemeFile({ ...file, name: "朝" }).id).not.toBe(night.id);
     expect(parseThemeFile({ ...file, name: " 夜 " }).id).toBe(night.id);
+  });
+
+  it("keeps Claude body and secondary text readable on its surfaces", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const colors = getThemeColorsForMode(CLAUDE_THEME, mode)!;
+      for (const surface of [
+        colors.canvas,
+        colors.surface,
+        colors.surfaceRaised,
+        colors.surfaceOverlay,
+        colors.sidebar,
+      ]) {
+        expect(contrastRatio(colors.text, surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrastRatio(colors.accentForeground, colors.accent)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("keeps built-in and standard search pairs readable and distinct from inline code", () => {

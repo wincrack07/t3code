@@ -51,6 +51,20 @@
         // Keep this small boot-time copy in sync with the built-in palettes so
         // the selected theme is visible before the app has mounted.
         const BUILT_IN_THEME_PALETTES = {
+          claude: {
+            light: {
+              background: "#faf9f5",
+              foreground: "#35332e",
+              accent: "#b44f30",
+              chrome: "#f0eee6",
+            },
+            dark: {
+              background: "#191919",
+              foreground: "#e5e5e2",
+              accent: "#d97757",
+              chrome: "#292928",
+            },
+          },
           "t3-chat": {
             light: {
               background: "oklch(0.982446 0.010114 325.653)",
@@ -133,6 +147,7 @@
           "light",
           "dark",
           "t3-chat",
+          "claude",
           "grove",
           "ocean",
           "ember",
@@ -213,7 +228,9 @@
         };
 
         try {
-          const storedTheme = window.localStorage.getItem("t3code:theme");
+          const storedTheme =
+            window.localStorage.getItem("t3code:theme") ??
+            ("%VITE_RELEASE_CHANNEL%" === "nightly" ? "claude" : null);
           const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           const LEGACY_THEME_IDS = {
             "t3-chat-dark": "t3-chat",
@@ -256,7 +273,7 @@
               ? "system"
               : storedFollowSystem === "false"
                 ? preferenceMode
-                : theme === "system"
+                : theme === "system" || theme === "claude"
                   ? "system"
                   : preferenceMode;
           // A valid mix half for the wanted appearance takes over: it decides
