@@ -213,6 +213,84 @@ it.effect("links with a pairing code, and the peer holds its agents to the limit
 );
 
 it.effect(
+  "renewal preserves the peer session and a concurrent forget cannot restore the link",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveB(descriptorOf(box.environmentId, "Box", { peerLinkRenewal: true }));
+        const stored = yield* Ref.make(0);
+        const renewalStored = yield* Deferred.make<void>();
+        const finishStore = yield* Deferred.make<void>();
+        const secrets = Layer.effect(
+          ServerSecretStore.ServerSecretStore,
+          Effect.map(ServerSecretStore.make, (store) =>
+            ServerSecretStore.ServerSecretStore.of({
+              ...store,
+              set: (name, value) =>
+                store.set(name, value).pipe(
+                  Effect.andThen(
+                    Effect.gen(function* () {
+                      if (!name.startsWith("peer-link-")) return;
+                      const count = yield* Ref.updateAndGet(stored, (count) => count + 1);
+                      if (count === 3)
+                        yield* Deferred.succeed(renewalStored, undefined).pipe(
+                          Effect.andThen(Deferred.await(finishStore)),
+                        );
+                    }),
+                  ),
+                ),
+            }),
+          ),
+        );
+        const a = yield* makeA(laptop, secrets);
+        const original = yield* a.links.link({
+          url: b.url,
+          pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+          access: "auto",
+        });
+        const [session] = yield* linkedSessions(b);
+        yield* TestClock.adjust(Duration.days(26));
+        const renewed = yield* a.links.link({
+          url: b.url,
+          pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+          access: "auto",
+          renewExisting: true,
+        });
+        expect(renewed.linkedAt).toEqual(original.linkedAt);
+        expect(renewed.expiresAt.epochMilliseconds).toBeGreaterThan(
+          original.expiresAt.epochMilliseconds,
+        );
+        expect((yield* linkedSessions(b)).map((value) => value.sessionId)).toEqual([
+          session!.sessionId,
+        ]);
+        expect((yield* a.links.resolve(box.environmentId)).link.expiresAt).toEqual(
+          renewed.expiresAt,
+        );
+        const code = (yield* b.auth.issuePairingCredential()).credential;
+        const renewal = yield* a.links
+          .link({ url: b.url, pairingCode: code, access: "auto", renewExisting: true })
+          .pipe(Effect.result, Effect.forkScoped);
+        yield* Deferred.await(renewalStored);
+        yield* a.links.unlink(box.environmentId);
+        yield* Deferred.succeed(finishStore, undefined);
+        const raced = yield* Fiber.join(renewal);
+        expect(raced._tag).toBe("Failure");
+        expect(yield* a.links.get(box.environmentId)).toEqual(Option.none());
+        const forgotten = yield* a.links
+          .link({
+            url: b.url,
+            pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+            access: "auto",
+            renewExisting: true,
+          })
+          .pipe(Effect.flip);
+        expect(forgotten.message).toContain("forgotten, expired, or changed access");
+        yield* b.auth.revokeSession(session!.sessionId);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
   "each machine's Linked environments beta gates links, and a link waits while it is off",
   () =>
     Effect.scoped(
@@ -497,6 +575,22 @@ it.effect("tells the agent to link again once the peer revokes the link or it ex
       const revoked = yield* probe(a).pipe(Effect.flip);
       expect(revoked.code).toBe("capability_denied");
       expect(revoked.message).toContain("revoked there");
+      yield* Ref.set(b.descriptor, {
+        ...box,
+        capabilities: { ...box.capabilities, peerLinkRenewal: true },
+      });
+      const rejectedRenewal = yield* a.links
+        .link({
+          url: b.url,
+          pairingCode: (yield* b.auth.issuePairingCredential()).credential,
+          access: "auto",
+          renewExisting: true,
+        })
+        .pipe(Effect.flip);
+      expect(rejectedRenewal.reason).toBe("pairing_rejected");
+      expect(Option.getOrThrow(yield* a.links.get(box.environmentId)).lastError).toContain(
+        "could not be renewed",
+      );
 
       yield* a.links.link({
         url: b.url,

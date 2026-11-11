@@ -297,7 +297,12 @@ const make = Effect.gen(function* () {
 
   /** Signs in to the peer's `/mcp` with a pairing code: register, decide, exchange. */
   const signIn = Effect.fn("PeerLinks.signIn")(
-    function* (origin: string, input: PeerLinkCreateInput, clientName: string) {
+    function* (
+      origin: string,
+      input: PeerLinkCreateInput,
+      clientName: string,
+      renewalToken?: string,
+    ) {
       const client = yield* clientFor(origin);
       // Only the peer's own refusals are rejections. A dropped connection or
       // an answer this version cannot read is classified below.
@@ -369,6 +374,7 @@ const make = Effect.gen(function* () {
       return yield* client.mcpOAuth
         .token({
           payload: {
+            ...(renewalToken === undefined ? {} : { peer_link_token: Redacted.make(renewalToken) }),
             grant_type: "authorization_code",
             code: Redacted.make(code),
             redirect_uri: LINK_REDIRECT_URI,
@@ -505,14 +511,56 @@ const make = Effect.gen(function* () {
         message: `${peer.label} runs a T3 Code version that cannot keep a linked agent's limits. Update it, then link again.`,
       });
     }
-    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`);
+    const renewing =
+      input.renewExisting === true
+        ? yield* readRow(peer.environmentId)
+        : Option.none<PeerLinkRow>();
+    let renewalToken: string | undefined;
+    if (input.renewExisting === true) {
+      if (peer.capabilities.peerLinkRenewal !== true)
+        return yield* new PeerLinkError({
+          reason: "incompatible",
+          message:
+            "Update both environments to renew links without changing their thread ownership.",
+        });
+      if (
+        Option.isNone(renewing) ||
+        renewing.value.fenced !== 1 ||
+        renewing.value.access !== input.access ||
+        DateTime.isLessThanOrEqualTo(
+          DateTime.makeUnsafe(renewing.value.expires_at),
+          yield* DateTime.now,
+        )
+      ) {
+        return yield* new PeerLinkError({
+          reason: "expired",
+          message: "This link was forgotten, expired, or changed access. Link it again explicitly.",
+        });
+      }
+      const stored = yield* secrets.get(renewing.value.secret_name).pipe(Effect.catch(failStorage));
+      if (Option.isNone(stored))
+        return yield* new PeerLinkError({
+          reason: "unknown_link",
+          message: "This link lost its credential. Link it again explicitly.",
+        });
+      renewalToken = new TextDecoder().decode(stored.value);
+    }
+    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`, renewalToken).pipe(
+      Effect.tapError((error) =>
+        Option.isSome(renewing) && error.reason === "pairing_rejected"
+          ? sql`UPDATE peer_environment_links SET last_error = ${error.message} WHERE environment_id = ${peer.environmentId} AND secret_name = ${renewing.value.secret_name}`.pipe(
+              Effect.ignoreCause({ log: true }),
+            )
+          : Effect.void,
+      ),
+    );
     const now = yield* DateTime.now;
     const linked: PeerLink = {
       environmentId: peer.environmentId,
       label: peer.label,
       urls: origins,
       access: input.access,
-      linkedAt: now,
+      linkedAt: Option.isSome(renewing) ? DateTime.makeUnsafe(renewing.value.linked_at) : now,
       expiresAt: DateTime.add(now, { seconds: issued.expires_in }),
       lastReachedAt: now,
       lastError: null,
@@ -527,6 +575,14 @@ const make = Effect.gen(function* () {
     const previous = yield* Effect.gen(function* () {
       const urlsJson = yield* encodeUrls(origins).pipe(Effect.catch(failStorage));
       const previous = yield* readRow(peer.environmentId);
+      if (
+        Option.isSome(renewing) &&
+        (Option.isNone(previous) || previous.value.secret_name !== renewing.value.secret_name)
+      )
+        return yield* new PeerLinkError({
+          reason: "unknown_link",
+          message: "The link changed while renewing. It has not been restored.",
+        });
       yield* sql`
         INSERT INTO peer_environment_links (
           environment_id, secret_name, label, urls_json, access, linked_at, expires_at,
@@ -548,7 +604,11 @@ const make = Effect.gen(function* () {
           last_error = NULL
       `.pipe(Effect.catch(failStorage));
       return previous;
-    }).pipe(Effect.onError(() => secrets.remove(secretName).pipe(Effect.ignore)));
+    }).pipe(
+      sql.withTransaction,
+      Effect.catchTags({ SqlError: failStorage }),
+      Effect.onError(() => secrets.remove(secretName).pipe(Effect.ignore)),
+    );
     // Linking again replaces the old token. A racing link may leave its own
     // behind; it is unused either way.
     if (Option.isSome(previous) && previous.value.secret_name !== secretName) {

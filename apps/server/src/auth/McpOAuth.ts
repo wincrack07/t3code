@@ -542,22 +542,37 @@ const make = Effect.gen(function* () {
       ) {
         return yield* fail("invalid_grant", "The authorization code is invalid or expired.");
       }
-      const issued = yield* environmentAuth
-        .issueMcpClientSession({
+      if (token.peer_link_token !== undefined && !pending.peerLink)
+        return yield* fail("invalid_grant", "Only peer links can renew a session.");
+      const issue = Effect.gen(function* () {
+        if (token.peer_link_token !== undefined)
+          return yield* environmentAuth.renewMcpClientSession(
+            Redacted.value(token.peer_link_token),
+            pending.access,
+          );
+        return yield* environmentAuth.issueMcpClientSession({
           label: pending.clientName,
           access: pending.access,
           peerLink: pending.peerLink,
           client: deriveAuthClientMetadata({ request }),
-        })
-        .pipe(
-          Effect.catch((cause) =>
-            Effect.logError("Could not issue an MCP client session.", { cause }).pipe(
-              Effect.andThen(
-                Effect.fail(fail("invalid_grant", "The session could not be issued.")),
+        });
+      });
+      const issued = yield* issue.pipe(
+        Effect.catch((cause) =>
+          Effect.logError("Could not issue an MCP client session.", { cause }).pipe(
+            Effect.andThen(
+              Effect.fail(
+                fail(
+                  "invalid_grant",
+                  token.peer_link_token === undefined
+                    ? "The session could not be issued."
+                    : "The link could not be renewed. It may have expired, been revoked, or changed access; link again explicitly.",
+                ),
               ),
             ),
           ),
-        );
+        ),
+      );
       return {
         access_token: issued.token,
         token_type: "Bearer",
