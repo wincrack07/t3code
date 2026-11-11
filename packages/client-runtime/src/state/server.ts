@@ -1323,6 +1323,10 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.keepAwakeSubscribe,
       idleTtlMs: 0,
     }),
+    authorizeKeepAwakeLid: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:keep-awake:authorize",
+      tag: WS_METHODS.keepAwakeAuthorize,
+    }),
     changeKeepAwake: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:keep-awake:change",
       tag: WS_METHODS.keepAwakeChange,

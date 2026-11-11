@@ -1,3 +1,4 @@
+import * as LidSleep from "./LidSleep.ts";
 import {
   type KeepAwakeChange,
   type KeepAwakeDefaults,
@@ -35,6 +36,9 @@ export class KeepAwake extends Context.Service<
     readonly status: Effect.Effect<KeepAwakeStatus>;
     readonly changes: Stream.Stream<KeepAwakeStatus>;
     readonly change: (input: KeepAwakeChange) => Effect.Effect<KeepAwakeStatus>;
+    readonly authorizeLid: (
+      action: "install" | "remove" | "refresh",
+    ) => Effect.Effect<KeepAwakeStatus>;
     readonly agentsChanged: (count: number) => Effect.Effect<void>;
   }
 >()("t3/keepAwake/KeepAwake") {}
@@ -48,6 +52,7 @@ function nextUntilTime(time: string, now: number) {
 }
 
 const make = Effect.gen(function* () {
+  const lid = yield* LidSleep.LidSleep;
   const inhibitor = yield* SleepInhibitor.SleepInhibitor;
   const preferences = yield* KeepAwakePreferences;
   const defaults = yield* preferences.load;
@@ -61,14 +66,20 @@ const make = Effect.gen(function* () {
     endsAt: null,
     reason: inhibitor.supported ? null : "Sleep inhibition is not supported on this host.",
     lidClosedSupported: inhibitor.lidClosedSupported,
+    lid: yield* lid.status,
     options: defaults.options,
     defaults,
   });
+  yield* lid.changes.pipe(
+    Stream.runForEach((status) => SubscriptionRef.update(state, (s) => ({ ...s, lid: status }))),
+    Effect.forkIn(scope),
+  );
   let lease: Scope.Closeable | undefined;
   let expiry: Fiber.Fiber<void> | undefined;
   let idle: Fiber.Fiber<void> | undefined;
   let battery: Fiber.Fiber<void> | undefined;
   const stop = Effect.fn("KeepAwake.release")(function* () {
+    yield* lid.restore.pipe(Effect.ignore);
     if (lease) {
       const current = lease;
       lease = undefined;
@@ -99,9 +110,17 @@ const make = Effect.gen(function* () {
       if (level !== null && level <= s.options.batteryCutoff)
         return yield* end("Stopped at battery cutoff.");
     }
+    if (s.options.lidClosed) {
+      const enabled = yield* lid.enable.pipe(Effect.result);
+      if (enabled._tag === "Failure") {
+        yield* SubscriptionRef.update(state, (s) => ({ ...s, reason: enabled.failure.message }));
+        return;
+      }
+    }
     const acquired = yield* Scope.make();
     const result = yield* inhibitor.acquire(s.options).pipe(Scope.provide(acquired), Effect.result);
     if (result._tag === "Failure") {
+      yield* lid.restore.pipe(Effect.ignore);
       yield* Scope.close(acquired, Exit.void);
       yield* SubscriptionRef.update(state, (s) => ({
         ...s,
@@ -216,7 +235,35 @@ const make = Effect.gen(function* () {
         ? { mode: "until", endsAt: until }
         : { mode: defaults.mode };
   yield* change({ session });
+  const authorizeLid = Effect.fn("KeepAwake.authorizeLid")(function* (
+    action: "install" | "remove" | "refresh",
+  ) {
+    const remove = action === "remove";
+    if (remove) {
+      const current = yield* SubscriptionRef.get(state);
+      yield* change({
+        options: { ...current.options, lidClosed: false },
+        defaults: {
+          ...current.defaults,
+          options: { ...current.defaults.options, lidClosed: false },
+        },
+      });
+    }
+    if (action === "refresh") yield* lid.refresh.pipe(Effect.ignore);
+    else yield* lid.authorize(remove).pipe(Effect.ignore);
+    const current = yield* SubscriptionRef.get(state);
+    if (!current.active || !current.options.lidClosed) yield* lid.restore.pipe(Effect.ignore);
+    const status = yield* lid.status;
+    yield* SubscriptionRef.update(state, (s) => ({
+      ...s,
+      lid: status,
+      reason: status.authorized && status.error === null ? null : s.reason,
+    }));
+    if (!remove) yield* lock.withPermits(1)(start());
+    return yield* SubscriptionRef.get(state);
+  });
   return KeepAwake.of({
+    authorizeLid,
     status: SubscriptionRef.get(state),
     changes: SubscriptionRef.changes(state),
     change,

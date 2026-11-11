@@ -1,5 +1,5 @@
 import { DecisionInput, DecisionResult } from "./decisions.ts";
-import { KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
+import { KeepAwakeAuthorize, KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";
 import {
   OrchestrationV2SearchThreadError,
@@ -527,6 +527,7 @@ export const WS_METHODS = {
   deviceAction: "device.action",
 
   serverProbe: "server.probe",
+  keepAwakeAuthorize: "keepAwake.authorize",
   keepAwakeChange: "keepAwake.change",
   keepAwakeSubscribe: "keepAwake.subscribe",
   serverGetConfig: "server.getConfig",
@@ -2184,7 +2185,13 @@ const WsKeepAwakeSubscribe = Rpc.make(WS_METHODS.keepAwakeSubscribe, {
   error: EnvironmentAuthorizationError,
 });
 
+const WsKeepAwakeAuthorize = Rpc.make(WS_METHODS.keepAwakeAuthorize, {
+  payload: KeepAwakeAuthorize,
+  success: KeepAwakeStatus,
+  error: EnvironmentAuthorizationError,
+});
 export const WsRpcGroup = RpcGroup.make(
+  WsKeepAwakeAuthorize,
   WsKeepAwakeChange,
   WsKeepAwakeSubscribe,
   WsSubscribeMachineMonitorRpc,

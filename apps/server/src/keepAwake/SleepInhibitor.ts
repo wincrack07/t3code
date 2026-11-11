@@ -46,13 +46,7 @@ const make = Effect.gen(function* () {
       platform === "darwin"
         ? ChildProcess.make(
             "/usr/bin/caffeinate",
-            [
-              "-i",
-              ...(options.allowDisplaySleep ? [] : ["-d"]),
-              ...(options.lidClosed ? ["-s"] : []),
-              "-w",
-              String(process.pid),
-            ],
+            ["-i", ...(options.allowDisplaySleep ? [] : ["-d"]), "-w", String(process.pid)],
             { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
           )
         : ChildProcess.make(
