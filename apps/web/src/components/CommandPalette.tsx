@@ -43,6 +43,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { PR_REVIEW_EXECUTION_SHIPPED } from "@t3tools/contracts";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -1473,7 +1474,7 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
       },
     });
-    if (canRequestPrReview) {
+    if (PR_REVIEW_EXECUTION_SHIPPED && canRequestPrReview) {
       const environmentId = activeThread.environmentId;
       const threadId = activeThread.id;
       actionItems.push({

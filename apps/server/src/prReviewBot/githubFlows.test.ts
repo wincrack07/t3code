@@ -7,7 +7,14 @@ import { describe, expect } from "vite-plus/test";
 
 import { claim, settleClaim } from "./claimFlow.ts";
 import { headClaimKey } from "./claims.ts";
-import type { GitHubRequest, GitHubResponse, ReviewIdentity } from "./githubClient.ts";
+import {
+  makeAppIdentity,
+  verifiedLogin,
+  type GitHubRequest,
+  type GitHubResponse,
+  type GitHubSend,
+  type ReviewIdentity,
+} from "./githubClient.ts";
 import { makeGitHubReviewApi } from "./githubReviewApi.ts";
 import { initialCursor, pollRepository } from "./poller.ts";
 
@@ -150,6 +157,36 @@ function makeFakeGitHub(options: { readonly gateFirstListings?: Deferred.Deferre
 
 const target = { repository: REPO, number: 7, key: headClaimKey("abc123") };
 const now = Date.parse("2026-11-11T12:00:00Z");
+
+describe("identity", () => {
+  it.effect("is not ready until GitHub hands out an installation token", () =>
+    Effect.gen(function* () {
+      const { generateKeyPairSync } = yield* Effect.promise(() => import("node:crypto"));
+      const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+      const pem = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+      const answer =
+        (status: number): GitHubSend =>
+        () =>
+          Effect.succeed({
+            status,
+            headers: {},
+            body: JSON.stringify({ token: "t", expires_at: "2099-01-01T00:00:00Z" }),
+          });
+      const make = (status: number) =>
+        makeAppIdentity({
+          appId: "1",
+          installationId: "2",
+          appSlug: "t3-review",
+          privateKey: pem,
+          send: answer(status),
+          nowMs: Effect.succeed(Date.parse("2026-11-11T12:00:00Z")),
+        });
+      const refused = yield* verifiedLogin(yield* make(401)).pipe(Effect.result);
+      expect(refused._tag).toBe("Failure");
+      expect(yield* verifiedLogin(yield* make(201))).toBe("t3-review[bot]");
+    }),
+  );
+});
 
 describe("single claimer", () => {
   it.effect("lets exactly one of two racing environments review a head", () =>

@@ -187,6 +187,10 @@ export const makeGhIdentity = Effect.fn("PrReviewIdentity.gh")(function* (input:
   return { mode: "gh", token, login: yield* Effect.cached(login) } satisfies ReviewIdentity;
 });
 
+/** The login, once GitHub has accepted a token for it; a slug alone proves nothing. */
+export const verifiedLogin = (identity: ReviewIdentity) =>
+  identity.token.pipe(Effect.andThen(identity.login));
+
 /** Sends as `identity`, failing on any status but the expected ones. */
 export const call = Effect.fn("PrReviewGitHub.call")(function* (
   identity: ReviewIdentity,

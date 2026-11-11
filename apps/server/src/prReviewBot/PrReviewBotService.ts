@@ -5,6 +5,7 @@ import {
   type ModelSelection,
   PrReviewConfig,
   PrReviewError,
+  PR_REVIEW_EXECUTION_SHIPPED,
   type PrReviewIdentityStatus,
   type PrReviewRecord,
   type PrReviewRequestInput,
@@ -45,6 +46,7 @@ import {
   makeAppIdentity,
   makeFetchSend,
   makeGhIdentity,
+  verifiedLogin,
   type GitHubSend,
 } from "./githubClient.ts";
 import { makeGitHubReviewApi, type PrReviewGitHubApi, type Pull } from "./githubReviewApi.ts";
@@ -111,6 +113,8 @@ const parsePullRequestUrl = (url: string) => {
 };
 
 const short = (sha: string) => sha.slice(0, 7);
+
+const notShipped = new PrReviewError({ detail: "PR reviews cannot run on this server yet." });
 
 const isGitHubCallError = Schema.is(GitHubCallError);
 const errorDetail = (cause: Cause.Cause<unknown>) => {
@@ -260,7 +264,7 @@ export const make = Effect.gen(function* () {
     const identity = (yield* Ref.get(state)).config.identity;
     const hasPrivateKey = Option.isSome(yield* readPrivateKey);
     const login = yield* currentApi.pipe(
-      Effect.flatMap((api) => api.identity.login),
+      Effect.flatMap((api) => verifiedLogin(api.identity)),
       Effect.result,
     );
     return {
@@ -731,7 +735,7 @@ export const make = Effect.gen(function* () {
 
   const pollOnce = Effect.fn("PrReviewBot.pollOnce")(function* () {
     const current = yield* Ref.get(state);
-    if (!current.config.enabled) return { failures: 0 };
+    if (!PR_REVIEW_EXECUTION_SHIPPED || !current.config.enabled) return { polled: false };
     const api = yield* currentApi;
     const botLogin = yield* api.identity.login;
     const now = yield* nowMs;
@@ -769,7 +773,7 @@ export const make = Effect.gen(function* () {
       return [ready, { ...latest, pending: latest.pending.filter((entry) => entry.dueAt > now) }];
     });
     yield* Effect.forEach(due, (entry) => handle(entry.trigger), { discard: true });
-    return { failures: 0 };
+    return { polled: true };
   });
 
   yield* Effect.gen(function* () {
@@ -780,7 +784,9 @@ export const make = Effect.gen(function* () {
       let retryAtMs: number | undefined;
       if (outcome._tag === "Success") {
         failures = 0;
-        yield* Ref.set(polling, { lastPollAt: isoAt(now), backoffUntil: null, lastError: null });
+        if (outcome.success.polled) {
+          yield* Ref.set(polling, { lastPollAt: isoAt(now), backoffUntil: null, lastError: null });
+        }
       } else {
         failures++;
         retryAtMs = isGitHubCallError(outcome.failure) ? outcome.failure.retryAtMs : undefined;
@@ -833,6 +839,7 @@ export const make = Effect.gen(function* () {
       return yield* getState;
     }),
     request: Effect.fn("PrReviewBot.request")(function* (input) {
+      if (!PR_REVIEW_EXECUTION_SHIPPED) return yield* notShipped;
       let target = input.url === undefined ? null : parsePullRequestUrl(input.url);
       if (input.threadId !== undefined && target === null) {
         const shell = yield* threads
@@ -863,6 +870,7 @@ export const make = Effect.gen(function* () {
       return record;
     }),
     rerun: Effect.fn("PrReviewBot.rerun")(function* (recordId) {
+      if (!PR_REVIEW_EXECUTION_SHIPPED) return yield* notShipped;
       const previous = (yield* Ref.get(state)).history.find((entry) => entry.id === recordId);
       if (previous === undefined)
         return yield* new PrReviewError({ detail: "That review is no longer in the history." });

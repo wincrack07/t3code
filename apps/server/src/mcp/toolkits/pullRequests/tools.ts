@@ -3,6 +3,7 @@ import {
   OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
   PrReviewError,
+  PR_REVIEW_EXECUTION_SHIPPED,
   PositiveInt,
   PullRequestReviewGuide,
   PullRequestReviewGuideRun,
@@ -428,7 +429,10 @@ const RequestPullRequestReviewTool = Tool.make("request_pr_review", {
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, false)
   .annotate(Tool.OpenWorld, true)
-  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromSubagents);
+  .annotate(
+    McpSchema.EnabledWhen,
+    () => PR_REVIEW_EXECUTION_SHIPPED && McpInvocationContext.hiddenFromSubagents(),
+  );
 
 const GuideTarget = Schema.Struct({
   url: PullRequestTargetInput.fields.url,
