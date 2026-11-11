@@ -8,7 +8,12 @@ import {
 } from "react";
 import { cn } from "../../lib/utils";
 
-const GroupedRows = createContext(false);
+/** "contained" rows sit in an expanded group's card: no icons, a divider above each. */
+const GroupedRows = createContext<false | "list" | "contained">(false);
+
+export function useWorkLogContained(): boolean {
+  return use(GroupedRows) === "contained";
+}
 
 /** Groups may span virtualized timeline items. Each part owns its trailing space. */
 export function WorkLogBlock({
@@ -35,10 +40,23 @@ export function WorkLogBlock({
   );
 }
 
-export function WorkLogList({ children }: { children: ReactNode }) {
+export function WorkLogList({
+  contained = false,
+  children,
+}: {
+  contained?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <GroupedRows value>
-      <div className="flex min-w-0 flex-col">{children}</div>
+    <GroupedRows value={contained ? "contained" : "list"}>
+      {contained ? (
+        <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          {/* The first row's divider tucks under the card's own edge. */}
+          <div className="-mt-px flex min-w-0 flex-col">{children}</div>
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-col">{children}</div>
+      )}
     </GroupedRows>
   );
 }
@@ -50,7 +68,8 @@ type RowContent = {
   wrapLabel?: boolean;
 };
 
-function WorkLogLine({ icon, label, trailing, wrapLabel }: RowContent) {
+function WorkLogLine({ icon: rowIcon, label, trailing, wrapLabel }: RowContent) {
+  const icon = use(GroupedRows) === "contained" ? null : rowIcon;
   return (
     <div
       className={cn(
@@ -86,9 +105,14 @@ const interactionClassName =
 function useRowClassName(interactive: boolean) {
   const grouped = use(GroupedRows);
   return cn(
-    "group/timeline-row relative w-full min-w-0 rounded-md px-0.5 text-left transition-colors",
-    grouped ? "py-0" : "py-0.5",
+    "group/timeline-row relative w-full min-w-0 text-left transition-colors",
+    grouped === "contained"
+      ? "border-t border-border px-3 py-1"
+      : grouped
+        ? "rounded-md px-0.5 py-0"
+        : "rounded-md px-0.5 py-0.5",
     interactive && interactionClassName,
+    interactive && grouped === "contained" && "hover:bg-accent/60",
   );
 }
 

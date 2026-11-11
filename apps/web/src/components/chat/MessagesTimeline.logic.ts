@@ -1801,6 +1801,17 @@ export function deriveMessagesTimelineRows(input: {
     );
   };
 
+  // A plan the agent rewrites updates one card in place: only its latest version shows.
+  const latestTodoEntryIdByPlan = new Map<string, string>();
+  for (const entry of timelineEntries) {
+    const item = entry.kind === "work" ? entry.entry.projectedItem?.item : undefined;
+    if (item?.type === "todo_list") latestTodoEntryIdByPlan.set(item.planId, entry.id);
+  }
+  const isSupersededTodoEntry = (entry: TimelineEntry) => {
+    const item = entry.kind === "work" ? entry.entry.projectedItem?.item : undefined;
+    return item?.type === "todo_list" && latestTodoEntryIdByPlan.get(item.planId) !== entry.id;
+  };
+
   for (let index = 0; index < timelineEntries.length; index += 1) {
     const timelineEntry = timelineEntries[index];
     if (!timelineEntry) {
@@ -1916,6 +1927,8 @@ export function deriveMessagesTimelineRows(input: {
       continue;
     }
 
+    if (isSupersededTodoEntry(timelineEntry)) continue;
+
     if (timelineEntry.kind === "work") {
       if (
         isPendingApproval(timelineEntry.entry) ||
@@ -1939,9 +1952,23 @@ export function deriveMessagesTimelineRows(input: {
         continue;
       }
       const groupedEntries = [timelineEntry.entry];
+      // A plan update mid-run gets its own card after the group instead of splitting the run.
+      const todoEntriesInRun: Array<Extract<TimelineEntry, { kind: "work" }>> = [];
       let cursor = index + 1;
       while (cursor < timelineEntries.length) {
         const nextEntry = timelineEntries[cursor];
+        if (
+          nextEntry?.kind === "work" &&
+          nextEntry.entry.itemType === "todo_list" &&
+          (nextEntry.entry.runId ?? null) === (timelineEntry.entry.runId ?? null) &&
+          !activeWorkEntryIds.has(nextEntry.id) &&
+          !collapsedEntryIds.has(nextEntry.id) &&
+          !foldsByAnchorEntryId.has(nextEntry.id)
+        ) {
+          if (!isSupersededTodoEntry(nextEntry)) todoEntriesInRun.push(nextEntry);
+          cursor += 1;
+          continue;
+        }
         if (
           !nextEntry ||
           nextEntry.kind !== "work" ||
@@ -2057,6 +2084,15 @@ export function deriveMessagesTimelineRows(input: {
             );
           }
         }
+      }
+      for (const todoEntry of todoEntriesInRun) {
+        nextRows.push({
+          kind: "work",
+          id: todoEntry.id,
+          createdAt: todoEntry.createdAt,
+          groupedEntries: [todoEntry.entry],
+          isExpandedToolGroup: false,
+        });
       }
       index = cursor - 1;
       continue;
