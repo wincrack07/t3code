@@ -91,6 +91,7 @@ function useClaudeAccounts(): { readonly ready: boolean; readonly accounts: Clau
         environmentLabel: presentationById.get(environmentId)?.entry.target.label ?? environmentId,
         instanceId: provider.instanceId,
         displayName: resolveProviderInstanceDisplayName(provider),
+        email: provider.auth.email?.trim() || undefined,
         account: known?.accounts.find((account) => account.instanceId === provider.instanceId),
       }));
   });
@@ -131,8 +132,17 @@ export function ArtifactsPage() {
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   <SelectItem value={ALL_ACCOUNTS}>All accounts</SelectItem>
                   {accounts.map((account) => (
-                    <SelectItem key={account.key} value={account.key}>
-                      {account.email ? `${account.label} · ${account.email}` : account.label}
+                    <SelectItem
+                      key={account.key}
+                      value={account.key}
+                      title={[
+                        account.email,
+                        `via ${account.sources.map((source) => source.environmentLabel).join(", ")}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    >
+                      {account.label}
                     </SelectItem>
                   ))}
                 </SelectPopup>

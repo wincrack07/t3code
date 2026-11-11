@@ -25,7 +25,9 @@ const row = (
   environmentId,
   environmentLabel: environmentId,
   instanceId,
-  displayName: instanceId === work ? "Work" : "Personal",
+  displayName:
+    instanceId === work ? "Claude · Invu-Clau · Suscripción" : "Claude · Personal · Suscripción",
+  email: "me@example.com",
   account:
     account === undefined
       ? undefined
@@ -44,7 +46,7 @@ describe("groupClaudeAccounts", () => {
     ]);
     const accounts = groupClaudeAccounts(rows, mac);
     expect(accounts.map((account) => [account.key, account.label, account.email])).toEqual([
-      ["work-key", "Work", "me@example.com"],
+      ["work-key", "Invu-Clau", "me@example.com"],
       ["personal-key", "Personal", "me@example.com"],
     ]);
     // The active environment answers first when it can; one that cannot read the login goes last.
@@ -79,16 +81,32 @@ describe("groupClaudeAccounts", () => {
     expect(accounts.map((account) => account.label)).toEqual(["Org A", "Org B"]);
   });
 
-  it("keeps unidentified instances per environment so nothing disappears", () => {
+  it("merges an environment that cannot identify the account by instance name and e-mail", () => {
     const accounts = groupClaudeAccounts(
-      [row(vps, work, undefined), row(box, work, undefined), row(box, personal, {})],
+      [
+        row(vps, work, undefined),
+        row(box, work, { accountKey: "work-key" }),
+        row(box, personal, undefined),
+        row(lab, personal, undefined),
+      ],
       null,
     );
-    expect(accounts.map((account) => account.key)).toEqual([
-      "vps:claude_work",
-      "box:claude_work",
-      "box:claude_personal",
+    expect(accounts.map((account) => [account.label, account.sources.length])).toEqual([
+      ["Invu-Clau", 2],
+      ["Personal", 2],
     ]);
+    expect(accounts[0]?.key).toBe("work-key");
+  });
+
+  it("keeps instances with neither identity nor e-mail per environment so none disappear", () => {
+    const accounts = groupClaudeAccounts(
+      [
+        { ...row(vps, work, undefined), email: undefined },
+        { ...row(box, work, undefined), email: undefined },
+      ],
+      null,
+    );
+    expect(accounts.map((account) => account.key)).toEqual(["vps:claude_work", "box:claude_work"]);
   });
 });
 
