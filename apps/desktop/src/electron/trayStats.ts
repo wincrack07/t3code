@@ -6,15 +6,16 @@ function number(value: number | null, width: number, decimals = 0, maximum = 100
     value === null || !Number.isFinite(value)
       ? "n/a"
       : Math.min(maximum, Math.max(0, value)).toFixed(decimals)
-  ).padStart(width, " ");
+  ).padStart(width, "\u2007");
 }
 
 export function trayRate(bytes: number | null) {
-  if (bytes === null || !Number.isFinite(bytes)) return " n/a";
+  if (bytes === null || !Number.isFinite(bytes)) return "\u2007n/a";
   const mb = Math.max(0, bytes) / 1_000_000;
   if (mb >= 999.5) return "999+";
   const decimal = mb.toFixed(mb < 1 ? 2 : 1);
-  return (Number(decimal) >= 100 ? mb.toFixed(0) : decimal).padEnd(4, " ");
+  // A punctuation space preserves the decimal point's width when rates become integers.
+  return Number(decimal) >= 100 ? `${mb.toFixed(0)}\u2008` : decimal.padStart(4, "\u2007");
 }
 
 function percent(used: number | null, total: number | null) {
@@ -25,7 +26,7 @@ export function trayStatsTitle(settings: TrayStatsSettings, sample?: MachineSamp
   if (!settings.enabled) return "";
   return [
     settings.network
-      ? `↓ ${trayRate(sample?.networkDown ?? null)} ↑ ${trayRate(sample?.networkUp ?? null)} MB/s`
+      ? `↓${trayRate(sample?.networkDown ?? null)} ↑${trayRate(sample?.networkUp ?? null)} MB/s`
       : null,
     settings.cpu ? `CPU ${number(sample?.cpu ?? null, 3)}%` : null,
     settings.memory
