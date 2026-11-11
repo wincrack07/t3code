@@ -758,6 +758,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "keep-awake",
+    title: "Keep awake",
+    to: "/settings/maintenance",
+    scope: "environment-defaults",
+    searchTerms: ["sleep inhibit amphetamine caffeine agents duration display lid"],
+  },
+  {
     id: "background-activity",
     title: "Background activity",
     to: "/settings/maintenance",

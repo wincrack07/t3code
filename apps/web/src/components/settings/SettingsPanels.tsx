@@ -2172,9 +2172,13 @@ export function AboutSettingsPanel() {
 
 function KeepAwakeSettings() {
   const { environment } = useSettingsScope();
-  return environment ? (
-    <KeepAwakeControl environmentId={environment.environmentId} settings />
-  ) : (
-    <p>Select one environment to configure Keep awake.</p>
+  return (
+    <div id={searchableSetting("keep-awake").id}>
+      {environment ? (
+        <KeepAwakeControl environmentId={environment.environmentId} settings />
+      ) : (
+        <p>Select one environment to configure Keep awake.</p>
+      )}
+    </div>
   );
 }
