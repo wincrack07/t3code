@@ -350,6 +350,8 @@ export interface ChatComposerProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
   environmentId: EnvironmentId;
   canOperateThread: boolean;
+  /** Auto balance: the draft has no settled machine, so tasks it saves pick their own. */
+  automaticEnvironment?: boolean;
   attachmentUploadsCapabilityKnown: boolean;
   supportsAttachmentUploads: boolean;
   supportsQuestionAttachments: boolean;
@@ -502,6 +504,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerDraftTarget,
     environmentId,
     canOperateThread,
+    automaticEnvironment = false,
     attachmentUploadsCapabilityKnown,
     supportsAttachmentUploads,
     supportsQuestionAttachments,
@@ -3754,6 +3757,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         projectId={activeProjectId}
                         target={composerDraftTarget}
                         text={prompt}
+                        automaticEnvironment={automaticEnvironment}
                         disabled={!canOperateThread || voiceInputActive}
                       />
                     ) : null}

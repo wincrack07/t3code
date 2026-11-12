@@ -3624,6 +3624,7 @@ export default function ChatView(props: ChatViewProps) {
                                 contextTokens={activeContextWindow?.usedTokens ?? null}
                                 contextPercentage={activeContextWindow?.usedPercentage ?? null}
                                 canOperateThread={canOperateThread}
+                                automaticEnvironment={automaticEnvironment}
                                 reportedModelSelection={reportedModelSelection}
                                 multipleModelSelections={multipleModelSelections}
                                 supportsMultipleModels={
