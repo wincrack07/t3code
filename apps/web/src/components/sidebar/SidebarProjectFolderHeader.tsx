@@ -1,4 +1,4 @@
-import { SidebarColorMarker } from "./SidebarColorPicker";
+import { sidebarRowColorStyle } from "../../sidebarColors";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
@@ -76,7 +76,11 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
       ref={setNodeRef}
       data-testid="sidebar-project-folder"
       data-tree-row={sidebarTreeRow(item)}
-      style={sidebarTreeIndent(props.depth ?? 0)}
+      data-sidebar-row-colour={props.sidebarColor ?? undefined}
+      style={{
+        ...sidebarTreeIndent(props.depth ?? 0),
+        ...sidebarRowColorStyle(props.sidebarColor),
+      }}
       className={cn("group/project-folder mt-2 list-none first:mt-0", SIDEBAR_TREE_DROP_CLASS_NAME)}
     >
       <button
@@ -92,7 +96,6 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         className="flex h-7 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <ProjectFavicon project={group} className="size-4 shrink-0" />
-        <SidebarColorMarker color={props.sidebarColor} />
         <span className="min-w-0 flex-1 truncate text-xs font-normal text-sidebar-muted-foreground">
           {group.displayName}
         </span>

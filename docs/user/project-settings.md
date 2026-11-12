@@ -54,9 +54,11 @@ The sidebar takes a subtle tint while that project's thread or draft is focused,
 including when you focus a different split column. Conversation panels stay unchanged.
 
 A project's own colour takes priority over its group's colour. **Default** follows
-the group, or leaves the sidebar untinted when the group also uses Default.
-Edit a group or open its action menu to set its colour. Header markers remain
-visible regardless of which project is active.
+the nearest ancestor group with a colour, or leaves the sidebar neutral.
+Edit a group or open its action menu to set its colour. Coloured rows have a
+background wash and leading bar; a group's wash includes its projects.
+Turn off **Tint sidebar with project colour** in **Settings → Appearance** to keep
+only these row colours.
 
 Project colours are saved on the selected project environments and shared with
 other clients connected to them. Group colours stay with this client's groups.

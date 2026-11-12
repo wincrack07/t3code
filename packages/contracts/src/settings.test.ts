@@ -441,6 +441,10 @@ describe("ServerSettings project overrides across versions", () => {
   it("round trips sidebar colours and decodes old project and group settings", () => {
     expect(decodeServerSettings({}).sidebarColor).toBeNull();
     expect(decodeClientSettings({}).sidebarProjectFolders).toEqual([]);
+    expect(decodeClientSettings({}).tintSidebarWithProjectColor).toBe(true);
+    expect(
+      decodeClientSettings({ tintSidebarWithProjectColor: false }).tintSidebarWithProjectColor,
+    ).toBe(false);
     const oldFolder = { id: "staff", name: "StaffPass", emoji: "", projectKeys: ["repo:staff"] };
     expect(
       decodeClientSettings({ sidebarProjectFolders: [oldFolder] }).sidebarProjectFolders,
