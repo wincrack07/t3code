@@ -56,6 +56,10 @@ it("opens group colour actions and its edit-dialog colour menu", async () => {
       <ul>
         <ProjectGroupHeader
           folder={folder}
+          folders={[folder]}
+          excludedFolderIds={new Set([folder.id])}
+          onCreateInside={vi.fn()}
+          onMove={vi.fn()}
           collapsed
           threads={[]}
           onToggle={vi.fn()}
@@ -76,6 +80,10 @@ it("opens group colour actions and its edit-dialog colour menu", async () => {
     <ul>
       <ProjectGroupHeader
         folder={folder}
+        folders={[folder]}
+        excludedFolderIds={new Set([folder.id])}
+        onCreateInside={vi.fn()}
+        onMove={vi.fn()}
         collapsed
         threads={[]}
         onToggle={vi.fn()}
