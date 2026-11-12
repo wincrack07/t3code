@@ -2,8 +2,7 @@ import { SidebarColorPicker } from "../sidebar/SidebarColorPicker";
 import { useProjectSidebarColor } from "../../hooks/useProjectSidebarColor";
 import { useComposerMenuState } from "../chat/useComposerMenuState";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
-import { useEnvironmentsWithScope } from "../../state/session";
+import { useProjectUpdateEnvironments } from "../../hooks/useProjectGroupUpdate";
 import { mapAtomCommandResult, settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
@@ -309,7 +308,7 @@ function ProjectDetail({
   const environmentById = new Map(
     environments.map((environment) => [environment.environmentId, environment]),
   );
-  const editableIds = useEnvironmentsWithScope(allMembers, AuthOrchestrationOperateScope);
+  const editableIds = useProjectUpdateEnvironments(allMembers);
   const canEditGroup = group.memberProjects.every((member) =>
     editableIds.has(member.environmentId),
   );

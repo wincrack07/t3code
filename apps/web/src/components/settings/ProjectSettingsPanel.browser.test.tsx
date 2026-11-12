@@ -86,20 +86,10 @@ vi.mock(import("~/state/entities"), async (original) => ({
     )) as never,
   waitForProjectRemoval: async () => true,
 }));
-vi.mock(import("~/state/projects"), async (original) => {
-  const actual = await original();
-  return {
-    ...actual,
-    projectEnvironment: {
-      ...actual.projectEnvironment,
-      update: "update",
-      delete: "delete",
-    } as unknown as typeof actual.projectEnvironment,
-  };
-});
 vi.mock(import("~/state/use-atom-command"), async (original) => ({
   ...(await original()),
-  useAtomCommand: ((command: "update" | "delete") => state[command]) as never,
+  useAtomCommand: ((command: { label: string }) =>
+    command.label.endsWith(":update") ? state.update : state.delete) as never,
 }));
 // Only sidebar groups change in these tests, so the rest of the settings stay at defaults.
 vi.mock(import("~/hooks/useSettings"), async (original) => {

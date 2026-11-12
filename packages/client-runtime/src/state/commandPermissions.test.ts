@@ -17,6 +17,7 @@ import {
   AuthSettingsWriteScope,
   AuthSourceControlWriteScope,
   ThreadId,
+  ProjectId,
   EnvironmentId,
   ORCHESTRATION_V2_WS_METHODS,
   ScheduledTaskId,
@@ -34,6 +35,8 @@ import { EnvironmentRegistry } from "../connection/registry.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
 import { createEnvironmentRpcCommand } from "./runtime.ts";
 import { AVAILABLE_CONNECTION_STATE, BearerConnectionTarget } from "../connection/model.ts";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import { createProjectEnvironmentAtoms } from "./projectCommands.ts";
 import { createPeerLinkEnvironmentAtoms } from "./peerLinks.ts";
 
 vi.mock("./session.ts", () => ({
@@ -614,4 +617,70 @@ it.effect("rejects protected unary and streamed RPCs outside a guarded command",
     expect(streamed._tag).toBe("EnvironmentAuthorizationError");
     expect(writes).toBe(0);
   }),
+);
+
+it.effect.each(["create", "update", "delete"] as const)(
+  "authorizes project %s at the destination command boundary",
+  (operation) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const writes: string[] = [];
+        const projectRuntime = Atom.runtime(
+          Layer.mergeAll(
+            Layer.succeed(
+              SecureRandom.SecureRandom,
+              SecureRandom.make((size) => new Uint8Array(size)),
+            ),
+            Layer.succeed(EnvironmentRegistry, {
+              run: (id: EnvironmentId, effect: Effect.Effect<unknown>) =>
+                Effect.gen(function* () {
+                  const supervisor = {
+                    target: new BearerConnectionTarget({
+                      environmentId: id,
+                      label: id,
+                      connectionId: id,
+                    }),
+                    session: yield* SubscriptionRef.make(
+                      Option.some({
+                        client: {
+                          [WS_METHODS.projectsMutate]: () =>
+                            Effect.sync(() => {
+                              writes.push(id);
+                              return {};
+                            }),
+                        },
+                      } as unknown as RpcSession),
+                    ),
+                  } as unknown as EnvironmentSupervisor["Service"];
+                  return yield* effect.pipe(
+                    Effect.provideService(EnvironmentSupervisor, supervisor),
+                  );
+                }),
+            } as unknown as EnvironmentRegistry["Service"]),
+          ),
+        );
+        const command = createProjectEnvironmentAtoms(projectRuntime, {
+          projectAtom: () => Atom.make(null),
+        })[operation];
+        const input = {
+          projectId: ProjectId.make("project"),
+          title: "Renamed",
+          workspaceRoot: "/repo",
+        };
+        registry.mount(sessions(other));
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        const run = (id: EnvironmentId) =>
+          Effect.promise(() => command.run(registry, { environmentId: id, input }));
+        expect(registry.get(command.permissionAtom(env))).toBe(true);
+        expect(registry.get(command.permissionAtom(other))).toBe(false);
+        expect((yield* run(env))._tag).toBe("Success");
+        expect((yield* run(other))._tag).toBe("Failure");
+        expect(writes).toEqual([env]);
+        registry.set(sessions(other), AsyncResult.success(grant(true)));
+        expect((yield* run(other))._tag).toBe("Success");
+        expect(writes).toEqual([env, other]);
+      }),
+    ),
 );

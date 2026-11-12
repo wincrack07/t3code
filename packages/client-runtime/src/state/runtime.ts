@@ -1007,7 +1007,7 @@ export function createEnvironmentRpcCommand<
   R,
   ER,
   TTag extends EnvironmentUnaryRpcTag,
-  Input extends EnvironmentRpcInput<TTag> = EnvironmentRpcInput<TTag>,
+  Input = EnvironmentRpcInput<TTag>,
   Started = undefined,
 >(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, ER>,
@@ -1027,7 +1027,7 @@ export function createEnvironmentRpcCommand<
     ) => Effect.Effect<
       EnvironmentRpcSuccess<TTag>,
       EnvironmentRpcFailure<TTag> | EnvironmentRpcUnavailableError,
-      EnvironmentSupervisor.EnvironmentSupervisor | EnvironmentRegistry.EnvironmentRegistry
+      EnvironmentSupervisor.EnvironmentSupervisor | EnvironmentRegistry.EnvironmentRegistry | R
     >;
     readonly scheduler?: AtomCommandScheduler;
     readonly concurrency?: AtomCommandConcurrency<{
@@ -1050,7 +1050,7 @@ export function createEnvironmentRpcCommand<
       },
       registry: AtomRegistry.AtomRegistry,
     ) => Effect.Effect<void, never, R>;
-  },
+  } & (Input extends EnvironmentRpcInput<TTag> ? unknown : { readonly execute: unknown }),
 ) {
   const permissions = createCommandPermissions(runtime, options.tag);
   const command = createEnvironmentCommand(runtime, {
@@ -1068,7 +1068,10 @@ export function createEnvironmentRpcCommand<
       return permissions.authorize(registry, environmentId, input).pipe(
         Effect.andThen(() => {
           started = options.onStart?.(target, registry);
-          return options.execute?.(input) ?? requestGuarded(options.tag, input);
+          return (
+            options.execute?.(input) ??
+            requestGuarded(options.tag, input as EnvironmentRpcInput<TTag>)
+          );
         }),
         Effect.provideService(RpcPermissionGuard, {
           authorize: (id, method, payload) =>
