@@ -11,7 +11,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   TASK_STATUS_LABELS,
-  TASK_STATUSES,
+  TASK_MANUAL_STATUSES,
   taskRunningMinutes,
   taskThreadRefs,
   taskThreadState,
@@ -108,9 +108,9 @@ export function TaskThreadDot({
 const STATUS_BADGE = {
   open: "secondary",
   "in-progress": "info",
-  review: "info",
+  review: "warning",
   done: "success",
-} as const satisfies Record<SavedPromptStatus, "secondary" | "info" | "success">;
+} as const satisfies Record<SavedPromptStatus, "secondary" | "info" | "warning" | "success">;
 
 /** A status chip that opens the status menu; the keyboard path for every status change. */
 export function TaskStatusMenu({
@@ -138,12 +138,14 @@ export function TaskStatusMenu({
         <ChevronDownIcon />
       </MenuTrigger>
       <MenuPopup align="start">
-        {TASK_STATUSES.map((value) => (
-          <MenuItem key={value} onClick={() => value !== status && onChange(value)}>
-            <CheckIcon className={value === status ? undefined : "invisible"} />
-            {TASK_STATUS_LABELS[value]}
-          </MenuItem>
-        ))}
+        {[...TASK_MANUAL_STATUSES, ...(status === "review" ? (["review"] as const) : [])].map(
+          (value) => (
+            <MenuItem key={value} onClick={() => value !== status && onChange(value)}>
+              <CheckIcon className={value === status ? undefined : "invisible"} />
+              {TASK_STATUS_LABELS[value]}
+            </MenuItem>
+          ),
+        )}
       </MenuPopup>
     </Menu>
   );

@@ -23,10 +23,18 @@ import {
   type SavedPromptStatus,
   type ScopedThreadRef,
   taskAttachmentKey,
+  type TaskReviewSnapshot,
 } from "@t3tools/contracts";
 import { buildNewThreadLink, PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 
 export const TASK_STATUSES = [
+  "open",
+  "in-progress",
+  "review",
+  "done",
+] as const satisfies ReadonlyArray<SavedPromptStatus>;
+/** Statuses a person picks; Review is reached when a linked thread settles. */
+export const TASK_MANUAL_STATUSES = [
   "open",
   "in-progress",
   "done",
@@ -43,9 +51,7 @@ export const TASK_TITLE_MAX_LENGTH = 160;
 export const TASK_POLISH_MAX_LENGTH = 20_000;
 
 const taskStatus = (task: ProjectSavedPrompt): SavedPromptStatus =>
-  task.status === "review"
-    ? "in-progress"
-    : (task.status ?? (task.completedAt === null ? "open" : "done"));
+  task.status ?? (task.completedAt === null ? "open" : "done");
 
 export const taskTitle = (task: ProjectSavedPrompt) =>
   task.title ?? (task.text.split("\n")[0]?.slice(0, TASK_TITLE_MAX_LENGTH) || "Untitled task");
@@ -176,6 +182,10 @@ export function findTaskGroupForProject(
 
 export const openTaskCount = (group: Pick<TaskProjectGroup, "tasks">) =>
   group.tasks.filter((entry) => entry.status !== "done").length;
+
+/** Tasks whose result waits for someone to approve it or ask for changes. */
+export const reviewTaskCount = (group: Pick<TaskProjectGroup, "tasks">) =>
+  group.tasks.filter((entry) => entry.status === "review").length;
 
 /**
  * Where a new task is stored when the composer has no settled machine (Auto balance) or the
@@ -491,13 +501,93 @@ export function buildTaskBoard(
   return board;
 }
 
-/** A drop onto a column changes status only when the column differs. */
+/**
+ * A drop onto a column changes status only when the column differs. Review only fills from a
+ * settled thread, so it takes no drops; a review card dropped on Done is an approval.
+ */
 export function taskStatusForDrop(
   entry: Pick<TaskEntry, "status">,
   target: unknown,
-): SavedPromptStatus | null {
-  const status = TASK_STATUSES.find((candidate) => candidate === target);
-  return status !== undefined && status !== entry.status ? status : null;
+): SavedPromptStatus | "approve" | null {
+  const status = TASK_MANUAL_STATUSES.find((candidate) => candidate === target);
+  if (status === undefined || status === entry.status) return null;
+  return entry.status === "review" && status === "done" ? "approve" : status;
+}
+
+export type TaskReviewTone = "success" | "warning" | "error" | "quiet";
+
+export interface TaskReviewView {
+  readonly outcome: string;
+  readonly tone: TaskReviewTone;
+  /** The final assistant message as plain text, for a short preview. */
+  readonly excerpt: string | null;
+  readonly changes: { readonly files: number; readonly label: string } | null;
+  readonly duration: string | null;
+  readonly pullRequests: TaskReviewSnapshot["pullRequests"];
+}
+
+const REVIEW_OUTCOMES: Record<
+  TaskReviewSnapshot["outcome"],
+  { readonly label: string; readonly tone: TaskReviewTone }
+> = {
+  completed: { label: "Finished", tone: "success" },
+  "waiting for input": { label: "Finished with questions", tone: "warning" },
+  failed: { label: "Failed", tone: "error" },
+  interrupted: { label: "Interrupted", tone: "quiet" },
+};
+
+/** Markdown reduced to the words a two-line preview can show. */
+function plainTextExcerpt(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?(```|$)/g, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
+    .replace(/[`*_~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatTaskDuration(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds} s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
+}
+
+export function taskReviewView(snapshot: TaskReviewSnapshot): TaskReviewView {
+  const outcome = REVIEW_OUTCOMES[snapshot.outcome];
+  const excerpt = snapshot.assistantMessage ? plainTextExcerpt(snapshot.assistantMessage) : "";
+  return {
+    outcome: outcome.label,
+    tone: outcome.tone,
+    excerpt: excerpt || null,
+    changes:
+      snapshot.changes && snapshot.changes.count > 0
+        ? {
+            files: snapshot.changes.count,
+            label: `+${snapshot.changes.additions} \u2212${snapshot.changes.deletions}`,
+          }
+        : null,
+    duration: snapshot.durationMs === undefined ? null : formatTaskDuration(snapshot.durationMs),
+    pullRequests: snapshot.pullRequests,
+  };
+}
+
+/**
+ * The thread a task's home can't see settle on its own: it ran on another machine, so the
+ * client reports its result once that thread is loaded and idle.
+ */
+export function taskReviewToReconcile(
+  entry: Pick<TaskEntry, "task" | "home" | "status">,
+  threadState: TaskThreadState | null,
+): ScopedThreadRef | null {
+  const { task } = entry;
+  if (entry.status !== "in-progress" || threadState !== "finished") return null;
+  if (!task.latestThreadId || !task.latestThreadEnvironmentId) return null;
+  if (task.latestThreadEnvironmentId === entry.home.environmentId) return null;
+  return scopeThreadRef(task.latestThreadEnvironmentId, task.latestThreadId);
 }
 
 export type TaskThreadState = "running" | "finished" | "missing";

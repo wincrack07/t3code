@@ -31,6 +31,7 @@ import {
   taskDropPlan,
   taskListOrder,
   taskPriority,
+  taskReviewView,
   taskTitle,
   type TaskEntry,
   type TaskListModel,
@@ -404,6 +405,11 @@ function TaskRow({
       ) : null}
       <TaskAttachmentCount count={entry.task.attachments?.length ?? 0} />
       {running ? <TaskRunningLabel startedAt={thread.shell?.latestRun?.startedAt ?? null} /> : null}
+      {entry.status === "review" && entry.task.review ? (
+        <Badge variant={taskReviewView(entry.task.review).tone} size="sm">
+          {taskReviewView(entry.task.review).outcome}
+        </Badge>
+      ) : null}
       <Menu>
         <span className="flex shrink-0 opacity-0 group-hover/row:opacity-100 group-has-focus-visible/row:opacity-100 has-data-popup-open:opacity-100">
           <MenuTrigger

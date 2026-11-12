@@ -66,6 +66,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { TaskAddPathForm, TaskAttachmentCount, TaskAttachmentStrip } from "./TaskAttachments";
 import { TASK_PRIORITY_BADGE, TASK_WHEN_ORDER, TaskChoiceChip, TaskTagsEditor } from "./TaskFields";
 import { TaskMachineChip, TaskStatusMenu, TaskThreadRow } from "./TaskParts";
+import { TaskReviewActions, TaskReviewSummary } from "./TaskReview";
 import {
   type InspectedTaskAttachment,
   pendingTaskLink,
@@ -372,6 +373,15 @@ export function TaskDetail({
           </span>
         )}
       </div>
+      {entry.status === "review" && task.review ? (
+        <section
+          aria-label="Result"
+          className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-3"
+        >
+          <TaskReviewSummary entry={entry} density="detail" />
+          <TaskReviewActions entry={entry} showOpenThread />
+        </section>
+      ) : null}
       <div
         className={cn(
           "flex min-h-0 flex-col rounded-lg border border-border has-focus-visible:border-ring",

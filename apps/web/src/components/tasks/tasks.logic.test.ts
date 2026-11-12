@@ -19,6 +19,9 @@ import {
   NO_TASK_FILTER,
   normalizeTaskTags,
   taskCaptureProjectKey,
+  taskReviewToReconcile,
+  taskReviewView,
+  reviewTaskCount,
   taskDropPlan,
   type TaskFilter,
   openTaskCount,
@@ -303,8 +306,83 @@ describe("board", () => {
   it("changes status only for a drop on a different column", () => {
     expect(taskStatusForDrop({ status: "open" }, "done")).toBe("done");
     expect(taskStatusForDrop({ status: "open" }, "open")).toBeNull();
+    // Review fills only from a settled thread; a review card on Done is an approval.
+    expect(taskStatusForDrop({ status: "in-progress" }, "review")).toBeNull();
+    expect(taskStatusForDrop({ status: "review" }, "done")).toBe("approve");
+    expect(taskStatusForDrop({ status: "review" }, "open")).toBe("open");
     expect(taskStatusForDrop({ status: "open" }, "task:abc")).toBeNull();
     expect(taskStatusForDrop({ status: "open" }, null)).toBeNull();
+  });
+});
+
+describe("review", () => {
+  const snapshot = {
+    runId: "run-1",
+    userMessageId: "msg-1",
+    outcome: "completed",
+    finishedAt: "2026-11-12T10:04:00.000Z",
+    durationMs: 245_000,
+    assistantMessage:
+      "## Done\n\nAdded **pagination** to `GET /events`.\n\n```ts\nconst x = 1;\n```\n- see [docs](https://x.dev)",
+    changes: { count: 3, additions: 84, deletions: 12 },
+    pullRequests: [{ number: 42, url: "https://github.com/acme/orbit/pull/42", state: "open" }],
+  } as unknown as NonNullable<ProjectSavedPrompt["review"]>;
+
+  it("presents the outcome, a plain excerpt, change stats and duration", () => {
+    expect(taskReviewView(snapshot)).toMatchObject({
+      outcome: "Finished",
+      tone: "success",
+      excerpt: "Done Added pagination to GET /events. see docs",
+      changes: { files: 3, label: "+84 \u221212" },
+      duration: "4 min",
+    });
+    expect(
+      taskReviewView({
+        ...snapshot,
+        outcome: "waiting for input",
+        assistantMessage: undefined,
+        changes: undefined,
+        durationMs: undefined,
+      } as typeof snapshot),
+    ).toMatchObject({
+      outcome: "Finished with questions",
+      tone: "warning",
+      excerpt: null,
+      changes: null,
+      duration: null,
+    });
+    expect(taskReviewView({ ...snapshot, outcome: "failed" }).tone).toBe("error");
+    expect(taskReviewView({ ...snapshot, durationMs: 3_900_000 }).duration).toBe("1 h 5 min");
+  });
+
+  it("reconciles only a settled thread that ran on another machine", () => {
+    const home = project(mac, "orbit", []);
+    const entry = (
+      extra: Partial<ProjectSavedPrompt>,
+      status: "in-progress" | "review" = "in-progress",
+    ) => ({
+      home,
+      status,
+      task: task("r1", "2026-11-01T00:00:00Z", { latestThreadId: ThreadId.make("t9"), ...extra }),
+    });
+    expect(taskReviewToReconcile(entry({ latestThreadEnvironmentId: vpsA }), "finished")).toEqual({
+      environmentId: vpsA,
+      threadId: "t9",
+    });
+    expect(taskReviewToReconcile(entry({ latestThreadEnvironmentId: vpsA }), "running")).toBeNull();
+    expect(taskReviewToReconcile(entry({ latestThreadEnvironmentId: mac }), "finished")).toBeNull();
+    expect(taskReviewToReconcile(entry({}), "finished")).toBeNull();
+    expect(
+      taskReviewToReconcile(entry({ latestThreadEnvironmentId: vpsA }, "review"), "finished"),
+    ).toBeNull();
+  });
+
+  it("counts review tasks as needing attention", () => {
+    expect(
+      reviewTaskCount({
+        tasks: [{ status: "review" }, { status: "open" }, { status: "review" }] as never,
+      }),
+    ).toBe(2);
   });
 });
 

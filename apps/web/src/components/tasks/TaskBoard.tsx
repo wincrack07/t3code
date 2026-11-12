@@ -33,6 +33,7 @@ import {
   type TaskRow,
 } from "./tasks.logic";
 import { TaskPriorityChip } from "./TaskFields";
+import { TaskReviewActions, TaskReviewSummary } from "./TaskReview";
 import { useEnvironmentLabel } from "./useTaskProjects";
 
 export function TaskBoard({
@@ -60,7 +61,10 @@ export function TaskBoard({
         type: "project.update",
         projectId: entry.home.id,
         commandId: CommandId.make(randomUUID()),
-        savedPrompt: { kind: "edit", id: entry.task.id, status },
+        savedPrompt:
+          status === "approve"
+            ? { kind: "approve", id: entry.task.id }
+            : { kind: "edit", id: entry.task.id, status },
       },
     });
   };
@@ -101,7 +105,7 @@ function BoardColumn({
       ref={setNodeRef}
       aria-label={TASK_STATUS_LABELS[status]}
       className={cn(
-        "flex shrink-0 flex-col rounded-lg border bg-card md:min-h-0 md:min-w-64 md:max-w-96 md:flex-1 md:basis-0",
+        "flex shrink-0 flex-col rounded-lg border bg-card md:min-h-0 md:min-w-52 md:max-w-96 md:flex-1 md:basis-0",
         isOver ? "border-ring" : "border-border",
       )}
     >
@@ -115,7 +119,9 @@ function BoardColumn({
       </header>
       <div className="flex flex-col gap-2 p-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {count === 0 ? (
-          <p className="px-1 py-2 text-xs text-muted-foreground">Drop a task here.</p>
+          <p className="px-1 py-2 text-xs text-muted-foreground">
+            {status === "review" ? "Finished threads land here for review." : "Drop a task here."}
+          </p>
         ) : (
           children
         )}
@@ -140,6 +146,7 @@ function TaskCard({
   const { allowed, update } = useSavedPrompts(entry.home.environmentId, entry.home.id);
   const labelOf = useEnvironmentLabel();
   const thread = useTaskThread(entry);
+  const review = entry.status === "review" && entry.task.review !== undefined;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: entry.key,
     disabled: !allowed,
@@ -168,7 +175,15 @@ function TaskCard({
       >
         {taskTitle(entry.task)}
       </button>
-      <p className="line-clamp-2 text-xs leading-4 text-muted-foreground">{entry.task.text}</p>
+      {review ? (
+        <div className="relative z-1">
+          <TaskReviewSummary entry={entry} density="card" />
+        </div>
+      ) : (
+        entry.task.text.trim() !== taskTitle(entry.task) && (
+          <p className="line-clamp-2 text-xs leading-4 text-muted-foreground">{entry.task.text}</p>
+        )
+      )}
       <div className="relative z-1 flex min-w-0 items-center gap-1.5">
         <TaskPriorityChip priority={taskPriority(entry.task)} />
         {projectLabel !== null ? (
@@ -196,6 +211,11 @@ function TaskCard({
           />
         </span>
       </div>
+      {review ? (
+        <div className="relative z-1 border-t border-border pt-2">
+          <TaskReviewActions entry={entry} showOpenThread={false} />
+        </div>
+      ) : null}
     </div>
   );
 }

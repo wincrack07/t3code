@@ -34,7 +34,8 @@ import {
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuItemDetail } from "../ui/menu";
-import { openTaskCount } from "../tasks/tasks.logic";
+import { openTaskCount, reviewTaskCount } from "../tasks/tasks.logic";
+import { TaskReviewReconcilers } from "../tasks/TaskReview";
 import { useTaskProjectGroups } from "../tasks/useTaskProjects";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -219,14 +220,19 @@ function SidebarUtilityItem({
   icon,
   label,
   count,
+  attention,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   count?: number;
+  /** Items waiting on the user, shown as a dot beside the count. */
+  attention?: number;
   onClick: () => void;
 }) {
-  const name = count ? `${label} · ${count} open` : label;
+  const name = [label, count ? `${count} open` : null, attention ? `${attention} to review` : null]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
@@ -238,6 +244,12 @@ function SidebarUtilityItem({
                 <span className="pointer-events-none absolute right-0.5 bottom-0.5 min-w-3 rounded-sm bg-sidebar px-0.5 text-center text-3xs leading-3 font-medium text-sidebar-muted-foreground tabular-nums">
                   {count > 99 ? "99+" : count}
                 </span>
+              ) : null}
+              {attention ? (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-sidebar-foreground ring-2 ring-sidebar"
+                />
               ) : null}
             </SidebarMenuButton>
           }
@@ -256,10 +268,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
-  const openTasks = useTaskProjectGroups().reduce(
-    (total, group) => total + openTaskCount(group),
-    0,
-  );
+  const taskGroups = useTaskProjectGroups();
+  const openTasks = taskGroups.reduce((total, group) => total + openTaskCount(group), 0);
+  const reviewTasks = taskGroups.reduce((total, group) => total + reviewTaskCount(group), 0);
   const [utilityWidth, setUtilityWidth] = useState(0);
   const observeUtilityWidth = (row: HTMLUListElement) =>
     observeResize(row, ([entry]) => {
@@ -310,7 +321,13 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   };
 
   const secondaryActions = [
-    { label: "Tasks", icon: <ListTodoIcon />, count: openTasks, onClick: handleTasksClick },
+    {
+      label: "Tasks",
+      icon: <ListTodoIcon />,
+      count: openTasks,
+      attention: reviewTasks,
+      onClick: handleTasksClick,
+    },
     ...(pullRequestsSupported
       ? [
           {
@@ -371,7 +388,12 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
                   {action.icon}
                   {action.label}
                   {"count" in action && action.count ? (
-                    <MenuItemDetail>{action.count}</MenuItemDetail>
+                    <MenuItemDetail>
+                      {action.count}
+                      {"attention" in action && action.attention
+                        ? ` · ${action.attention} to review`
+                        : ""}
+                    </MenuItemDetail>
                   ) : null}
                 </MenuItem>
               ))}
@@ -379,6 +401,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           </Menu>
         </SidebarMenuItem>
       ) : null}
+      <TaskReviewReconcilers groups={taskGroups} />
     </SidebarMenu>
   );
 });
