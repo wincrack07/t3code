@@ -8,6 +8,8 @@ Set your project roots and protected paths first. Project scans stop at depth se
 
 Select Phase B candidates and choose **Delete selected** to review their exact paths and sizes. Confirmation applies only to those items. Eligibility is checked again immediately before deletion. Dirty worktrees, active T3 threads, protected paths and changed candidates remain untouched. Branches are kept. Worktrees marked **Probably active** are best kept.
 
+Attachments copied into Tasks are reported under **Task attachments**, split by open, done and deleted tasks. Copies for done and deleted tasks are Phase B candidates. Copies for open tasks are never preselected and need their own confirmation, like aggressive options. A deleted task keeps its copies until you remove them here, so Undo still restores them; a task whose copy was removed shows it as missing.
+
 Aggressive options require a separate confirmation for each item and show their effects. They also rerun regenerable cleanup. Simulator apps/data, Android virtual devices and Xcode archives can have lasting value; review those paths carefully.
 
 Enable daily unattended cleanup to run Phase A at 06:00 local time, or choose another time. The server must be running; missed runs catch up when it becomes available. Phase B and C are never deleted by the daily timer. A relevant completed run makes at most one native notification attempt on the environment. Headless Linux or missing notification permissions may prevent delivery; the report records that failure. Relay/mobile push delivery is not provided by this notification channel.

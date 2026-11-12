@@ -1,28 +1,50 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { CommandId, type EnvironmentId, type SavedPromptStatus } from "@t3tools/contracts";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import type { SavedTaskLinkReceipt } from "@t3tools/client-runtime/state/tasks";
+import {
+  CommandId,
+  type EnvironmentId,
+  type SavedPromptStatus,
+  type TaskAttachmentInput,
+  taskAttachmentKey,
+} from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  FolderPlusIcon,
   LinkIcon,
   MoreHorizontalIcon,
   Trash2Icon,
   WandIcon,
 } from "lucide-react";
-import { type ClipboardEvent, type DragEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { cn, randomUUID } from "../../lib/utils";
+import { cn, newThreadId, randomUUID } from "../../lib/utils";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { projectEnvironment } from "../../state/projects";
 import { environmentServerConfigsAtom } from "../../state/server";
-import { launchTaskThread } from "../../state/tasks";
+import { taskDrafts } from "../../state/taskDrafts";
+import {
+  composerAttachmentsFromTask,
+  isTaskImageFile,
+  setTaskLinkReceipt,
+  taskAttachmentInputsFromFiles,
+  taskLinkReceiptsAtom,
+} from "../../state/tasks";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { usePromptPolish } from "../chat/usePromptPolish";
@@ -41,20 +63,21 @@ import {
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { TaskAttachmentStrip, type TaskAttachmentActions } from "./TaskAttachments";
+import { TaskAddPathForm, TaskAttachmentCount, TaskAttachmentStrip } from "./TaskAttachments";
+import { TaskMachineChip, TaskStatusMenu, TaskThreadRow } from "./TaskParts";
 import {
-  TASK_THREAD_STATE_LABELS,
-  TaskMachineChip,
-  TaskStatusMenu,
-  TaskThreadDot,
-  useTaskThread,
-} from "./TaskParts";
-import {
+  type InspectedTaskAttachment,
+  pendingTaskLink,
   TASK_POLISH_MAX_LENGTH,
   TASK_TEXT_MAX_LENGTH,
   TASK_TITLE_MAX_LENGTH,
+  taskAttachmentLimitError,
+  taskAttachmentViews,
+  taskStartTargets,
   taskThreadLink,
+  taskThreadRefs,
   taskTitle,
+  type TaskAttachmentCandidate,
   type TaskEntry,
   type TaskProjectGroup,
 } from "./tasks.logic";
@@ -67,20 +90,25 @@ export function TaskDetail({
   entry,
   group,
   density = "page",
-  attachmentActions = null,
 }: {
   entry: TaskEntry;
   group: TaskProjectGroup;
   density?: TaskDetailDensity;
-  attachmentActions?: TaskAttachmentActions | null;
 }) {
   const { task, home } = entry;
   const environmentId = home.environmentId;
   const projectId = home.id;
   const compact = density === "compact";
-  const { allowed, update } = useSavedPrompts(environmentId, projectId);
+  const { allowed, update, attempt } = useSavedPrompts(environmentId, projectId);
   const labelOf = useEnvironmentLabel();
-  const thread = useTaskThread(entry);
+  const threads = taskThreadRefs(task, environmentId);
+  const [showPrevious, setShowPrevious] = useState(false);
+  const pendingLink = pendingTaskLink(
+    useAtomValue(taskLinkReceiptsAtom)[entry.key],
+    task,
+    environmentId,
+  );
+  const attachments = useTaskAttachments(entry, group);
   const navigate = useNavigate();
   const [text, setText] = useState(task.text);
   const [title, setTitle] = useState(task.title ?? "");
@@ -140,22 +168,72 @@ export function TaskDetail({
   const changeStatus = (status: SavedPromptStatus) =>
     void update({ kind: "edit", id: task.id, status });
   const remove = async () => {
+    // Pending typing would otherwise be lost: restore brings back the stored record.
+    await save();
     if (!(await update({ kind: "delete", id: task.id }))) return;
     toastManager.add({
       type: "success",
       title: "Task deleted",
       actionProps: {
         children: "Undo",
-        onClick: () =>
-          void update({
-            kind: "add",
-            id: task.id,
-            text: text.trim() || task.text,
-            title: trimmedTitle,
-            status: entry.status,
-          }),
+        onClick: () => void update({ kind: "restore", id: task.id }),
       },
     });
+  };
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [addingPath, setAddingPath] = useState(false);
+  const canAttach = allowed && !compact;
+  const attach = async (
+    candidates: ReadonlyArray<TaskAttachmentCandidate>,
+    prepare: () => Promise<{ inputs: TaskAttachmentInput[]; release: () => void }>,
+  ) => {
+    const limit = taskAttachmentLimitError(task.attachments ?? [], candidates);
+    setAttachError(limit);
+    if (limit !== null) return false;
+    setAttaching(true);
+    const prepared = await prepare().catch((error: unknown) => {
+      setAttachError(error instanceof Error ? error.message : "Could not read the attachment.");
+      return null;
+    });
+    if (!prepared) {
+      setAttaching(false);
+      return false;
+    }
+    const refusal = await attempt({ kind: "attach", id: task.id, attachments: prepared.inputs });
+    prepared.release();
+    setAttaching(false);
+    setAttachError(refusal);
+    return refusal === null;
+  };
+  const attachFiles = (files: ReadonlyArray<File>) =>
+    void attach(
+      files.map((file) => ({
+        name: file.name,
+        kind: isTaskImageFile(file) ? "image" : "file",
+        sizeBytes: file.size,
+      })),
+      () => taskAttachmentInputsFromFiles(environmentId, files),
+    );
+  const attachPath = async (path: string) => {
+    if (
+      await attach([{ name: path, kind: "path", sizeBytes: 0 }], async () => ({
+        inputs: [{ kind: "path", path }],
+        release: () => {},
+      }))
+    )
+      setAddingPath(false);
+  };
+  const removeAttachment = async (key: string) =>
+    setAttachError(await attempt({ kind: "remove-attachment", id: task.id, key }));
+  const onDataTransfer = (data: DataTransfer, preventDefault: () => void) => {
+    if (!canAttach || data.files.length === 0) return;
+    preventDefault();
+    if ([...data.items].some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
+      setAttachError("Add folders with Add file or folder path.");
+      return;
+    }
+    attachFiles([...data.files]);
   };
   const link = taskThreadLink(text.trim(), window.location.origin);
   const copyLink = async () => {
@@ -169,9 +247,9 @@ export function TaskDetail({
   };
   const busy = start.busy;
   const canStart = allowed && start.allowed && valid && !busy && review === null;
-  const startThread = async (send: boolean) => {
+  const startThread = async (send: boolean, target: EnvironmentProject = home) => {
     if (!(await save())) return;
-    await start.run(send, text.trim());
+    await start.run(send, target);
   };
   const counter = (review ?? text).length;
   const polishTooLong = text.length > TASK_POLISH_MAX_LENGTH;
@@ -226,8 +304,11 @@ export function TaskDetail({
                 Copy link
                 {link === null ? <MenuItemDetail>Too long for a link</MenuItemDetail> : null}
               </MenuItem>
-              {attachmentActions ? (
-                <MenuItem onClick={attachmentActions.onAddPath}>Add file or folder path</MenuItem>
+              {canAttach ? (
+                <MenuItem onClick={() => setAddingPath(true)}>
+                  <FolderPlusIcon />
+                  Add file or folder path
+                </MenuItem>
               ) : null}
               <MenuSeparator />
               <MenuItem variant="destructive" disabled={!allowed} onClick={() => void remove()}>
@@ -290,23 +371,59 @@ export function TaskDetail({
               void startThread(true);
             }
           }}
-          {...(attachmentActions
-            ? {
-                onDrop: (event: DragEvent<HTMLTextAreaElement>) => {
-                  if (event.dataTransfer.files.length === 0) return;
-                  event.preventDefault();
-                  attachmentActions.onDropFiles([...event.dataTransfer.files]);
-                },
-                onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => {
-                  if (event.clipboardData.files.length === 0) return;
-                  event.preventDefault();
-                  attachmentActions.onDropFiles([...event.clipboardData.files]);
-                },
-              }
-            : {})}
+          onDragOver={(event) => {
+            if (canAttach && event.dataTransfer.types.includes("Files")) event.preventDefault();
+          }}
+          onDrop={(event) => onDataTransfer(event.dataTransfer, () => event.preventDefault())}
+          onPaste={(event) => onDataTransfer(event.clipboardData, () => event.preventDefault())}
         />
       </div>
-      <TaskAttachmentStrip attachments={[]} actions={attachmentActions} />
+      {compact ? (
+        attachments.views.length > 0 ? (
+          <div className="flex h-7 min-w-0 items-center gap-2 px-1 text-xs text-muted-foreground">
+            <TaskAttachmentCount count={attachments.views.length} />
+            <span className="min-w-0 truncate">Manage attachments in Tasks</span>
+            <Button
+              size="micro"
+              variant="ghost"
+              onClick={() =>
+                void navigate({ to: "/tasks", search: { project: group.key, task: entry.key } })
+              }
+            >
+              Open
+            </Button>
+          </div>
+        ) : null
+      ) : (
+        <>
+          <TaskAttachmentStrip
+            environmentId={environmentId}
+            attachments={attachments.views}
+            onRemove={canAttach ? (key) => void removeAttachment(key) : null}
+          />
+          {addingPath ? (
+            <TaskAddPathForm
+              machineLabel={labelOf(environmentId)}
+              busy={attaching}
+              onSubmit={(path) => void attachPath(path)}
+              onCancel={() => {
+                setAddingPath(false);
+                setAttachError(null);
+              }}
+            />
+          ) : null}
+          {attaching && !addingPath ? (
+            <p className="px-1 text-xs text-muted-foreground" role="status">
+              Attaching…
+            </p>
+          ) : null}
+          {attachError ? (
+            <p role="alert" className="px-1 text-xs text-destructive-foreground">
+              {attachError}
+            </p>
+          ) : null}
+        </>
+      )}
       <div
         className="flex h-4 items-center justify-between gap-2 px-1 text-xs text-muted-foreground"
         aria-live="polite"
@@ -330,31 +447,44 @@ export function TaskDetail({
           {counter.toLocaleString()} / {TASK_TEXT_MAX_LENGTH.toLocaleString()}
         </span>
       </div>
-      {thread.state !== null ? (
-        thread.shell ? (
+      {pendingLink ? (
+        <PendingLinkRow
+          receipt={pendingLink}
+          taskKey={entry.key}
+          machineLabel={labelOf(pendingLink.thread.environmentId)}
+        />
+      ) : null}
+      {threads.latest ? (
+        <TaskThreadRow
+          threadRef={threads.latest}
+          machineLabel={
+            threads.latest.environmentId === environmentId
+              ? null
+              : labelOf(threads.latest.environmentId)
+          }
+        />
+      ) : null}
+      {threads.previous.length > 0 ? (
+        <div className="flex min-w-0 flex-col">
           <button
             type="button"
-            className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
-            onClick={() =>
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(scopeThreadRef(environmentId, thread.shell!.id)),
-              })
-            }
+            aria-expanded={showPrevious}
+            className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+            onClick={() => setShowPrevious(!showPrevious)}
           >
-            <TaskThreadDot state={thread.state} />
-            <span className="min-w-0 flex-1 truncate">{thread.shell.title}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {TASK_THREAD_STATE_LABELS[thread.state]}
-            </span>
-            <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <ChevronRightIcon className={cn("size-3.5 shrink-0", showPrevious && "rotate-90")} />
+            Previous threads <span className="tabular-nums">· {threads.previous.length}</span>
           </button>
-        ) : (
-          <p className="flex h-8 items-center gap-2 px-2 text-xs text-muted-foreground">
-            <TaskThreadDot state="missing" />
-            The linked thread is archived or not loaded.
-          </p>
-        )
+          {showPrevious
+            ? threads.previous.map((ref) => (
+                <TaskThreadRow
+                  key={`${ref.environmentId}:${ref.threadId}`}
+                  threadRef={ref}
+                  machineLabel={labelOf(ref.environmentId)}
+                />
+              ))
+            : null}
+        </div>
       ) : null}
       <div className="flex min-w-0 items-center gap-1">
         {polishTooLong ? (
@@ -410,8 +540,9 @@ export function TaskDetail({
                 <MenuSeparator />
                 <StartMachineItems
                   group={group}
-                  homeEnvironmentId={environmentId}
+                  entry={entry}
                   labelOf={labelOf}
+                  onStart={(target) => void startThread(true, target)}
                 />
               </MenuPopup>
             </Menu>
@@ -422,79 +553,250 @@ export function TaskDetail({
   );
 }
 
-/** Where a task's thread runs. Only its own machine until the backend links threads across machines. */
+/** Where a task's thread runs: its own machine, or another machine with the same project. */
 function StartMachineItems({
   group,
-  homeEnvironmentId,
+  entry,
   labelOf,
+  onStart,
 }: {
   group: TaskProjectGroup;
-  homeEnvironmentId: EnvironmentId;
+  entry: TaskEntry;
   labelOf: (environmentId: EnvironmentId) => string;
+  onStart: (target: EnvironmentProject) => void;
 }) {
-  const others = [
-    ...new Set(
-      group.members
-        .map((member) => member.project.environmentId)
-        .filter((environmentId) => environmentId !== homeEnvironmentId),
-    ),
-  ];
+  const targets = taskStartTargets(group, entry, labelOf);
+  if (targets.length < 2) return null;
   return (
     <MenuGroup>
-      <MenuGroupLabel>Runs on</MenuGroupLabel>
-      <MenuItem disabled>
-        {labelOf(homeEnvironmentId)}
-        <MenuItemDetail>Task's machine</MenuItemDetail>
-      </MenuItem>
-      {others.map((environmentId) => (
-        <MenuItem key={environmentId} disabled>
-          {labelOf(environmentId)}
-        </MenuItem>
+      <MenuGroupLabel>Start on</MenuGroupLabel>
+      {targets.map((target) => (
+        <StartMachineItem
+          key={target.project.environmentId}
+          label={labelOf(target.project.environmentId)}
+          environmentId={target.project.environmentId}
+          detail={target.home ? "Task's machine" : target.disabledReason}
+          disabled={target.disabledReason !== null}
+          onClick={() => onStart(target.project)}
+        />
       ))}
-      {others.length > 0 ? (
-        <p className="px-2 pt-1 pb-1.5 text-xs text-muted-foreground">
-          A task's thread runs on the machine that stores the task. Other machines need a server
-          update before they can start it.
-        </p>
-      ) : null}
     </MenuGroup>
   );
 }
 
-/** Start a thread from the task on its machine, or open it in a new composer draft. */
-function useTaskStart(entry: TaskEntry) {
-  const { home, task } = entry;
-  const environmentId = home.environmentId;
-  const newThread = useNewThreadHandler();
-  const launch = useAtomCommand(launchTaskThread);
-  const allowed = useAtomValue(launchTaskThread.permissionAtom(environmentId));
+function StartMachineItem({
+  label,
+  environmentId,
+  detail,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  environmentId: EnvironmentId;
+  detail: string | null;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const allowed = useAtomValue(projectEnvironment.tasks.launch.permissionAtom(environmentId));
+  return (
+    <MenuItem disabled={disabled || !allowed} onClick={onClick}>
+      <span className="min-w-0 truncate">{label}</span>
+      {detail !== null || !allowed ? (
+        <MenuItemDetail>{!allowed && detail === null ? "No permission" : detail}</MenuItemDetail>
+      ) : null}
+    </MenuItem>
+  );
+}
+
+/** "Started, not linked": the thread exists, only the task's record of it failed. */
+function PendingLinkRow({
+  receipt,
+  taskKey,
+  machineLabel,
+}: {
+  receipt: SavedTaskLinkReceipt;
+  taskKey: string;
+  machineLabel: string;
+}) {
+  const retry = useAtomCommand(projectEnvironment.tasks.retryLink);
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
-  const openInComposer = async (prompt: string) => {
-    const result = await newThread(scopeProjectRef(environmentId, home.id), { prompt });
+  return (
+    <div className="flex h-8 min-w-0 items-center gap-2 px-2 text-xs" role="status">
+      <AlertTriangleIcon className="size-3.5 shrink-0 text-warning-foreground" />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        Started on {machineLabel}, not linked to this task
+      </span>
+      <Button
+        size="micro"
+        variant="ghost"
+        onClick={() =>
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(receipt.thread),
+          })
+        }
+      >
+        Open
+      </Button>
+      <Button
+        size="micro"
+        variant="outline"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const result = await retry(receipt);
+          setBusy(false);
+          if (result._tag === "Success") setTaskLinkReceipt(taskKey, null);
+        }}
+      >
+        {busy ? "Linking…" : "Retry link"}
+      </Button>
+    </div>
+  );
+}
+
+/** The task's attachments, checked on its machine and on every connected machine with the project. */
+function useTaskAttachments(entry: TaskEntry, group: TaskProjectGroup) {
+  const labelOf = useEnvironmentLabel();
+  const inspect = useAtomCommand(projectEnvironment.tasks.attachments, { reportFailure: false });
+  const [inspected, setInspected] = useState<{
+    signature: string;
+    items: ReadonlyArray<InspectedTaskAttachment>;
+  } | null>(null);
+  const homeEnvironmentId = entry.home.environmentId;
+  const homeProjectId = entry.home.id;
+  const taskId = entry.task.id;
+  const list = entry.task.attachments ?? [];
+  const checkKey = [
+    ...new Set(
+      group.members
+        .filter((member) => member.reachable)
+        .map((member) => member.project.environmentId),
+    ),
+  ].join("\n");
+  const signature = JSON.stringify([entry.key, list.map(taskAttachmentKey), checkKey]);
+  const empty = list.length === 0;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads file state from the task's machine whenever its attachments or reachable machines change
+  useEffect(() => {
+    if (empty) return;
+    let live = true;
+    void inspect({
+      source: { home: scopeProjectRef(homeEnvironmentId, homeProjectId), taskId },
+      checkEnvironmentIds: checkKey.split("\n") as EnvironmentId[],
+    }).then((result) => {
+      if (live && result._tag === "Success") setInspected({ signature, items: result.value });
+    });
+    return () => {
+      live = false;
+    };
+  }, [inspect, empty, homeEnvironmentId, homeProjectId, taskId, checkKey, signature]);
+  return {
+    views: taskAttachmentViews({
+      attachments: list,
+      inspected: inspected?.signature === signature ? inspected.items : null,
+      homeEnvironmentId,
+      labelOf,
+    }),
+  };
+}
+
+function launchFailureToast(error: unknown, labelOf: (environmentId: EnvironmentId) => string) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "_tag" in error &&
+    error._tag === "TaskAttachmentsHomeOnlyError" &&
+    "homeEnvironmentId" in error
+  ) {
+    const home = labelOf(error.homeEnvironmentId as EnvironmentId);
+    toastManager.add({
+      type: "error",
+      title: `Start this task on ${home}`,
+      description: `Its attachments are stored on ${home}.`,
+    });
+    return;
+  }
+  toastManager.add({
+    type: "error",
+    title: "Could not start the thread",
+    description:
+      typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : undefined,
+  });
+}
+
+/** Start a thread from the task on any machine with its project, or open it as a composer draft. */
+function useTaskStart(entry: TaskEntry) {
+  const { home, task } = entry;
+  const newThread = useNewThreadHandler();
+  const launch = useAtomCommand(projectEnvironment.tasks.launch, { reportFailure: false });
+  const prepare = useAtomCommand(projectEnvironment.tasks.prepareDraft, { reportFailure: false });
+  const allowed = useAtomValue(projectEnvironment.tasks.launch.permissionAtom(home.environmentId));
+  const labelOf = useEnvironmentLabel();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const source = { home: scopeProjectRef(home.environmentId, home.id), taskId: task.id };
+  const fail = (result: {
+    readonly cause: Parameters<typeof squashAtomCommandFailure>[0]["cause"];
+  }) => launchFailureToast(squashAtomCommandFailure(result), labelOf);
+  const openInComposer = async (target: EnvironmentProject) => {
+    setBusy(true);
+    const prepared = await prepare({
+      source,
+      target: scopeProjectRef(target.environmentId, target.id),
+    });
+    if (prepared._tag !== "Success") {
+      setBusy(false);
+      if (!isAtomCommandInterrupted(prepared)) fail(prepared);
+      return;
+    }
+    const files = await composerAttachmentsFromTask(
+      home.environmentId,
+      prepared.value.attachments,
+    ).catch((error: unknown) => {
+      toastManager.add({
+        type: "error",
+        title: "Could not open the task's attachments",
+        description: error instanceof Error ? error.message : undefined,
+      });
+      return null;
+    });
+    setBusy(false);
+    if (!files) return;
+    const prompt = prepared.value.text;
+    const result = await newThread(scopeProjectRef(target.environmentId, target.id), { prompt });
     if (!result) return;
     const store = useComposerDraftStore.getState();
     const existing = store.getComposerDraft(result.draftId)?.prompt;
     if (existing !== prompt) {
       store.setPrompt(result.draftId, [existing, prompt].filter(Boolean).join("\n\n"));
     }
+    store.addImages(result.draftId, files.images);
+    store.addFiles(result.draftId, files.files);
+    // Sending this draft later links its thread back to the task.
+    taskDrafts.set(scopeThreadRef(target.environmentId, result.threadId), source);
   };
-  const run = async (send: boolean, prompt: string) => {
-    if (!send) return openInComposer(prompt);
-    const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
+  const run = async (send: boolean, target: EnvironmentProject) => {
+    if (!send) return openInComposer(target);
+    const config = appAtomRegistry.get(environmentServerConfigsAtom).get(target.environmentId);
     if (!config) {
-      toastManager.add({ type: "error", title: "This task's machine is not connected" });
+      toastManager.add({
+        type: "error",
+        title: `${labelOf(target.environmentId)} is not connected`,
+      });
       return;
     }
-    const settings = resolveProjectSettings(config.settings, home.id, home).settings;
+    const settings = resolveProjectSettings(config.settings, target.id, target).settings;
     const selection = resolveNewThreadModelSelection({
       defaultSelection:
         settings.defaultModelSelection ??
-        resolveProjectDefaultProviderModelSelection(config.providers, config.settings, home.id),
+        resolveProjectDefaultProviderModelSelection(config.providers, config.settings, target.id),
       fallbackSelection: settings.fallbackModelSelection,
       providers: config.providers,
       settings: config.settings,
-      projectId: home.id,
+      projectId: target.id,
       now: Date.now(),
     }).selection;
     if (!selection) {
@@ -503,11 +805,13 @@ function useTaskStart(entry: TaskEntry) {
     }
     setBusy(true);
     const result = await launch({
-      environmentId,
-      input: {
+      source,
+      target: scopeProjectRef(target.environmentId, target.id),
+      launch: {
         commandId: CommandId.make(randomUUID()),
-        projectId: home.id,
-        savedPromptId: task.id,
+        // Stored copies are claimed for the new thread, so the server needs its id up front.
+        threadId: newThreadId(),
+        projectId: target.id,
         title: task.title ?? taskTitle(task),
         modelSelection: selection,
         runtimeMode: settings.defaultRuntimeMode,
@@ -516,20 +820,30 @@ function useTaskStart(entry: TaskEntry) {
       },
     });
     setBusy(false);
-    if (result._tag !== "Success") return;
-    const threadRef = scopeThreadRef(environmentId, result.value.threadId);
-    toastManager.add({
-      type: "success",
-      title: "Thread started",
-      actionProps: {
-        children: "Open",
-        onClick: () =>
-          void navigate({
-            to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(threadRef),
-          }),
-      },
-    });
+    if (result._tag !== "Success") {
+      if (!isAtomCommandInterrupted(result)) fail(result);
+      return;
+    }
+    const { receipt } = result.value;
+    const open = {
+      children: "Open",
+      onClick: () =>
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(receipt.thread),
+        }),
+    };
+    if (result.value.status === "started-not-linked") {
+      setTaskLinkReceipt(entry.key, receipt);
+      toastManager.add({
+        type: "warning",
+        title: "Thread started, not linked",
+        description: "The task could not record it. Retry the link from the task.",
+        actionProps: open,
+      });
+      return;
+    }
+    toastManager.add({ type: "success", title: "Thread started", actionProps: open });
   };
   return { allowed, busy, run };
 }

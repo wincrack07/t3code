@@ -1,27 +1,75 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { SavedPromptStatus } from "@t3tools/contracts";
-import { CheckIcon, ChevronDownIcon, ServerIcon } from "lucide-react";
+import type { SavedPromptStatus, ScopedThreadRef } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ServerIcon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import { useQuietThreadShell } from "../../state/entities";
+import { buildThreadRouteParams } from "../../threadRoutes";
 import { Badge } from "../ui/badge";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   TASK_STATUS_LABELS,
   TASK_STATUSES,
+  taskThreadRefs,
   taskThreadState,
   type TaskEntry,
   type TaskThreadState,
 } from "./tasks.logic";
 
-/** The linked thread's shell, read without streaming ticks. */
+/** The latest linked thread's shell, on the machine that ran it, read without streaming ticks. */
 export function useTaskThread(entry: TaskEntry) {
-  const threadId = entry.task.latestThreadId;
-  const shell = useQuietThreadShell(
-    threadId ? scopeThreadRef(entry.home.environmentId, threadId) : null,
+  const ref = taskThreadRefs(entry.task, entry.home.environmentId).latest;
+  const shell = useQuietThreadShell(ref);
+  return { ref, shell, state: taskThreadState(entry.task, shell) };
+}
+
+/** One linked thread: its status, title and machine; opens the thread. */
+export function TaskThreadRow({
+  threadRef,
+  machineLabel,
+}: {
+  threadRef: ScopedThreadRef;
+  machineLabel: string | null;
+}) {
+  const navigate = useNavigate();
+  const shell = useQuietThreadShell(threadRef);
+  const state = taskThreadState({ latestThreadId: threadRef.threadId }, shell);
+  if (!shell) {
+    return (
+      <p className="flex h-8 min-w-0 items-center gap-2 px-2 text-xs text-muted-foreground">
+        <TaskThreadDot state="missing" />
+        <span className="min-w-0 truncate">
+          The linked thread is archived or not loaded
+          {machineLabel ? ` on ${machineLabel}` : ""}.
+        </span>
+      </p>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+      onClick={() =>
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(threadRef),
+        })
+      }
+    >
+      <TaskThreadDot state={state ?? "missing"} />
+      <span className="min-w-0 flex-1 truncate">{shell.title}</span>
+      {machineLabel ? (
+        <span className="max-w-32 shrink truncate text-xs text-muted-foreground">
+          {machineLabel}
+        </span>
+      ) : null}
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {TASK_THREAD_STATE_LABELS[state ?? "missing"]}
+      </span>
+      <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+    </button>
   );
-  return { shell, state: taskThreadState(entry.task, shell) };
 }
 
 export const TASK_THREAD_STATE_LABELS: Record<TaskThreadState, string> = {
