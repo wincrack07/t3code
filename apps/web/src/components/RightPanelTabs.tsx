@@ -49,7 +49,6 @@ import {
   ListTodo,
   Volume2Icon,
   VolumeOffIcon,
-  XIcon,
 } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -66,11 +65,7 @@ import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
-import {
-  resolveShortcutCommand,
-  shortcutLabelForCommand,
-  type ShortcutMatchContext,
-} from "~/keybindings";
+import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
 import { readLocalApi } from "~/localApi";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { Button } from "~/components/ui/button";
@@ -1057,7 +1052,6 @@ function RightPanelTab(
 export function RightPanelTabs(props: RightPanelTabsProps) {
   const focusedSurface = props.surfaces.find((surface) => surface.id === props.activeSurfaceId);
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
-  const closePanelShortcutLabel = shortcutLabelForCommand(props.keybindings, "rightPanel.toggle");
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -1548,35 +1542,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           </div>
         ) : null}
         {props.layoutControls}
-        {props.onClosePanel && props.open !== false ? (
-          <>
-            {props.layoutControls ? (
-              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    aria-label="Close panel"
-                    data-right-panel-close
-                    className="shrink-0"
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={props.onClosePanel}
-                  />
-                }
-              >
-                <XIcon className="size-4" />
-              </TooltipTrigger>
-              <TooltipPopup side="bottom">
-                Close panel{closePanelShortcutLabel ? ` (${closePanelShortcutLabel})` : ""}
-              </TooltipPopup>
-            </Tooltip>
-            {props.layoutControls ? null : (
-              <span aria-hidden className="mr-2 ml-1 h-4 w-px shrink-0 bg-border" />
-            )}
-          </>
-        ) : null}
       </div>
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
