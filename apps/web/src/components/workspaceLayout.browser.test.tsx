@@ -203,7 +203,9 @@ it("keeps the single-column title bar controls clickable and inset like the side
 it("keeps the open panel's header controls and its add menu clickable", async () => {
   await using _app = await mountApp(1600, 900);
   await page.getByRole("button", { name: "Toggle right panel" }).click();
-  await expect.element(page.getByRole("button", { name: "Close panel" })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Add panel surface" })).toBeVisible();
+  // The header's toggle closes the panel, so the tab bar carries no second close button.
+  expect(page.getByRole("button", { name: "Close panel" }).query()).toBeNull();
   expect(controlsUnderDragRegions()).toEqual([]);
   await page.getByRole("button", { name: "Add panel surface" }).click();
   await expect.element(page.getByRole("menuitem", { name: /^Terminal/ })).toBeVisible();
@@ -228,14 +230,9 @@ it("keeps split column and collapsed-sidebar title bars clickable", async () => 
   expect(controlsUnderDragRegions()).toEqual([]);
 });
 
-it("closes the empty panel with its ×, with Escape, and with the toggle that opened it", async () => {
+it("closes the empty panel with Escape and with the toggle that opened it", async () => {
   await using _app = await mountApp(1600, 900);
   const toggle = page.getByRole("button", { name: "Toggle right panel" });
-
-  await toggle.click();
-  await expect.element(page.getByText("Open a surface", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Close panel" }).click();
-  expect(rightPanelOpen(refA)).toBe(false);
 
   await toggle.click();
   await expect.element(page.getByText("Open a surface", { exact: true })).toBeVisible();
@@ -338,9 +335,8 @@ it.each([1600, 1300, 1000])(
       expect(box.right).toBeLessThanOrEqual(active().right + 1);
     }
     expect(controlsUnderDragRegions()).toEqual([]);
-    const closePanel = page
-      .getByRole("button", { name: "Close panel" })
-      .element()
+    const closePanel = (drawer ?? document.querySelector("[data-active-thread-column]"))!
+      .querySelector<HTMLElement>("[data-right-panel-toggle]")!
       .getBoundingClientRect();
     expect(closePanel.right).toBeLessThanOrEqual(active().right);
   },

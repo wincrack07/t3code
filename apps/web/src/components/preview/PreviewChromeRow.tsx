@@ -4,8 +4,11 @@ import {
   ArrowRight,
   Camera,
   ExternalLink,
+  HatGlasses,
   MousePointerClick,
   PictureInPicture2,
+  ServerIcon,
+  UserRoundIcon,
 } from "lucide-react";
 import {
   type FormEvent,
@@ -15,10 +18,13 @@ import {
   useState,
 } from "react";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
+
+import { formatAddressForDisplay } from "./addressDisplay";
 
 interface Props {
   url: string;
@@ -50,6 +56,22 @@ interface Props {
 }
 
 const NOOP = () => {};
+
+/** The tab's non-default profile; a cramped row keeps only its icon. */
+export function PreviewProfileChip(props: { name: string; incognito: boolean }) {
+  const Icon = props.incognito ? HatGlasses : UserRoundIcon;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Badge variant="outline" className="max-w-28 shrink-0" />}>
+        <Icon aria-hidden className="@min-[26rem]/address:hidden" />
+        <span className="sr-only @min-[26rem]/address:not-sr-only @min-[26rem]/address:truncate">
+          {props.name}
+        </span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">{props.name}</TooltipPopup>
+    </Tooltip>
+  );
+}
 
 export function PreviewChromeRow({
   url,
@@ -93,10 +115,10 @@ export function PreviewChromeRow({
     <div className="relative">
       <form
         onSubmit={submit}
-        className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-2 in-data-[preview-panel-mode=inline]:mb-3 in-data-[preview-panel-mode=inline]:h-7 in-data-[preview-panel-mode=inline]:min-h-7 in-data-[preview-panel-mode=inline]:border-b-transparent"
+        className="@container/address flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-2 in-data-[preview-panel-mode=inline]:mb-3 in-data-[preview-panel-mode=inline]:h-7 in-data-[preview-panel-mode=inline]:min-h-7 in-data-[preview-panel-mode=inline]:border-b-transparent"
         data-surface-subheader
       >
-        <div className="flex items-center gap-0.5" role="group" aria-label="Navigation">
+        <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="Navigation">
           <Tooltip>
             <TooltipTrigger
               render={
@@ -155,9 +177,16 @@ export function PreviewChromeRow({
         <InputGroup variant="ghost" className="group/address h-7 flex-1">
           {environmentLabel ? (
             <InputGroupAddon>
+              {/* The machine gives way before the host: it truncates, then becomes an icon. */}
               <Tooltip>
-                <TooltipTrigger render={<span className="max-w-28 truncate" />}>
-                  {environmentLabel} ›
+                <TooltipTrigger render={<span className="flex min-w-0 items-center" />}>
+                  <ServerIcon aria-hidden className="size-3.5 @min-[30rem]/address:hidden" />
+                  <span className="sr-only @min-[30rem]/address:not-sr-only @min-[30rem]/address:max-w-16 @min-[30rem]/address:truncate @min-[36rem]/address:max-w-28">
+                    {environmentLabel}
+                  </span>
+                  <span aria-hidden className="ms-1 hidden @min-[30rem]/address:inline">
+                    ›
+                  </span>
                 </TooltipTrigger>
                 <TooltipPopup>{environmentLabel}</TooltipPopup>
               </Tooltip>
@@ -168,7 +197,7 @@ export function PreviewChromeRow({
               render={
                 <InputGroupInput
                   ref={inputRef}
-                  value={inputFocused ? draft : url}
+                  value={inputFocused ? draft : formatAddressForDisplay(url)}
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => {
                     setDraft(url);
