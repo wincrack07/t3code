@@ -2393,7 +2393,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         promptCompletion.dismiss();
       },
       cyclePromptSuggestion: promptCompletion.cycleNext,
-      inlineCompletion: promptCompletion.inline,
+      inlineCompletion: promptRef.current === prompt ? promptCompletion.inline : null,
       takeInlineCompletionWord: promptCompletion.takeInlineWord,
       dismissInlineCompletion: promptCompletion.dismiss,
     })(key, event, isTaskItem);

@@ -127,6 +127,16 @@ describe("PromptCompletion", () => {
     }),
   );
 
+  it("drops a corrected rewrite of the existing draft", () => {
+    expect(
+      PromptCompletion.parsePromptCompletion(
+        "continue",
+        "ya esta todo donde lo quiero entonces?",
+        "Ya está todo donde lo quiero entonces?",
+      ),
+    ).toEqual([]);
+  });
+
   it("keeps a continuation to its first line and drops an echoed draft", () => {
     expect(
       PromptCompletion.parsePromptCompletion("continue", "Run the", "Run the tests now\nand more"),
@@ -135,5 +145,15 @@ describe("PromptCompletion", () => {
       "tests",
     ]);
     expect(PromptCompletion.parsePromptCompletion("continue", "Done", "   ")).toEqual([]);
+    expect(
+      PromptCompletion.parsePromptCompletion(
+        "continue",
+        "Run tests\nthen deploy",
+        "Run tests\nthen deploy and report",
+      ),
+    ).toEqual([" and report"]);
+    expect(PromptCompletion.parsePromptCompletion("continue", "quier", "o entonces")).toEqual([
+      "o entonces",
+    ]);
   });
 });

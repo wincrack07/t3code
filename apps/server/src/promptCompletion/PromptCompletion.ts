@@ -1,3 +1,4 @@
+import { promptContinuation } from "@t3tools/shared/promptContinuation";
 import {
   PROMPT_COMPLETION_MAX_SUGGESTIONS,
   PROMPT_CONTINUE_INSTRUCTIONS,
@@ -63,7 +64,7 @@ export function buildPromptCompletionPrompt(input: {
     input.mode === "continue" ? PROMPT_CONTINUE_INSTRUCTIONS : PROMPT_NEXT_INSTRUCTIONS,
     input.projectTitle ? `<project>${input.projectTitle}</project>` : "",
     `<conversation>\n${historyBlock(input.messages)}\n</conversation>`,
-    input.mode === "continue" ? `<draft>${input.draft}</draft>` : "",
+    input.mode === "continue" ? `<draft>${JSON.stringify(input.draft)}</draft>` : "",
   ]
     .filter((part) => part.length > 0)
     .join("\n\n");
@@ -90,13 +91,11 @@ export function parsePromptCompletion(
       PROMPT_COMPLETION_MAX_SUGGESTIONS,
     );
   }
-  const first = lines[0];
+  const first = lines.length > 0 ? lines.join("\n") : undefined;
   if (first === undefined) return [];
-  // Models often echo the draft before continuing it.
-  const continuation = first.startsWith(draft) ? first.slice(draft.length) : first;
-  if (continuation.trim().length === 0) return [];
-  const needsSpace = !/\s$/u.test(draft) && !/^[\s.,;:!?)]/u.test(continuation);
-  return [needsSpace && draft.length > 0 ? ` ${continuation.trimStart()}` : continuation];
+  const continuation = promptContinuation(draft, first);
+  const firstLine = continuation?.split(/\r?\n/u)[0];
+  return firstLine && /[\p{L}\p{N}]/u.test(firstLine) ? [firstLine] : [];
 }
 
 const make = Effect.gen(function* () {
