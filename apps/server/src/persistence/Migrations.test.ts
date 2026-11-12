@@ -29,6 +29,40 @@ const v2TableCount = Effect.gen(function* () {
 });
 
 describe("runMigrations", () => {
+  it.effect("upgrades saved prompts to tasks without changing their text or completion", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 83 });
+      const at = "2026-06-20T10:00:00.000Z";
+      const old = [
+        { id: "open", text: "First line\nMore detail", createdAt: at, completedAt: null },
+        { id: "done", text: "Already done", createdAt: at, completedAt: at },
+      ];
+      for (const [id, prompts] of [
+        ["demo", old],
+        ["empty", []],
+      ] as const) {
+        yield* sql`INSERT INTO projection_projects
+          (project_id, title, workspace_root, scripts_json, saved_prompts_json, created_at, updated_at)
+          VALUES (${id}, ${id}, ${`/work/${id}`}, '[]', ${JSON.stringify(prompts)}, ${at}, ${at})`;
+      }
+      yield* runMigrations();
+      const rows = yield* sql<{ project_id: string; saved_prompts_json: string }>`
+        SELECT project_id, saved_prompts_json FROM projection_projects ORDER BY project_id`;
+      assert.deepStrictEqual(
+        JSON.parse(rows[0]!.saved_prompts_json),
+        old.map((item) => ({
+          ...item,
+          title: null,
+          attachments: [],
+          status: item.completedAt === null ? "open" : "done",
+        })),
+      );
+      assert.deepStrictEqual(JSON.parse(rows[1]!.saved_prompts_json), []);
+      assert.deepStrictEqual(yield* runMigrations(), []);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("refuses to start when another migration took a V2 id", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;

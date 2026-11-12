@@ -43,6 +43,7 @@ export interface ProjectCreateInput extends ProjectCreatePayload {
 }
 
 export interface ProjectUpdateInput extends ProjectUpdatePayload {
+  readonly savedPromptThread?: { readonly id: string; readonly threadId: ThreadId };
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
 }
@@ -428,6 +429,9 @@ export const make = Effect.gen(function* () {
           : { defaultThreadEnvMode: input.defaultThreadEnvMode }),
         ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
         ...(input.savedPrompt === undefined ? {} : { savedPrompt: input.savedPrompt }),
+        ...(input.savedPromptThread === undefined
+          ? {}
+          : { savedPromptThread: input.savedPromptThread }),
         ...(input.pinned === undefined ? {} : { pinned: input.pinned }),
         ...(input.archived === undefined ? {} : { archived: input.archived }),
       });

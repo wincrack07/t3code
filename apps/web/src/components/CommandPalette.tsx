@@ -1878,6 +1878,17 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:tasks",
+    searchTerms: ["tasks", "saved", "prompts", "todo"],
+    title: "Open tasks",
+    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/tasks", search: {} });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:artifacts",
     searchTerms: ["artifacts", "claude", "gallery", "pages", "published", "claude.ai"],
     title: "Open Claude artifacts",

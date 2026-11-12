@@ -1,3 +1,5 @@
+import * as Decisions from "../decisions/Decisions.ts";
+import { AUTO_MODEL } from "@t3tools/contracts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
@@ -79,6 +81,7 @@ export interface ThreadLaunchInitialMessage {
 }
 
 export interface ThreadLaunchInput {
+  readonly savedPromptId?: string;
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
@@ -140,6 +143,7 @@ export class ThreadLaunchError extends Schema.TaggedError<ThreadLaunchError>()(
       "create-thread",
       "update-thread",
       "dispatch-message",
+      "link-saved-prompt",
       "release-run",
       "fail-run",
     ]),
@@ -907,7 +911,7 @@ const make = Effect.gen(function* () {
     function* (request) {
       // Scratch has no Git repository. Normalize before folder allocation so
       // durable preparation and retries use the thread's own Scratch folder.
-      const input: ThreadLaunchInput =
+      let input: ThreadLaunchInput =
         request.workspaceStrategy.type === "worktree" &&
         (yield* managedFolders.isScratchProject(request.projectId))
           ? { ...request, workspaceStrategy: { type: "root" } }
@@ -925,6 +929,41 @@ const make = Effect.gen(function* () {
           }),
         ),
       );
+      if (input.savedPromptId !== undefined) {
+        if (input.reuseExistingThread === true) {
+          return yield* mapError(input, "resolve-project")("A saved task starts a new thread.");
+        }
+        const task = project.savedPrompts?.find((item) => item.id === input.savedPromptId);
+        if (!task)
+          return yield* mapError(input, "resolve-project")("Saved task not found in this project.");
+        const settings = resolveProjectSettings(
+          yield* serverSettings.getSettings.pipe(
+            Effect.mapError(mapError(input, "resolve-project")),
+          ),
+          project.id,
+          project,
+        ).settings;
+        input = {
+          ...input,
+          title: task.title ?? task.text.split("\n")[0]!.slice(0, 160),
+          modelSelection: settings.defaultModelSelection ?? input.modelSelection,
+          initialMessage: { text: task.text, attachments: [] },
+        };
+      }
+      if (
+        input.savedPromptId !== undefined &&
+        (input.modelSelection.model === AUTO_MODEL || input.modelSelection.routing === "auto")
+      ) {
+        const decisions = yield* Effect.serviceOption(Decisions.Decisions);
+        if (Option.isSome(decisions))
+          input = {
+            ...input,
+            ...(yield* decisions.value.route(
+              { projectId: input.projectId, prompt: input.initialMessage!.text },
+              input.modelSelection,
+            )),
+          };
+      }
       if (input.reuseExistingThread === true && input.threadId === undefined) {
         return yield* mapError(
           input,
@@ -1142,6 +1181,16 @@ const make = Effect.gen(function* () {
               }
             }).pipe(Effect.onError(() => releasePreparation(input.commandId)));
           }
+        }
+
+        if (input.savedPromptId !== undefined && runId !== null) {
+          yield* projects
+            .update({
+              commandId: CommandId.make(`${input.commandId}:saved-prompt`),
+              projectId: input.projectId,
+              savedPromptThread: { id: input.savedPromptId, threadId },
+            })
+            .pipe(Effect.mapError(mapError(input, "link-saved-prompt", threadId)));
         }
 
         return {

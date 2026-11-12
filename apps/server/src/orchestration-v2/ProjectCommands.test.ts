@@ -1,5 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
-import { CommandId, EventId, ProjectId, type ProjectScript } from "@t3tools/contracts";
+import {
+  CommandId,
+  EventId,
+  ProjectId,
+  ThreadId,
+  type ProjectSavedPrompt,
+  type ProjectScript,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Result from "effect/Result";
 
@@ -58,6 +65,98 @@ const failureOf = (result: ReturnType<typeof plan>) => {
 };
 
 describe("planProjectCommand", () => {
+  it("enforces task limits and replaces the latest thread without completing the task", () => {
+    const task: ProjectSavedPrompt = {
+      id: "one",
+      text: "Body",
+      title: "Title",
+      status: "done",
+      createdAt: DateTime.formatIso(now),
+      completedAt: DateTime.formatIso(now),
+    };
+    const update = (
+      savedPrompt: NonNullable<
+        Extract<ProjectCommand, { type: "project.meta.update" }>["savedPrompt"]
+      >,
+      items = [task],
+    ) =>
+      plan(
+        {
+          type: "project.meta.update",
+          commandId: CommandId.make("task:update"),
+          projectId,
+          savedPrompt,
+        },
+        { project: row({ savedPrompts: items }) },
+      );
+    for (const savedPrompt of [
+      { kind: "add", id: "two", text: "x".repeat(120001) },
+      { kind: "edit", id: "one", text: "x".repeat(120001) },
+      { kind: "edit", id: "one", title: "x".repeat(161) },
+      { kind: "edit", id: "missing", status: "open" },
+    ] as const)
+      assert.strictEqual(failureOf(update(savedPrompt))._tag, "ProjectCommandInvariantError");
+    assert.strictEqual(
+      failureOf(
+        update(
+          { kind: "add", id: "new", text: "More" },
+          Array.from({ length: 100 }, (_, i) => ({ ...task, id: String(i) })),
+        ),
+      )._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(
+        update({ kind: "add", id: "new", text: "x".repeat(100001) }, [
+          { ...task, text: "x".repeat(100000) },
+        ]),
+      )._tag,
+      "ProjectCommandInvariantError",
+    );
+    const max = payloadOf(
+      update({
+        kind: "edit",
+        id: "one",
+        text: "x".repeat(120000),
+        title: "x".repeat(160),
+        status: "open",
+      }),
+    );
+    assert.strictEqual((max.savedPrompts as ProjectSavedPrompt[])[0]?.completedAt, null);
+    const linked = payloadOf(
+      plan(
+        {
+          type: "project.meta.update",
+          commandId: CommandId.make("task:link"),
+          projectId,
+          savedPromptThread: { id: "one", threadId: ThreadId.make("new-thread") },
+        },
+        {
+          project: row({
+            savedPrompts: [{ ...task, latestThreadId: ThreadId.make("old-thread") }],
+          }),
+        },
+      ),
+    );
+    assert.deepStrictEqual(linked.savedPrompts, [
+      { ...task, status: "in-progress", completedAt: null, latestThreadId: "new-thread" },
+    ]);
+    assert.strictEqual(
+      failureOf(
+        plan(
+          {
+            type: "project.meta.update",
+            commandId: CommandId.make("task:wrong-project"),
+            projectId,
+            savedPromptThread: { id: "one", threadId: ThreadId.make("new-thread") },
+          },
+          { project: row({ savedPrompts: [] }) },
+        ),
+      )._tag,
+      "ProjectCommandInvariantError",
+    );
+  });
+
   it("keeps legacy scripts editable and removable while rejecting new invalid ones", () => {
     const legacy = script("install-javascript-dependencies");
     const withLegacy = (scripts: ReadonlyArray<ProjectScript>) =>
