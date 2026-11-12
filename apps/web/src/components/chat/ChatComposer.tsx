@@ -1,3 +1,4 @@
+import { SavePromptButton } from "./SavePromptButton";
 import { ContextUsageControl } from "./ContextUsageControl";
 import { VoiceInputSetup } from "./VoiceInputSetup";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
@@ -3747,6 +3748,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     compactBeforeSendTokens={props.resumeCompactionTokens}
                     keepFullHistory={props.keepFullHistory}
                   >
+                    {activeProjectId && !isComposerApprovalState && !activePendingProgress ? (
+                      <SavePromptButton
+                        environmentId={environmentId}
+                        projectId={activeProjectId}
+                        target={composerDraftTarget}
+                        text={prompt}
+                        disabled={!canOperateThread || voiceInputActive}
+                      />
+                    ) : null}
                     {composerPolishButton}
                     {speechInput.available ? (
                       <>

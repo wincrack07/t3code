@@ -1,3 +1,6 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import { assert, it } from "@effect/vitest";
 import { EventId, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -97,4 +100,60 @@ it.layer(ProjectStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemor
       }),
     );
   },
+);
+
+it.effect("retains saved prompts after closing and reopening the database", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-saved-prompts-" });
+    const projectId = ProjectId.make("persisted-prompts");
+    const at = "2026-06-20T10:00:00.000Z";
+    const savedPrompts = [{ id: "one", text: "Persist me", createdAt: at, completedAt: null }];
+    const databaseLayer = () =>
+      ProjectStore.layer.pipe(
+        Layer.provide(SqlitePersistence.layerFromPath(path.join(directory, "state.sqlite"))),
+      );
+    yield* Effect.gen(function* () {
+      const store = yield* ProjectStore.ProjectStoreV2;
+      const base = {
+        aggregateKind: "project",
+        aggregateId: projectId,
+        occurredAt: at,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+      } as const;
+      yield* store.apply({
+        ...base,
+        sequence: 1,
+        eventId: EventId.make("persist:create"),
+        type: "project.created",
+        payload: {
+          projectId,
+          title: "Demo",
+          workspaceRoot: "/work/demo",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: at,
+          updatedAt: at,
+        },
+      });
+      yield* store.apply({
+        ...base,
+        sequence: 2,
+        eventId: EventId.make("persist:save"),
+        type: "project.meta-updated",
+        payload: { projectId, savedPrompts, updatedAt: at },
+      });
+    }).pipe(Effect.provide(databaseLayer()));
+    yield* Effect.gen(function* () {
+      const store = yield* ProjectStore.ProjectStoreV2;
+      assert.deepStrictEqual(
+        Option.getOrThrow(yield* store.get(projectId)).savedPrompts,
+        savedPrompts,
+      );
+    }).pipe(Effect.provide(databaseLayer()));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

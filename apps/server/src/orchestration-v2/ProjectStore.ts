@@ -6,6 +6,7 @@ import {
   StoredProjectIcon,
   ProjectId,
   ProjectScript,
+  ProjectSavedPrompt,
   ThreadEnvMode,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -39,6 +40,7 @@ export const ProjectRow = Schema.Struct({
   faviconPath: Schema.NullOr(Schema.String),
   projectIcon: Schema.NullOr(StoredProjectIcon),
   scripts: Schema.Array(ProjectScript),
+  savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
   pinnedAt: Schema.NullOr(IsoDateTime),
   archivedAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,
@@ -53,6 +55,7 @@ const ProjectDbRow = Schema.Struct({
   autoPull: Schema.BooleanFromBit,
   projectIcon: Schema.NullOr(Schema.fromJsonString(StoredProjectIcon)),
   scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+  savedPrompts: Schema.fromJsonString(Schema.Array(ProjectSavedPrompt)),
 });
 
 function toShell(row: ProjectRow): OrchestrationProjectShell {
@@ -67,6 +70,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     faviconPath: row.faviconPath,
     projectIcon: row.projectIcon,
     scripts: row.scripts,
+    savedPrompts: row.savedPrompts ?? [],
     pinnedAt: row.pinnedAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
@@ -124,6 +128,7 @@ export const make = Effect.gen(function* () {
         favicon_path AS "faviconPath",
         project_icon_json AS "projectIcon",
         scripts_json AS "scripts",
+        saved_prompts_json AS "savedPrompts",
         pinned_at AS "pinnedAt",
         archived_at AS "archivedAt",
         created_at AS "createdAt",
@@ -143,7 +148,7 @@ export const make = Effect.gen(function* () {
   });
 
   const upsertRow = (row: ProjectRow) =>
-    encodeRow(row).pipe(
+    encodeRow({ ...row, savedPrompts: row.savedPrompts ?? [] }).pipe(
       Effect.flatMap(
         (encoded) => sql`
           INSERT INTO projection_projects (
@@ -156,6 +161,7 @@ export const make = Effect.gen(function* () {
             favicon_path,
             project_icon_json,
             scripts_json,
+            saved_prompts_json,
             pinned_at,
             archived_at,
             created_at,
@@ -172,6 +178,7 @@ export const make = Effect.gen(function* () {
             ${encoded.faviconPath},
             ${encoded.projectIcon},
             ${encoded.scripts},
+            ${encoded.savedPrompts},
             ${encoded.pinnedAt},
             ${encoded.archivedAt},
             ${encoded.createdAt},
@@ -188,6 +195,7 @@ export const make = Effect.gen(function* () {
             favicon_path = excluded.favicon_path,
             project_icon_json = excluded.project_icon_json,
             scripts_json = excluded.scripts_json,
+            saved_prompts_json = excluded.saved_prompts_json,
             pinned_at = excluded.pinned_at,
             archived_at = excluded.archived_at,
             created_at = excluded.created_at,
@@ -270,6 +278,7 @@ export const make = Effect.gen(function* () {
         ...(payload.faviconPath === undefined ? {} : { faviconPath: payload.faviconPath }),
         ...(payload.projectIcon === undefined ? {} : { projectIcon: payload.projectIcon }),
         ...(payload.scripts === undefined ? {} : { scripts: payload.scripts }),
+        ...(payload.savedPrompts === undefined ? {} : { savedPrompts: payload.savedPrompts }),
         ...(payload.pinnedAt === undefined ? {} : { pinnedAt: payload.pinnedAt }),
         ...(payload.archivedAt === undefined ? {} : { archivedAt: payload.archivedAt }),
         updatedAt: payload.updatedAt,

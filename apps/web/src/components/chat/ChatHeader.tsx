@@ -1,3 +1,4 @@
+import { SavedPrompts } from "../SavedPrompts";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
@@ -278,6 +279,10 @@ export const ChatHeader = memo(function ChatHeader({
                 </TooltipTrigger>
                 <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
               </Tooltip>
+              <SavedPrompts
+                environmentId={activeProject.environmentId}
+                projectId={activeProject.id}
+              />
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator>
               <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>

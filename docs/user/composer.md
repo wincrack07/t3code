@@ -12,6 +12,18 @@ becomes an attachment when inserting it would exceed the message limit. On a
 hardware keyboard, use `Cmd+Shift+V` on Apple devices or `Ctrl+Shift+V` elsewhere
 to keep a large paste editable in the composer instead.
 
+## Save for later
+
+Use **Save for later** beside Send, or `Cmd+Alt+S` (`Ctrl+Alt+S` on
+Windows and Linux), to park the draft text in the current project. You can also
+find it in the command palette. Attachments and rich context stay in the composer.
+
+Open the bookmark count beside the project name in the chat header to manage saved prompts.
+**Use** adds one to the current thread's draft; **Start thread** opens a draft in
+that project. Both mark the prompt done. Expand **Done** to reopen it or clear
+completed prompts. Prompts belong to the project's server, so other devices
+connected to that environment see the same list.
+
 ## Formatting
 
 The composer writes Markdown and shows it styled as you type. When your cursor

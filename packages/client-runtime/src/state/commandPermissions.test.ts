@@ -159,6 +159,7 @@ describe("command permissions", () => {
   );
 
   it.effect.each([
+    { method: WS_METHODS.projectsMutate, scope: AuthOrchestrationOperateScope },
     { method: WS_METHODS.machineCleanupHistory, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupScan, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupRunPhaseA, scope: AuthEnvironmentMaintainScope },
@@ -175,7 +176,10 @@ describe("command permissions", () => {
       Effect.gen(function* () {
         const registry = yield* setup;
         const command = createCommandPermissions(runtime, method);
-        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        registry.set(
+          sessions(env),
+          AsyncResult.success({ ...grant(true), scopes: [], permissions: [] }),
+        );
         expect(registry.get(command.permissionAtom(env))).toBe(false);
         expect((yield* command.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
           "EnvironmentAuthorizationError",

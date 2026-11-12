@@ -1,3 +1,4 @@
+import { SAVE_PROMPT_EVENT } from "./chat/SavePromptButton";
 import { setAllProjectsExpanded } from "./sidebar/projectExpansion";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { openThreadInSplit } from "../threadColumnsStore";
@@ -1311,6 +1312,18 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  if (activeThread || activeDraftThread)
+    actionItems.push({
+      kind: "action",
+      value: "action:save-prompt",
+      title: "Save prompt for later",
+      searchTerms: ["save", "prompt", "later", "todo"],
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "composer.saveForLater",
+      run: async () => {
+        window.dispatchEvent(new Event(SAVE_PROMPT_EVENT));
+      },
+    });
 
   if (projects.length > 0) {
     const activeProjectTitle =
