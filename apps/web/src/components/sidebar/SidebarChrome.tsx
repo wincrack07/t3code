@@ -7,6 +7,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LayoutGridIcon,
+  ListTodoIcon,
+  SquareKanbanIcon,
   MoreHorizontalIcon,
   SettingsIcon,
 } from "lucide-react";
@@ -50,6 +52,8 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { useProjects } from "../../state/entities";
+import { usePrimaryEnvironmentId } from "../../state/environments";
 import { observeResize } from "~/lib/observeResize";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
@@ -360,8 +364,46 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 });
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+  const projects = useProjects();
+  const environmentId = usePrimaryEnvironmentId();
+  const count = projects
+    .filter((project) => project.environmentId === environmentId)
+    .reduce(
+      (total, project) =>
+        total + (project.savedPrompts ?? []).filter((task) => task.completedAt === null).length,
+      0,
+    );
+  const navigate = useNavigate();
   return (
     <SidebarFooter>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton onClick={() => void navigate({ to: "/activity" })}>
+            <SquareKanbanIcon />
+            <span>Activity</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton onClick={() => void navigate({ to: "/artifacts" })}>
+            <LayoutGridIcon />
+            <span>Artifacts</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            onClick={() =>
+              void navigate({
+                to: "/tasks",
+                search: environmentId ? { environment: environmentId } : {},
+              })
+            }
+          >
+            <ListTodoIcon />
+            <span>Tasks</span>
+            <span className="ml-auto text-xs text-muted-foreground">{count}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />
