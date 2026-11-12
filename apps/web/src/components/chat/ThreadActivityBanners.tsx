@@ -5,6 +5,7 @@ import type {
   OrchestrationV2ProviderSession,
   ThreadId,
 } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell, ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import {
   presentPendingBackgroundWork,
@@ -28,6 +29,7 @@ import {
 import { Fragment } from "react";
 import { tickTextContent } from "~/lib/tickTextContent";
 import { BackgroundWorkDetails } from "./BackgroundWorkDetails";
+import { ChildQuestionCard } from "./ChildQuestionCard";
 import { Button, InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
@@ -51,8 +53,10 @@ export function childInputNowItem(input: {
   readonly parentAwaitingUser: boolean;
   // A task delegated to a linked environment lives there, not where the parent runs.
   readonly onOpenThread: (threadId: ThreadId, environmentId: EnvironmentId) => void;
+  /** Whether the first child's question is open here, and how to toggle it; null when it can't be. */
+  readonly answerHere: { readonly open: boolean; readonly onToggle: () => void } | null;
 }): (ThreadNowItem & { readonly waitingLabel: string }) | null {
-  const { childThreadInputs, onOpenThread } = input;
+  const { childThreadInputs, onOpenThread, answerHere } = input;
   const first = childThreadInputs[0];
   if (!first || input.parentAwaitingUser) return null;
   return {
@@ -79,10 +83,24 @@ export function childInputNowItem(input: {
       </Fragment>
     )),
     actions: (
-      <InlineButton onClick={() => onOpenThread(first.id, first.environmentId)}>
-        {first.hasPendingApprovals ? "Open approval" : "Open question"}
-      </InlineButton>
+      <>
+        {answerHere && !first.hasPendingApprovals ? (
+          <InlineButton aria-expanded={answerHere.open} onClick={answerHere.onToggle}>
+            {answerHere.open ? "Hide answer" : "Answer here"}
+          </InlineButton>
+        ) : null}
+        <InlineButton
+          tone={answerHere && !first.hasPendingApprovals ? "muted" : "default"}
+          onClick={() => onOpenThread(first.id, first.environmentId)}
+        >
+          {first.hasPendingApprovals ? "Open approval" : "Open question"}
+        </InlineButton>
+      </>
     ),
+    detail:
+      answerHere?.open && !first.hasPendingApprovals ? (
+        <ChildQuestionCard threadRef={scopeThreadRef(first.environmentId, first.id)} />
+      ) : undefined,
   };
 }
 

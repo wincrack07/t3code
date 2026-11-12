@@ -499,12 +499,32 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   };
   const onOpenRelatedThreadStable = useStableCallback(onOpenRelatedThread);
   const childThreadInputs = useChildThreadInputs(activeThreadRef);
+  const firstChildInput = childThreadInputs[0];
+  const firstChildInputKey = firstChildInput
+    ? scopedThreadKey(scopeThreadRef(firstChildInput.environmentId, firstChildInput.id))
+    : null;
+  const canAnswerChild = useEnvironmentScope(
+    firstChildInput?.environmentId ?? environmentId,
+    AuthOrchestrationOperateScope,
+  );
+  // Keyed by child, so the next subagent to ask starts closed.
+  const [answeringChildKey, setAnsweringChildKey] = useState<string | null>(null);
   const childInputNow = childInputNowItem({
     childThreadInputs,
     parentAwaitingUser: Boolean(
       activePendingApproval || activePendingUserInput || activeThreadShell?.hasPendingUserInput,
     ),
     onOpenThread: onOpenRelatedThreadStable,
+    answerHere:
+      firstChildInputKey === null || !canAnswerChild
+        ? null
+        : {
+            open: answeringChildKey === firstChildInputKey,
+            onToggle: () =>
+              setAnsweringChildKey((current) =>
+                current === firstChildInputKey ? null : firstChildInputKey,
+              ),
+          },
   });
 
   const sendStandaloneCommand = async (text: string, failureMessage: string) => {

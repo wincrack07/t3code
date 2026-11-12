@@ -12,6 +12,8 @@ export interface ThreadNowItem {
   readonly title: ReactNode;
   readonly description?: ReactNode;
   readonly actions?: ReactNode;
+  /** Opened from the line's actions, such as a subagent's question to answer here. */
+  readonly detail?: ReactNode;
 }
 
 /** Matches ThreadStatusLine, so every line at the end of the timeline reads as one family. */
@@ -95,6 +97,7 @@ export function ThreadNow({
   return (
     <>
       {attention ? <ThreadNowLine item={attention} announce /> : null}
+      {attention?.detail ? <div className="chat-content-lane pb-2">{attention.detail}</div> : null}
       {work ? <ThreadNowLine item={work} /> : null}
       {syncPhase ? <ThreadSyncLine phase={syncPhase} /> : null}
       {goal ? <ThreadNowLine item={goal} /> : null}
