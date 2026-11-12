@@ -13,7 +13,8 @@ export function createSidebarColorBlocks(items: ReactNode[]) {
         data-sidebar-row-colour={block.color ?? undefined}
         style={sidebarRowColorStyle(block.color)}
         // The gap above a group sits outside its wash, so the header stays centred in it.
-        className="mt-2 list-none"
+        // Groups stand further apart than the projects inside them; a nested group hugs its parent.
+        className="mt-3 list-none first:mt-2 [[data-sidebar-group-header]+&]:mt-0"
       >
         <ul className="m-0 flow-root list-none p-0">{block.items}</ul>
       </li>,
