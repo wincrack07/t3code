@@ -1,3 +1,4 @@
+import { useClientSettings } from "../../hooks/useSettings";
 import { useAtomMount } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
@@ -1225,6 +1226,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     </span>
   ) : null;
 
+  const hideProjectIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
+
   if (variant !== "card") {
     const multiline = variant === "folder-multiline";
     const inFolder = variant === "folder" || multiline;
@@ -1264,7 +1267,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     ? "flex flex-col justify-center px-2.5 py-1.5"
                     : "flex h-8 items-center gap-1.5 px-2.5",
                   // Lines titles up with the folder name, past its chevron and icon.
-                  inFolder && "ps-9",
+                  inFolder && !hideProjectIcons && "ps-9",
+                  inFolder && hideProjectIcons && "ps-2.5",
                 )}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
@@ -1276,7 +1280,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
               {accessibleTitle}
-              {inFolder ? null : (
+              {inFolder || hideProjectIcons ? null : (
                 <span
                   className={cn(
                     "flex shrink-0 items-center transition-opacity",
@@ -1492,7 +1496,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           >
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
-              {props.project ? (
+              {props.project && !hideProjectIcons ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
               {/* Left of the status slot, the pin would slide when hover swaps the
@@ -1686,6 +1690,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
   onSelect: () => void;
   onFileDropThreads: (threadRef: ScopedThreadRef, files: File[]) => void;
 }) {
+  const hideProjectIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
   const thread =
     useThreadShell(scopeThreadRef(props.thread.environmentId, props.thread.id)) ?? props.thread;
   const accessibility = resolveSidebarRowAccessibility({
@@ -1789,7 +1794,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
             />
           }
         >
-          {props.project ? (
+          {props.project && !hideProjectIcons ? (
             <ProjectFavicon
               project={props.project}
               className={cn(

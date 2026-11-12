@@ -1,5 +1,7 @@
 import type { ClientSettings } from "@t3tools/contracts";
 
+export const UNGROUPED_PROJECT_FOLDER_ID = "ungrouped";
+
 export type ProjectFolder = ClientSettings["sidebarProjectFolders"][number];
 
 export function moveProjectsToFolder(
@@ -168,6 +170,7 @@ export function deleteProjectFolder(
 
 export type ProjectFolderTreeRow<T> =
   | { kind: "project"; project: T; depth: number; folderId: string | null }
+  | { kind: "loose"; project: T; depth: 0 }
   | {
       kind: "folder";
       folder: ProjectFolder;
@@ -181,7 +184,9 @@ export type ProjectFolderTreeRow<T> =
  * Groups come before projects at every level. Projects keep their order from the
  * sorted list; groups keep their stored order. A collapsed group hides its subtree.
  */
-export function arrangeProjectFolderTree<T extends { group: { projectKey: string } }>(
+export function arrangeProjectFolderTree<
+  T extends { group: { projectKey: string; isScratch?: boolean } },
+>(
   projects: readonly T[],
   folders: readonly ProjectFolder[],
   options: { isCollapsed: (folderId: string) => boolean; includeEmpty?: boolean },
@@ -192,6 +197,7 @@ export function arrangeProjectFolderTree<T extends { group: { projectKey: string
     for (const key of folder.projectKeys) if (!owners.has(key)) owners.set(key, folder.id);
   }
   const ownerOf = (project: T) => owners.get(project.group.projectKey) ?? null;
+  const ordinary = projects.filter((project) => !project.group.isScratch);
   const descendants = new Map<string, T[]>();
   const collect = (folderId: string): T[] => {
     const known = descendants.get(folderId);
@@ -200,7 +206,7 @@ export function arrangeProjectFolderTree<T extends { group: { projectKey: string
       ...folders
         .filter((folder) => parents.get(folder.id) === folderId)
         .flatMap((folder) => collect(folder.id)),
-      ...projects.filter((project) => ownerOf(project) === folderId),
+      ...ordinary.filter((project) => ownerOf(project) === folderId),
     ];
     descendants.set(folderId, below);
     return below;
@@ -215,12 +221,29 @@ export function arrangeProjectFolderTree<T extends { group: { projectKey: string
       rows.push({ kind: "folder", folder, depth, collapsed, projects: below });
       if (!collapsed) visit(folder.id, depth + 1);
     }
-    for (const project of projects) {
+    for (const project of ordinary) {
+      if (parentId === null && folders.length > 0) continue;
       if (ownerOf(project) === parentId)
         rows.push({ kind: "project", project, depth, folderId: parentId });
     }
   };
   visit(null, 0);
+  const ungrouped = ordinary.filter((project) => ownerOf(project) === null);
+  if (folders.length > 0 && ungrouped.length > 0) {
+    const collapsed = options.isCollapsed(UNGROUPED_PROJECT_FOLDER_ID);
+    rows.push({
+      kind: "folder",
+      folder: { id: UNGROUPED_PROJECT_FOLDER_ID, name: "Ungrouped", emoji: "", projectKeys: [] },
+      depth: 0,
+      collapsed,
+      projects: ungrouped,
+    });
+    if (!collapsed)
+      for (const project of ungrouped)
+        rows.push({ kind: "project", project, depth: 1, folderId: null });
+  }
+  for (const project of projects)
+    if (project.group.isScratch) rows.push({ kind: "loose", project, depth: 0 });
   return rows;
 }
 
@@ -271,6 +294,11 @@ export function planSidebarTreeDrop(
   const none = { kind: "none" } as const;
   const parents = resolveProjectFolderParents(folders);
   if (item.kind === "folder") {
+    if (
+      item.id === UNGROUPED_PROJECT_FOLDER_ID ||
+      (target.kind === "folder" && target.id === UNGROUPED_PROJECT_FOLDER_ID)
+    )
+      return none;
     if (target.kind === "project") return none;
     if (target.kind === "root")
       return parents.get(item.id) === null
@@ -294,10 +322,10 @@ export function planSidebarTreeDrop(
   const current = projectFolderOfProject(folders, item.key)?.id ?? null;
   if (target.kind === "root")
     return current === null ? none : { kind: "move-project", projectKey: item.key, folderId: null };
-  if (target.kind === "folder")
-    return current === target.id
-      ? none
-      : { kind: "move-project", projectKey: item.key, folderId: target.id };
+  if (target.kind === "folder") {
+    const folderId = target.id === UNGROUPED_PROJECT_FOLDER_ID ? null : target.id;
+    return current === folderId ? none : { kind: "move-project", projectKey: item.key, folderId };
+  }
   if (target.key === item.key) return none;
   return {
     kind: "move-project",

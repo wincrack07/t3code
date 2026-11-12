@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { CheckIcon } from "lucide-react";
+import { cn } from "~/lib/utils";
 import { SIDEBAR_COLORS, isSidebarColor } from "../../sidebarColors";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -10,21 +12,32 @@ import {
   MenuGroupLabel,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuRadioItemIndicator,
   MenuSeparator,
   MenuSub,
   MenuSubTrigger,
   MenuSubPopup,
 } from "../ui/menu";
 
-export function SidebarColorMarker({ color }: { color?: string | null | undefined }) {
-  return color ? (
+export function SidebarColorMarker({
+  color,
+  variant = "dot",
+}: {
+  color?: string | null | undefined;
+  variant?: "dot" | "swatch";
+}) {
+  if (!color && variant === "dot") return null;
+  return (
     <span
       aria-hidden="true"
       data-sidebar-color={color}
-      className="inline-block size-2 shrink-0 rounded-full border border-current/30"
-      style={{ backgroundColor: color }}
+      className={cn(
+        "inline-block shrink-0 rounded-full border",
+        variant === "swatch" ? "size-3 border-border" : "size-2 border-current/30",
+      )}
+      style={color ? { backgroundColor: color } : undefined}
     />
-  ) : null;
+  );
 }
 
 function SidebarColorChoices({
@@ -35,41 +48,77 @@ function SidebarColorChoices({
   onChange: (color: string | null) => void;
 }) {
   const [custom, setCustom] = useState(value ?? "#629bd7");
+  const valid = isSidebarColor(custom);
+  const customSelected =
+    value !== null && !SIDEBAR_COLORS.some((color) => color.value === value.toLowerCase());
+  const apply = () => {
+    if (valid) onChange(custom.toLowerCase());
+  };
   return (
     <>
       <MenuRadioGroup
-        value={value ?? "default"}
+        value={value?.toLowerCase() ?? "default"}
         onValueChange={(color) => {
           if (color === "default" || isSidebarColor(color))
             onChange(color === "default" ? null : color);
         }}
       >
         <MenuGroupLabel>Sidebar colour</MenuGroupLabel>
-        <MenuRadioItem value="default">Default</MenuRadioItem>
-        {SIDEBAR_COLORS.map((color) => (
-          <MenuRadioItem closeOnClick={false} key={color.value} value={color.value}>
-            <SidebarColorMarker color={color.value} />
-            {color.name}
+        {[{ name: "Default", value: "default" }, ...SIDEBAR_COLORS].map((color) => (
+          <MenuRadioItem
+            variant="rounded"
+            closeOnClick={false}
+            key={color.value}
+            value={color.value}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <SidebarColorMarker
+                variant="swatch"
+                color={color.value === "default" ? null : color.value}
+              />
+              <span className="min-w-0 flex-1 truncate">{color.name}</span>
+              <MenuRadioItemIndicator />
+            </span>
           </MenuRadioItem>
         ))}
       </MenuRadioGroup>
       <MenuSeparator />
       <MenuGroup>
-        <MenuGroupLabel>Custom colour</MenuGroupLabel>
-        <div className="flex items-center gap-2 p-2" onKeyDown={(event) => event.stopPropagation()}>
+        <MenuGroupLabel>
+          <span className="flex items-center gap-2">
+            <span className="flex-1">Custom colour</span>
+            {customSelected ? (
+              <>
+                <CheckIcon aria-hidden className="size-3.5" />
+                <span className="sr-only">Current colour</span>
+              </>
+            ) : null}
+          </span>
+        </MenuGroupLabel>
+        <div
+          className="flex items-center gap-2 px-2 py-1"
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") event.stopPropagation();
+          }}
+        >
+          <SidebarColorMarker variant="swatch" color={valid ? custom : null} />
           <Input
             aria-label="Custom sidebar colour"
             value={custom}
+            aria-invalid={!valid || undefined}
+            spellCheck={false}
+            font="mono"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                apply();
+              }
+            }}
             onChange={(event) => setCustom(event.target.value)}
             placeholder="#629bd7"
             size="sm"
           />
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={!isSidebarColor(custom)}
-            onClick={() => onChange(custom)}
-          >
+          <Button size="sm" variant="outline" disabled={!valid} onClick={apply}>
             Apply
           </Button>
         </div>
@@ -85,7 +134,7 @@ export function SidebarColorPicker(props: {
   return (
     <Menu>
       <MenuTrigger render={<Button variant="outline" size="sm" disabled={props.disabled} />}>
-        <SidebarColorMarker color={props.value} />
+        <SidebarColorMarker variant="swatch" color={props.value} />
         Sidebar colour
       </MenuTrigger>
       <MenuPopup align="end">

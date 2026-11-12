@@ -106,14 +106,13 @@ it("opens the display menu and collapses all projects while preserving the curre
   expect(onCreate).toHaveBeenCalledOnce();
 });
 
-it("opens group actions and the move-to-group submenu", async () => {
+it("opens group actions and moves groups", async () => {
   using _environment = installFakeEnvironment([]);
   using _fixture = setup();
   const folder = getClientSettings().sidebarProjectFolders[0]!;
   const child = { id: "child", name: "Backend", emoji: "", projectKeys: [], parentId: "staff" };
   const other = { id: "other", name: "Other", emoji: "", projectKeys: [] };
   const folders = [folder, child, other];
-  const onMove = vi.fn();
   const onGroupMove = vi.fn();
   const onRename = vi.fn();
   const onCreateInside = vi.fn();
@@ -147,17 +146,6 @@ it("opens group actions and the move-to-group submenu", async () => {
           onDelete={vi.fn()}
         />
       </ul>
-      <Menu>
-        <MenuTrigger>Project actions</MenuTrigger>
-        <MenuPopup>
-          <ProjectFolderMenu
-            folders={[folder, other]}
-            currentFolderId="staff"
-            onMove={onMove}
-            onCreate={vi.fn()}
-          />
-        </MenuPopup>
-      </Menu>
     </>,
   );
   await userEvent.click(screen.getByRole("button", { name: "Group actions for StaffPass" }));
@@ -184,6 +172,27 @@ it("opens group actions and the move-to-group submenu", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Group actions for Backend" }));
   await userEvent.click(page.getByRole("menuitem", { name: "Move to top level", exact: true }));
   expect(onGroupMove).toHaveBeenLastCalledWith(null);
+});
+
+it("moves projects between groups and back to top level", async () => {
+  using _environment = installFakeEnvironment([]);
+  using _fixture = setup();
+  const folder = getClientSettings().sidebarProjectFolders[0]!;
+  const other = { id: "other", name: "Other", emoji: "", projectKeys: [] };
+  const onMove = vi.fn();
+  await using screen = await render(
+    <Menu>
+      <MenuTrigger>Project actions</MenuTrigger>
+      <MenuPopup>
+        <ProjectFolderMenu
+          folders={[folder, other]}
+          currentFolderId="staff"
+          onMove={onMove}
+          onCreate={vi.fn()}
+        />
+      </MenuPopup>
+    </Menu>,
+  );
   await userEvent.click(screen.getByRole("button", { name: "Project actions" }));
   await userEvent.hover(page.getByRole("menuitem", { name: "Move to group" }));
   await expect
