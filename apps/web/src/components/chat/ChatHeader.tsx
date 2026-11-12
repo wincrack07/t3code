@@ -264,7 +264,7 @@ export const ChatHeader = memo(function ChatHeader({
       >
         {activeProject ? (
           <>
-            <WorkspaceBreadcrumbItem className="shrink">
+            <WorkspaceBreadcrumbItem className="shrink gap-1">
               <Tooltip>
                 <TooltipTrigger
                   render={

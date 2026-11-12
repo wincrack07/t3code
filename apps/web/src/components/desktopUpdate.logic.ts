@@ -138,6 +138,9 @@ export function shouldToastDesktopUpdateActionResult(result: DesktopUpdateAction
   return getDesktopUpdateActionError(result) !== null;
 }
 
+export const DESKTOP_UPDATE_CHECK_LABEL = "Check for Updates";
+export const DESKTOP_UPDATE_CHECKING_LABEL = "Checking…";
+
 export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
   if (!state || !state.enabled) return false;
   return (

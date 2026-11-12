@@ -2,11 +2,14 @@ import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 import { ExternalLinkIcon } from "lucide-react";
 
 import {
+  DESKTOP_UPDATE_CHECK_LABEL,
+  DESKTOP_UPDATE_CHECKING_LABEL,
   getDesktopUpdateReleaseHistoryUrl,
   getDesktopUpdateReleaseUrl,
 } from "../desktopUpdate.logic";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { openDesktopUpdateReleaseNotes } from "../desktopUpdate.toast";
+import { Button } from "../ui/button";
 
 type DesktopUpdateShell = Pick<DesktopBridge, "openExternal">;
 
@@ -59,10 +62,16 @@ export function SidebarUpdateReleaseNotes({
   shell,
   state,
   tooltip,
+  check,
 }: {
   readonly shell: DesktopUpdateShell | undefined;
   readonly state: DesktopUpdateState;
   readonly tooltip: string;
+  readonly check?: {
+    readonly checking: boolean;
+    readonly disabled: boolean;
+    readonly onCheck: () => void;
+  };
 }) {
   if (state.releaseNotes.length === 0) {
     return <>{tooltip}</>;
@@ -158,6 +167,23 @@ export function SidebarUpdateReleaseNotes({
           </div>
         ) : null}
       </div>
+      {check ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 pt-2 pr-1">
+          <Button
+            size="micro"
+            variant="ghost-muted"
+            disabled={check.disabled}
+            onClick={check.onCheck}
+          >
+            {check.checking ? DESKTOP_UPDATE_CHECKING_LABEL : DESKTOP_UPDATE_CHECK_LABEL}
+          </Button>
+          {state.checkedAt ? (
+            <span className="text-xs leading-4 text-muted-foreground">
+              Checked {formatRelativeTimeLabel(state.checkedAt)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
