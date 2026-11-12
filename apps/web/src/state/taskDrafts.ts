@@ -1,3 +1,4 @@
+import { mergingStorage } from "../windowPersistence";
 import {
   SavedTaskDraftBinding,
   type SavedTaskDraftBindings,
@@ -23,7 +24,7 @@ export const createTaskDraftStore = (storage: StateStorage) =>
 const taskDraftStore = createTaskDraftStore(
   typeof localStorage === "undefined"
     ? { getItem: () => null, setItem: () => {}, removeItem: () => {} }
-    : localStorage,
+    : mergingStorage(localStorage),
 );
 export const taskDrafts = {
   store: taskDraftStore,

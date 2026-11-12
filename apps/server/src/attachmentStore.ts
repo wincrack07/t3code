@@ -42,7 +42,11 @@ export function toSafeThreadAttachmentSegment(threadId: string): string | null {
   if (segment.length === 0) {
     return null;
   }
-  return segment === PENDING_ATTACHMENT_THREAD_SEGMENT ? "_pending" : segment;
+  return segment === PENDING_ATTACHMENT_THREAD_SEGMENT
+    ? "_pending"
+    : /^saved-task-[a-f0-9]{32}$/.test(segment)
+      ? `_${segment}`
+      : segment;
 }
 
 export function attachmentFileExtension(fileName: string): string {
@@ -95,6 +99,7 @@ export function createAttachmentId(threadId: string, extension?: string): string
 export function createDeterministicAttachmentId(
   threadId: string,
   stableKey: string,
+  extension?: string,
 ): string | null {
   const threadSegment = toSafeThreadAttachmentSegment(threadId);
   if (!threadSegment) return null;
@@ -103,7 +108,22 @@ export function createDeterministicAttachmentId(
     .digest("hex")
     .slice(0, 32);
   const uuid = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20)}`;
-  return `${threadSegment}-${uuid}`;
+  return `${threadSegment}-${uuid}${attachmentIdExtensionSuffix(extension)}`;
+}
+
+// Reserve task ownership so cleanup cannot mistake a normally named thread's files for task copies.
+export function createTaskAttachmentId(
+  owner: string,
+  stableKey: string,
+  extension?: string,
+): string | null {
+  if (!/^saved-task-[a-f0-9]{32}$/.test(owner)) return null;
+  return (
+    createDeterministicAttachmentId(owner, stableKey, extension)?.replace(
+      /^_saved-task-/,
+      "saved-task-",
+    ) ?? null
+  );
 }
 
 /** Retries keep ids; changed bytes must get new ids because clients cache images by id. */
@@ -205,6 +225,10 @@ export function resolveAttachmentPathById(input: {
   return null;
 }
 
+export function isTaskAttachmentId(id: string): boolean {
+  return /^saved-task-[a-f0-9]{32}$/.test(parseThreadSegmentFromAttachmentId(id) ?? "");
+}
+
 export type AttachmentClaimPlan =
   | {
       readonly ok: true;
@@ -228,7 +252,10 @@ export function planAttachmentClaim(input: {
   if (!toSafeThreadAttachmentSegment(input.threadId)) {
     return { ok: false, reason: "invalid thread id" };
   }
-  if (requestedSegment !== PENDING_ATTACHMENT_THREAD_SEGMENT) {
+  if (
+    requestedSegment !== PENDING_ATTACHMENT_THREAD_SEGMENT &&
+    !isTaskAttachmentId(input.attachmentId)
+  ) {
     return { ok: false, reason: "attachment must be a pending upload" };
   }
 
@@ -240,7 +267,9 @@ export function planAttachmentClaim(input: {
     return { ok: false, reason: "attachment not found (removed or expired)" };
   }
   const fileExtension = parseAttachmentFileExtension(input.attachmentId) ?? undefined;
-  const finalId = createAttachmentId(input.threadId, fileExtension);
+  const finalId = isTaskAttachmentId(input.attachmentId)
+    ? createDeterministicAttachmentId(input.threadId, input.attachmentId, fileExtension)
+    : createAttachmentId(input.threadId, fileExtension);
   if (!finalId) {
     return { ok: false, reason: "failed to create attachment id" };
   }

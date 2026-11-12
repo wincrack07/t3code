@@ -8,6 +8,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   chatAttachmentStableKey,
   createAttachmentId,
+  createTaskAttachmentId,
+  isTaskAttachmentId,
   createDeterministicAttachmentId,
   createPendingAttachmentId,
   parseAttachmentUuid,
@@ -72,6 +74,10 @@ describe("attachmentStore", () => {
     expect(parseThreadSegmentFromAttachmentId(pendingId)).toBe("pending");
     expect(parseAttachmentUuid(pendingId)).toMatch(/^[a-f0-9-]{36}$/);
     expect(parseThreadSegmentFromAttachmentId(createAttachmentId("pending")!)).toBe("_pending");
+    const owner = `saved-task-${"a".repeat(32)}`;
+    expect(isTaskAttachmentId(createAttachmentId(owner)!)).toBe(false);
+    expect(isTaskAttachmentId(createTaskAttachmentId(owner, "upload", ".bin")!)).toBe(true);
+
     expect(parseThreadSegmentFromAttachmentId(createAttachmentId("pending_thread")!)).toBe(
       "pending_thread",
     );

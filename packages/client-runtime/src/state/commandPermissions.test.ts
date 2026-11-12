@@ -163,6 +163,7 @@ describe("command permissions", () => {
 
   it.effect.each([
     { method: WS_METHODS.projectsMutate, scope: AuthOrchestrationOperateScope },
+    { method: WS_METHODS.projectsTaskAttachments, scope: AuthOrchestrationReadScope },
     { method: WS_METHODS.machineCleanupHistory, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupScan, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupRunPhaseA, scope: AuthEnvironmentMaintainScope },

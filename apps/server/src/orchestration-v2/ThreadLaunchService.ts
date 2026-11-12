@@ -1,3 +1,8 @@
+import * as FileSystem from "effect/FileSystem";
+import * as ServerConfig from "../config.ts";
+import * as DocumentText from "../provider/DocumentText.ts";
+import { savedTaskDraftContent } from "@t3tools/shared/savedTasks";
+import * as AttachmentClaims from "./AttachmentClaims.ts";
 import * as Decisions from "../decisions/Decisions.ts";
 import { AUTO_MODEL } from "@t3tools/contracts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
@@ -243,6 +248,9 @@ function failureDetail(error: unknown): string {
 
 const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const config = yield* ServerConfig.ServerConfig;
+  const documents = yield* DocumentText.DocumentText;
   const setupTracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
   const cloneTracker = yield* ProjectCloneTracker.ProjectCloneTracker;
   const terminals = yield* TerminalManager.TerminalManager;
@@ -959,9 +967,9 @@ const make = Effect.gen(function* () {
         ).settings;
         input = {
           ...input,
-          title: task.title ?? task.text.split("\n")[0]!.slice(0, 160),
+          title: savedTaskDraftContent(task).title,
           modelSelection: settings.defaultModelSelection ?? input.modelSelection,
-          initialMessage: { text: task.text, attachments: [] },
+          initialMessage: savedTaskDraftContent(task),
         };
       }
       if (
@@ -1094,11 +1102,25 @@ const make = Effect.gen(function* () {
         let messageSequence: number | undefined;
         let messageWasAlreadyAccepted = false;
         if (input.initialMessage !== undefined) {
+          let initialMessage = input.initialMessage;
           const messageCommandId = CommandId.make(`${input.commandId}:initial-message`);
           const messageReceipt = yield* readReceipt(input, messageCommandId);
           messageWasAlreadyAccepted = Option.isSome(messageReceipt);
+          if (input.savedPromptId !== undefined && !messageWasAlreadyAccepted) {
+            const claimed = yield* AttachmentClaims.claimPendingAttachments({
+              threadId,
+              attachments: initialMessage.attachments,
+            }).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(ServerConfig.ServerConfig, config),
+              Effect.provideService(DocumentText.DocumentText, documents),
+              Effect.mapError(mapError(input, "dispatch-message", threadId)),
+            );
+            initialMessage = { ...initialMessage, attachments: claimed.attachments };
+            input = { ...input, initialMessage };
+          }
           const messageId =
-            input.initialMessage.messageId ??
+            initialMessage.messageId ??
             (yield* ids.allocate
               .message({ threadId, ordinal: 1 })
               .pipe(Effect.mapError(mapError(input, "dispatch-message", threadId))));
@@ -1108,16 +1130,16 @@ const make = Effect.gen(function* () {
               commandId: messageCommandId,
               threadId,
               messageId,
-              text: input.initialMessage.text,
+              text: initialMessage.text,
               ...(input.routingDecision ? { routingDecision: input.routingDecision } : {}),
-              ...(input.initialMessage.scheduledTaskId === undefined
+              ...(initialMessage.scheduledTaskId === undefined
                 ? {}
-                : { scheduledTaskId: input.initialMessage.scheduledTaskId }),
-              ...(input.initialMessage.senderThreadId === undefined
+                : { scheduledTaskId: initialMessage.scheduledTaskId }),
+              ...(initialMessage.senderThreadId === undefined
                 ? {}
-                : { senderThreadId: input.initialMessage.senderThreadId }),
-              attachments: input.initialMessage.attachments,
-              ...(input.initialMessage.context ? { context: input.initialMessage.context } : {}),
+                : { senderThreadId: initialMessage.senderThreadId }),
+              attachments: initialMessage.attachments,
+              ...(initialMessage.context ? { context: initialMessage.context } : {}),
               ...(input.generateTitle === true ? { titleSeed: input.title } : {}),
               modelSelection: input.modelSelection,
               dispatchMode: { type: "defer_start", workspaceStrategy },

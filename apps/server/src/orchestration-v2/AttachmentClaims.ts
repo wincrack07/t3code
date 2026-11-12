@@ -1,3 +1,4 @@
+import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as FileSystem from "effect/FileSystem";
 import {
   ChatAttachmentId,
@@ -10,6 +11,7 @@ import { isSvgAttachment } from "@t3tools/shared/image";
 
 import {
   parseThreadSegmentFromAttachmentId,
+  isTaskAttachmentId,
   PENDING_ATTACHMENT_THREAD_SEGMENT,
   planAttachmentClaim,
   resolveAttachmentPath,
@@ -39,6 +41,10 @@ export interface ClaimedAttachments {
 
 export function attachmentIsPendingUpload(attachment: ChatAttachment): boolean {
   return parseThreadSegmentFromAttachmentId(attachment.id) === PENDING_ATTACHMENT_THREAD_SEGMENT;
+}
+
+export function attachmentNeedsClaim(attachment: ChatAttachment): boolean {
+  return attachmentIsPendingUpload(attachment) || isTaskAttachmentId(attachment.id);
 }
 
 /** Remove partial claims only before dispatch, or after proving they were not accepted. */
@@ -78,7 +84,7 @@ export const claimPendingAttachments = Effect.fn("AttachmentClaims.claimPendingA
         message: "Duplicate attachment ids are not allowed.",
       });
     }
-    if (!input.attachments.some(attachmentIsPendingUpload)) {
+    if (!input.attachments.some(attachmentNeedsClaim)) {
       return { attachments: input.attachments, claimedPaths: [] } satisfies ClaimedAttachments;
     }
     const serverConfig = yield* ServerConfig.ServerConfig;
@@ -89,7 +95,7 @@ export const claimPendingAttachments = Effect.fn("AttachmentClaims.claimPendingA
       input.attachments,
       (attachment) =>
         Effect.gen(function* () {
-          if (!attachmentIsPendingUpload(attachment)) {
+          if (!attachmentNeedsClaim(attachment)) {
             return attachment;
           }
           const claim = planAttachmentClaim({
@@ -169,4 +175,10 @@ export const claimPendingAttachments = Effect.fn("AttachmentClaims.claimPendingA
     ).pipe(Effect.onError(() => releaseClaimedAttachments(claimedPaths)));
     return { attachments, claimedPaths } satisfies ClaimedAttachments;
   },
+  (effect, input) =>
+    input.attachments.some((item) => isTaskAttachmentId(item.id))
+      ? Effect.flatMap(ServerConfig.ServerConfig, (config) =>
+          withWorkspaceLease(config.attachmentsDir, effect),
+        )
+      : effect,
 );

@@ -191,6 +191,7 @@ const makeLayer = (input: {
     ),
     Layer.provide(
       Layer.succeed(ProjectService.ProjectService, {
+        taskAttachments: () => Effect.die("unused"),
         getShell: () =>
           Effect.succeedSome({
             id: projectId,

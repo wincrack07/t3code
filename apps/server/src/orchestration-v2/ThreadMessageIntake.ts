@@ -253,7 +253,7 @@ export const launchThread = Effect.fn("ThreadMessageIntake.launchThread")(functi
       };
   }
   yield* AttachmentClaims.validateAttachmentLimits(input.initialMessage?.attachments ?? []);
-  if (!input.initialMessage?.attachments.some(AttachmentClaims.attachmentIsPendingUpload)) {
+  if (!input.initialMessage?.attachments.some(AttachmentClaims.attachmentNeedsClaim)) {
     return yield* launches.launch(input);
   }
   if (input.threadId === undefined) {

@@ -1,12 +1,17 @@
 import {
   CommandId,
+  MessageId,
+  ThreadId,
+  TaskAttachmentError,
+  SavedPromptAction,
+  type TaskAttachmentListResult,
+  type TaskAttachmentsInput,
   type OrchestrationProjectShell,
   ProjectId,
   type Project,
   type ProjectCreatePayload,
   type ProjectUpdatePayload,
   type ProjectSnapshot,
-  type ThreadId,
 } from "@t3tools/contracts";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as Context from "effect/Context";
@@ -14,11 +19,21 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
+import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
+import * as ServerConfig from "../config.ts";
+import {
+  prepareTaskAttachment,
+  taskAttachmentMetadata,
+  taskAttachmentOwner,
+} from "./taskAttachmentFiles.ts";
+import { persistChatAttachments } from "../assets/persistChatAttachments.ts";
 import { withCommandMetrics } from "../observability/Metrics.ts";
+import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as LegacyV1ThreadImporter from "../orchestration-v2/legacy/LegacyV1ThreadImporter.ts";
@@ -123,7 +138,8 @@ export type ProjectServiceError =
   | ProjectConflictError
   | ProjectNotEmptyError
   | ProjectInvalidError
-  | ProjectOperationError;
+  | ProjectOperationError
+  | TaskAttachmentError;
 
 export class ProjectService extends Context.Service<
   ProjectService,
@@ -136,6 +152,9 @@ export class ProjectService extends Context.Service<
       ProjectServiceError
     >;
     readonly update: (input: ProjectUpdateInput) => Effect.Effect<Project, ProjectServiceError>;
+    readonly taskAttachments: (
+      input: TaskAttachmentsInput,
+    ) => Effect.Effect<TaskAttachmentListResult, TaskAttachmentError>;
     readonly delete: (input: ProjectDeleteInput) => Effect.Effect<Project, ProjectServiceError>;
     readonly getById: (
       projectId: ProjectId,
@@ -171,6 +190,16 @@ export class ProjectService extends Context.Service<
   }
 >()("t3/project/ProjectService") {}
 
+const isSavedPromptAction = Schema.is(SavedPromptAction);
+const isTaskAttachmentError = Schema.is(TaskAttachmentError);
+const taskAttachmentFailure = (cause: unknown) =>
+  isTaskAttachmentError(cause)
+    ? cause
+    : new TaskAttachmentError({
+        reason: "storage",
+        message: "Could not store the attachment. Check its size and upload or attach it again.",
+      });
+
 export const make = Effect.gen(function* () {
   const projects = yield* ProjectStore.ProjectStoreV2;
   const projectEnrichment = yield* ProjectEnrichmentService.ProjectEnrichmentService;
@@ -182,6 +211,9 @@ export const make = Effect.gen(function* () {
   const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const fileSystem = yield* FileSystem.FileSystem;
+  const config = yield* ServerConfig.ServerConfig;
+  const commandReceipts = yield* Effect.serviceOption(CommandReceiptStore.CommandReceiptStoreV2);
+  const path = yield* Path.Path;
   const isManagedWorktreePath = yield* makeIsManagedWorktreePath;
   const projectLocks = yield* KeyedLock.make<ProjectId>();
   const workspaceLocks = yield* KeyedLock.make<string>();
@@ -412,6 +444,74 @@ export const make = Effect.gen(function* () {
               projectId: input.projectId,
               workspaceRoot: input.workspaceRoot,
             });
+      const action = input.savedPrompt;
+      if (action !== undefined && !isSavedPromptAction(action))
+        return yield* new ProjectInvalidError({
+          projectId: input.projectId,
+          detail: "Invalid saved task or attachment limits exceeded.",
+        });
+      const taskId = action !== undefined && "id" in action ? action.id : "";
+      const uploads =
+        action !== undefined && (action.kind === "add" || action.kind === "attach")
+          ? action.attachments
+          : undefined;
+      // Accepted uploads can outlive their temporary source; replay before touching it again.
+      if (uploads !== undefined && Option.isSome(commandReceipts)) {
+        const receipt = yield* commandReceipts.value.getProjectByCommandId(input.commandId).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProjectOperationError({
+                operation: "dispatch-project-command",
+                projectId: input.projectId,
+                cause,
+              }),
+          ),
+        );
+        if (Option.isSome(receipt)) {
+          yield* commit({
+            type: "project.meta.update",
+            commandId: input.commandId,
+            projectId: input.projectId,
+            savedPrompt: action!,
+          });
+          return yield* readCommitted(input.projectId);
+        }
+      }
+      const prepared =
+        uploads === undefined
+          ? undefined
+          : yield* Effect.forEach(
+              uploads,
+              (attachment, index) =>
+                Effect.gen(function* () {
+                  if (attachment.kind === "upload" && "dataUrl" in attachment.attachment) {
+                    const result = yield* persistChatAttachments({
+                      threadId: ThreadId.make(taskAttachmentOwner(input.projectId, taskId)),
+                      taskOwner: taskAttachmentOwner(input.projectId, taskId),
+                      messageId: MessageId.make(`${input.commandId}:${index}`),
+                      attachments: [attachment.attachment],
+                    }).pipe(
+                      Effect.provideService(ServerConfig.ServerConfig, config),
+                      Effect.provideService(FileSystem.FileSystem, fileSystem),
+                      Effect.provideService(Path.Path, path),
+                    );
+                    return { kind: "stored" as const, attachment: result[0]! };
+                  }
+                  return yield* Effect.tryPromise({
+                    try: () =>
+                      prepareTaskAttachment({
+                        storage: config,
+                        projectId: input.projectId,
+                        taskId: taskId,
+                        commandId: input.commandId,
+                        index,
+                        attachment,
+                      }),
+                    catch: taskAttachmentFailure,
+                  });
+                }).pipe(Effect.mapError(taskAttachmentFailure)),
+              { concurrency: 1 },
+            );
       yield* commit({
         type: "project.meta.update",
         commandId: input.commandId,
@@ -429,6 +529,7 @@ export const make = Effect.gen(function* () {
           : { defaultThreadEnvMode: input.defaultThreadEnvMode }),
         ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
         ...(input.savedPrompt === undefined ? {} : { savedPrompt: input.savedPrompt }),
+        ...(prepared === undefined ? {} : { savedPromptAttachments: prepared }),
         ...(input.savedPromptThread === undefined
           ? {}
           : { savedPromptThread: input.savedPromptThread }),
@@ -440,6 +541,11 @@ export const make = Effect.gen(function* () {
       }
       return yield* readCommitted(input.projectId);
     },
+    // Serialize ownership changes with approved cleanup, including reopening a done task.
+    (effect, input) =>
+      input.savedPrompt === undefined && input.savedPromptThread === undefined
+        ? effect
+        : withWorkspaceLease(config.attachmentsDir, effect),
   );
 
   const bootstrap: ProjectService["Service"]["bootstrap"] = Effect.fn("ProjectService.bootstrap")(
@@ -563,6 +669,7 @@ export const make = Effect.gen(function* () {
       yield* projectEnrichment.invalidate([existing.value.workspaceRoot]);
       return yield* readCommitted(projectId);
     },
+    (effect) => withWorkspaceLease(config.attachmentsDir, effect),
   );
 
   const enrichShell = (shell: OrchestrationProjectShell) =>
@@ -635,8 +742,33 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  const taskAttachments = Effect.fn("ProjectService.taskAttachments")(function* (
+    input: TaskAttachmentsInput,
+  ) {
+    const row = yield* readRow(input.projectId).pipe(Effect.mapError(taskAttachmentFailure));
+    const task = Option.getOrUndefined(row)?.savedPrompts?.find(
+      (item) => item.id === input.taskId && item.deletedAt === undefined,
+    );
+    if (!task)
+      return yield* new TaskAttachmentError({
+        reason: "task-missing",
+        message: "The task no longer exists.",
+      });
+    const attachments = yield* Effect.forEach(
+      task.attachments ?? [],
+      (item) =>
+        Effect.tryPromise({
+          try: () => taskAttachmentMetadata(config, item),
+          catch: taskAttachmentFailure,
+        }),
+      { concurrency: 1 },
+    );
+    return { attachments, ...(input.includePrompt === true ? { task } : {}) };
+  });
+
   return ProjectService.of({
     create,
+    taskAttachments,
     bootstrap,
     update,
     delete: deleteProject,

@@ -39,7 +39,14 @@ export const MachineCleanupItem = Schema.Struct({
   head: Schema.NullOr(Schema.String),
 });
 export type MachineCleanupItem = typeof MachineCleanupItem.Type;
+export const TaskAttachmentUsage = Schema.Struct({
+  open: Schema.Struct({ count: Schema.Number, bytes: Schema.Number }),
+  done: Schema.Struct({ count: Schema.Number, bytes: Schema.Number }),
+  orphaned: Schema.Struct({ count: Schema.Number, bytes: Schema.Number }),
+});
+export type TaskAttachmentUsage = typeof TaskAttachmentUsage.Type;
 export const MachineCleanupReport = Schema.Struct({
+  taskAttachments: Schema.optional(TaskAttachmentUsage),
   id: Schema.String,
   mode: Schema.Literals(["scan", "phaseA", "phaseB", "phaseC", "unattended"]),
   platform: Schema.String,

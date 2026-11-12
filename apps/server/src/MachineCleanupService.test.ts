@@ -66,7 +66,10 @@ it.effect(
                   Layer.mock(Settings.ServerSettingsService)({
                     getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
                   }),
-                  Layer.mock(ProjectStore.ProjectStoreV2)({ listShells: () => Effect.succeed([]) }),
+                  Layer.mock(ProjectStore.ProjectStoreV2)({
+                    listShells: () => Effect.succeed([]),
+                    list: () => Effect.succeed([]),
+                  }),
                   Layer.mock(Projections.ProjectionStoreV2)({
                     getShellSnapshot: () =>
                       Effect.succeed({

@@ -1,3 +1,7 @@
+import {
+  scanTaskAttachmentCopies,
+  deleteTaskAttachmentCopy,
+} from "./project/taskAttachmentCleanup.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as DateTime from "effect/DateTime";
 import { cleanupScheduleDay, selectedMachineCleanupItems } from "./machineCleanupSchedule.ts";
@@ -121,6 +125,20 @@ const make = Effect.gen(function* () {
       try: run,
       catch: (cause) => new MachineCleanupError({ operation, cause }),
     });
+  const taskCopies = Effect.fn("MachineCleanup.taskCopies")(function* (
+    options: import("@t3tools/contracts").MachineCleanupSettings,
+  ) {
+    const rows = yield* projects
+      .list({ includeDeleted: true })
+      .pipe(
+        Effect.mapError(
+          (cause) => new MachineCleanupError({ operation: "scan-task-attachments", cause }),
+        ),
+      );
+    return yield* io("scan-task-attachments", () =>
+      scanTaskAttachmentCopies(config, rows, options),
+    );
+  });
   const persist = Effect.fn("MachineCleanup.persist")(function* (report: MachineCleanupReport) {
     const previous = yield* SubscriptionRef.get(ref);
     const known = new Set(
@@ -212,7 +230,13 @@ const make = Effect.gen(function* () {
               progress = value;
             }),
           );
-          report = { ...report, mode };
+          const copies = yield* taskCopies(currentSettings);
+          report = {
+            ...report,
+            mode,
+            items: [...report.items, ...copies.items],
+            taskAttachments: copies.usage,
+          };
           if (mode !== "scan") {
             const selected = selectedMachineCleanupItems(report, mode, selection?.itemIds ?? []);
             const missing =
@@ -244,6 +268,41 @@ const make = Effect.gen(function* () {
                 item.path,
                 Effect.gen(function* () {
                   yield* refreshActive();
+                  if (item.id.startsWith("task-attachment:"))
+                    return yield* withWorkspaceLease(
+                      config.attachmentsDir,
+                      Effect.gen(function* () {
+                        const rows = yield* projects.list({ includeDeleted: true }).pipe(
+                          Effect.mapError(
+                            (cause) =>
+                              new MachineCleanupError({
+                                operation: "task-attachment-ownership",
+                                cause,
+                              }),
+                          ),
+                        );
+                        const removed = yield* io("delete-task-attachment", () =>
+                          deleteTaskAttachmentCopy(config, rows, latestSettings, item),
+                        );
+                        const freeAfter = yield* io("measure", () =>
+                          cleanupNodeFreeSpace(report.measurementPath),
+                        );
+                        return {
+                          ...report,
+                          items: [removed],
+                          freeAfter,
+                          measurements: [
+                            ...(report.measurements ?? []),
+                            {
+                              phase: item.phase,
+                              itemId: item.id,
+                              before: report.freeAfter,
+                              after: freeAfter,
+                            },
+                          ],
+                        };
+                      }),
+                    );
                   return yield* io("delete", (signal) =>
                     backend.execute(
                       { ...report, items: [item] },
@@ -264,6 +323,7 @@ const make = Effect.gen(function* () {
               };
             }
           }
+          report = { ...report, taskAttachments: (yield* taskCopies(currentSettings)).usage };
           report = yield* io("notification", (signal) =>
             backend.notify(report, currentSettings, signal),
           );
