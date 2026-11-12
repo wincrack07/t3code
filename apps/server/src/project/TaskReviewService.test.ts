@@ -91,10 +91,12 @@ const executor = Layer.effect(
 ).pipe(Layer.provideMerge(review));
 const layer = EffectWorker.layer.pipe(Layer.provideMerge(executor));
 
-it.effect.each(["completed", "failed", "interrupted", "waiting"] as const)(
+it.effect.each(["completed", "failed", "interrupted", "waiting", "history"] as const)(
   "records %s after commit, including a turn that finished before linking",
-  (status) =>
+  (scenario) =>
     Effect.gen(function* () {
+      const superseded = scenario === "history";
+      const status = superseded ? "failed" : scenario;
       const projects = yield* ProjectService.ProjectService;
       const sink = yield* EventSink.EventSinkV2;
       const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
@@ -246,6 +248,17 @@ it.effect.each(["completed", "failed", "interrupted", "waiting"] as const)(
           ],
         });
       }
+      if (superseded)
+        yield* projects.update({
+          commandId: CommandId.make("newer-launch"),
+          projectId,
+          savedPrompt: {
+            kind: "link",
+            id: "task",
+            threadId: ThreadId.make("newer-thread"),
+            userMessageId: MessageId.make("newer-message"),
+          },
+        });
       if (status !== "completed") {
         const terminal = events[1]!;
         if (terminal.type !== "run.created") return assert.fail("Expected a run fixture");
@@ -266,15 +279,14 @@ it.effect.each(["completed", "failed", "interrupted", "waiting"] as const)(
       }
       yield* worker.drain();
       const task = Option.getOrThrow(yield* projects.getById(projectId))?.savedPrompts?.[0];
-      assert.strictEqual(task?.status, "review");
+      assert.strictEqual(task?.status, superseded ? "in-progress" : "review");
+      const snapshot = task?.threadLinks?.find((link) => link.threadId === threadId)?.snapshot;
       assert.strictEqual(task?.completedAt, null);
-      assert.strictEqual(
-        task?.review?.outcome,
-        status === "waiting" ? "waiting for input" : status,
-      );
-      assert.strictEqual(task?.review?.durationMs, 10000);
-      assert.strictEqual(task?.review?.assistantMessage?.length, 8000);
-      assert.deepStrictEqual(task?.threadLinks?.[0]?.snapshot, task?.review);
+      assert.strictEqual(snapshot?.outcome, status === "waiting" ? "waiting for input" : status);
+      assert.strictEqual(snapshot?.durationMs, 10000);
+      assert.strictEqual(snapshot?.assistantMessage?.length, 8000);
+      if (!superseded) assert.deepStrictEqual(snapshot, task?.review);
+      else assert.strictEqual(task?.latestThreadId, "newer-thread");
       yield* sink.write({
         events: [
           {
@@ -301,9 +313,12 @@ it.effect.each(["completed", "failed", "interrupted", "waiting"] as const)(
       });
       yield* worker.drain();
       assert.deepStrictEqual(
-        Option.getOrThrow(yield* projects.getById(projectId)).savedPrompts?.[0]?.review?.changes,
+        Option.getOrThrow(yield* projects.getById(projectId)).savedPrompts?.[0]?.threadLinks?.find(
+          (link) => link.threadId === threadId,
+        )?.snapshot?.changes,
         { count: 1, additions: 7, deletions: 2 },
       );
+      if (superseded) return;
       yield* projects.update({
         commandId: CommandId.make("approve"),
         projectId,

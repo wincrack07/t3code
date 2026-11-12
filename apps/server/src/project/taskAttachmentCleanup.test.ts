@@ -5,6 +5,13 @@ import * as Path from "effect/Path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   ChatAttachmentId,
+  CommandId,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  MessageId,
+  type ProjectTaskBatch,
   DEFAULT_MACHINE_CLEANUP_SETTINGS,
   type ProjectSavedPrompt,
   type MachineCleanupReport,
@@ -94,6 +101,43 @@ it.effect(
           .sort(),
       ).toEqual(["task-attachments-done", "task-attachments-orphaned"]);
       const done = scanned.items.find((item) => item.rule === "task-attachments-done")!;
+      const queuedBatch: ProjectTaskBatch = {
+        id: CommandId.make("batch"),
+        concurrency: 2,
+        createdAt: "2026-01-01T00:00:00Z",
+        entries: [
+          {
+            id: "queued",
+            title: "Queued task",
+            commandId: CommandId.make("queued"),
+            threadId: ThreadId.make("queued"),
+            userMessageId: MessageId.make("queued"),
+            source: {
+              environmentId: EnvironmentId.make("home"),
+              projectId: ProjectId.make("project"),
+              taskId: "done",
+            },
+            brief: tasks[1]!,
+            state: "queued",
+            launch: {
+              modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "test" },
+              runtimeMode: "full-access",
+              interactionMode: "default",
+            },
+          },
+        ],
+      };
+      const queuedRows = [{ ...rows[0]!, taskBatches: [queuedBatch] }];
+      const queuedUsage = yield* Effect.promise(() =>
+        scanTaskAttachmentCopies(storage, queuedRows, DEFAULT_MACHINE_CLEANUP_SETTINGS),
+      );
+      expect(queuedUsage.usage.open).toEqual({ count: 2, bytes: 3 });
+      expect(
+        (yield* Effect.promise(() =>
+          deleteTaskAttachmentCopy(storage, queuedRows, DEFAULT_MACHINE_CLEANUP_SETTINGS, done),
+        )).outcome,
+      ).toBe("skipped");
+      expect(yield* fs.exists(done.path)).toBe(true);
       const reopened = [
         {
           ...rows[0]!,

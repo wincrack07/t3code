@@ -5,8 +5,10 @@ import {
   type OrchestrationProjectShell,
   StoredProjectIcon,
   ProjectId,
+  ThreadId,
   ProjectScript,
   ProjectSavedPrompt,
+  ProjectTaskBatches,
   ThreadEnvMode,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -41,6 +43,7 @@ export const ProjectRow = Schema.Struct({
   projectIcon: Schema.NullOr(StoredProjectIcon),
   scripts: Schema.Array(ProjectScript),
   savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
+  taskBatches: Schema.optional(ProjectTaskBatches),
   pinnedAt: Schema.NullOr(IsoDateTime),
   archivedAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,
@@ -56,6 +59,7 @@ const ProjectDbRow = Schema.Struct({
   projectIcon: Schema.NullOr(Schema.fromJsonString(StoredProjectIcon)),
   scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
   savedPrompts: Schema.fromJsonString(Schema.Array(ProjectSavedPrompt)),
+  taskBatches: Schema.fromJsonString(ProjectTaskBatches),
 });
 
 function toShell(row: ProjectRow): OrchestrationProjectShell {
@@ -71,6 +75,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     projectIcon: row.projectIcon,
     scripts: row.scripts,
     savedPrompts: (row.savedPrompts ?? []).filter((item) => item.deletedAt === undefined),
+    taskBatches: row.taskBatches ?? [],
     pinnedAt: row.pinnedAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
@@ -88,6 +93,8 @@ export class ProjectStoreV2 extends Context.Service<
       options?: { readonly includeDeleted?: boolean },
     ) => Effect.Effect<Option.Option<ProjectRow>, ProjectStoreV2Error>;
     readonly list: (options?: {
+      readonly pendingTaskBatchesOnly?: boolean;
+      readonly taskThreadId?: ThreadId;
       readonly projectIds?: ReadonlyArray<ProjectId>;
       readonly includeDeleted?: boolean;
     }) => Effect.Effect<ReadonlyArray<ProjectRow>, ProjectStoreV2Error>;
@@ -115,6 +122,8 @@ export const make = Effect.gen(function* () {
       projectIds: Schema.optional(Schema.Array(ProjectId)),
       workspaceRoot: Schema.optional(Schema.String),
       includeDeleted: Schema.Boolean,
+      pendingTaskBatchesOnly: Schema.optional(Schema.Boolean),
+      taskThreadId: Schema.optional(ThreadId),
     }),
     Result: ProjectDbRow,
     execute: (request) => sql`
@@ -129,6 +138,7 @@ export const make = Effect.gen(function* () {
         project_icon_json AS "projectIcon",
         scripts_json AS "scripts",
         saved_prompts_json AS "savedPrompts",
+        task_batches_json AS "taskBatches",
         pinned_at AS "pinnedAt",
         archived_at AS "archivedAt",
         created_at AS "createdAt",
@@ -137,6 +147,16 @@ export const make = Effect.gen(function* () {
       FROM projection_projects
       WHERE ${sql.and([
         ...(request.includeDeleted ? [] : [sql`deleted_at IS NULL`]),
+        ...(request.pendingTaskBatchesOnly !== true
+          ? []
+          : [
+              sql`EXISTS(SELECT 1 FROM json_each(task_batches_json) b, json_each(b.value, '$.entries') e WHERE json_extract(e.value, '$.state') IN ('queued', 'starting', 'running'))`,
+            ]),
+        ...(request.taskThreadId === undefined
+          ? []
+          : [
+              sql`EXISTS(SELECT 1 FROM json_each(saved_prompts_json) t WHERE json_extract(t.value, '$.latestThreadId') = ${request.taskThreadId} OR EXISTS(SELECT 1 FROM json_each(t.value, '$.threadLinks') l WHERE json_extract(l.value, '$.threadId') = ${request.taskThreadId}))`,
+            ]),
         ...(request.projectId === undefined ? [] : [sql`project_id = ${request.projectId}`]),
         ...(request.projectIds === undefined ? [] : [sql.in("project_id", request.projectIds)]),
         ...(request.workspaceRoot === undefined
@@ -150,6 +170,7 @@ export const make = Effect.gen(function* () {
   const upsertRow = (row: ProjectRow) =>
     encodeRow({
       ...row,
+      taskBatches: row.taskBatches ?? [],
       savedPrompts: (row.savedPrompts ?? []).map((item) => ({
         ...item,
         title: item.title ?? null,
@@ -169,6 +190,7 @@ export const make = Effect.gen(function* () {
             project_icon_json,
             scripts_json,
             saved_prompts_json,
+            task_batches_json,
             pinned_at,
             archived_at,
             created_at,
@@ -186,6 +208,7 @@ export const make = Effect.gen(function* () {
             ${encoded.projectIcon},
             ${encoded.scripts},
             ${encoded.savedPrompts},
+            ${encoded.taskBatches},
             ${encoded.pinnedAt},
             ${encoded.archivedAt},
             ${encoded.createdAt},
@@ -203,6 +226,7 @@ export const make = Effect.gen(function* () {
             project_icon_json = excluded.project_icon_json,
             scripts_json = excluded.scripts_json,
             saved_prompts_json = excluded.saved_prompts_json,
+            task_batches_json = excluded.task_batches_json,
             pinned_at = excluded.pinned_at,
             archived_at = excluded.archived_at,
             created_at = excluded.created_at,
@@ -227,6 +251,8 @@ export const make = Effect.gen(function* () {
   const list: ProjectStoreV2["Service"]["list"] = (options) =>
     selectRows({
       ...(options?.projectIds === undefined ? {} : { projectIds: options.projectIds }),
+      pendingTaskBatchesOnly: options?.pendingTaskBatchesOnly,
+      taskThreadId: options?.taskThreadId,
       includeDeleted: options?.includeDeleted === true,
     }).pipe(NodeSqliteClient.readOnly, mapError("list"));
 
@@ -286,6 +312,7 @@ export const make = Effect.gen(function* () {
         ...(payload.projectIcon === undefined ? {} : { projectIcon: payload.projectIcon }),
         ...(payload.scripts === undefined ? {} : { scripts: payload.scripts }),
         ...(payload.savedPrompts === undefined ? {} : { savedPrompts: payload.savedPrompts }),
+        ...(payload.taskBatches === undefined ? {} : { taskBatches: payload.taskBatches }),
         ...(payload.pinnedAt === undefined ? {} : { pinnedAt: payload.pinnedAt }),
         ...(payload.archivedAt === undefined ? {} : { archivedAt: payload.archivedAt }),
         updatedAt: payload.updatedAt,

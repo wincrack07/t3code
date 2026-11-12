@@ -244,6 +244,22 @@ describe("planProjectCommand", () => {
       failureOf(update({ kind: "approve", id: "one" }, [running]))._tag,
       "ProjectCommandInvariantError",
     );
+    const guarded = payloadOf(
+      update(
+        {
+          kind: "link",
+          id: "one",
+          threadId: ThreadId.make("late-thread"),
+          userMessageId: MessageId.make("late-message"),
+          expectedThreadId: null,
+          expectedUserMessageId: null,
+        },
+        [running],
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(guarded[0]?.latestThreadId, running.latestThreadId);
+    assert.strictEqual(guarded[0]?.status, "in-progress");
+    assert.strictEqual(guarded[0]?.threadLinks?.at(-1)?.threadId, "late-thread");
     const parent: ProjectSavedPrompt = { ...task, id: "parent" };
     const childItems = [task, parent];
     const brief = payloadOf(

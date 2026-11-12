@@ -1,4 +1,10 @@
 import {
+  TaskBatchStartInput,
+  TaskBatchCancelInput,
+  ProjectTaskBatch,
+  TaskBatchError,
+} from "./project.ts";
+import {
   MachineCleanupReport,
   MachineCleanupState,
   MachineCleanupSelection,
@@ -455,6 +461,8 @@ export const WS_METHODS = {
   projectsWriteFile: "projects.writeFile",
   projectsMutate: "projects.mutate",
   projectsTaskAttachments: "projects.taskAttachments",
+  projectsTaskBatchStart: "projects.taskBatchStart",
+  projectsTaskBatchCancel: "projects.taskBatchCancel",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
@@ -1524,6 +1532,17 @@ const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectsTaskBatchStartRpc = Rpc.make(WS_METHODS.projectsTaskBatchStart, {
+  payload: TaskBatchStartInput,
+  success: ProjectTaskBatch,
+  error: Schema.Union([TaskBatchError, EnvironmentAuthorizationError]),
+});
+const WsProjectsTaskBatchCancelRpc = Rpc.make(WS_METHODS.projectsTaskBatchCancel, {
+  payload: TaskBatchCancelInput,
+  success: ProjectTaskBatch,
+  error: Schema.Union([TaskBatchError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsTaskAttachmentsRpc = Rpc.make(WS_METHODS.projectsTaskAttachments, {
   payload: TaskAttachmentsInput,
   success: TaskAttachmentListResult,
@@ -2412,6 +2431,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsProjectsTaskAttachmentsRpc,
+  WsProjectsTaskBatchStartRpc,
+  WsProjectsTaskBatchCancelRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsFilesystemGetMetadataRpc,

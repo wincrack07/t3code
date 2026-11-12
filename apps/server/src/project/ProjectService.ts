@@ -5,6 +5,7 @@ import {
   TaskAttachmentError,
   SavedPromptAction,
   type TaskAttachmentListResult,
+  type ProjectTaskBatch,
   type TaskAttachmentsInput,
   type OrchestrationProjectShell,
   ProjectId,
@@ -58,6 +59,7 @@ export interface ProjectCreateInput extends ProjectCreatePayload {
 }
 
 export interface ProjectUpdateInput extends ProjectUpdatePayload {
+  readonly taskBatches?: ReadonlyArray<ProjectTaskBatch>;
   readonly savedPromptThread?: { readonly id: string; readonly threadId: ThreadId };
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
@@ -233,6 +235,7 @@ export const make = Effect.gen(function* () {
     projectIcon: row.projectIcon,
     scripts: row.scripts,
     savedPrompts: (row.savedPrompts ?? []).filter((item) => item.deletedAt === undefined),
+    taskBatches: row.taskBatches ?? [],
     pinnedAt: row.pinnedAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
@@ -529,6 +532,7 @@ export const make = Effect.gen(function* () {
           : { defaultThreadEnvMode: input.defaultThreadEnvMode }),
         ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
         ...(input.savedPrompt === undefined ? {} : { savedPrompt: input.savedPrompt }),
+        ...(input.taskBatches === undefined ? {} : { taskBatches: input.taskBatches }),
         ...(prepared === undefined ? {} : { savedPromptAttachments: prepared }),
         ...(input.savedPromptThread === undefined
           ? {}
@@ -543,7 +547,9 @@ export const make = Effect.gen(function* () {
     },
     // Serialize ownership changes with approved cleanup, including reopening a done task.
     (effect, input) =>
-      input.savedPrompt === undefined && input.savedPromptThread === undefined
+      input.savedPrompt === undefined &&
+      input.savedPromptThread === undefined &&
+      input.taskBatches === undefined
         ? effect
         : withWorkspaceLease(config.attachmentsDir, effect),
   );

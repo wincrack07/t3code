@@ -1,3 +1,4 @@
+import * as TaskBatchService from "./project/TaskBatchService.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
 import * as KeepAwake from "./keepAwake/KeepAwake.ts";
@@ -1344,6 +1345,7 @@ export const layerWsRpc = (
       const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
       const projectStore = yield* ProjectStore.ProjectStoreV2;
       const projectService = yield* ProjectService.ProjectService;
+      const taskBatches = yield* TaskBatchService.TaskBatchService;
       const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
       const eventLoopMonitor = yield* EventLoopMonitor.EventLoopMonitor;
@@ -2893,6 +2895,8 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.projectsTaskAttachments]: (input) => projectService.taskAttachments(input),
+        [WS_METHODS.projectsTaskBatchStart]: (input) => taskBatches.start(input),
+        [WS_METHODS.projectsTaskBatchCancel]: (input) => taskBatches.cancel(input),
         [WS_METHODS.projectsMutate]: (mutation) =>
           startup.enqueueCommand(mutateProject(mutation)).pipe(
             Effect.mapError((cause) =>

@@ -978,7 +978,9 @@ const make = Effect.gen(function* () {
         };
       }
       if (
-        (input.savedPromptId !== undefined || input.useProjectDefaultModel === true) &&
+        (input.savedPromptId !== undefined ||
+          input.useProjectDefaultModel === true ||
+          input.taskOverrides?.modelSelection !== undefined) &&
         (input.modelSelection.model === AUTO_MODEL || input.modelSelection.routing === "auto")
       ) {
         const decisions = yield* Effect.serviceOption(Decisions.Decisions);

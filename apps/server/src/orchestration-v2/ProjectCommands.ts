@@ -1,5 +1,7 @@
 import {
   SavedPromptAction,
+  ProjectTaskBatches,
+  type ProjectTaskBatch,
   ProjectTaskAttachment,
   getProviderAttachmentLimitError,
   taskAttachmentKey,
@@ -31,6 +33,7 @@ export interface ProjectCreateCommand {
 }
 
 export interface ProjectMetaUpdateCommand {
+  readonly taskBatches?: ReadonlyArray<ProjectTaskBatch>;
   readonly savedPrompt?: SavedPromptAction;
   readonly savedPromptAttachments?: ReadonlyArray<ProjectTaskAttachment>;
   readonly savedPromptThread?: { readonly id: string; readonly threadId: ThreadId };
@@ -114,6 +117,7 @@ export interface ProjectCommandState {
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 const isSavedPromptAction = Schema.is(SavedPromptAction);
+const isTaskBatches = Schema.is(ProjectTaskBatches);
 const isTaskAttachments = Schema.is(
   Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8)),
 );
@@ -201,6 +205,8 @@ export function planProjectCommand(input: {
           }
         }
       }
+      if (command.taskBatches !== undefined && !isTaskBatches(command.taskBatches))
+        return invariant("Invalid persisted task queue.");
       let savedPrompts = project.savedPrompts ?? [];
       const action = command.savedPrompt;
       if (action !== undefined) {
@@ -291,26 +297,36 @@ export function planProjectCommand(input: {
           });
         } else if (action.kind === "review") {
           savedPrompts = savedPrompts.map((item) => {
-            if (
-              item.id !== action.id ||
-              item.deletedAt !== undefined ||
-              item.latestThreadId !== action.threadId ||
-              item.latestThreadEnvironmentId !== action.environmentId ||
-              (item.latestUserMessageId !== undefined &&
-                item.latestUserMessageId !== action.snapshot.userMessageId) ||
-              (item.status !== "in-progress" && item.status !== "review")
-            )
-              return item;
-            if (item.review?.runId === action.snapshot.runId && item.status === "in-progress")
-              return item;
-            return {
+            if (item.id !== action.id || item.deletedAt !== undefined) return item;
+            const current =
+              item.latestThreadId === action.threadId &&
+              item.latestThreadEnvironmentId === action.environmentId &&
+              (item.latestUserMessageId === undefined ||
+                item.latestUserMessageId === action.snapshot.userMessageId);
+            const matches = (link: NonNullable<typeof item.threadLinks>[number]) =>
+              link.threadId === action.threadId &&
+              link.environmentId === action.environmentId &&
+              (link.userMessageId === undefined ||
+                link.userMessageId === action.snapshot.userMessageId);
+            if (!current && !(item.threadLinks ?? []).some(matches)) return item;
+            const withHistory = {
               ...item,
+              ...(current ? { review: action.snapshot } : {}),
+              threadLinks: (item.threadLinks ?? []).map((link) =>
+                matches(link) ? { ...link, snapshot: action.snapshot } : link,
+              ),
+            };
+            if (
+              !current ||
+              (item.status !== "in-progress" && item.status !== "review") ||
+              (item.review?.runId === action.snapshot.runId && item.status === "in-progress")
+            )
+              return withHistory;
+            return {
+              ...withHistory,
               status: "review" as const,
               completedAt: null,
               review: action.snapshot,
-              threadLinks: (item.threadLinks ?? []).map((link, index) =>
-                index === 0 ? { ...link, snapshot: action.snapshot } : link,
-              ),
             };
           });
         } else if (action.kind === "approve") {
@@ -356,47 +372,50 @@ export function planProjectCommand(input: {
         } else if (action.kind === "link") {
           if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
             return invariant("The saved prompt no longer exists.");
-          savedPrompts = savedPrompts.map((item) =>
-            item.id !== action.id
-              ? item
-              : {
-                  ...item,
-                  status: "in-progress" as const,
-                  completedAt: null,
-                  latestThreadId: action.threadId,
-                  latestUserMessageId: action.userMessageId,
-                  latestThreadEnvironmentId: action.environmentId,
-                  threadLinks: [
+          savedPrompts = savedPrompts.map((item) => {
+            if (item.id !== action.id) return item;
+            const link = {
+              threadId: action.threadId,
+              ...(action.environmentId === undefined
+                ? {}
+                : { environmentId: action.environmentId }),
+              ...(action.userMessageId === undefined
+                ? {}
+                : { userMessageId: action.userMessageId }),
+            };
+            const previous = (
+              item.threadLinks ??
+              (item.latestThreadId === undefined
+                ? []
+                : [
                     {
-                      threadId: action.threadId,
-                      ...(action.userMessageId === undefined
-                        ? {}
-                        : { userMessageId: action.userMessageId }),
-                      ...(action.environmentId === undefined
-                        ? {}
-                        : { environmentId: action.environmentId }),
+                      threadId: item.latestThreadId,
+                      environmentId: item.latestThreadEnvironmentId,
+                      userMessageId: item.latestUserMessageId,
                     },
-                    ...(
-                      item.threadLinks ??
-                      (item.latestThreadId === undefined
-                        ? []
-                        : [
-                            {
-                              threadId: item.latestThreadId,
-                              ...(item.latestThreadEnvironmentId === undefined
-                                ? {}
-                                : { environmentId: item.latestThreadEnvironmentId }),
-                            },
-                          ])
-                    ).filter(
-                      (link) =>
-                        link.userMessageId !== action.userMessageId ||
-                        link.threadId !== action.threadId ||
-                        link.environmentId !== action.environmentId,
-                    ),
-                  ].slice(0, 10),
-                },
-          );
+                  ])
+            ).filter(
+              (previous) =>
+                previous.threadId !== action.threadId ||
+                previous.environmentId !== action.environmentId ||
+                previous.userMessageId !== action.userMessageId,
+            );
+            const current =
+              (action.expectedThreadId === undefined ||
+                (item.latestThreadId ?? null) === action.expectedThreadId) &&
+              (action.expectedUserMessageId === undefined ||
+                (item.latestUserMessageId ?? null) === action.expectedUserMessageId);
+            if (!current) return { ...item, threadLinks: [...previous, link].slice(0, 10) };
+            return {
+              ...item,
+              status: "in-progress" as const,
+              completedAt: null,
+              latestThreadId: action.threadId,
+              latestThreadEnvironmentId: action.environmentId,
+              latestUserMessageId: action.userMessageId,
+              threadLinks: [link, ...previous].slice(0, 10),
+            };
+          });
         } else {
           if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
             return invariant("The saved prompt no longer exists.");
@@ -544,6 +563,7 @@ export function planProjectCommand(input: {
           ...(command.faviconPath === undefined ? {} : { faviconPath: command.faviconPath }),
           ...(command.projectIcon === undefined ? {} : { projectIcon: command.projectIcon }),
           ...(command.scripts === undefined ? {} : { scripts: command.scripts }),
+          ...(command.taskBatches === undefined ? {} : { taskBatches: command.taskBatches }),
           ...(action === undefined && command.savedPromptThread === undefined
             ? {}
             : { savedPrompts }),

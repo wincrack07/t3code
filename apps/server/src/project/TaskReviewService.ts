@@ -1,6 +1,6 @@
 import * as Option from "effect/Option";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
-import { CommandId, type RunId, type ThreadId } from "@t3tools/contracts";
+import { CommandId, type RunId, type ThreadId, type ProjectSavedPrompt } from "@t3tools/contracts";
 import { taskReviewSnapshot } from "@t3tools/shared/savedTasks";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -32,15 +32,21 @@ const make = Effect.gen(function* () {
         const environmentId = Option.isSome(identity)
           ? yield* identity.value.getEnvironmentId
           : undefined;
-        const rows = yield* store.list();
+        const rows = yield* store.list({ taskThreadId: threadId });
+        const localLink = (task: ProjectSavedPrompt) =>
+          [
+            ...(task.threadLinks ?? []),
+            ...(task.latestThreadId === undefined
+              ? []
+              : [{ threadId: task.latestThreadId, environmentId: task.latestThreadEnvironmentId }]),
+          ].find(
+            (link) =>
+              link.threadId === threadId &&
+              (link.environmentId === undefined || link.environmentId === environmentId),
+          );
         const homes = rows.filter((row) =>
           row.savedPrompts?.some(
-            (task) =>
-              task.deletedAt === undefined &&
-              task.latestThreadId === threadId &&
-              (task.latestThreadEnvironmentId === undefined ||
-                task.latestThreadEnvironmentId === environmentId) &&
-              (task.status === "in-progress" || task.status === "review"),
+            (task) => task.deletedAt === undefined && localLink(task) !== undefined,
           ),
         );
         if (homes.length === 0) return;
@@ -49,14 +55,8 @@ const make = Effect.gen(function* () {
         if (!snapshot) return;
         for (const row of homes)
           for (const task of row.savedPrompts ?? []) {
-            if (
-              task.deletedAt !== undefined ||
-              task.latestThreadId !== threadId ||
-              (task.latestThreadEnvironmentId !== undefined &&
-                task.latestThreadEnvironmentId !== environmentId) ||
-              (task.status !== "in-progress" && task.status !== "review")
-            )
-              continue;
+            const link = localLink(task);
+            if (task.deletedAt !== undefined || link === undefined) continue;
             yield* projects.update({
               projectId: row.projectId,
               commandId: CommandId.make(
@@ -66,9 +66,7 @@ const make = Effect.gen(function* () {
                 kind: "review",
                 id: task.id,
                 threadId,
-                ...(task.latestThreadEnvironmentId === undefined
-                  ? {}
-                  : { environmentId: task.latestThreadEnvironmentId }),
+                ...(link.environmentId === undefined ? {} : { environmentId: link.environmentId }),
                 snapshot,
               },
             });

@@ -37,11 +37,7 @@ export function taskReviewSnapshot(
   runId: RunId,
 ): TaskReviewSnapshot | undefined {
   const run = projection.runs.find((item) => item.id === runId);
-  if (
-    !run ||
-    projection.runs.some((item) => item.ordinal > run.ordinal && item.status !== "queued")
-  )
-    return;
+  if (!run) return;
   const waiting = projection.runtimeRequests.find(
     (request) =>
       request.kind === "user_input" &&

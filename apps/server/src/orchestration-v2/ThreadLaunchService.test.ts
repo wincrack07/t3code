@@ -1,3 +1,4 @@
+import * as Decisions from "../decisions/Decisions.ts";
 import { taskAttachmentOwner } from "../project/taskAttachmentFiles.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
@@ -21,6 +22,7 @@ import {
   type ChatAttachment,
   type ProjectSavedPrompt,
   CommandId,
+  AUTO_MODEL,
   DEFAULT_SERVER_SETTINGS,
   GitCommandError,
   MessageId,
@@ -470,6 +472,27 @@ it.effect(
       });
       assert.equal(overridden.projection.thread.modelSelection.model, "override-model");
       assert.equal(overridden.projection.thread.runtimeMode, "approval-required");
+      const automatic = yield* launches
+        .launch({
+          ...launchInput({
+            command: "task:auto-remote",
+            thread: "task:auto-remote",
+            message: "Implement the copied task brief",
+          }),
+          modelSelection: { ...modelSelection, model: AUTO_MODEL },
+          taskOverrides: { modelSelection: { ...modelSelection, model: AUTO_MODEL } },
+        })
+        .pipe(
+          Effect.provide(
+            Layer.mock(Decisions.Decisions)({
+              route: () =>
+                Effect.succeed({
+                  modelSelection: { ...modelSelection, model: "routed-task-model" },
+                }),
+            }),
+          ),
+        );
+      assert.equal(automatic.projection.thread.modelSelection.model, "routed-task-model");
       const before = updates.length;
       for (const invalid of [
         { ...request, projectId: otherProjectId },

@@ -31,6 +31,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { forkParked } from "../serverActivation.ts";
 
 export const OrchestrationEffectRequestV2 = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("task.batch-pump") }),
   Schema.Struct({ type: Schema.Literal("task.review"), runId: RunId }),
   Schema.Struct({
     type: Schema.Literal("provider-runtime.continue"),

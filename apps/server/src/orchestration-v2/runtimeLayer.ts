@@ -1,3 +1,4 @@
+import * as TaskBatchService from "../project/TaskBatchService.ts";
 import * as TaskReviewService from "../project/TaskReviewService.ts";
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
 import * as GuestShareService from "../guest/GuestShareService.ts";
@@ -284,6 +285,17 @@ const layerThreadLaunchProvided = ThreadLaunchService.layer.pipe(
     ),
   ),
 );
+const layerTaskBatchProvided = TaskBatchService.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerProjectService,
+      layerThreadLaunchProvided,
+      ProjectStore.layer,
+      ProjectionStore.layer,
+    ),
+  ),
+);
+
 const layerSecretRequestsProvided = SecretRequests.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
@@ -388,7 +400,8 @@ export const layerProduction = Layer.mergeAll(
   WorktreeBranchSync.layer.pipe(
     Layer.provide(Layer.merge(layerThreadManagementProvided, ProjectionStore.layer)),
   ),
-  layer.pipe(Layer.provide(layerProjectService)),
+  layer.pipe(Layer.provide(Layer.merge(layerProjectService, layerTaskBatchProvided))),
+  layerTaskBatchProvided,
   layerProjectService,
   layerManagedProjectFoldersProvided,
   layerThreadLaunchProvided,

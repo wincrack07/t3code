@@ -298,6 +298,100 @@ export const ProjectSavedPrompt = Schema.Struct({
   attachments: Schema.optional(Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8))),
 });
 export type ProjectSavedPrompt = typeof ProjectSavedPrompt.Type;
+export const TaskBatchSource = Schema.Struct({
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  taskId: TrimmedNonEmptyString,
+});
+const TaskBatchLaunchSettings = Schema.Struct({
+  modelSelection: ModelSelection,
+  runtimeMode: RuntimeMode,
+  interactionMode: ProviderInteractionMode,
+  threadEnvMode: Schema.optional(ThreadEnvMode),
+  baseRef: Schema.optional(TrimmedNonEmptyString),
+});
+const TaskBatchSubmission = Schema.Struct({
+  source: TaskBatchSource,
+  brief: ProjectSavedPrompt,
+  launch: TaskBatchLaunchSettings,
+  overrides: Schema.optional(TaskRunSettings),
+});
+export const TaskBatchEntry = Schema.Struct({
+  expectedThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  expectedUserMessageId: Schema.optional(Schema.NullOr(MessageId)),
+  ...TaskBatchSubmission.fields,
+  brief: Schema.optional(ProjectSavedPrompt),
+  title: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
+  id: TrimmedNonEmptyString,
+  commandId: CommandId,
+  threadId: ThreadId,
+  userMessageId: MessageId,
+  runId: Schema.optional(RunId),
+  state: Schema.Literals([
+    "queued",
+    "starting",
+    "running",
+    "settled",
+    "cancelled",
+    "failed-to-start",
+  ]),
+  reason: Schema.optional(Schema.String.check(Schema.isMaxLength(1000))),
+  snapshot: Schema.optional(TaskReviewSnapshot),
+});
+export type TaskBatchEntry = typeof TaskBatchEntry.Type;
+export const ProjectTaskBatch = Schema.Struct({
+  id: CommandId,
+  concurrency: PositiveInt.check(Schema.isLessThanOrEqualTo(4)),
+  createdAt: IsoDateTime,
+  entries: Schema.Array(TaskBatchEntry).check(Schema.isMaxLength(100)),
+});
+export type ProjectTaskBatch = typeof ProjectTaskBatch.Type;
+export const ProjectTaskBatches = Schema.Array(ProjectTaskBatch).check(Schema.isMaxLength(10));
+export const TaskBatchStartInput = Schema.Struct({
+  commandId: CommandId,
+  projectId: ProjectId,
+  concurrency: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(4))),
+  entries: Schema.Array(TaskBatchSubmission).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+});
+export type TaskBatchStartInput = typeof TaskBatchStartInput.Type;
+export const TaskBatchCancelInput = Schema.Struct({
+  commandId: CommandId,
+  projectId: ProjectId,
+  batchId: CommandId,
+  entryId: Schema.optional(TrimmedNonEmptyString),
+});
+export type TaskBatchCancelInput = typeof TaskBatchCancelInput.Type;
+export class TaskBatchError extends Schema.TaggedError<TaskBatchError>()("TaskBatchError", {
+  operation: Schema.Literals(["start", "cancel", "pump"]),
+  projectId: Schema.optional(ProjectId),
+  reason: Schema.Literals([
+    "invalid-input",
+    "capacity",
+    "missing-project",
+    "missing-batch",
+    "home-only-attachments",
+    "persistence",
+  ]),
+  cause: Schema.optional(Schema.Defect()),
+}) {
+  override get message(): string {
+    switch (this.reason) {
+      case "invalid-input":
+        return "Invalid batch input. Select unique tasks and a concurrency limit from 1 to 4.";
+      case "capacity":
+        return "The environment queue is full (100 pending tasks and 200000 prompt characters maximum).";
+      case "missing-project":
+        return "The destination project is unavailable.";
+      case "missing-batch":
+        return "The batch or queue entry is unavailable.";
+      case "home-only-attachments":
+        return "Tasks with stored attachments must run on their home environment.";
+      case "persistence":
+        return "The task queue could not be updated.";
+    }
+  }
+}
+
 export const TaskAttachmentListResult = Schema.Struct({
   task: Schema.optional(ProjectSavedPrompt),
   attachments: Schema.Array(TaskAttachmentMetadata),
@@ -352,6 +446,8 @@ export const SavedPromptAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("restore"), id: TrimmedNonEmptyString }),
   Schema.Struct({
     kind: Schema.Literal("link"),
+    expectedThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+    expectedUserMessageId: Schema.optional(Schema.NullOr(MessageId)),
     userMessageId: Schema.optional(MessageId),
     id: TrimmedNonEmptyString,
     threadId: ThreadId,
@@ -384,6 +480,7 @@ export const Project = Schema.Struct({
   autoPull: Schema.optional(Schema.Boolean),
   scripts: Schema.Array(ProjectScript),
   savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
+  taskBatches: Schema.optional(ProjectTaskBatches),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   createdAt: IsoDateTime,
