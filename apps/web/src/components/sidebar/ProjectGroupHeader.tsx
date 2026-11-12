@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { SidebarColorMarker, SidebarColorSubmenu } from "./SidebarColorPicker";
+import { updateClientSettings, getClientSettings } from "../../hooks/useSettings";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useDraggable } from "@dnd-kit/core";
 import { ChevronDownIcon, FolderIcon, MoreHorizontalIcon } from "lucide-react";
@@ -41,6 +44,7 @@ export function ProjectGroupHeader({
   onMove: (parentId: string | null) => void;
   onDelete: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const summary = summarizeSidebarFolder([{ hiddenThreads: threads }]);
   const dot = collapsed ? summary.activity : null;
   const item = { kind: "folder", id: folder.id } as const;
@@ -52,6 +56,10 @@ export function ProjectGroupHeader({
       data-tree-expanded={!collapsed}
       style={sidebarTreeIndent(depth)}
       className={`mt-2 flex list-none items-center gap-1 ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuOpen(true);
+      }}
     >
       <button
         type="button"
@@ -63,6 +71,7 @@ export function ProjectGroupHeader({
       >
         <ChevronDownIcon className={collapsed ? "size-3 -rotate-90" : "size-3"} />
         {folder.emoji ? <span>{folder.emoji}</span> : <FolderIcon className="size-4" />}
+        <SidebarColorMarker color={folder.sidebarColor} />
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
         {collapsed ? (
           <>
@@ -86,7 +95,7 @@ export function ProjectGroupHeader({
           </>
         ) : null}
       </button>
-      <Menu>
+      <Menu open={menuOpen} onOpenChange={setMenuOpen}>
         <MenuTrigger
           render={
             <Button
@@ -99,6 +108,16 @@ export function ProjectGroupHeader({
           <MoreHorizontalIcon />
         </MenuTrigger>
         <MenuPopup>
+          <SidebarColorSubmenu
+            value={folder.sidebarColor ?? null}
+            onChange={(color) =>
+              void updateClientSettings({
+                sidebarProjectFolders: getClientSettings().sidebarProjectFolders.map((entry) =>
+                  entry.id === folder.id ? { ...entry, sidebarColor: color } : entry,
+                ),
+              })
+            }
+          />
           <MenuItem onClick={onRename}>Rename group</MenuItem>
           <MenuItem onClick={onCreateInside}>New group inside…</MenuItem>
           <ProjectFolderMenu

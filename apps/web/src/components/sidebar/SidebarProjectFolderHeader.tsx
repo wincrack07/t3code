@@ -1,3 +1,4 @@
+import { SidebarColorMarker } from "./SidebarColorPicker";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
@@ -45,6 +46,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   group: SidebarProjectSnapshot;
   /** Nesting depth under sidebar groups. */
   depth?: number;
+  sidebarColor?: string | null;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
   localLastVisitedAtById: Readonly<Record<string, string>>;
@@ -90,6 +92,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         className="flex h-7 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <ProjectFavicon project={group} className="size-4 shrink-0" />
+        <SidebarColorMarker color={props.sidebarColor} />
         <span className="min-w-0 flex-1 truncate text-xs font-normal text-sidebar-muted-foreground">
           {group.displayName}
         </span>

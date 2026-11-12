@@ -22,9 +22,11 @@ const THEME_STORAGE_KEY = "t3code:theme";
 const DEFAULT_DARK_CHROME = getDefaultThemeColors("dark").chrome;
 
 const bootScript = (() => {
-  const match = indexHtml.match(/<script>([\s\S]*?)<\/script>/);
-  if (!match?.[1]) throw new Error("Could not find the inline boot script in index.html");
-  return match[1];
+  const script = [...indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].find((match) =>
+    match[1]?.includes("const LIGHT_BACKGROUND"),
+  )?.[1];
+  if (!script) throw new Error("Could not find the inline theme boot script in index.html");
+  return script;
 })();
 
 type BootResult = {
@@ -403,3 +405,57 @@ describe("index.html boot script", () => {
     expect(dark.isDark).toBe(true);
   });
 });
+
+it.each(["match", "different route", "different theme", "invalid colour"])(
+  "restores only valid matching sidebar startup colours: %s",
+  (scenario) => {
+    const script = [...indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].find((match) =>
+      match[1]?.includes("t3code:sidebar-tint:v1"),
+    )![1]!;
+    const variables: Record<string, string> = {};
+    const dataset: Record<string, string> = { themeId: "claude" };
+    const cache = {
+      path: scenario === "different route" ? "/other" : "/thread",
+      theme: JSON.stringify([
+        scenario === "different theme" ? "ocean" : "claude",
+        true,
+        null,
+        null,
+      ]),
+      variables: Object.fromEntries(
+        [
+          "--sidebar",
+          "--sidebar-control-surface",
+          "--sidebar-row-hover",
+          "--sidebar-row-active",
+          "--sidebar-row-selected",
+          "--sidebar-border",
+        ].map((key) => [key, scenario === "invalid colour" ? "url(x)" : "#123456"]),
+      ),
+    };
+    new Function("document", "localStorage", "location", script)(
+      {
+        documentElement: {
+          dataset,
+          classList: { contains: () => true },
+          style: {
+            setProperty: (key: string, value: string) => {
+              variables[key] = value;
+            },
+          },
+        },
+      },
+      {
+        getItem: (key: string) => (key === "t3code:sidebar-tint:v1" ? JSON.stringify(cache) : null),
+      },
+      { pathname: "/thread" },
+    );
+    expect(variables).toEqual(
+      scenario === "match"
+        ? Object.fromEntries(
+            Object.keys(cache.variables).map((key) => [`--startup${key.slice(1)}`, "#123456"]),
+          )
+        : {},
+    );
+  },
+);

@@ -1,3 +1,4 @@
+import { useSidebarTint } from "../hooks/useSidebarTint";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -417,6 +418,7 @@ export function AppSidebarLayout({
   children: ReactNode;
   showSidebar?: boolean;
 }) {
+  const sidebarTint = useSidebarTint();
   const sidebarArea = workspaceAreaProps("sidebar", 0, "Threads");
   const [sidebarRouteReveal] = useState<SidebarRouteReveal>(() => ({
     observedKey: null,
@@ -484,7 +486,7 @@ export function AppSidebarLayout({
                 storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
                 onResize: setSidebarWidth,
               }}
-              style={windowControlsInsetStyle}
+              style={{ ...windowControlsInsetStyle, ...sidebarTint }}
             >
               <ThreadSidebar routeReveal={sidebarRouteReveal} />
               <SidebarRail onDoubleClick={resetSidebarWidth} />

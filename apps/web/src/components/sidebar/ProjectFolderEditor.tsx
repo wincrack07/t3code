@@ -1,3 +1,4 @@
+import { SidebarColorPicker } from "./SidebarColorPicker";
 import { randomUUID } from "../../lib/utils";
 import { useState } from "react";
 import { useClientSettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
@@ -33,6 +34,7 @@ export function ProjectFolderEditor({
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const update = useUpdatePrimarySettings();
   const [name, setName] = useState(folder?.name ?? "");
+  const [sidebarColor, setSidebarColor] = useState(folder?.sidebarColor ?? null);
   const [emoji, setEmoji] = useState(folder?.emoji ?? "");
   return (
     <Dialog
@@ -69,6 +71,7 @@ export function ProjectFolderEditor({
               onChange={(event) => setEmoji(event.target.value)}
             />
           </label>
+          <SidebarColorPicker value={sidebarColor} onChange={setSidebarColor} />
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -82,6 +85,7 @@ export function ProjectFolderEditor({
                 id: folder?.id ?? randomUUID(),
                 name: name.trim(),
                 emoji: emoji.trim(),
+                sidebarColor,
                 projectKeys: folder?.projectKeys ?? [],
                 ...(parentId === undefined ? {} : { parentId }),
               };

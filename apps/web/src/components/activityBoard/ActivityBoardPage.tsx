@@ -1,3 +1,5 @@
+import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
+import { SidebarColorMarker } from "../sidebar/SidebarColorPicker";
 import { KeepAwakeControl } from "../KeepAwakeControl";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
@@ -61,6 +63,14 @@ export function ActivityBoardPage() {
   const environments = useEnvironmentConnectionSummaries();
   const threads = useQuietThreadShells();
   const projects = useProjects();
+  const sidebarProjects = useSidebarProjectGroups();
+  const projectColors = new Map(
+    sidebarProjects.flatMap((group) =>
+      group.memberProjectRefs.map(
+        (ref) => [`${ref.environmentId}:${ref.projectId}`, group.sidebarColor] as const,
+      ),
+    ),
+  );
   const columns = buildActivityBoard({ environments, threads, projects });
   const total = columns.reduce((count, column) => count + column.cardCount, 0);
   const connected = columns.filter((column) => column.connected).length;
@@ -80,7 +90,11 @@ export function ActivityBoardPage() {
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:flex-row md:overflow-x-auto md:overflow-y-hidden">
             {columns.map((column) => (
-              <ActivityColumn key={column.environment.environmentId} column={column} />
+              <ActivityColumn
+                key={column.environment.environmentId}
+                column={column}
+                projectColors={projectColors}
+              />
             ))}
           </div>
         )}
@@ -89,7 +103,13 @@ export function ActivityBoardPage() {
   );
 }
 
-function ActivityColumn({ column }: { column: ActivityBoardColumn }) {
+function ActivityColumn({
+  column,
+  projectColors,
+}: {
+  column: ActivityBoardColumn;
+  projectColors: ReadonlyMap<string, string | null | undefined>;
+}) {
   const { environment } = column;
   const machine = useEnvironmentMachines().get(environment.environmentId) ?? "server";
   const providerEntries =
@@ -149,6 +169,13 @@ function ActivityColumn({ column }: { column: ActivityBoardColumn }) {
                 ) : (
                   <FolderIcon className="size-3.5 shrink-0" />
                 )}
+                <SidebarColorMarker
+                  color={
+                    group.project
+                      ? projectColors.get(`${group.project.environmentId}:${group.project.id}`)
+                      : null
+                  }
+                />
                 <span className="truncate">{group.project?.title ?? "Unknown project"}</span>
               </h3>
               {group.cards.map((card) => (

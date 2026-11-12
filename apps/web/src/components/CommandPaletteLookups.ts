@@ -7,9 +7,9 @@ import {
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useClientSettings } from "../hooks/useSettings";
 import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
-import { useProjects, useVisibleThreadShells } from "../state/entities";
+import { useProjects, useVisibleThreadShells, useServerConfigs } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
-import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
+import { buildSidebarProjectSnapshots, withSidebarProjectColors } from "../sidebarProjectGrouping";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sidebar.logic";
 
@@ -55,6 +55,7 @@ export const selectCommandPaletteClientSettings = (settings: ClientSettings) => 
 });
 
 export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<EnvironmentId, string>) {
+  const configs = useServerConfigs();
   const projects = useProjects();
   const threads = useVisibleThreadShells();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
@@ -80,7 +81,7 @@ export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<Environ
     resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
   });
   return sortLogicalProjectsForSidebar(
-    unsortedProjectGroups,
+    withSidebarProjectColors(unsortedProjectGroups, configs, clientSettings.sidebarProjectFolders),
     threads,
     clientSettings.sidebarProjectSortOrder,
   );

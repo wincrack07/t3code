@@ -23,6 +23,8 @@ import {
   parseSidebarTreeRow,
   sidebarTreeRow,
 } from "./sidebar/sidebarTreeDrag";
+import { SIDEBAR_COLORS, resolveSidebarColor } from "../sidebarColors";
+import { useProjectSidebarColor } from "../hooks/useProjectSidebarColor";
 import { ProjectFolderEditor, ProjectFolderSuggestions } from "./sidebar/ProjectFolderEditor";
 import { ProjectGroupHeader } from "./sidebar/ProjectGroupHeader";
 import { sidebarProjectIsOther, sidebarNestedThreads } from "./Sidebar.logic";
@@ -1158,6 +1160,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   });
   const { theme } = useTheme();
+  const projectSidebarColors = useProjectSidebarColor();
   const namedProjectFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const [folderEditor, setFolderEditor] = useState<{
     folder?: ProjectFolder;
@@ -1493,6 +1496,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             [
               { id: "new-thread", label: "New thread" },
               { id: "copy-path", label: "Copy path" },
+              {
+                id: "sidebar-color",
+                label: "Sidebar colour",
+                disabled: !projectSidebarColors.canSet(group.memberProjects),
+                children: [
+                  { id: "sidebar-color:default", label: "Default" },
+                  ...SIDEBAR_COLORS.map((color) => ({
+                    id: `sidebar-color:${color.value}`,
+                    label: color.name,
+                  })),
+                  { id: "sidebar-color:custom", label: "Custom colour…" },
+                ],
+              },
               ...(canPinProject(group)
                 ? [
                     group.pinned
@@ -1523,6 +1539,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
         if (clicked._tag === "Failure") return;
+        if (clicked.value?.startsWith("sidebar-color:")) {
+          const value = clicked.value.slice("sidebar-color:".length);
+          if (value === "custom") openProjectSettings(group);
+          else
+            void projectSidebarColors.setColor(
+              group.memberProjects,
+              value === "default" ? null : value,
+            );
+          return;
+        }
         if (clicked.value?.startsWith("move-group:") || clicked.value === "remove-group") {
           moveSidebarProjectToFolder(
             group.projectKey,
@@ -4062,6 +4088,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   key={`project-folder:${folder.group.projectKey}`}
                                   group={folder.group}
                                   depth={row.depth}
+                                  sidebarColor={resolveSidebarColor(
+                                    projectSidebarColors.colorFor(folder.group),
+                                    projectFolderOfProject(
+                                      namedProjectFolders,
+                                      folder.group.projectKey,
+                                    )?.sidebarColor,
+                                  )}
                                   collapsed={folder.collapsed}
                                   localLastVisitedAtById={folderLastVisitedByThreadKey}
                                   hiddenThreads={folder.hiddenThreads}

@@ -1,3 +1,4 @@
+import { useProjectSidebarColor } from "../hooks/useProjectSidebarColor";
 import "../index.css";
 import { useUiStateStore } from "../uiStateStore";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
@@ -27,6 +28,7 @@ vi.mock("../../../../packages/client-runtime/src/connection/driver.ts", async (i
 });
 
 vi.mock("../state/entities", { spy: true });
+vi.mock("../hooks/useProjectSidebarColor", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
 vi.mock("../commandPaletteBus", () => ({
   openCommandPalette: vi.fn(),
@@ -104,11 +106,18 @@ describe("sidebar header new thread", () => {
 });
 
 it("hides grouped project children on collapse, expands all, and opens project actions", async () => {
+  const setColor = vi.fn().mockResolvedValue(undefined);
+  vi.mocked(useProjectSidebarColor).mockImplementation(() => ({
+    canSet: () => true,
+    setColor,
+    colorFor: () => null,
+  }));
   using _environment = installFakeEnvironment([]);
   using stack = new DisposableStack();
   const previousSettings = getClientSettings();
   const previousUi = useUiStateStore.getState();
   stack.defer(() => {
+    vi.mocked(useProjectSidebarColor).mockRestore();
     __setClientSettingsForTests(previousSettings);
     useUiStateStore.setState(previousUi);
   });
@@ -154,6 +163,22 @@ it("hides grouped project children on collapse, expands all, and opens project a
   await vi.waitFor(() => expect(folders()).toHaveLength(0));
   await userEvent.click(screen.getByRole("button", { name: "Expand all projects", exact: true }));
   await vi.waitFor(() => expect(folders()).toHaveLength(2));
+  await act(() => {
+    folders()[0]!
+      .querySelector("button")!
+      .dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 20,
+          clientY: 200,
+        }),
+      );
+  });
+  await userEvent.hover(page.getByRole("menuitem", { name: "Sidebar colour", exact: true }));
+  await expect.element(page.getByRole("menuitem", { name: "Blue", exact: true })).toBeVisible();
+  await userEvent.click(page.getByRole("menuitem", { name: "Blue", exact: true }));
+  expect(setColor).toHaveBeenCalledWith(groups[0]!.memberProjects, "#629bd7");
   await act(() => {
     folders()[0]!
       .querySelector("button")!
