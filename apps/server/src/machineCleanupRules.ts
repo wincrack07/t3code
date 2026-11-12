@@ -53,7 +53,7 @@ export function machineCacheRules(platform: string): MachineCacheRule[] {
     },
     {
       id: "docker-build",
-      relativePath: ".docker",
+      relativePath: ".docker/build-cache",
       phase: "C",
       effect: "Docker build cache is lost; images and containers remain",
       command: ["docker", "builder", "prune", "-af"],
@@ -187,4 +187,31 @@ export function cleanupBuildProcesses(output: string) {
       { pid: Number(match[1]), cpu, command, busy: !command.includes("GradleDaemon") || cpu > 1 },
     ];
   });
+}
+
+export function dockerBuildCacheBytes(output: string): number | null {
+  for (const line of output.split(/\r?\n/).filter(Boolean)) {
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("Type" in value) ||
+      value.Type !== "Build Cache" ||
+      !("Size" in value) ||
+      typeof value.Size !== "string"
+    )
+      continue;
+    const match = /^\s*([\d.]+)\s*(B|kB|KB|MB|GB|TB|KiB|MiB|GiB|TiB)?/.exec(value.Size);
+    if (!match) return null;
+    const unit = match[2] ?? "B";
+    const power = ["B", "KB", "MB", "GB", "TB"].indexOf(unit.replace("i", "").toUpperCase());
+    const bytes = Number(match[1]) * (unit.includes("i") ? 1024 : 1000) ** power;
+    return Number.isFinite(bytes) && bytes >= 0 ? bytes : null;
+  }
+  return null;
 }

@@ -3,6 +3,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
   MachineCleanupItem,
+  MachineCleanupReport,
   MachineCleanupSettings as CleanupSettings,
 } from "@t3tools/contracts";
 import { serverEnvironment } from "../../state/server";
@@ -64,6 +65,8 @@ function EnvironmentCleanup({
   const phaseC = useAtomCommand(serverEnvironment.runMachineCleanupPhaseC);
   const cancel = useAtomCommand(serverEnvironment.cancelMachineCleanup);
   const update = useAtomCommand(serverEnvironment.updateSettings);
+  const exportHistory = useAtomCommand(serverEnvironment.machineCleanupHistory);
+  const [historyJson, setHistoryJson] = useState<string | null>(null);
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [confirming, setConfirming] = useState<{
     phase: "B" | "C";
@@ -86,7 +89,7 @@ function EnvironmentCleanup({
     ]),
   ].filter((rule) => rule !== "project");
   const history = [...(state?.history ?? [])].reverse();
-  const minimum = Math.min(...history.map((entry) => entry.freeAfter), 0);
+  const minimum = history.length ? Math.min(...history.map((entry) => entry.freeAfter)) : 0;
   const maximum = Math.max(...history.map((entry) => entry.freeAfter), 1);
   const points = history
     .map(
@@ -129,12 +132,53 @@ function EnvironmentCleanup({
           </div>
         }
       >
+        {state?.freeNow !== undefined && <p>{formatBytes(state.freeNow)} available now</p>}
         {busy && <p role="status">{state?.progress || "Scanning…"}</p>}
         {!busy && state?.progress && <p role="status">{state.progress}</p>}
         {history.length > 1 && (
           <svg role="img" aria-label="Free disk space over cleanup history" viewBox="0 0 400 100">
             <polyline fill="none" stroke="currentColor" strokeWidth="2" points={points} />
           </svg>
+        )}
+      </SettingsRow>
+      {report && (
+        <SettingsRow
+          title="Cleanup report"
+          description="Measured space freed, plus estimates for items you can review."
+        >
+          <CleanupReportSummary report={report} />
+          <details>
+            <summary>Regenerable files and skips</summary>
+            {report.items
+              .filter((item) => item.phase === "A")
+              .map((item) => (
+                <p key={item.id}>
+                  {item.path} · {formatBytes(item.bytes)} · {item.reason || item.effect}
+                </p>
+              ))}
+          </details>
+        </SettingsRow>
+      )}
+      <SettingsRow
+        title="History JSON"
+        description="The latest 100 reports are retained on this environment. Full history is loaded only when requested."
+        control={
+          <Button
+            variant="outline"
+            disabled={!allowed || busy}
+            onClick={async () => {
+              const result = await exportHistory({ environmentId, input: {} });
+              if (result._tag === "Success") setHistoryJson(JSON.stringify(result.value, null, 2));
+            }}
+          >
+            View history JSON
+          </Button>
+        }
+      >
+        {historyJson && (
+          <div className="max-h-80 overflow-auto">
+            <pre>{historyJson}</pre>
+          </div>
         )}
       </SettingsRow>
       <SettingsRow
@@ -286,13 +330,14 @@ function EnvironmentCleanup({
           <Button
             variant="outline"
             disabled={!allowed || busy || !candidates.some((item) => selected.includes(item.id))}
-            onClick={() =>
+            onClick={() => {
+              if (!report) return;
               setConfirming({
                 phase: "B",
-                reportId: report!.id,
+                reportId: report.id,
                 items: candidates.filter((item) => selected.includes(item.id)),
-              })
-            }
+              });
+            }}
           >
             Delete selected
           </Button>
@@ -329,7 +374,9 @@ function EnvironmentCleanup({
               <Button
                 variant="outline"
                 disabled={!allowed || busy}
-                onClick={() => setConfirming({ phase: "C", reportId: report!.id, items: [item] })}
+                onClick={() => {
+                  if (report) setConfirming({ phase: "C", reportId: report.id, items: [item] });
+                }}
               >
                 Review aggressive cleanup
               </Button>
@@ -389,6 +436,7 @@ function EnvironmentCleanup({
             <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
             <Button
               variant="destructive"
+              disabled={!allowed || busy}
               onClick={() => {
                 if (!report || !confirming) return;
                 const command = confirming.phase === "B" ? phaseB : phaseC;
@@ -409,5 +457,51 @@ function EnvironmentCleanup({
         </AlertDialogPopup>
       </AlertDialog>
     </SettingsSection>
+  );
+}
+
+function cleanupCategory(item: MachineCleanupItem) {
+  return item.rule === "worktree"
+    ? "Worktrees"
+    : item.rule === "node-modules" || item.rule === "pods"
+      ? "Dependencies"
+      : item.project
+        ? "Builds"
+        : "Caches";
+}
+function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
+  const categories = [...new Set(report.items.map(cleanupCategory))];
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>GB freed in A</th>
+          <th>GB pending in B</th>
+          <th>GB in C</th>
+        </tr>
+      </thead>
+      <tbody>
+        {categories.map((category) => {
+          const items = report.items.filter((item) => cleanupCategory(item) === category);
+          const ids = new Set(items.map((item) => item.id));
+          const freed = (report.measurements ?? [])
+            .filter((entry) => entry.phase === "A" && ids.has(entry.itemId))
+            .reduce((sum, entry) => sum + Math.max(0, entry.after - entry.before), 0);
+          const bytes = (phase: "B" | "C") =>
+            items
+              .filter((item) => item.phase === phase && item.outcome === "pending")
+              .reduce((sum, item) => sum + item.bytes, 0);
+          return (
+            <tr key={category}>
+              <td>{category}</td>
+              <td>{(freed / 1e9).toFixed(2)}</td>
+              <td>{(bytes("B") / 1e9).toFixed(2)}</td>
+              <td>{(bytes("C") / 1e9).toFixed(2)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

@@ -22,6 +22,7 @@ vi.mock(import("../../state/server"), async () => {
       deleteMachineCleanupApproved: command("phaseB"),
       runMachineCleanupPhaseC: command("phaseC"),
       cancelMachineCleanup: command("cancel"),
+      machineCleanupHistory: command("history"),
       updateSettings: command("settings"),
     },
   } as never;
@@ -140,4 +141,14 @@ it("opens machine cleanup and requires exact-path confirmation before submitting
     environmentId: EnvironmentId.make("fixture"),
     input: { reportId: "report", itemIds: ["candidate"] },
   });
+});
+
+it("opens before any cleanup report exists", async () => {
+  setup();
+  state.value = { running: false, progress: "", report: null, history: [] };
+  await using screen = await render(<MachineCleanupSettings />, {
+    router: "/settings/maintenance",
+  });
+  await expect.element(screen.getByRole("button", { name: "Scan", exact: true })).toBeVisible();
+  await expect.element(screen.getByRole("button", { name: "Delete selected" })).toBeDisabled();
 });

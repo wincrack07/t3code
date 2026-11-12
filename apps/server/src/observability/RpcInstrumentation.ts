@@ -60,6 +60,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverCommitDesktopUpdate]: "server",
   [WS_METHODS.serverUpsertKeybinding]: "server",
   [WS_METHODS.serverRemoveKeybinding]: "server",
+  [WS_METHODS.machineCleanupHistory]: "server",
   [WS_METHODS.machineCleanupScan]: "server",
   [WS_METHODS.machineCleanupRunPhaseA]: "server",
   [WS_METHODS.machineCleanupDeleteApproved]: "server",

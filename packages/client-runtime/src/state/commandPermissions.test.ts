@@ -159,6 +159,7 @@ describe("command permissions", () => {
   );
 
   it.effect.each([
+    { method: WS_METHODS.machineCleanupHistory, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupScan, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupRunPhaseA, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupDeleteApproved, scope: AuthEnvironmentMaintainScope },

@@ -1207,6 +1207,10 @@ export function createServerEnvironmentAtoms<R, E>(
 
   return {
     configValueAtom,
+    machineCleanupHistory: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-history",
+      tag: WS_METHODS.machineCleanupHistory,
+    }),
     scanMachineCleanup: createEnvironmentRpcCommand(runtime, {
       label: "machine-cleanup-scanMachineCleanup",
       tag: WS_METHODS.machineCleanupScan,

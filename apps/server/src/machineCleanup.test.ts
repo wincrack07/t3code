@@ -107,6 +107,11 @@ describe("machine cleanup path boundary", () => {
     await NodeFSP.writeFile(NodePath.join(cache, ".env"), "fixture");
     await expect(deleteCleanupPath(cache, f.scope)).rejects.toBeInstanceOf(UnsafeCleanupPath);
     expect(await NodeFSP.readFile(NodePath.join(cache, ".env"), "utf8")).toBe("fixture");
+    const devState = await directory(NodePath.join(f.root, "dev-cache", ".t3", "userdata"));
+    await expect(
+      deleteCleanupPath(NodePath.join(f.root, "dev-cache"), f.scope),
+    ).rejects.toBeInstanceOf(UnsafeCleanupPath);
+    expect((await NodeFSP.stat(devState)).isDirectory()).toBe(true);
     const safe = await directory(NodePath.join(f.root, "safe"));
     await NodeFSP.writeFile(NodePath.join(safe, "generated"), "fixture");
     await deleteCleanupPath(safe, f.scope);

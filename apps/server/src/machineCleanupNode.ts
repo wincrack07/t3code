@@ -21,6 +21,7 @@ import {
 import { assessCleanupWorktrees, type CleanupGitRunner } from "./machineCleanupWorktrees.ts";
 import {
   cleanupBuildProcesses,
+  dockerBuildCacheBytes,
   cleanupMeasurementPath,
   machineCacheRules,
   machineRuleEnabled,
@@ -49,7 +50,19 @@ export async function cleanupNodeCommand(
   args: readonly string[],
   signal: AbortSignal,
 ) {
-  const { stdout } = await execFile(command, [...args], {
+  const safeArgs =
+    command === "git"
+      ? [
+          "-c",
+          "core.hooksPath=/dev/null",
+          "-c",
+          "core.fsmonitor=false",
+          "-c",
+          "protocol.ext.allow=never",
+          ...args,
+        ]
+      : [...args];
+  const { stdout } = await execFile(command, safeArgs, {
     cwd,
     signal,
     maxBuffer: 16 * 1024 * 1024,
@@ -58,6 +71,19 @@ export async function cleanupNodeCommand(
       ...(command === "flutter" && args[0] === "pub" && args[1] === "cache"
         ? { PUB_CACHE: NodePath.join(cwd, ".pub-cache") }
         : {}),
+      ...(command === "rustup" ? { RUSTUP_HOME: NodePath.join(cwd, ".rustup") } : {}),
+      ...(command === "brew"
+        ? {
+            HOMEBREW_CACHE: NodePath.join(cwd, "Library/Caches/Homebrew"),
+            HOMEBREW_NO_AUTO_UPDATE: "1",
+          }
+        : {}),
+      ...(command === "gradle" ? { GRADLE_USER_HOME: NodePath.join(cwd, ".gradle") } : {}),
+      ...(command === "docker" && args[0] === "--host"
+        ? { DOCKER_CONTEXT: "", DOCKER_HOST: args[1] }
+        : {}),
+      GIT_SSH_COMMAND: "ssh -o BatchMode=yes",
+      GCM_INTERACTIVE: "Never",
       GIT_TERMINAL_PROMPT: "0",
       GIT_OPTIONAL_LOCKS: "0",
     },
@@ -199,6 +225,28 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
       head: null,
     });
     for (const candidate of projectScan.candidates) {
+      if (
+        candidate.phase === "B" &&
+        (await options.activeWorktrees()).some(
+          (active) =>
+            candidate.project === active ||
+            candidate.project.startsWith(`${active}${NodePath.sep}`),
+        )
+      ) {
+        items.push({
+          ...item(
+            candidate.rule,
+            candidate.path,
+            candidate.phase,
+            candidate.bytes,
+            "Dependencies retained",
+          ),
+          project: candidate.project,
+          outcome: "protected",
+          reason: "T3 project has unsettled, running or queued work",
+        });
+        continue;
+      }
       if (candidate.phase === "A" && !machineRuleEnabled(settings, candidate.rule)) continue;
       items.push({
         ...item(
@@ -279,6 +327,30 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
     if (options.platform === "darwin" && (await exists(local))) await visitLocal(local);
     for (const rule of rules) {
       signal.throwIfAborted();
+      if (rule.id === "docker-build") {
+        try {
+          const host = (
+            await run("docker", ["context", "inspect", "--format", "{{.Endpoints.docker.Host}}"])
+          ).trim();
+          if (!host.startsWith("unix://")) continue;
+          const bytes = dockerBuildCacheBytes(
+            await run("docker", ["--host", host, "system", "df", "--format", "{{json .}}"]),
+          );
+          if (bytes !== null)
+            items.push(
+              item(
+                rule.id,
+                NodePath.join(options.home, rule.relativePath),
+                "C",
+                bytes,
+                rule.effect,
+              ),
+            );
+        } catch {
+          notes.push("Docker build-cache usage unavailable");
+        }
+        continue;
+      }
       if (rule.phase === "A" && !machineRuleEnabled(settings, rule.id)) continue;
       let target = NodePath.join(options.home, rule.relativePath);
       if (rule.id.startsWith("pnpm-")) {
@@ -286,6 +358,18 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
           target = (await run("pnpm", ["store", "path", "--silent"])).trim();
         } catch {
           notes.push("pnpm store path unavailable; pnpm rule skipped");
+          continue;
+        }
+      }
+      if (rule.id === "linux-pnpm" || rule.id === "mac-pnpm") {
+        try {
+          const store = (await run("pnpm", ["store", "path", "--silent"])).trim();
+          if (store === target || store.startsWith(`${target}${NodePath.sep}`)) {
+            notes.push(`Retained ${target}: contains pnpm store; use store prune instead`);
+            continue;
+          }
+        } catch {
+          notes.push(`Retained ${target}: pnpm store location unavailable`);
           continue;
         }
       }
@@ -367,12 +451,13 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
                   (active) => active === target || active.startsWith(`${target}${NodePath.sep}`),
                 ),
             });
+            const repositoryRoot = assessments[0]?.worktree.path ?? directory;
             for (const entry of assessments) {
               if (entry.outcome === "keep") continue;
               const wt = entry.worktree;
               const row = {
                 ...item("worktree", wt.path, "B", 0, "Remove the merged worktree; keep its branch"),
-                project: directory,
+                project: repositoryRoot,
                 head: wt.head,
                 branch: wt.branch,
                 changes: entry.changes,
@@ -380,6 +465,18 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
                 reason: entry.reason,
               };
               if (entry.outcome === "candidate") {
+                const allowed = [
+                  options.home,
+                  ...settings.projectRoots.map((root) => expand(options.home, root)),
+                ].some((root) => wt.path.startsWith(`${root}${NodePath.sep}`));
+                if (!allowed) {
+                  items.push({
+                    ...row,
+                    outcome: "protected",
+                    reason: "Outside the configured scan scope",
+                  });
+                  continue;
+                }
                 try {
                   await verifyCleanupPath(wt.path, scopeFor(settings, [wt.path]));
                   items.push({ ...row, bytes: await allocatedCleanupBytes(wt.path, signal) });
@@ -402,6 +499,24 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
       }
     };
     await search(options.home, 0);
+    if (options.platform === "darwin") {
+      const dockerRaw = NodePath.join(
+        options.home,
+        "Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw",
+      );
+      if (await exists(dockerRaw))
+        items.push({
+          ...item(
+            "review-only",
+            dockerRaw,
+            "C",
+            await allocatedCleanupBytes(dockerRaw, signal),
+            "Sparse Docker disk, allocated storage only",
+          ),
+          outcome: "protected",
+          reason: "Measured only. Images and containers remain untouched",
+        });
+    }
     signal.throwIfAborted();
     return {
       ...report,
@@ -419,6 +534,7 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
     signal: AbortSignal,
     progress: (target: string) => void,
   ): Promise<MachineCleanupReport> => {
+    const phaseBefore = await options.freeSpace(report.measurementPath);
     const notes = [...report.notes];
     const rows: MachineCleanupItem[] = [];
     const run = (command: string, args: readonly string[], cwd = options.home) =>
@@ -435,6 +551,15 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
       }
       progress(row.path);
       try {
+        if (
+          row.phase === "B" &&
+          row.rule !== "worktree" &&
+          (await options.activeWorktrees()).some(
+            (active) =>
+              row.project === active || row.project.startsWith(`${active}${NodePath.sep}`),
+          )
+        )
+          throw new Error("T3 project became active");
         if (row.phase === "A" && !machineRuleEnabled(settings, row.rule))
           throw new Error("Rule was disabled");
         const processes = cleanupBuildProcesses(await run("ps", ["-axo", "pid=,pcpu=,args="]));
@@ -570,16 +695,44 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
             )
               throw new Error("Candidate is no longer eligible");
           }
+          if (
+            row.rule === "linux-pnpm" ||
+            row.rule === "mac-pnpm" ||
+            row.rule.startsWith("pnpm-")
+          ) {
+            const store = (await run("pnpm", ["store", "path", "--silent"])).trim();
+            if (
+              row.rule.startsWith("pnpm-")
+                ? store !== row.path
+                : store === row.path || store.startsWith(`${row.path}${NodePath.sep}`)
+            )
+              throw new Error("pnpm store location changed or overlaps cache");
+          }
           const command = rule?.command;
           await deleteCleanupPath(
             row.path,
             scopeFor(settings, row.project ? [] : [row.path]),
             command
               ? async () => {
+                  let dockerHost: string | undefined;
+                  if (row.rule === "docker-build") {
+                    const host = (
+                      await run("docker", [
+                        "context",
+                        "inspect",
+                        "--format",
+                        "{{.Endpoints.docker.Host}}",
+                      ])
+                    ).trim();
+                    if (!host.startsWith("unix://"))
+                      throw new Error("Docker context is no longer local");
+                    dockerHost = host;
+                  }
                   if (row.rule === "simulator-data")
                     await run("xcrun", ["simctl", "shutdown", "all"]);
-                  const args =
-                    row.rule === "npm"
+                  const args = dockerHost
+                    ? ["--host", dockerHost, ...command.slice(1)]
+                    : row.rule === "npm"
                       ? [...command.slice(1), "--cache", row.path]
                       : row.rule === "pnpm-prune"
                         ? [...command.slice(1), "--store-dir", row.path]
@@ -601,11 +754,21 @@ export function makeMachineCleanupNode(options: CleanupNodeOptions) {
         notes.push(`Skipped ${row.path}; it may be active, protected or partly in use`);
       }
     }
+    const phaseAfter = await options.freeSpace(report.measurementPath);
     return {
       ...report,
       items: rows,
       notes,
-      freeAfter: await options.freeSpace(report.measurementPath),
+      measurements: [
+        ...(report.measurements ?? []),
+        {
+          phase: phases[0] ?? "A",
+          itemId: report.items[0]?.id ?? "",
+          before: phaseBefore,
+          after: phaseAfter,
+        },
+      ],
+      freeAfter: phaseAfter,
       finishedAt: DateTime.formatIso(DateTime.makeUnsafe(options.now())),
     };
   };

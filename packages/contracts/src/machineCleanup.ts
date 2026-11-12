@@ -45,6 +45,16 @@ export const MachineCleanupReport = Schema.Struct({
   platform: Schema.String,
   startedAt: Schema.String,
   finishedAt: Schema.NullOr(Schema.String),
+  measurements: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        phase: Schema.Literals(["A", "B", "C"]),
+        itemId: Schema.String,
+        before: Schema.Number,
+        after: Schema.Number,
+      }),
+    ),
+  ),
   measurementPath: Schema.String,
   freeBefore: Schema.Number,
   freeAfter: Schema.Number,
@@ -53,6 +63,8 @@ export const MachineCleanupReport = Schema.Struct({
 });
 export type MachineCleanupReport = typeof MachineCleanupReport.Type;
 export const MachineCleanupState = Schema.Struct({
+  freeNow: Schema.optionalKey(Schema.Number),
+  measuredAt: Schema.optionalKey(Schema.String),
   running: Schema.Boolean,
   progress: Schema.String,
   report: Schema.NullOr(MachineCleanupReport),
@@ -72,7 +84,9 @@ export class MachineCleanupError extends Schema.TaggedError<MachineCleanupError>
   },
 ) {
   override get message(): string {
-    return `Machine cleanup ${this.operation} failed.`;
+    return this.operation === "unsupported-platform"
+      ? "Machine cleanup is not supported on Windows."
+      : `Machine cleanup ${this.operation} failed.`;
   }
 }
 

@@ -1,3 +1,4 @@
+import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as DateTime from "effect/DateTime";
 import { cleanupScheduleDay, selectedMachineCleanupItems } from "./machineCleanupSchedule.ts";
 import { forkParked } from "./serverActivation.ts";
@@ -24,7 +25,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as ServerConfig from "./config.ts";
 import * as Settings from "./serverSettings.ts";
 import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
-import { threadHasQueuedTurnStart } from "./orchestration-v2/ThreadSettlementService.ts";
+import { activeMachineCleanupPaths } from "./machineCleanupThreads.ts";
 import {
   makeMachineCleanupNode,
   cleanupNodeCommand,
@@ -45,8 +46,14 @@ export class MachineCleanup extends Context.Service<
     readonly cancel: Effect.Effect<void>;
     readonly state: Stream.Stream<MachineCleanupState>;
     readonly current: Effect.Effect<MachineCleanupState>;
+    readonly history: Effect.Effect<readonly MachineCleanupReport[]>;
   }
 >()("t3/MachineCleanupService/MachineCleanup") {}
+
+export class Commands extends Context.Reference<typeof cleanupNodeCommand>(
+  "t3/MachineCleanupService/Commands",
+  { defaultValue: () => cleanupNodeCommand },
+) {}
 
 const encodeHistory = Schema.encodeEffect(
   Schema.fromJsonString(Schema.Array(MachineCleanupReport)),
@@ -55,10 +62,12 @@ const isCleanupError = Schema.is(MachineCleanupError);
 
 const make = Effect.gen(function* () {
   const home = yield* HostProcess.HomeDirectory;
+  const command = yield* Commands;
   const platform = yield* HostProcess.Platform;
   const config = yield* ServerConfig.ServerConfig;
   const settings = yield* Settings.ServerSettingsService;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
+  const projects = yield* ProjectStore.ProjectStoreV2;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const scope = yield* Effect.scope;
@@ -90,22 +99,22 @@ const make = Effect.gen(function* () {
     t3Home: config.baseDir,
     platform,
     now: Date.now,
-    command: cleanupNodeCommand,
+    command,
     freeSpace: cleanupNodeFreeSpace,
     activeWorktrees: async () => activePaths,
   });
   const refreshActive = Effect.fn("MachineCleanup.refreshActive")(function* () {
     const snapshot = yield* projections.getShellSnapshot();
     const now = yield* Clock.currentTimeMillis;
-    activePaths = [...snapshot.threads, ...snapshot.archivedThreads].flatMap((thread) =>
-      thread.worktreePath !== null &&
-      (thread.settledAt === null ||
-        thread.activeRunId !== null ||
-        threadHasQueuedTurnStart(thread, now) ||
-        (thread.pendingBackgroundTasks?.length ?? 0) > 0)
-        ? [thread.worktreePath]
-        : [],
+    const paths = activeMachineCleanupPaths(
+      [...snapshot.threads, ...snapshot.archivedThreads],
+      now,
+      yield* projects.listShells(),
     );
+    const canonical = yield* Effect.forEach(paths, (target) =>
+      fs.realPath(target).pipe(Effect.orElseSucceed(() => target)),
+    );
+    activePaths = [...new Set([...paths, ...canonical])];
   });
   const io = <A>(operation: string, run: (signal: AbortSignal) => Promise<A>) =>
     Effect.tryPromise({
@@ -114,14 +123,38 @@ const make = Effect.gen(function* () {
     });
   const persist = Effect.fn("MachineCleanup.persist")(function* (report: MachineCleanupReport) {
     const previous = yield* SubscriptionRef.get(ref);
+    const known = new Set(
+      previous.history.flatMap((entry) => entry.items.map((item) => item.path)),
+    );
+    const large = report.items.filter(
+      (item) => item.bytes > 2 * 1024 ** 3 && !known.has(item.path),
+    );
+    report = {
+      ...report,
+      notes: [
+        ...report.notes,
+        ...large.map(
+          (item) =>
+            `New large path worth reviewing: ${item.path} (${(item.bytes / 1024 ** 3).toFixed(1)} GiB)`,
+        ),
+      ],
+    };
     const history = [report, ...previous.history].slice(0, 100);
     const encoded = yield* encodeHistory(history).pipe(
       Effect.mapError((cause) => new MachineCleanupError({ operation: "history", cause })),
     );
-    yield* fs
-      .writeFileString(historyPath, encoded)
-      .pipe(Effect.mapError((cause) => new MachineCleanupError({ operation: "history", cause })));
-    yield* SubscriptionRef.set(ref, { running: false, progress: "Finished", report, history });
+    yield* fs.writeFileString(`${historyPath}.tmp`, encoded).pipe(
+      Effect.andThen(fs.rename(`${historyPath}.tmp`, historyPath)),
+      Effect.mapError((cause) => new MachineCleanupError({ operation: "history", cause })),
+    );
+    yield* SubscriptionRef.set(ref, {
+      running: false,
+      progress: "Finished",
+      report,
+      history,
+      freeNow: report.freeAfter,
+      measuredAt: report.finishedAt ?? report.startedAt,
+    });
   });
   const start = Effect.fn("MachineCleanup.start")(function* (
     mode: MachineCleanupReport["mode"],
@@ -129,6 +162,11 @@ const make = Effect.gen(function* () {
   ) {
     yield* mutex.withPermit(
       Effect.gen(function* () {
+        if (platform !== "linux" && platform !== "darwin")
+          return yield* new MachineCleanupError({
+            operation: "unsupported-platform",
+            cause: platform,
+          });
         const state = yield* SubscriptionRef.get(ref);
         if (state.running)
           return yield* new MachineCleanupError({
@@ -271,7 +309,8 @@ const make = Effect.gen(function* () {
       if (day === null) return;
       yield* start("unattended");
       lastScheduledDay = day;
-      yield* fs.writeFileString(schedulePath, day);
+      yield* fs.writeFileString(`${schedulePath}.tmp`, day);
+      yield* fs.rename(`${schedulePath}.tmp`, schedulePath);
     },
     Effect.catch((cause) => Effect.logWarning("Machine cleanup schedule failed", { cause })),
   );
@@ -281,6 +320,16 @@ const make = Effect.gen(function* () {
   const cancel = Effect.gen(function* () {
     if (job) yield* Fiber.interrupt(job);
   });
+  const current = Effect.gen(function* () {
+    const free = yield* io("measure", () =>
+      cleanupNodeFreeSpace(platform === "darwin" ? "/System/Volumes/Data" : home),
+    ).pipe(Effect.orElseSucceed(() => null));
+    if (free !== null) {
+      const measuredAt = DateTime.formatIso(yield* DateTime.now);
+      yield* SubscriptionRef.update(ref, (state) => ({ ...state, freeNow: free, measuredAt }));
+    }
+    return yield* SubscriptionRef.get(ref);
+  });
   return MachineCleanup.of({
     scan: start("scan"),
     runPhaseA: start("phaseA"),
@@ -289,10 +338,19 @@ const make = Effect.gen(function* () {
     ),
     runPhaseC: Effect.fn("MachineCleanup.runPhaseC")((selection) => start("phaseC", selection)),
     cancel,
-    state: SubscriptionRef.changes(ref).pipe(
-      Stream.map((state) => (state.running ? { ...state, report: null, history: [] } : state)),
+    state: Stream.fromEffect(current).pipe(
+      Stream.concat(SubscriptionRef.changes(ref)),
+      Stream.map((state) =>
+        state.running
+          ? { ...state, report: null, history: [] }
+          : {
+              ...state,
+              history: state.history.map((report) => ({ ...report, items: [], notes: [] })),
+            },
+      ),
     ),
-    current: SubscriptionRef.get(ref),
+    current,
+    history: SubscriptionRef.get(ref).pipe(Effect.map((state) => state.history)),
   });
 });
 export const layer = Layer.effect(MachineCleanup, make);

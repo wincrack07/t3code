@@ -2714,6 +2714,7 @@ export const layerWsRpc = (
           Effect.fnUntraced(function* (rule) {
             return yield* keybindings.removeKeybindingRule(rule);
           }),
+        [WS_METHODS.machineCleanupHistory]: () => machineCleanup.history,
         [WS_METHODS.machineCleanupScan]: () => machineCleanup.scan,
         [WS_METHODS.machineCleanupRunPhaseA]: () => machineCleanup.runPhaseA,
         [WS_METHODS.machineCleanupDeleteApproved]: (selection) =>

@@ -87,7 +87,12 @@ export async function verifyCleanupPath(target: string, scope: CleanupScope): Pr
     value
       .split(NodePath.sep)
       .some(
-        (part) => part === ".env" || part.startsWith(".env.") || part.startsWith("thread_history"),
+        (part) =>
+          part === ".t3" ||
+          part === "Docker.raw" ||
+          part === ".env" ||
+          part.startsWith(".env.") ||
+          part.startsWith("thread_history"),
       );
   if (
     forbidden(target) ||
@@ -288,6 +293,7 @@ export async function scanMachineProjects(input: {
   };
   for (const root of input.scope.roots) {
     if (await exists(root)) await visit(await canonical(root), 0);
+    else skipped.push({ path: root, reason: "Configured project root is missing or unreadable" });
   }
   return { candidates, skipped };
 }

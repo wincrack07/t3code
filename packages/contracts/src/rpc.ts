@@ -1,4 +1,5 @@
 import {
+  MachineCleanupReport,
   MachineCleanupState,
   MachineCleanupSelection,
   MachineCleanupError,
@@ -543,6 +544,7 @@ export const WS_METHODS = {
   serverCommitDesktopUpdate: "server.commitDesktopUpdate",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
+  machineCleanupHistory: "machineCleanup.history",
   machineCleanupScan: "machineCleanup.scan",
   machineCleanupRunPhaseA: "machineCleanup.runPhaseA",
   machineCleanupDeleteApproved: "machineCleanup.deleteApproved",
@@ -849,6 +851,11 @@ const WsServerCommitDesktopUpdateRpc = Rpc.make(WS_METHODS.serverCommitDesktopUp
   error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
 });
 
+const WsMachineCleanupHistoryRpc = Rpc.make(WS_METHODS.machineCleanupHistory, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(MachineCleanupReport),
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
 const WsMachineCleanupScanRpc = Rpc.make(WS_METHODS.machineCleanupScan, {
   payload: Schema.Struct({}),
   success: Schema.Void,
@@ -2257,6 +2264,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerCommitDesktopUpdateRpc,
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
+  WsMachineCleanupHistoryRpc,
   WsMachineCleanupScanRpc,
   WsMachineCleanupRunPhaseARpc,
   WsMachineCleanupDeleteApprovedRpc,
