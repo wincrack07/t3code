@@ -15,6 +15,22 @@ import {
 } from "./ClaudeHome.ts";
 
 it.layer(NodeServices.layer)("ClaudeHome", (it) => {
+  it.effect("isolates a custom endpoint from inherited Anthropic credentials and model aliases", () =>
+    Effect.gen(function* () {
+      const host = { ANTHROPIC_API_KEY: "host-key", ANTHROPIC_MODEL: "claude-host", ANTHROPIC_BASE_URL: "https://host.invalid", KEEP: "yes" };
+      const custom = yield* mergeClaudeProcessEnvironment({ homePath: "" }, [
+        { name: "ANTHROPIC_BASE_URL", value: "https://api.refuseless.com", sensitive: false },
+        { name: "ANTHROPIC_AUTH_TOKEN", value: "test-key", sensitive: true },
+      ], host);
+      expect(custom.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(custom.ANTHROPIC_MODEL).toBeUndefined();
+      expect(custom.ANTHROPIC_AUTH_TOKEN).toBe("test-key");
+      expect(custom.KEEP).toBe("yes");
+      expect((yield* mergeClaudeProcessEnvironment({ homePath: "" }, undefined, host)).ANTHROPIC_API_KEY).toBe("host-key");
+      expect(host.ANTHROPIC_BASE_URL).toBe("https://host.invalid");
+    }),
+  );
+
   describe("Claude home resolution", () => {
     it.effect("resolves configured Claude HOME and stamps continuation/cache keys with it", () =>
       Effect.gen(function* () {

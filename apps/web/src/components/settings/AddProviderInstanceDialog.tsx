@@ -71,6 +71,29 @@ const DRIVER_OPTIONS = providerClients.definitions.filter(
 );
 const FEATURED_DRIVER_OPTIONS = DRIVER_OPTIONS.filter((option) => option.featured !== false);
 const MORE_DRIVER_OPTIONS = DRIVER_OPTIONS.filter((option) => option.featured === false);
+const CUSTOM_ENDPOINT_PRESETS = [
+  {
+    label: "Refuseless",
+    driver: ProviderDriverKind.make("claudeAgent"),
+    environment: [
+      ["ANTHROPIC_BASE_URL", "https://api.refuseless.com"],
+      ["ANTHROPIC_MODEL", "glm-5.3-abliterated"],
+      ["ANTHROPIC_DEFAULT_OPUS_MODEL", "glm-5.3-abliterated"],
+      ["ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-5.3-abliterated"],
+      ["ANTHROPIC_DEFAULT_FABLE_MODEL", "glm-5.3-abliterated"],
+      ["ANTHROPIC_DEFAULT_HAIKU_MODEL", "glm-5.3-flash-abliterated"],
+      ["CLAUDE_CODE_SUBAGENT_MODEL", "glm-5.3-abliterated"],
+    ],
+    models: [
+      "glm-5.3-abliterated",
+      "glm-5.3-flash-abliterated",
+      "deepseek-v4.1-flash-abliterated",
+      "deepseek-v4.1-flash-abliterated-free",
+      "deepseek-v4.1-flash-fast",
+      "minimax-m3.1-flash",
+    ],
+  },
+] as const;
 const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
 function validateInstanceId(id: string, existing: ReadonlySet<string>): string | null {
   if (id.length === 0) return "Instance ID is required.";
@@ -158,6 +181,7 @@ export function AddProviderInstanceDialog({
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
 
+  const [endpointPreset, setEndpointPreset] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState(0);
   const [addingChatGptAccount, setAddingChatGptAccount] = useState(false);
   // Drivers the administrator's policy leaves out are not offered at all.
@@ -261,6 +285,8 @@ export function AddProviderInstanceDialog({
     });
   };
   const selectDriver = (value: string) => {
+    setEndpointPreset(null);
+    setLocalEnvironment([]);
     setDriver(ProviderDriverKind.make(value));
     setIsManualAcpConfiguration(false);
     setHasAttemptedSubmit(false);
@@ -389,7 +415,9 @@ export function AddProviderInstanceDialog({
       ...(label.trim().length > 0 ? { displayName: label.trim() } : {}),
       ...(normalizedAccentColor ? { accentColor: normalizedAccentColor } : {}),
       ...(hasConfig ? { config } : {}),
-      ...(isLocalAcp && localEnvironment.length > 0 ? { environment: localEnvironment } : {}),
+      ...((isLocalAcp || endpointPreset !== null) && localEnvironment.length > 0
+        ? { environment: localEnvironment }
+        : {}),
     };
     const brandedId = ProviderInstanceId.make(instanceId);
     setIsSaving(true);
@@ -483,6 +511,45 @@ export function AddProviderInstanceDialog({
                   onValueChange={selectDriver}
                   aria-labelledby="add-instance-driver-label"
                 />
+                {isManagedDriverAllowed(managedPolicy, ProviderDriverKind.make("claudeAgent")) ? (
+                  <SettingsGroup aria-label="Custom endpoint" variant="plain">
+                    <p>Custom endpoint</p>
+                    {CUSTOM_ENDPOINT_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.label}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEndpointPreset(preset.label);
+                          setDriver(preset.driver);
+                          setIdentityByDriver((existing) => ({
+                            ...existing,
+                            [preset.driver]: {
+                              label: preset.label,
+                              accentColor: "",
+                              instanceIdOverride: null,
+                            },
+                          }));
+                          setConfigByDriver((existing) => ({
+                            ...existing,
+                            [preset.driver]: { customModels: [...preset.models] },
+                          }));
+                          setLocalEnvironment([
+                            ...preset.environment.map(([name, value]) => ({
+                              name,
+                              value,
+                              sensitive: false,
+                            })),
+                            { name: "ANTHROPIC_AUTH_TOKEN", value: "", sensitive: true },
+                          ]);
+                          setWizardStep(1);
+                        }}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </SettingsGroup>
+                ) : null}
                 <MultipleAccountsNote environmentId={environmentId} driver={driver} />
               </div>
 
@@ -688,6 +755,13 @@ export function AddProviderInstanceDialog({
                 />
               </SettingsGroup>
 
+              {endpointPreset && wizardStep === 2 ? (
+                <ProviderEnvironmentSection
+                  environment={localEnvironment}
+                  onChange={setLocalEnvironment}
+                  secretSources={secretSources}
+                />
+              ) : null}
               {!isAcpRegistry && driverSettingsFields.length > 0 ? (
                 <SettingsGroup variant="plain" className={cn(wizardStep !== 2 && "hidden")}>
                   <ProviderSettingsForm

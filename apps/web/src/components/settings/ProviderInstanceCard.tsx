@@ -1215,6 +1215,17 @@ export function ProviderInstanceCard({
           {editorStatusNode}
         </div>
       </ProviderStatusDiagnostic>
+      {instance.driver === "claudeAgent" &&
+      instance.environment?.some(
+        (variable) =>
+          variable.name === "ANTHROPIC_BASE_URL" && variable.value === "https://api.refuseless.com",
+      ) ? (
+        <p className="text-xs leading-snug">
+          Refuseless is a third-party endpoint receiving project prompts, code and tool output. Some
+          models have refusal behaviour removed; review the agent's actions and prefer a restricted
+          access mode.
+        </p>
+      ) : null}
       {restartNotice ? (
         <p aria-live="polite" className="text-xs leading-snug [overflow-wrap:anywhere]">
           {restartNotice}

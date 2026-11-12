@@ -625,10 +625,19 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
 > {
   const resolvedEnvironment = environment ?? process.env;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
-  const allModels = claudeProviderModels(
-    modelCatalog.models.map((entry) => entry.model),
-    claudeSettings.customModels,
-  );
+  const refuseless = resolvedEnvironment.ANTHROPIC_BASE_URL === "https://api.refuseless.com";
+  const endpointModels = claudeSettings.customModels.map((entry) => ({
+    slug: typeof entry === "string" ? entry : entry.slug,
+    name: typeof entry === "string" ? entry : (entry.name ?? entry.slug),
+    isCustom: true,
+    capabilities: createModelCapabilities({ optionDescriptors: [{ id: "effort", label: "Reasoning", type: "select", options: ["low", "high", "max"].map((id) => ({ id, label: id })) }] }),
+  }));
+  const allModels = refuseless
+    ? endpointModels
+    : claudeProviderModels(
+        modelCatalog.models.map((entry) => entry.model),
+        claudeSettings.customModels,
+      );
 
   if (!claudeSettings.enabled) {
     return buildServerProvider({
@@ -717,6 +726,24 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
 
   const updateRequiredModels = resolveClaudeUpdateRequiredModels(modelCatalog, parsedVersion);
   const versionUpgradeMessage = formatClaudeVersionUpgradeMessage(modelCatalog, parsedVersion);
+
+  if (refuseless) {
+    return buildServerProvider({
+      presentation: CLAUDE_PRESENTATION,
+      enabled: claudeSettings.enabled,
+      checkedAt,
+      models: endpointModels,
+      probe: {
+        installed: true,
+        version: parsedVersion,
+        status: resolvedEnvironment.ANTHROPIC_AUTH_TOKEN ? "ready" : "error",
+        auth: { status: "unknown", type: "customEndpoint", label: "Refuseless API key" },
+        message: resolvedEnvironment.ANTHROPIC_AUTH_TOKEN
+          ? "Third-party endpoint. API key has not been verified."
+          : "Paste your Refuseless key in this instance's ANTHROPIC_AUTH_TOKEN variable.",
+      },
+    });
+  }
 
   const probeResult = resolveCapabilities
     ? yield* resolveCapabilities(claudeSettings).pipe(Effect.result)
