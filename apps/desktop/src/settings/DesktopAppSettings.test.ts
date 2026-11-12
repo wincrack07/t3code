@@ -236,6 +236,32 @@ describe("DesktopSettings", () => {
     ),
   );
 
+  it.effect("restores independent windows and removes only a closed window", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        const first = {
+          id: "main",
+          bounds: { x: 30, y: 40, width: 900, height: 700 },
+          maximized: false,
+          fullscreen: false,
+        };
+        const second = {
+          id: "second",
+          bounds: { x: -1200, y: 40, width: 900, height: 700 },
+          maximized: true,
+          fullscreen: true,
+        };
+        yield* settings.setMainWindowBounds(first.bounds, false, { ...first, open: true });
+        yield* settings.setMainWindowBounds(second.bounds, true, { ...second, open: true });
+        const restored = yield* settings.load;
+        assert.deepEqual(restored.windows, [first, second]);
+        yield* settings.setMainWindowBounds(second.bounds, true, { ...second, open: false });
+        assert.deepEqual((yield* settings.load).windows, [first]);
+      }),
+    ),
+  );
+
   it.effect("persists sparse desktop settings documents", () =>
     withSettings(
       Effect.gen(function* () {

@@ -249,8 +249,9 @@ function layerTest(input: {
         desktopSettings = { ...desktopSettings, windowTheme };
         return { settings: desktopSettings, changed: true };
       }),
-    setMainWindowBounds: (bounds, isMaximized) =>
+    setMainWindowBounds: (bounds, isMaximized, saved) =>
       Effect.gen(function* () {
+        if (saved?.open === false) return { settings: desktopSettings, changed: false };
         if (input.beforeMainWindowBoundsUpdate) {
           yield* input.beforeMainWindowBoundsUpdate(bounds);
         }
@@ -470,6 +471,16 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
 
 const captureOne = DesktopSnapShotId.make("11111111-1111-4111-8111-111111111111");
 const captureTwo = DesktopSnapShotId.make("22222222-2222-4222-8222-222222222222");
+
+it("cascades into the pointer display and clamps windows to its visible area", () => {
+  assert.deepEqual(
+    DesktopWindow.cascadeWindowBounds(
+      { x: 2000, y: 900, width: 800, height: 600 },
+      { x: 0, y: 0, width: 1200, height: 800 },
+    ),
+    { x: 400, y: 200, width: 800, height: 600 },
+  );
+});
 
 describe("DesktopWindow", () => {
   it("restores bounds only when the window fits within a connected display", () => {
@@ -983,7 +994,7 @@ describe("DesktopWindow", () => {
 
         assert.deepEqual(mainWindowBoundsUpdates, [{ x: 220, y: 140, width: 1380, height: 920 }]);
         assert.deepEqual(mainWindowMaximizedUpdates, [true]);
-        assert.equal(fakeWindow.getNormalBounds.mock.calls.length, 1);
+        assert.equal(fakeWindow.getNormalBounds.mock.calls.length, 2);
         assert.equal(fakeWindow.getBounds.mock.calls.length, 0);
       }).pipe(Effect.provide(layer));
     }),
