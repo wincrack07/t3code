@@ -33,6 +33,7 @@ import { useSettingsScope } from "./SettingsScopeContext";
 type Option = { value: string; label: string };
 const SOURCES: Option[] = [
   { value: "provider", label: "Configured provider" },
+  { value: "jev", label: "Jev (TypeSafe)" },
   { value: "openai", label: "OpenAI API" },
   { value: "custom", label: "Custom (OpenAI-compatible)" },
 ];
@@ -168,6 +169,8 @@ export function DecisionsSettingsSection() {
   const save = (patch: Partial<DecisionSettings>) => update({ decisions: { ...config, ...patch } });
   const nextRuleId = `rule-${config.rules.reduce((next, rule) => Math.max(next, Number(rule.id.replace("rule-", "")) || 0), 0) + 1}`;
   const custom = config.source === "custom";
+  const apiKey =
+    config.source === "jev" ? config.jevApiKey : custom ? config.customApiKey : config.apiKey;
   const selection = config.modelSelection;
   const saveRule = (rule: DecisionRule) =>
     save({ rules: config.rules.map((entry) => (entry.id === rule.id ? rule : entry)) });
@@ -198,7 +201,12 @@ export function DecisionsSettingsSection() {
               value={config.source}
               choices={SOURCES}
               onChange={(value) => {
-                if (value === "provider" || value === "openai" || value === "custom") {
+                if (
+                  value === "provider" ||
+                  value === "openai" ||
+                  value === "custom" ||
+                  value === "jev"
+                ) {
                   save({ source: value });
                   setConnection("");
                 }
@@ -281,12 +289,20 @@ export function DecisionsSettingsSection() {
                   size="sm"
                   className="w-full sm:w-64"
                   aria-label="Decision API model"
-                  defaultValue={custom ? (config.customModel ?? "") : config.openaiModel}
+                  defaultValue={
+                    config.source === "jev"
+                      ? (config.jevModel ?? "jev-latest")
+                      : custom
+                        ? (config.customModel ?? "")
+                        : config.openaiModel
+                  }
                   onBlur={(event) =>
                     save(
-                      custom
-                        ? { customModel: event.target.value.trim() }
-                        : { openaiModel: event.target.value.trim() },
+                      config.source === "jev"
+                        ? { jevModel: event.target.value.trim() }
+                        : custom
+                          ? { customModel: event.target.value.trim() }
+                          : { openaiModel: event.target.value.trim() },
                     )
                   }
                 />
@@ -303,16 +319,14 @@ export function DecisionsSettingsSection() {
                   type="password"
                   autoComplete="off"
                   aria-label="Decision API key"
-                  defaultValue={
-                    typeof (custom ? config.customApiKey : config.apiKey) === "string"
-                      ? ((custom ? config.customApiKey : config.apiKey) as string)
-                      : ""
-                  }
+                  defaultValue={typeof apiKey === "string" ? apiKey : ""}
                   onBlur={(event) =>
                     save(
-                      custom
-                        ? { customApiKey: event.target.value }
-                        : { apiKey: event.target.value },
+                      config.source === "jev"
+                        ? { jevApiKey: event.target.value }
+                        : custom
+                          ? { customApiKey: event.target.value }
+                          : { apiKey: event.target.value },
                     )
                   }
                 />
