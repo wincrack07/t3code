@@ -41,7 +41,7 @@ describe("snapshotCookieDatabase", () => {
     ),
   );
 
-  it.effect("snapshots a database its browser holds an exclusive lock on", () =>
+  it.effect("snapshots a database its browser holds an exclusive lock on, from a copy", () =>
     runNode(
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
