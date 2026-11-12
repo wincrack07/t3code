@@ -1,3 +1,4 @@
+import { withExclusiveUpdatePrompt } from "./updatePrompt";
 import {
   type DesktopBridge,
   type DesktopUpdateState,
@@ -306,28 +307,30 @@ function SidebarUpdateControl() {
     }
 
     if (action === "install") {
-      let confirmed = false;
-      try {
-        confirmed = await ensureLocalApi().dialogs.confirm(
-          getDesktopUpdateInstallConfirmationMessage(state),
-          { initialFocus: "confirm" },
-        );
-      } catch (error) {
-        setIsActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
-          }),
-        );
-        return;
-      }
-      if (!confirmed) {
-        setIsActionPending(false);
-        return;
-      }
-      void installLocalUpdate(bridge).finally(() => setIsActionPending(false));
+      void withExclusiveUpdatePrompt(async () => {
+        let confirmed = false;
+        try {
+          confirmed = await ensureLocalApi().dialogs.confirm(
+            getDesktopUpdateInstallConfirmationMessage(state),
+            { initialFocus: "confirm" },
+          );
+        } catch (error) {
+          setIsActionPending(false);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not confirm update",
+              description: error instanceof Error ? error.message : "Update confirmation failed.",
+            }),
+          );
+          return;
+        }
+        if (!confirmed) {
+          setIsActionPending(false);
+          return;
+        }
+        await installLocalUpdate(bridge);
+      }).finally(() => setIsActionPending(false));
       return;
     }
 

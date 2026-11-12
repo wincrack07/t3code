@@ -1,3 +1,4 @@
+import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { DesktopUpdateState } from "@t3tools/contracts";
@@ -49,6 +50,8 @@ export interface UpdatesHarnessOptions {
 export function makeHarness(options: UpdatesHarnessOptions = {}) {
   let checkCount = 0;
   let quitAndInstallCount = 0;
+  let windowFlushes = 0;
+  const flushesAtInstall: number[] = [];
   let downloadCount = 0;
   let allowDowngrade = false;
   const checkAllowedDowngrade: boolean[] = [];
@@ -107,6 +110,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     quitAndInstall: () =>
       Effect.sync(() => {
         quitAndInstallCount += 1;
+        flushesAtInstall.push(windowFlushes);
         installSteps.push("quitAndInstall");
       }).pipe(Effect.andThen(options.quitAndInstall ?? Effect.void)),
     on: (eventName, listener) =>
@@ -124,6 +128,11 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   const layerWindow = Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected BrowserWindow creation"),
     main: Effect.succeedNone,
+    reportThreads: () => Effect.void,
+    allowDuplicate: () => Effect.void,
+    findThread: () => Effect.succeedNone,
+    appWindows: Effect.succeed([]),
+    fromSender: () => Effect.succeedNone,
     currentMainOrFirst: Effect.succeedNone,
     focusedMainOrFirst: Effect.succeedNone,
     setMain: () => Effect.void,
@@ -278,6 +287,13 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   });
 
   const layer = DesktopUpdates.layer.pipe(
+    Layer.provide(
+      Layer.mock(DesktopWindow.DesktopWindow)({
+        flushMainWindowBounds: Effect.sync(() => {
+          windowFlushes += 1;
+        }),
+      }),
+    ),
     Layer.provide(layerFileSystem),
     Layer.provide(DesktopUpdatePolicy.layerTest(options.policy)),
     Layer.provideMerge(layerUpdater),
@@ -301,6 +317,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     layer,
     checkCount: () => checkCount,
     quitAndInstalls: () => quitAndInstallCount,
+    flushesAtInstall,
     installSteps,
     updateRestartMarkers,
     installRecords,

@@ -28,6 +28,7 @@ import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
+  readonly windows?: readonly DesktopSavedWindow[];
   readonly windowTheme: DesktopWindowTheme | null;
   readonly localEnvironmentEnabled: boolean;
   readonly linuxPasswordStore: LinuxPasswordStorePreference;
@@ -64,6 +65,14 @@ export const DesktopWindowBoundsSchema = Schema.Struct({
   height: Schema.Int.check(Schema.isGreaterThanOrEqualTo(MIN_MAIN_WINDOW_SIZE.height)),
 });
 export type DesktopWindowBounds = typeof DesktopWindowBoundsSchema.Type;
+export const DesktopSavedWindowSchema = Schema.Struct({
+  id: Schema.String,
+  bounds: DesktopWindowBoundsSchema,
+  maximized: Schema.Boolean,
+  fullscreen: Schema.Boolean,
+});
+export type DesktopSavedWindow = typeof DesktopSavedWindowSchema.Type;
+
 export const DEFAULT_MAIN_WINDOW_SIZE = {
   width: 1100,
   height: 780,
@@ -93,6 +102,7 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 });
 
 const DesktopSettingsDocument = Schema.Struct({
+  windows: Schema.optionalKey(Schema.Array(DesktopSavedWindowSchema)),
   windowTheme: Schema.optionalKey(Schema.NullOr(DesktopWindowThemeSchema)),
   localEnvironmentEnabled: Schema.optionalKey(Schema.Boolean),
   linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
@@ -160,6 +170,7 @@ export class DesktopAppSettings extends Context.Service<
     readonly setMainWindowBounds: (
       bounds: DesktopWindowBounds,
       isMaximized: boolean,
+      window?: DesktopSavedWindow & { readonly open: boolean },
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setServerExposureMode: (
       mode: DesktopServerExposureMode,
@@ -226,6 +237,7 @@ function normalizeDesktopSettingsDocument(
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
   return {
+    ...(parsed.windows === undefined ? {} : { windows: parsed.windows }),
     windowTheme: parsed.windowTheme ?? null,
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,
     linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
@@ -250,6 +262,7 @@ function toDesktopSettingsDocument(
   defaults: DesktopSettings,
 ): DesktopSettingsDocument {
   const document: Mutable<DesktopSettingsDocument> = {};
+  if (settings.windows !== undefined) document.windows = settings.windows;
   if (settings.windowTheme !== null) document.windowTheme = settings.windowTheme;
 
   if (settings.localEnvironmentEnabled !== defaults.localEnvironmentEnabled) {
@@ -321,7 +334,25 @@ function setMainWindowBounds(
   settings: DesktopSettings,
   bounds: DesktopWindowBounds,
   isMaximized: boolean,
+  window?: DesktopSavedWindow & { readonly open: boolean },
 ): DesktopSettings {
+  if (window !== undefined) {
+    const windows = (settings.windows ?? []).filter((entry) => entry.id !== window.id);
+    if (window.open)
+      windows.push({
+        id: window.id,
+        bounds: window.bounds,
+        maximized: window.maximized,
+        fullscreen: window.fullscreen,
+      });
+    return {
+      ...settings,
+      windows,
+      ...(window.id === "main"
+        ? { mainWindowBounds: bounds, mainWindowMaximized: isMaximized }
+        : {}),
+    };
+  }
   return settings.mainWindowBounds !== null &&
     desktopWindowBoundsEquivalence(settings.mainWindowBounds, bounds) &&
     settings.mainWindowMaximized === isMaximized
@@ -544,7 +575,7 @@ export const make = Effect.gen(function* () {
       return persist((settings) => setWindowTheme(settings, theme));
     }),
     setMainWindowBounds: Effect.fn("desktop.settings.setMainWindowBounds")(
-      function* (bounds, isMaximized) {
+      function* (bounds, isMaximized, window) {
         yield* Effect.annotateCurrentSpan({
           x: bounds.x,
           y: bounds.y,
@@ -553,7 +584,9 @@ export const make = Effect.gen(function* () {
           isMaximized,
         });
 
-        return yield* persist((settings) => setMainWindowBounds(settings, bounds, isMaximized));
+        return yield* persist((settings) =>
+          setMainWindowBounds(settings, bounds, isMaximized, window),
+        );
       },
     ),
     setServerExposureMode: Effect.fn("desktop.settings.setServerExposureMode")(function* (mode) {
@@ -628,8 +661,8 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
           return update((settings) => setWindowTheme(settings, theme));
         }),
         setMainWindowBounds: Effect.fn("DesktopAppSettings.setMainWindowBounds")(
-          function (bounds, isMaximized) {
-            return update((settings) => setMainWindowBounds(settings, bounds, isMaximized));
+          function (bounds, isMaximized, window) {
+            return update((settings) => setMainWindowBounds(settings, bounds, isMaximized, window));
           },
         ),
         setServerExposureMode: Effect.fn("DesktopAppSettings.setServerExposureMode")(

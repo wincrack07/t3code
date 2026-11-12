@@ -206,6 +206,10 @@ export function startThreadNotifications(
       trackNotification(environmentId, thread.id, notification);
       notification.addEventListener("click", () => {
         notification.close();
+        if (window.desktopBridge?.openThread) {
+          void window.desktopBridge.openThread(environmentId, thread.id).catch(() => undefined);
+          return;
+        }
         window.focus();
         void window.desktopBridge?.revealWindow().catch(() => undefined);
         void router.navigate({

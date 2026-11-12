@@ -1,3 +1,4 @@
+import { mergingStorage } from "./windowPersistence";
 import { AUTO_MODEL } from "@t3tools/contracts";
 import { stripInlineContextReferences } from "./lib/composerContextReferences";
 import { composerFileAttachmentMimeType } from "./components/chat/composerAttachmentFiles";
@@ -126,7 +127,7 @@ type ComposerPersistState =
   | PersistedComposerDraftStoreState;
 
 const composerDebouncedStorage = createDeferredStorage<StorageValue<ComposerPersistState>>(
-  typeof localStorage !== "undefined" ? localStorage : createMemoryStorage(),
+  typeof localStorage !== "undefined" ? mergingStorage(localStorage) : createMemoryStorage(),
   (value) =>
     JSON.stringify({
       state:
@@ -4681,4 +4682,12 @@ export function subscribeDraftThreadPromotion(input: {
     unsubscribeMilestones();
     unsubscribeDrafts();
   };
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== COMPOSER_DRAFT_STORAGE_KEY) return;
+    composerDebouncedStorage.flush();
+    void composerDraftStore.persist.rehydrate();
+  });
 }

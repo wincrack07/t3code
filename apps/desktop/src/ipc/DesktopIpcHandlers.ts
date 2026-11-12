@@ -49,6 +49,9 @@ import {
   pasteAsText,
   probeRemoteEditors,
   revealWindow,
+  newWindow,
+  reportWindowThreads,
+  focusThread,
   pickFolder,
   pickProjectFavicon,
   pickThemeFiles,
@@ -94,6 +97,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(AppActivationIpc.setReady);
   yield* ipc.handle(AppActivationIpc.complete);
   yield* ipc.handle(WebLinksIpc.setReady);
+  yield* ipc.handle(WebLinksIpc.openThread);
   yield* ipc.handle(FinderIpc.state);
   yield* ipc.handle(FinderIpc.install);
   yield* ipc.handle(FinderIpc.inspect);
@@ -161,6 +165,9 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(checkSystemPermission);
   yield* ipc.handle(pasteAsText);
   yield* ipc.handle(revealWindow);
+  yield* ipc.handle(newWindow);
+  yield* ipc.handle(reportWindowThreads);
+  yield* ipc.handle(focusThread);
   yield* ipc.handle(syncHtmlFullscreen);
   yield* ipc.handle(probeRemoteEditors);
   yield* ipc.handle(getUpdateState);

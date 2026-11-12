@@ -3053,6 +3053,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
+              canOpenNewWindow: Boolean(window.desktopBridge?.newWindow),
               split: threadSplitMenuState(threadRef),
               canOperate: readEnvironmentScope(
                 threadRef.environmentId,
@@ -3091,6 +3092,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
+        if (clicked.value === "open-in-new-window") {
+          await window.desktopBridge?.newWindow?.(threadRef);
+          return;
+        }
         if (clicked.value === "open-in-split") {
           const splitRef = openThreadInSplit(threadRef);
           navigateToThread(splitRef);

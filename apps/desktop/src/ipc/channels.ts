@@ -146,3 +146,12 @@ export const FINDER_STATE_CHANNEL = "finder:state";
 export const FINDER_INSTALL_CHANNEL = "finder:install";
 export const FINDER_INSPECT_CHANNEL = "finder:inspect";
 export const FINDER_READ_CHANNEL = "finder:read";
+
+export const NEW_WINDOW_CHANNEL = "desktop:new-window";
+
+export const OPEN_THREAD_CHANNEL = "desktop:open-thread";
+
+export const CLIENT_SETTINGS_CHANGED_CHANNEL = "desktop:client-settings-changed";
+
+export const WINDOW_THREADS_CHANNEL = "desktop:window-threads";
+export const FOCUS_THREAD_CHANNEL = "desktop:focus-thread";

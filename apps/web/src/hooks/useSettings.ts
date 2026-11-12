@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import { ClientSettingsSchema } from "@t3tools/contracts";
 import { useRef, useSyncExternalStore, use } from "react";
 import { useSyncExternalStoreWithSelector } from "use-sync-external-store/with-selector";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
@@ -764,4 +766,17 @@ export function __setClientSettingsForTests(settings: ClientSettings): void {
   clientSettingsSnapshot = settings;
   clientSettingsHydrationStatus = "ready";
   clientSettingsHydrationPromise = null;
+}
+
+const decodeSharedClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
+if (typeof window !== "undefined") {
+  window.desktopBridge?.onClientSettingsChanged?.((settings) =>
+    replaceClientSettingsSnapshot(settings),
+  );
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "t3code:client-settings:v1" || event.newValue === null) return;
+    try {
+      replaceClientSettingsSnapshot(decodeSharedClientSettings(JSON.parse(event.newValue)));
+    } catch {}
+  });
 }

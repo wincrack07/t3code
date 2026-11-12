@@ -139,6 +139,7 @@ export function useThreadActionMenu(input: {
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
+        canOpenNewWindow: typeof window !== "undefined" && Boolean(window.desktopBridge?.newWindow),
         split: threadSplitMenuState(threadRef),
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         canFind: onFind !== undefined,
@@ -196,6 +197,9 @@ export function useThreadActionMenu(input: {
         }
       };
       switch (action) {
+        case "open-in-new-window":
+          await window.desktopBridge?.newWindow?.(threadRef);
+          return;
         case "open-in-split":
           await router.navigate({
             to: "/$environmentId/$threadId",

@@ -52,13 +52,13 @@ export const installPreviewEventForwarding = Effect.fn(
     electronWindow.sendAll(IpcChannels.PREVIEW_STATE_CHANGE_CHANNEL, tabId, state),
   );
   yield* manager.subscribeRecordingInputs((event) =>
-    electronWindow.sendAll(IpcChannels.PREVIEW_RECORDING_INPUT_CHANNEL, event),
+    manager.sendToHost(event.tabId, IpcChannels.PREVIEW_RECORDING_INPUT_CHANNEL, event),
   );
   yield* manager.subscribePointerEvents((event) =>
-    electronWindow.sendAll(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, event),
+    manager.sendToHost(event.tabId, IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, event),
   );
   yield* manager.subscribeOpenLinks((event) =>
-    electronWindow.sendAll(IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, event),
+    manager.sendToHost(event.tabId, IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, event),
   );
   yield* manager.subscribeFindResults((event) =>
     electronWindow.sendAll(IpcChannels.PREVIEW_FIND_RESULT_CHANNEL, event),
@@ -79,14 +79,12 @@ const createTab = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_CREATE_TAB_CHANNEL,
   payload: DesktopPreviewCreateTabInputSchema,
   result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.createTab")(function* ({
-    tabId,
-    zoomFactor,
-    colorScheme,
-    serverTab,
-  }) {
+  handler: Effect.fn("desktop.ipc.preview.createTab")(function* (
+    { tabId, zoomFactor, colorScheme, serverTab },
+    event,
+  ) {
     const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.createTab(tabId, { zoomFactor, colorScheme, serverTab });
+    yield* manager.createTab(tabId, { zoomFactor, colorScheme, serverTab }, event?.sender.id);
   }),
 });
 
@@ -94,9 +92,9 @@ const closeTab = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_CLOSE_TAB_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.closeTab")(function* ({ tabId }) {
+  handler: Effect.fn("desktop.ipc.preview.closeTab")(function* ({ tabId }, event) {
     const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.closeTab(tabId);
+    yield* manager.closeTab(tabId, event?.sender.id);
   }),
 });
 

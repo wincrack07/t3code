@@ -1,9 +1,11 @@
+import * as NodeEvents from "node:events";
 import { assert, describe, it } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import type * as Electron from "electron";
 import { beforeEach, vi } from "vite-plus/test";
 
@@ -110,6 +112,39 @@ describe("ElectronWindow", () => {
     windowsForegroundPrepareMock.mockReset().mockResolvedValue(false);
     windowsForegroundCloseMock.mockReset();
   });
+
+  it.effect(
+    "routes to the most recently focused app window and resolves IPC senders independently",
+    () =>
+      Effect.gen(function* () {
+        const windows = yield* ElectronWindow.ElectronWindow;
+        const first = Object.assign(new NodeEvents.EventEmitter(), {
+          id: 1,
+          webContents: { id: 11 },
+          isDestroyed: () => false,
+        }) as unknown as Electron.BrowserWindow;
+        const second = Object.assign(new NodeEvents.EventEmitter(), {
+          id: 2,
+          webContents: { id: 22 },
+          isDestroyed: () => false,
+        }) as unknown as Electron.BrowserWindow;
+        yield* windows.setMain(first);
+        yield* windows.setMain(second);
+        assert.deepEqual(yield* windows.appWindows, [first, second]);
+        assert.strictEqual((yield* windows.main).pipe(Option.getOrNull), second);
+        first.emit("focus");
+        assert.strictEqual((yield* windows.main).pipe(Option.getOrNull), first);
+        getFocusedWindowMock.mockReturnValue({ isDestroyed: () => false });
+        assert.strictEqual((yield* windows.focusedMainOrFirst).pipe(Option.getOrNull), first);
+        assert.strictEqual((yield* windows.fromSender(22)).pipe(Option.getOrNull), second);
+        assert.isTrue(Option.isNone(yield* windows.fromSender(99)));
+        first.emit("closed");
+        assert.strictEqual((yield* windows.main).pipe(Option.getOrNull), second);
+        second.emit("closed");
+        assert.isTrue(Option.isNone(yield* windows.main));
+        assert.deepEqual(yield* windows.appWindows, []);
+      }).pipe(Effect.provide(layerTest)),
+  );
 
   it.effect("cancels native focus when destroyed during the foreground query", () =>
     Effect.gen(function* () {

@@ -8,9 +8,19 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as PubSub from "effect/PubSub";
 import * as Electron from "electron";
+import * as Option from "effect/Option";
+import * as ElectronWindow from "./ElectronWindow.ts";
 
 export const make = Effect.fn("KeepAwakeTray.make")(function* () {
   const platform = yield* HostProcess.Platform;
+  const windows = yield* ElectronWindow.ElectronWindow;
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const open = Effect.fn("KeepAwakeTray.open")(function* (action?: string) {
+    const window = yield* windows.main;
+    if (Option.isNone(window)) return;
+    if (action !== undefined) window.value.webContents.send(MENU_ACTION_CHANNEL, action);
+    yield* windows.reveal(window.value);
+  });
   const supportsHeaders =
     platform === "darwin" && Number(process.getSystemVersion().split(".")[0]) >= 14;
   const actions = yield* PubSub.unbounded<{
@@ -102,22 +112,13 @@ export const make = Effect.fn("KeepAwakeTray.make")(function* () {
           {
             label: "Open machine monitor",
             click: () => {
-              const window = Electron.BrowserWindow.getAllWindows().find(
-                (window) => !window.isDestroyed(),
-              );
-              window?.show();
-              window?.focus();
-              window?.webContents.send(MENU_ACTION_CHANNEL, "machine-monitor.open");
+              void runPromise(open("machine-monitor.open"));
             },
           },
           {
             label: "Open T3 Code",
             click: () => {
-              const window = Electron.BrowserWindow.getAllWindows().find(
-                (window) => !window.isDestroyed(),
-              );
-              window?.show();
-              window?.focus();
+              void runPromise(open());
             },
           },
         ]),

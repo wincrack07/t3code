@@ -745,6 +745,20 @@ describe("PreviewManager", () => {
       ),
   );
 
+  effectIt.effect("keeps a tab retained by another window during handoff", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        yield* manager.createTab("shared_window_tab", undefined, 1);
+        yield* manager.createTab("shared_window_tab", undefined, 2);
+        yield* manager.closeTab("shared_window_tab", 1);
+        yield* manager.navigate("shared_window_tab", "https://example.com");
+        const retained = yield* manager.createTab("shared_window_tab");
+        expect(retained.navStatus).toMatchObject({ kind: "Loading", url: "https://example.com/" });
+        yield* manager.closeTab("shared_window_tab", 2);
+      }),
+    ),
+  );
+
   effectIt.effect("keeps editing and forwarded shortcuts in whichever tab holds focus", () =>
     withManager((manager) =>
       Effect.gen(function* () {
@@ -1708,6 +1722,38 @@ describe("PreviewManager", () => {
         ]);
       }),
     ),
+  );
+
+  effectIt.effect(
+    "accepts previews in either app window and keeps the other host after a close",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const firstHost = makeTestHostWebContents();
+          const secondHost = makeTestHostWebContents();
+          const first = makeTestPreviewWebContents(vi.fn(), 41, firstHost);
+          const second = makeTestPreviewWebContents(vi.fn(), 42, secondHost);
+          fromId.mockImplementation((id) => (id === 41 ? first : id === 42 ? second : null));
+          let closeFirst: (() => void) | undefined;
+          for (const host of [firstHost, secondHost]) {
+            yield* manager.setMainWindow({
+              isDestroyed: () => false,
+              webContents: host,
+              once: (_event: string, callback: () => void) => {
+                if (host === firstHost) closeFirst = callback;
+              },
+            } as never);
+          }
+          yield* manager.createTab("multi_first");
+          yield* manager.createTab("multi_second");
+          yield* manager.registerWebview("multi_first", 41);
+          yield* manager.registerWebview("multi_second", 42);
+          closeFirst?.();
+          yield* manager.registerWebview("multi_second", 42);
+          const rejected = yield* Effect.exit(manager.registerWebview("multi_first", 41));
+          expect(rejected._tag).toBe("Failure");
+        }),
+      ),
   );
 
   effectIt.effect("keeps every recorded guest unthrottled until its frame capture stops", () =>

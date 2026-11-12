@@ -1,5 +1,7 @@
 import {
   ContextMenuItemSchema,
+  EnvironmentId,
+  ThreadId,
   DesktopAppBrandingSchema,
   DesktopEnvironmentBootstrapSchema,
   DesktopMediaReadSchema,
@@ -119,9 +121,9 @@ export const getPreferredSystemLanguages = DesktopIpc.makeSyncIpcMethod({
 export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
   channel: IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL,
   result: Schema.Boolean,
-  handler: Effect.fn("desktop.ipc.window.getWindowFullscreenState")(function* () {
+  handler: Effect.fn("desktop.ipc.window.getWindowFullscreenState")(function* (event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.currentMainOrFirst;
+    const window = yield* electronWindow.fromSender(event?.sender?.id);
     return Option.isSome(window) && window.value.isFullScreen();
   }),
 });
@@ -199,7 +201,7 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PICK_FOLDER_CHANNEL,
   payload: Schema.UndefinedOr(PickFolderOptionsSchema),
   result: Schema.NullOr(Schema.String),
-  handler: Effect.fn("desktop.ipc.window.pickFolder")(function* (options) {
+  handler: Effect.fn("desktop.ipc.window.pickFolder")(function* (options, event) {
     const dialog = yield* ElectronDialog.ElectronDialog;
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -232,7 +234,7 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
         )
       : environment.resolvePickFolderDefaultPath(options);
     const selectedPath = yield* dialog.pickFolder({
-      owner: yield* electronWindow.focusedMainOrFirst,
+      owner: yield* electronWindow.fromSender(event?.sender.id),
       defaultPath,
     });
     if (Option.isNone(selectedPath)) {
@@ -259,7 +261,7 @@ export const pickProjectFavicon = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PICK_PROJECT_FAVICON_CHANNEL,
   payload: Schema.UndefinedOr(Schema.String),
   result: Schema.NullOr(Schema.String),
-  handler: Effect.fn("desktop.ipc.window.pickProjectFavicon")(function* (initialPath) {
+  handler: Effect.fn("desktop.ipc.window.pickProjectFavicon")(function* (initialPath, event) {
     const dialog = yield* ElectronDialog.ElectronDialog;
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const appSettings = yield* DesktopAppSettings.DesktopAppSettings;
@@ -267,7 +269,7 @@ export const pickProjectFavicon = DesktopIpc.makeIpcMethod({
       return null;
     }
     const paths = yield* dialog.pickFiles({
-      owner: yield* electronWindow.focusedMainOrFirst,
+      owner: yield* electronWindow.fromSender(event?.sender.id),
       defaultPath: Option.fromNullishOr(initialPath),
       multiple: false,
       filters: [
@@ -295,10 +297,10 @@ export const showContextMenu = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.CONTEXT_MENU_CHANNEL,
   payload: ContextMenuInput,
   result: Schema.NullOr(Schema.String),
-  handler: Effect.fn("desktop.ipc.window.showContextMenu")(function* (input) {
+  handler: Effect.fn("desktop.ipc.window.showContextMenu")(function* (input, event) {
     const electronMenu = yield* ElectronMenu.ElectronMenu;
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.focusedMainOrFirst;
+    const window = yield* electronWindow.fromSender(event?.sender.id);
     if (Option.isNone(window)) {
       return null;
     }
@@ -336,7 +338,7 @@ export const readMedia = DesktopIpc.makeIpcMethod({
   payload: Schema.String,
   result: Schema.NullOr(DesktopMediaReadSchema),
   handler: Effect.fn("desktop.ipc.window.readMedia")(function* (url, event) {
-    const window = yield* (yield* ElectronWindow.ElectronWindow).main;
+    const window = yield* (yield* ElectronWindow.ElectronWindow).fromSender(event?.sender.id);
     if (
       event === undefined ||
       Option.isNone(window) ||
@@ -414,7 +416,7 @@ export const pasteAsText = DesktopIpc.makeIpcMethod({
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.window.pasteAsText")(function* (_input, event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.main;
+    const window = yield* electronWindow.fromSender(event?.sender.id);
     if (
       event === undefined ||
       Option.isNone(window) ||
@@ -440,7 +442,7 @@ export const revealWindow = DesktopIpc.makeIpcMethod({
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.window.revealWindow")(function* (_input, event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.main;
+    const window = yield* electronWindow.fromSender(event?.sender.id);
     if (
       event === undefined ||
       Option.isNone(window) ||
@@ -478,7 +480,7 @@ export const syncHtmlFullscreen = DesktopIpc.makeIpcMethod({
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.window.syncHtmlFullscreen")(function* (fullscreen, event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const main = yield* electronWindow.main;
+    const main = yield* electronWindow.fromSender(event?.sender.id);
     if (
       event === undefined ||
       Option.isNone(main) ||
@@ -508,7 +510,7 @@ export const pickThemeFiles = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PICK_THEME_FILES_CHANNEL,
   payload: Schema.Undefined,
   result: Schema.NullOr(Schema.Array(PickedThemeFileSchema)),
-  handler: Effect.fn("desktop.ipc.window.pickThemeFiles")(function* () {
+  handler: Effect.fn("desktop.ipc.window.pickThemeFiles")(function* (_input, event) {
     const dialog = yield* ElectronDialog.ElectronDialog;
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -518,7 +520,7 @@ export const pickThemeFiles = DesktopIpc.makeIpcMethod({
       .exists(extensionsDir)
       .pipe(Effect.orElseSucceed(() => false));
     const paths = yield* dialog.pickFiles({
-      owner: yield* electronWindow.focusedMainOrFirst,
+      owner: yield* electronWindow.fromSender(event?.sender.id),
       defaultPath: defaultPath ? Option.some(extensionsDir) : Option.none(),
       filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: true,
@@ -550,5 +552,54 @@ export const checkSystemPermission = DesktopIpc.makeIpcMethod({
     if (environment.platform !== "darwin") return false;
     const check = yield* safariPermissionCheck;
     return yield* Effect.promise(check);
+  }),
+});
+
+export const newWindow = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.NEW_WINDOW_CHANNEL,
+  payload: Schema.UndefinedOr(Schema.Struct({ environmentId: EnvironmentId, threadId: ThreadId })),
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.newWindow")(function* (thread, event) {
+    const windows = yield* ElectronWindow.ElectronWindow;
+    if (Option.isNone(yield* windows.fromSender(event?.sender.id))) return;
+    const window = yield* (yield* DesktopWindow.DesktopWindow).createMain;
+    if (!thread) return;
+    yield* windows.allowDuplicate(window, `${thread.environmentId}:${thread.threadId}`);
+    const deliver = () => {
+      if (!window.isDestroyed())
+        window.webContents.send(
+          IpcChannels.WEB_LINK_OPEN_CHANNEL,
+          `t3code://threads/${encodeURIComponent(thread.environmentId)}/${encodeURIComponent(thread.threadId)}`,
+        );
+    };
+    if (window.webContents.isLoadingMainFrame())
+      window.webContents.once("did-finish-load", deliver);
+    else deliver();
+  }),
+});
+
+export const reportWindowThreads = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.WINDOW_THREADS_CHANNEL,
+  payload: Schema.Array(Schema.String),
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.reportThreads")(function* (keys, event) {
+    const windows = yield* ElectronWindow.ElectronWindow;
+    const window = yield* windows.fromSender(event?.sender.id);
+    if (Option.isSome(window)) yield* windows.reportThreads(window.value, keys);
+  }),
+});
+export const focusThread = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.FOCUS_THREAD_CHANNEL,
+  payload: Schema.String,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.focusThread")(function* (key, event) {
+    const windows = yield* ElectronWindow.ElectronWindow;
+    const sender = yield* windows.fromSender(event?.sender.id);
+    if (Option.isNone(sender)) return false;
+    const target = yield* windows.findThread(key, sender.value.id);
+    if (Option.isNone(target)) return false;
+    target.value.webContents.send(IpcChannels.MENU_ACTION_CHANNEL, `focus-thread:${key}`);
+    yield* windows.reveal(target.value);
+    return true;
   }),
 });

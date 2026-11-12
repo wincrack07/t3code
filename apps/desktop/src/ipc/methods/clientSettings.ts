@@ -1,3 +1,4 @@
+import * as ElectronWindow from "../../electron/ElectronWindow.ts";
 import { ClientSettingsSchema } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -26,6 +27,10 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
     const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
     const snapShot = yield* DesktopSnapShot.DesktopSnapShot;
     yield* clientSettings.set(settings);
+    yield* (yield* ElectronWindow.ElectronWindow).sendAll(
+      IpcChannels.CLIENT_SETTINGS_CHANGED_CHANNEL,
+      settings,
+    );
     yield* snapShot.configure(settings);
   }),
 });

@@ -207,6 +207,20 @@ function windowBoundsEqual(
   );
 }
 
+export function cascadeWindowBounds(
+  source: DisplayBounds,
+  display: DisplayBounds,
+): DesktopAppSettings.DesktopWindowBounds {
+  const width = Math.min(source.width, display.width);
+  const height = Math.min(source.height, display.height);
+  return {
+    width,
+    height,
+    x: Math.max(display.x, Math.min(source.x + 28, display.x + display.width - width)),
+    y: Math.max(display.y, Math.min(source.y + 28, display.y + display.height - height)),
+  };
+}
+
 export function resolveInitialMainWindowBounds(
   persistedBounds: DesktopAppSettings.DesktopWindowBounds | null,
   displays: readonly DisplayBounds[],
@@ -392,7 +406,7 @@ export const make = Effect.gen(function* () {
   const revealMain = Effect.fn("desktop.window.revealMain")((window: Electron.BrowserWindow) =>
     Effect.suspend(() => pendingMainReveals.get(window) ?? electronWindow.reveal(window)),
   );
-  let flushMainWindowBounds: Effect.Effect<void> = Effect.void;
+  const boundsFlushers = new Map<string, Effect.Effect<void>>();
 
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
@@ -427,18 +441,23 @@ export const make = Effect.gen(function* () {
     yield* previewManager.reapplyZoom();
   });
 
-  const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
-    Option.Option<Electron.BrowserWindow>,
-    DesktopWindowError
-  > {
+  let windowSequence = 0;
+  const createWindow = Effect.fn("desktop.window.createWindow")(function* (
+    restored?: DesktopAppSettings.DesktopSavedWindow,
+  ): Effect.fn.Return<Option.Option<Electron.BrowserWindow>, DesktopWindowError> {
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
+    const windowId =
+      restored?.id ??
+      (windowSequence++ === 0
+        ? "main"
+        : `window-${yield* Clock.currentTimeMillis}-${windowSequence}`);
     yield* previewManager.getBrowserSession();
     const applicationUrl = getDesktopUrl(environment.isDevelopment);
     const iconPaths = yield* assets.iconPaths;
     const iconOption = getIconOption(iconPaths, environment.platform);
     const persistedSettings = yield* restoreWindowTheme;
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
-    const persistedBounds = persistedSettings.mainWindowBounds;
+    const persistedBounds = restored?.bounds ?? persistedSettings.mainWindowBounds;
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
         return {
@@ -455,7 +474,23 @@ export const make = Effect.gen(function* () {
         : yield* logWindowWarning("failed to read connected displays; using defaults", {
             cause: displayBoundsResult.cause,
           }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
-    const initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
+    let initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
+    if (!restored && windowSequence > 1) {
+      const focused = yield* electronWindow.main;
+      initialBounds = yield* Effect.sync(() => {
+        try {
+          const display = Electron.screen.getDisplayNearestPoint(
+            Electron.screen.getCursorScreenPoint(),
+          );
+          const source = Option.isSome(focused)
+            ? focused.value.getNormalBounds()
+            : display.workArea;
+          return cascadeWindowBounds(source, display.workArea);
+        } catch {
+          return initialBounds;
+        }
+      });
+    }
     const restoredPersistedBounds = persistedBounds !== null && initialBounds === persistedBounds;
     if (persistedBounds !== null && initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE) {
       yield* logWindowWarning("saved main window bounds could not be restored; using defaults");
@@ -476,6 +511,7 @@ export const make = Effect.gen(function* () {
       title: environment.displayName,
       ...getWindowTitleBarOptions(shouldUseDarkColors, environment.platform),
       webPreferences: {
+        additionalArguments: [`--t3-window-id=${windowId}`],
         preload: environment.preloadPath,
         // Hidden-renderer throttling stalls first paint; re-enable it after the first reveal.
         backgroundThrottling: false,
@@ -527,14 +563,22 @@ export const make = Effect.gen(function* () {
         return pendingBoundsPersistFiber;
       }
       pendingBoundsPersistFiber = runFork(
-        desktopSettings.setMainWindowBounds(bounds, window.isMaximized()).pipe(
-          Effect.asVoid,
-          Effect.catch((error) =>
-            logWindowWarning("failed to persist main window bounds", {
-              message: error.message,
-            }),
+        desktopSettings
+          .setMainWindowBounds(bounds, window.isMaximized(), {
+            id: windowId,
+            bounds,
+            maximized: window.isMaximized(),
+            fullscreen: window.isFullScreen(),
+            open: true,
+          })
+          .pipe(
+            Effect.asVoid,
+            Effect.catch((error) =>
+              logWindowWarning("failed to persist main window bounds", {
+                message: error.message,
+              }),
+            ),
           ),
-        ),
       );
       return pendingBoundsPersistFiber;
     };
@@ -583,7 +627,7 @@ export const make = Effect.gen(function* () {
         fiber === undefined ? Effect.void : Fiber.join(fiber).pipe(Effect.asVoid),
       ),
     );
-    flushMainWindowBounds = flushBoundsPersist;
+    boundsFlushers.set(windowId, flushBoundsPersist);
 
     yield* previewManager.setMainWindow(window);
     if (yield* Ref.get(desktopState.quitting)) {
@@ -793,8 +837,28 @@ export const make = Effect.gen(function* () {
     window.on("move", scheduleBoundsPersist);
     window.on("maximize", scheduleBoundsPersist);
     window.on("unmaximize", scheduleBoundsPersist);
+    window.on("enter-full-screen", scheduleBoundsPersist);
+    window.on("leave-full-screen", scheduleBoundsPersist);
     window.on("close", () => {
-      runFork(flushBoundsPersist);
+      const bounds = readPersistableBounds();
+      const maximized = window.isMaximized();
+      const fullscreen = window.isFullScreen();
+      runFork(
+        Effect.gen(function* () {
+          yield* flushBoundsPersist;
+          if (bounds && !(yield* Ref.get(desktopState.quitting))) {
+            yield* desktopSettings
+              .setMainWindowBounds(bounds, maximized, {
+                id: windowId,
+                bounds,
+                maximized,
+                fullscreen,
+                open: false,
+              })
+              .pipe(Effect.ignore);
+          }
+        }),
+      );
     });
 
     if (environment.platform === "darwin") {
@@ -947,7 +1011,8 @@ export const make = Effect.gen(function* () {
       firstRevealComplete = true;
       pendingMainReveals.delete(window);
       window.webContents.setBackgroundThrottling(true);
-      if (persistedSettings.mainWindowMaximized) window.maximize();
+      if (restored?.maximized ?? persistedSettings.mainWindowMaximized) window.maximize();
+      if (restored?.fullscreen) window.setFullScreen(true);
       yield* electronWindow.reveal(window);
       yield* dismissConnectingSplash;
     });
@@ -957,7 +1022,7 @@ export const make = Effect.gen(function* () {
       void runPromise(revealWhenReady);
     });
 
-    // Desktop IPC only answers the main window, so register it before its renderer can call in.
+    // Register the app window before its renderer can send trusted IPC.
     yield* electronWindow.setMain(window);
     loadApplication();
     if (environment.isDevelopment) {
@@ -968,6 +1033,7 @@ export const make = Effect.gen(function* () {
       if (!backendHasStarted) mainClosedDuringStartup = true;
       clearDevelopmentLoadRetry();
       clearBoundsPersist();
+      boundsFlushers.delete(windowId);
       void runPromise(electronWindow.clearMain(Option.some(window)));
     });
 
@@ -1012,7 +1078,14 @@ export const make = Effect.gen(function* () {
   const createMainIfBackendReady = Effect.gen(function* () {
     if (yield* Ref.get(desktopState.quitting)) return;
     if (yield* waitingForBackend) return;
-    yield* ensureMain;
+    if (Option.isSome(yield* currentMainWindow)) return;
+    const saved = (yield* desktopSettings.get).windows;
+    if (saved?.length) {
+      for (const entry of saved) {
+        yield* createWindow(entry);
+      }
+      windowSequence = saved.length;
+    } else yield* ensureMain;
   }).pipe(Effect.withSpan("desktop.window.createMainIfBackendReady"));
 
   const showConnectingSplash = Effect.gen(function* () {
@@ -1139,9 +1212,9 @@ export const make = Effect.gen(function* () {
     handleBackendNotReady: Ref.set(backendReadyRef, false).pipe(
       Effect.withSpan("desktop.window.handleBackendNotReady"),
     ),
-    flushMainWindowBounds: Effect.suspend(() => flushMainWindowBounds).pipe(
-      Effect.withSpan("desktop.window.flushMainWindowBounds"),
-    ),
+    flushMainWindowBounds: Effect.suspend(() =>
+      Effect.all([...boundsFlushers.values()], { discard: true }),
+    ).pipe(Effect.withSpan("desktop.window.flushMainWindowBounds")),
     dispatchMenuAction: Effect.fn("desktop.window.dispatchMenuAction")(function* (action, options) {
       yield* Effect.annotateCurrentSpan({ action });
       yield* dispatchRendererEvent(MENU_ACTION_CHANNEL, action, options);
@@ -1157,7 +1230,7 @@ export const make = Effect.gen(function* () {
     }),
     zoomMain: Effect.fn("desktop.window.zoomMain")(function* (direction) {
       yield* Effect.annotateCurrentSpan({ direction });
-      const window = yield* electronWindow.main;
+      const window = yield* electronWindow.focusedMainOrFirst;
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
@@ -1166,7 +1239,7 @@ export const make = Effect.gen(function* () {
     runMainContentsCommand: Effect.fn("desktop.window.runMainContentsCommand")(function* (command) {
       yield* Effect.annotateCurrentSpan({ command });
       // A focused OAuth popup must not receive the app's Reload command.
-      const window = yield* electronWindow.main;
+      const window = yield* electronWindow.focusedMainOrFirst;
       if (Option.isNone(window) || window.value.isDestroyed()) return;
       const webContents = window.value.webContents;
       if (command === "reload") webContents.reload();

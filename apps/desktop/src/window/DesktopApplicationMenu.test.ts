@@ -8,6 +8,8 @@ import * as Electron from "electron";
 import { vi } from "vite-plus/test";
 
 vi.mock("electron", () => ({
+  app: { dock: { setMenu: vi.fn() } },
+  Menu: { buildFromTemplate: vi.fn((template) => template) },
   webContents: { getAllWebContents: vi.fn(() => []) },
 }));
 
@@ -80,7 +82,9 @@ const layerDesktopUpdates = Layer.succeed(DesktopUpdates.DesktopUpdates, {
 
 const layerDesktopWindow = (selectedAction: Deferred.Deferred<string>) =>
   Layer.succeed(DesktopWindow.DesktopWindow, {
-    createMain: Effect.die("unexpected createMain"),
+    createMain: Deferred.succeed(selectedAction, "new-window").pipe(
+      Effect.as({} as Electron.BrowserWindow),
+    ),
     ensureMain: Effect.die("unexpected ensureMain"),
     revealOrCreateMain: Effect.die("unexpected revealOrCreateMain"),
     activate: Effect.void,
@@ -174,6 +178,12 @@ describe("DesktopApplicationMenu", () => {
       yield* configureMenu(selectedAction, applicationMenuTemplate, { platform: "darwin" });
 
       const template = yield* Deferred.await(applicationMenuTemplate);
+      const file = template.find((item) => item.label === "File");
+      if (!Array.isArray(file?.submenu)) throw new Error("Expected File menu");
+      const newWindow = file.submenu.find((item) => item.label === "New Window");
+      assert.equal(newWindow?.accelerator, "CmdOrCtrl+Alt+Shift+N");
+      const dockTemplate = vi.mocked(Electron.Menu.buildFromTemplate).mock.calls.at(-1)?.[0];
+      assert.strictEqual(dockTemplate?.[0]?.click, newWindow?.click);
       const viewMenu = template.find((item) => item.label === "View");
       assert.isDefined(viewMenu);
       if (!Array.isArray(viewMenu.submenu)) {
