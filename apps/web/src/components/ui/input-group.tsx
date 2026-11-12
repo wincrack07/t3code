@@ -113,7 +113,8 @@ function InputGroupAddon({
 }
 
 function InputGroupInput({ className, ...props }: InputProps) {
-  return <Input className={className} unstyled {...props} />;
+  // Addons squeeze the field; resting text that overflows ends in an ellipsis instead of a hard cut.
+  return <Input className={cn("*:text-ellipsis", className)} unstyled {...props} />;
 }
 
 export { InputGroup, InputGroupAddon, InputGroupInput };
