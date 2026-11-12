@@ -75,14 +75,12 @@ const createTab = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_CREATE_TAB_CHANNEL,
   payload: DesktopPreviewCreateTabInputSchema,
   result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.createTab")(function* ({
-    tabId,
-    zoomFactor,
-    colorScheme,
-    serverTab,
-  }) {
+  handler: Effect.fn("desktop.ipc.preview.createTab")(function* (
+    { tabId, zoomFactor, colorScheme, serverTab },
+    event,
+  ) {
     const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.createTab(tabId, { zoomFactor, colorScheme, serverTab });
+    yield* manager.createTab(tabId, { zoomFactor, colorScheme, serverTab }, event?.sender.id);
   }),
 });
 
@@ -90,9 +88,9 @@ const closeTab = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_CLOSE_TAB_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.preview.closeTab")(function* ({ tabId }) {
+  handler: Effect.fn("desktop.ipc.preview.closeTab")(function* ({ tabId }, event) {
     const manager = yield* PreviewManager.PreviewManager;
-    yield* manager.closeTab(tabId);
+    yield* manager.closeTab(tabId, event?.sender.id);
   }),
 });
 

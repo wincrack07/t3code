@@ -1,5 +1,7 @@
 import {
   ContextMenuItemSchema,
+  EnvironmentId,
+  ThreadId,
   DesktopAppBrandingSchema,
   DesktopEnvironmentBootstrapSchema,
   DesktopMediaReadSchema,
@@ -555,11 +557,49 @@ export const checkSystemPermission = DesktopIpc.makeIpcMethod({
 
 export const newWindow = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.NEW_WINDOW_CHANNEL,
-  payload: Schema.Undefined,
+  payload: Schema.UndefinedOr(Schema.Struct({ environmentId: EnvironmentId, threadId: ThreadId })),
   result: Schema.Void,
-  handler: Effect.fn("desktop.ipc.window.newWindow")(function* (_input, event) {
+  handler: Effect.fn("desktop.ipc.window.newWindow")(function* (thread, event) {
     const windows = yield* ElectronWindow.ElectronWindow;
     if (Option.isNone(yield* windows.fromSender(event?.sender.id))) return;
-    yield* (yield* DesktopWindow.DesktopWindow).createMain;
+    const window = yield* (yield* DesktopWindow.DesktopWindow).createMain;
+    if (!thread) return;
+    yield* windows.allowDuplicate(window, `${thread.environmentId}:${thread.threadId}`);
+    const deliver = () => {
+      if (!window.isDestroyed())
+        window.webContents.send(
+          IpcChannels.WEB_LINK_OPEN_CHANNEL,
+          `t3code://threads/${encodeURIComponent(thread.environmentId)}/${encodeURIComponent(thread.threadId)}`,
+        );
+    };
+    if (window.webContents.isLoadingMainFrame())
+      window.webContents.once("did-finish-load", deliver);
+    else deliver();
+  }),
+});
+
+export const reportWindowThreads = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.WINDOW_THREADS_CHANNEL,
+  payload: Schema.Array(Schema.String),
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.reportThreads")(function* (keys, event) {
+    const windows = yield* ElectronWindow.ElectronWindow;
+    const window = yield* windows.fromSender(event?.sender.id);
+    if (Option.isSome(window)) yield* windows.reportThreads(window.value, keys);
+  }),
+});
+export const focusThread = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.FOCUS_THREAD_CHANNEL,
+  payload: Schema.String,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.focusThread")(function* (key, event) {
+    const windows = yield* ElectronWindow.ElectronWindow;
+    const sender = yield* windows.fromSender(event?.sender.id);
+    if (Option.isNone(sender)) return false;
+    const target = yield* windows.findThread(key, sender.value.id);
+    if (Option.isNone(target)) return false;
+    target.value.webContents.send(IpcChannels.MENU_ACTION_CHANNEL, `focus-thread:${key}`);
+    yield* windows.reveal(target.value);
+    return true;
   }),
 });

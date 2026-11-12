@@ -1,3 +1,6 @@
+import { claimPreview, previewOwner, subscribePreviewOwner } from "~/desktopWindowRouting";
+import { useSyncExternalStore } from "react";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   AuthPreviewOperateScope,
@@ -8,7 +11,7 @@ import {
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useState, useEffect } from "react";
 
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
 
@@ -129,7 +132,24 @@ export function ElectronBrowserHost() {
   const previewByThreadKey = useActivePreviewSessions();
   const primaryEnvironmentId = useAtomValue(primaryEnvironmentIdAtom);
   useDesktopHostedPreviewSessions(primaryEnvironmentId);
-  const sessions = hostedBrowserSessions(previewByThreadKey, primaryEnvironmentId);
+  useSyncExternalStore(
+    subscribePreviewOwner,
+    () =>
+      Object.keys(previewByThreadKey)
+        .map((key) => previewOwner(key))
+        .join("|"),
+    () => "",
+  );
+  const id = window.desktopBridge?.windowId;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Allocate unclaimed native browser sessions to the focused desktop host.
+  useEffect(() => {
+    if (!id || !document.hasFocus()) return;
+    for (const key of Object.keys(previewByThreadKey))
+      if (previewOwner(key) === null) claimPreview(key);
+  }, [id, previewByThreadKey]);
+  const sessions = hostedBrowserSessions(previewByThreadKey, primaryEnvironmentId).filter(
+    (session) => !id || previewOwner(scopedThreadKey(session.threadRef)) === id,
+  );
 
   if (!isElectron) return null;
   return (

@@ -1295,6 +1295,21 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
+  if (window.desktopBridge?.newWindow && activeThread) {
+    actionItems.push({
+      kind: "action",
+      value: "action:thread-new-window",
+      title: "Open thread in new window",
+      searchTerms: ["thread", "window", "display"],
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await window.desktopBridge?.newWindow?.({
+          environmentId: activeThread.environmentId,
+          threadId: activeThread.id,
+        });
+      },
+    });
+  }
   if (window.desktopBridge?.newWindow) {
     actionItems.push({
       kind: "action",

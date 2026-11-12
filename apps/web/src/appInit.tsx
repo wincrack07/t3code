@@ -1,3 +1,4 @@
+import { startDesktopWindowRouting } from "./desktopWindowRouting";
 import { windowStorageKey } from "./windowPersistence";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -212,6 +213,7 @@ export function startAppServices(): AppRouter {
     syncDocumentWindowControlsOverlayClass();
   }
 
+  startDesktopWindowRouting(router);
   installDesktopPasteAsText(window.desktopBridge, window);
 
   startClientAppearance();

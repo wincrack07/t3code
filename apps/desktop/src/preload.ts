@@ -120,7 +120,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   openThread: (environmentId, threadId) =>
     ipcRenderer.invoke(IpcChannels.OPEN_THREAD_CHANNEL, { environmentId, threadId }),
-  newWindow: () => ipcRenderer.invoke(IpcChannels.NEW_WINDOW_CHANNEL),
+  reportWindowThreads: (keys) => ipcRenderer.invoke(IpcChannels.WINDOW_THREADS_CHANNEL, keys),
+  focusThread: (key) => ipcRenderer.invoke(IpcChannels.FOCUS_THREAD_CHANNEL, key),
+  newWindow: (thread) => ipcRenderer.invoke(IpcChannels.NEW_WINDOW_CHANNEL, thread),
   revealWindow: () => ipcRenderer.invoke(IpcChannels.REVEAL_WINDOW_CHANNEL),
   getSystemLocale: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_SYSTEM_LOCALE_CHANNEL);

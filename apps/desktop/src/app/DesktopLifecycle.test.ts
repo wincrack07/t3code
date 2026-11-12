@@ -71,6 +71,9 @@ function layerElectronWindow(destroyAll: Effect.Effect<void> = Effect.void) {
   return Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected window creation"),
     main: Effect.die("unexpected main window read"),
+    reportThreads: () => Effect.void,
+    allowDuplicate: () => Effect.void,
+    findThread: () => Effect.succeedNone,
     appWindows: Effect.succeed([]),
     fromSender: () => Effect.succeedNone,
     currentMainOrFirst: Effect.die("unexpected current window read"),

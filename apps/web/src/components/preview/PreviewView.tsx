@@ -1,3 +1,6 @@
+import { claimPreview, previewOwner, subscribePreviewOwner } from "~/desktopWindowRouting";
+import { useSyncExternalStore } from "react";
+import { Button } from "~/components/ui/button";
 import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
@@ -148,7 +151,29 @@ function ServerTabFileNotShown(props: {
   );
 }
 
-export function PreviewView({
+export function PreviewView(props: Props) {
+  const key = scopedThreadKey(props.threadRef);
+  const id = window.desktopBridge?.windowId;
+  const owner = useSyncExternalStore(
+    subscribePreviewOwner,
+    () => previewOwner(key),
+    () => null,
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Synchronize the native browser lease with mounted desktop hosts.
+  useEffect(() => {
+    if (id && owner === null && props.visible) claimPreview(key);
+  }, [id, key, owner, props.visible]);
+  if (id && owner && owner !== id)
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <p>Browser is open in another window.</p>
+        <Button onClick={() => claimPreview(key)}>Show here</Button>
+      </div>
+    );
+  return <OwnedPreviewView {...props} />;
+}
+
+function OwnedPreviewView({
   threadRef,
   tabId: requestedTabId,
   configuredUrls,

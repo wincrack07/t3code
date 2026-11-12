@@ -115,6 +115,15 @@ export class ElectronWindow extends Context.Service<
       options: Electron.BrowserWindowConstructorOptions,
       behavior?: { readonly auxiliary?: boolean },
     ) => Effect.Effect<Electron.BrowserWindow, ElectronWindowCreateError>;
+    readonly reportThreads: (
+      window: Electron.BrowserWindow,
+      keys: readonly string[],
+    ) => Effect.Effect<void>;
+    readonly allowDuplicate: (window: Electron.BrowserWindow, key: string) => Effect.Effect<void>;
+    readonly findThread: (
+      key: string,
+      senderId?: number,
+    ) => Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly appWindows: Effect.Effect<readonly Electron.BrowserWindow[]>;
     readonly fromSender: (
       senderId: number | undefined,
@@ -244,6 +253,15 @@ export const make = Effect.gen(function* () {
         catch: (cause) => new ElectronWindowCreateError({ options: diagnosticOptions, cause }),
       });
     }),
+    reportThreads: Effect.fn("ElectronWindow.reportThreads")((window, keys) =>
+      Effect.sync(() => registry.reportThreads(window, keys)),
+    ),
+    allowDuplicate: Effect.fn("ElectronWindow.allowDuplicate")((window, key) =>
+      Effect.sync(() => registry.allowDuplicate(window, key)),
+    ),
+    findThread: Effect.fn("ElectronWindow.findThread")((key, senderId) =>
+      Effect.sync(() => Option.fromNullishOr(registry.findThread(key, senderId))),
+    ),
     appWindows: Effect.sync(() => registry.list()),
     fromSender: Effect.fn("ElectronWindow.fromSender")((senderId) =>
       Effect.sync(() =>

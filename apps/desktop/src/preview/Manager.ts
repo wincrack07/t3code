@@ -552,6 +552,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const annotationThemeRef = yield* Ref.make(DEFAULT_ANNOTATION_THEME);
   const annotationSendEnabled = new Map<string, boolean>();
   const mainWindows = new Set<BrowserWindow>();
+  const tabOwners = new Map<string, Set<number>>();
   const tabsRef = yield* SynchronizedRef.make<ReadonlyMap<string, PreviewTabState>>(new Map());
   const attachedRef = yield* Ref.make<ReadonlyMap<number, ManagedListeners>>(new Map());
   const listenersRef = yield* Ref.make<ReadonlySet<Listener>>(new Set());
@@ -1669,7 +1670,13 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const createTab = Effect.fn("PreviewManager.createTab")(function* (
     tabId: string,
     defaults?: DesktopPreviewTabDefaults,
+    ownerId?: number,
   ) {
+    if (ownerId !== undefined) {
+      const owners = tabOwners.get(tabId) ?? new Set<number>();
+      owners.add(ownerId);
+      tabOwners.set(tabId, owners);
+    }
     return yield* withTabLifecycleLock(tabId, createTabUnlocked(tabId, defaults));
   });
 
@@ -1729,7 +1736,16 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     yield* emit(tabId, closed);
   });
 
-  const closeTab = Effect.fn("PreviewManager.closeTab")(function* (tabId: string) {
+  const closeTab = Effect.fn("PreviewManager.closeTab")(function* (
+    tabId: string,
+    ownerId?: number,
+  ) {
+    const owners = tabOwners.get(tabId);
+    if (ownerId !== undefined && owners) {
+      owners.delete(ownerId);
+      if (owners.size > 0) return;
+    }
+    tabOwners.delete(tabId);
     const claimed = yield* Ref.modify(closingTabIdsRef, (closingTabIds) => {
       if (closingTabIds.has(tabId)) return [false, closingTabIds] as const;
       return [true, new Set([...closingTabIds, tabId])] as const;
@@ -3591,8 +3607,12 @@ export class PreviewManager extends Context.Service<
     readonly createTab: (
       tabId: string,
       defaults?: DesktopPreviewTabDefaults,
+      ownerId?: number,
     ) => Effect.Effect<PreviewTabState, PreviewManagerError>;
-    readonly closeTab: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
+    readonly closeTab: (
+      tabId: string,
+      ownerId?: number,
+    ) => Effect.Effect<void, PreviewManagerError>;
     readonly registerWebview: (
       tabId: string,
       webContentsId: number,

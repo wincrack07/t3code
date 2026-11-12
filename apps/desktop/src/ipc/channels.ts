@@ -148,3 +148,6 @@ export const NEW_WINDOW_CHANNEL = "desktop:new-window";
 export const OPEN_THREAD_CHANNEL = "desktop:open-thread";
 
 export const CLIENT_SETTINGS_CHANGED_CHANNEL = "desktop:client-settings-changed";
+
+export const WINDOW_THREADS_CHANNEL = "desktop:window-threads";
+export const FOCUS_THREAD_CHANNEL = "desktop:focus-thread";

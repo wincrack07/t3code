@@ -743,6 +743,20 @@ describe("PreviewManager", () => {
       ),
   );
 
+  effectIt.effect("keeps a tab retained by another window during handoff", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        yield* manager.createTab("shared_window_tab", undefined, 1);
+        yield* manager.createTab("shared_window_tab", undefined, 2);
+        yield* manager.closeTab("shared_window_tab", 1);
+        yield* manager.navigate("shared_window_tab", "https://example.com");
+        const retained = yield* manager.createTab("shared_window_tab");
+        expect(retained.navStatus).toMatchObject({ kind: "Loading", url: "https://example.com/" });
+        yield* manager.closeTab("shared_window_tab", 2);
+      }),
+    ),
+  );
+
   effectIt.effect("keeps editing and forwarded shortcuts in whichever tab holds focus", () =>
     withManager((manager) =>
       Effect.gen(function* () {

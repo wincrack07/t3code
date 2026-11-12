@@ -1070,7 +1070,9 @@ export interface DesktopBridge {
    * only the main process can spend a notification click's activation token.
    */
   openThread?: (environmentId: EnvironmentId, threadId: ThreadId) => Promise<void>;
-  newWindow?: () => Promise<void>;
+  newWindow?: (thread?: { environmentId: EnvironmentId; threadId: ThreadId }) => Promise<void>;
+  reportWindowThreads?: (keys: readonly string[]) => Promise<void>;
+  focusThread?: (key: string) => Promise<boolean>;
   revealWindow: () => Promise<void>;
   /**
    * The OS locale as a BCP-47 tag, which the renderer cannot read for itself:

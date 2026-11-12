@@ -50,6 +50,8 @@ import {
   probeRemoteEditors,
   revealWindow,
   newWindow,
+  reportWindowThreads,
+  focusThread,
   pickFolder,
   pickProjectFavicon,
   pickThemeFiles,
@@ -164,6 +166,8 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(pasteAsText);
   yield* ipc.handle(revealWindow);
   yield* ipc.handle(newWindow);
+  yield* ipc.handle(reportWindowThreads);
+  yield* ipc.handle(focusThread);
   yield* ipc.handle(syncHtmlFullscreen);
   yield* ipc.handle(probeRemoteEditors);
   yield* ipc.handle(getUpdateState);
