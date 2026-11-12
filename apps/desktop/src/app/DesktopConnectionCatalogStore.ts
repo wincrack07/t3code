@@ -20,8 +20,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import * as DesktopSavedEnvironments from "../settings/DesktopSavedEnvironments.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -381,6 +383,7 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const safeStorage = yield* ElectronSafeStorage.ElectronSafeStorage;
+  const powerMonitor = yield* ElectronPowerMonitor.ElectronPowerMonitor;
   const random = yield* SecureRandom.SecureRandom;
   const savedEnvironments = yield* DesktopSavedEnvironments.DesktopSavedEnvironments;
   const catalogPath = path.join(environment.stateDir, "connection-catalog.json");
@@ -394,6 +397,18 @@ export const make = Effect.gen(function* () {
         }),
     ),
   );
+
+  // macOS refuses keychain prompts behind a locked screen, and Chromium keeps that refusal
+  // until the app restarts. An update can relaunch the app while the lid is closed.
+  const screenUnlocked =
+    environment.platform !== "darwin"
+      ? Effect.void
+      : powerMonitor.getSystemIdleState(60).pipe(
+          Effect.repeat({
+            until: (state) => state !== "locked",
+            schedule: Schedule.spaced("2 seconds"),
+          }),
+        );
 
   const writeCatalog = Effect.fn("desktop.connectionCatalogStore.writeCatalog")(function* (
     catalog: string,
@@ -467,8 +482,14 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(document)) {
         return yield* migrateLegacyCatalog;
       }
+      yield* screenUnlocked;
+      // Reading a saved catalog as missing would let the next save replace it with an empty one.
       if (!(yield* encryptionAvailable)) {
-        return Option.none<string>();
+        return yield* new DesktopConnectionCatalogStoreProtectionError({
+          operation: "check-encryption-availability",
+          catalogPath,
+          cause: new Error("Secure storage is unavailable."),
+        });
       }
       const decrypted = yield* decodeSecretBytes(catalogPath, document.value.encryptedCatalog).pipe(
         Effect.flatMap((encryptedCatalog) =>
