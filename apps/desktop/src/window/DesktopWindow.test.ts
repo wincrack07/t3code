@@ -25,6 +25,10 @@ vi.mock("electron", async (importOriginal) => ({
     })),
   },
   screen: {
+    getCursorScreenPoint: vi.fn(() => ({ x: 100, y: 80 })),
+    getDisplayNearestPoint: vi.fn(() => ({
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    })),
     getAllDisplays: vi.fn(() => [
       {
         bounds: { x: 0, y: 0, width: 1920, height: 1080 },
@@ -220,6 +224,10 @@ const desktopWindowBoundsEquivalence = Schema.toEquivalence(
 
 function layerTest(input: {
   readonly window: Electron.BrowserWindow;
+  readonly createWindow?: (
+    options: Electron.BrowserWindowConstructorOptions,
+  ) => Electron.BrowserWindow;
+  readonly savedWindows?: Map<string, DesktopAppSettings.DesktopSavedWindow>;
   readonly createCount: Ref.Ref<number>;
   readonly mainWindow: Ref.Ref<Option.Option<Electron.BrowserWindow>>;
   readonly createdWindowOptions?: Electron.BrowserWindowConstructorOptions[];
@@ -251,6 +259,16 @@ function layerTest(input: {
       }),
     setMainWindowBounds: (bounds, isMaximized, saved) =>
       Effect.gen(function* () {
+        if (saved) {
+          if (saved.open)
+            input.savedWindows?.set(saved.id, {
+              id: saved.id,
+              bounds: saved.bounds,
+              maximized: saved.maximized,
+              fullscreen: saved.fullscreen,
+            });
+          else input.savedWindows?.delete(saved.id);
+        }
         if (saved?.open === false) return { settings: desktopSettings, changed: false };
         if (input.beforeMainWindowBoundsUpdate) {
           yield* input.beforeMainWindowBoundsUpdate(bounds);
@@ -288,7 +306,7 @@ function layerTest(input: {
       }).pipe(
         Effect.andThen(Ref.update(input.createCount, (count) => count + 1)),
         Effect.andThen(input.onWindowCreate ?? Effect.void),
-        Effect.as(input.window),
+        Effect.map(() => input.createWindow?.(options) ?? input.window),
       ),
     main: Ref.get(input.mainWindow),
     reportThreads: () => Effect.void,
@@ -1016,6 +1034,64 @@ describe("DesktopWindow", () => {
           ),
         );
       }),
+  );
+
+  it.effect("saves untouched new windows on quit and again after restore", () =>
+    Effect.gen(function* () {
+      const savedWindows = new Map<string, DesktopAppSettings.DesktopSavedWindow>();
+      const initialBounds = { x: 100, y: 80, width: 1100, height: 780 };
+      const secondBounds = { x: 128, y: 108, width: 1100, height: 780 };
+      const first = makeFakeBrowserWindow();
+      const second = makeFakeBrowserWindow();
+      first.getBounds.mockReturnValue(initialBounds);
+      first.getNormalBounds.mockReturnValue(initialBounds);
+      second.getBounds.mockReturnValue(secondBounds);
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const windows = [first, second];
+      const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+      const layer = layerTest({
+        window: first.window,
+        createWindow: () => windows.shift()!.window,
+        createdWindowOptions,
+        createCount,
+        mainWindow,
+        savedWindows,
+        desktopSettings: {
+          ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+          mainWindowBounds: initialBounds,
+        },
+      });
+      yield* Effect.gen(function* () {
+        const service = yield* DesktopWindow.DesktopWindow;
+        yield* service.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        yield* service.createMain;
+        yield* service.flushMainWindowBounds;
+        assert.containSubset(createdWindowOptions, [initialBounds, secondBounds]);
+        assert.deepEqual(
+          [...savedWindows.values()].map((entry) => entry.bounds),
+          [initialBounds, secondBounds],
+        );
+      }).pipe(Effect.provide(layer));
+
+      const restored = [...savedWindows.values()];
+      savedWindows.clear();
+      const restoreWindows = [first, second];
+      const restoreLayer = layerTest({
+        window: first.window,
+        createWindow: () => restoreWindows.shift()!.window,
+        createCount,
+        mainWindow: yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none()),
+        savedWindows,
+        desktopSettings: { ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS, windows: restored },
+      });
+      yield* Effect.gen(function* () {
+        const service = yield* DesktopWindow.DesktopWindow;
+        yield* service.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        yield* service.flushMainWindowBounds;
+        assert.deepEqual([...savedWindows.values()], restored);
+      }).pipe(Effect.provide(restoreLayer));
+    }),
   );
 
   it.effect("persists normal bounds and state for a maximized window", () =>
