@@ -1,7 +1,7 @@
 import * as FileSystem from "effect/FileSystem";
 import * as ServerConfig from "../config.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
-import { savedTaskDraftContent } from "@t3tools/shared/savedTasks";
+import { savedTaskDraftContent, savedTaskLaunchSettings } from "@t3tools/shared/savedTasks";
 import * as AttachmentClaims from "./AttachmentClaims.ts";
 import * as Decisions from "../decisions/Decisions.ts";
 import { AUTO_MODEL } from "@t3tools/contracts";
@@ -86,6 +86,7 @@ export interface ThreadLaunchInitialMessage {
 }
 
 export interface ThreadLaunchInput {
+  readonly taskOverrides?: import("@t3tools/contracts").OrchestrationV2ThreadLaunchInput["taskOverrides"];
   readonly savedPromptId?: string;
   readonly useProjectDefaultModel?: boolean;
   readonly commandId: CommandId;
@@ -968,12 +969,18 @@ const make = Effect.gen(function* () {
         input = {
           ...input,
           title: savedTaskDraftContent(task).title,
-          modelSelection: settings.defaultModelSelection ?? input.modelSelection,
+          ...savedTaskLaunchSettings(
+            task,
+            { ...input, modelSelection: settings.defaultModelSelection ?? input.modelSelection },
+            input.taskOverrides,
+          ),
           initialMessage: savedTaskDraftContent(task),
         };
       }
       if (
-        (input.savedPromptId !== undefined || input.useProjectDefaultModel === true) &&
+        (input.savedPromptId !== undefined ||
+          input.useProjectDefaultModel === true ||
+          input.taskOverrides?.modelSelection !== undefined) &&
         (input.modelSelection.model === AUTO_MODEL || input.modelSelection.routing === "auto")
       ) {
         const decisions = yield* Effect.serviceOption(Decisions.Decisions);
@@ -1224,7 +1231,12 @@ const make = Effect.gen(function* () {
             .update({
               commandId: CommandId.make(`${input.commandId}:saved-prompt`),
               projectId: input.projectId,
-              savedPromptThread: { id: input.savedPromptId, threadId },
+              savedPrompt: {
+                kind: "link",
+                id: input.savedPromptId,
+                threadId,
+                userMessageId: projection.runs.find((run) => run.id === runId)?.userMessageId,
+              },
             })
             .pipe(Effect.mapError(mapError(input, "link-saved-prompt", threadId)));
         }

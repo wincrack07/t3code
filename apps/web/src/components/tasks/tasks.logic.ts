@@ -34,6 +34,7 @@ export const TASK_STATUSES = [
 export const TASK_STATUS_LABELS: Record<SavedPromptStatus, string> = {
   open: "Open",
   "in-progress": "In progress",
+  review: "Review",
   done: "Done",
 };
 export const TASK_TEXT_MAX_LENGTH = 120_000;
@@ -42,7 +43,9 @@ export const TASK_TITLE_MAX_LENGTH = 160;
 export const TASK_POLISH_MAX_LENGTH = 20_000;
 
 const taskStatus = (task: ProjectSavedPrompt): SavedPromptStatus =>
-  task.status ?? (task.completedAt === null ? "open" : "done");
+  task.status === "review"
+    ? "in-progress"
+    : (task.status ?? (task.completedAt === null ? "open" : "done"));
 
 export const taskTitle = (task: ProjectSavedPrompt) =>
   task.title ?? (task.text.split("\n")[0]?.slice(0, TASK_TITLE_MAX_LENGTH) || "Untitled task");
@@ -238,7 +241,12 @@ export function buildTaskBoard(
   groups: ReadonlyArray<TaskProjectGroup>,
   projectKey: string | null,
 ): Record<SavedPromptStatus, TaskEntry[]> {
-  const board: Record<SavedPromptStatus, TaskEntry[]> = { open: [], "in-progress": [], done: [] };
+  const board: Record<SavedPromptStatus, TaskEntry[]> = {
+    open: [],
+    "in-progress": [],
+    review: [],
+    done: [],
+  };
   for (const group of groups) {
     if (projectKey !== null && group.key !== projectKey) continue;
     for (const entry of group.tasks) board[entry.status].push(entry);

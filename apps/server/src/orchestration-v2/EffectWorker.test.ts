@@ -1,3 +1,4 @@
+import * as TaskReviewService from "../project/TaskReviewService.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CheckpointId,
@@ -88,6 +89,7 @@ function layerExecutorFor(input: {
 }) {
   const record = (event: string) => Ref.update(input.events, (events) => [...events, event]);
   const layerDependencies = Layer.mergeAll(
+    Layer.succeed(TaskReviewService.TaskReviewService, { reconcile: () => Effect.void }),
     Layer.succeed(
       ProviderTurnControlService.ProviderTurnControlServiceV2,
       ProviderTurnControlService.ProviderTurnControlServiceV2.of({

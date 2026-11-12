@@ -1,3 +1,4 @@
+import * as Decisions from "../decisions/Decisions.ts";
 import { taskAttachmentOwner } from "../project/taskAttachmentFiles.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
@@ -21,6 +22,7 @@ import {
   type ChatAttachment,
   type ProjectSavedPrompt,
   CommandId,
+  AUTO_MODEL,
   DEFAULT_SERVER_SETTINGS,
   GitCommandError,
   MessageId,
@@ -417,7 +419,12 @@ it.effect(
       yield* fs.writeFileString(sourcePath, "data");
       assert.deepEqual(wire.thread.modelSelection, project.defaultModelSelection);
       assert.equal(wire.thread.title, "Login");
-      assert.deepEqual(updates[0]?.savedPromptThread, { id: task.id, threadId: launched.threadId });
+      assert.deepEqual(updates[0]?.savedPrompt, {
+        kind: "link",
+        id: task.id,
+        threadId: launched.threadId,
+        userMessageId: launched.projection.runs.at(-1)?.userMessageId,
+      });
       assert.equal(updates[0]?.commandId, "task:send:saved-prompt");
       yield* launches.launch(request);
       const resent = yield* launches.launch({
@@ -425,7 +432,67 @@ it.effect(
         commandId: CommandId.make("task:resend"),
         threadId: ThreadId.make("task:resend"),
       });
-      assert.equal(updates.at(-1)?.savedPromptThread?.threadId, resent.threadId);
+      const linkedAgain = updates.at(-1)?.savedPrompt;
+      assert.equal(
+        linkedAgain?.kind === "link" ? linkedAgain.threadId : undefined,
+        resent.threadId,
+      );
+      savedPrompts[0] = {
+        ...savedPrompts[0]!,
+        runSettings: {
+          defaultModelSelection: {
+            ...modelSelection,
+            model: "task-model",
+            options: [{ id: "effort", value: "high" }],
+          },
+          runtimeMode: "auto",
+          threadEnvMode: "local",
+        },
+        acceptanceCriteria: [{ text: "Preserve sessions", done: false }],
+      };
+      const configured = yield* launches.launch({
+        ...request,
+        commandId: CommandId.make("task:configured"),
+        threadId: ThreadId.make("task:configured"),
+      });
+      assert.equal(configured.projection.thread.modelSelection.model, "task-model");
+      assert.equal(configured.projection.thread.runtimeMode, "auto");
+      assert.include(
+        configured.projection.messages[0]!.text,
+        "<acceptance_criteria>\n- [ ] Preserve sessions\n</acceptance_criteria>",
+      );
+      const overridden = yield* launches.launch({
+        ...request,
+        commandId: CommandId.make("task:override"),
+        threadId: ThreadId.make("task:override"),
+        taskOverrides: {
+          modelSelection: { ...modelSelection, model: "override-model" },
+          runtimeMode: "approval-required",
+        },
+      });
+      assert.equal(overridden.projection.thread.modelSelection.model, "override-model");
+      assert.equal(overridden.projection.thread.runtimeMode, "approval-required");
+      const automatic = yield* launches
+        .launch({
+          ...launchInput({
+            command: "task:auto-remote",
+            thread: "task:auto-remote",
+            message: "Implement the copied task brief",
+          }),
+          modelSelection: { ...modelSelection, model: AUTO_MODEL },
+          taskOverrides: { modelSelection: { ...modelSelection, model: AUTO_MODEL } },
+        })
+        .pipe(
+          Effect.provide(
+            Layer.mock(Decisions.Decisions)({
+              route: () =>
+                Effect.succeed({
+                  modelSelection: { ...modelSelection, model: "routed-task-model" },
+                }),
+            }),
+          ),
+        );
+      assert.equal(automatic.projection.thread.modelSelection.model, "routed-task-model");
       const before = updates.length;
       for (const invalid of [
         { ...request, projectId: otherProjectId },

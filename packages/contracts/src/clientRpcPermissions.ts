@@ -26,6 +26,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [ORCHESTRATION_V2_WS_METHODS.moveThreadToProject]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsTaskAttachments]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectsTaskBatchStart]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectsTaskBatchCancel]: AuthOrchestrationOperateScope,
   [WS_METHODS.keepAwakeAuthorize]: AuthSettingsWriteScope,
   [WS_METHODS.keepAwakeChange]: AuthSettingsWriteScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,

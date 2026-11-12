@@ -29,14 +29,21 @@ const headOf = (
   ]);
 export async function scanTaskAttachmentCopies(
   storage: TaskAttachmentStorage,
-  projects: ReadonlyArray<Pick<ProjectRow, "savedPrompts" | "title" | "deletedAt">>,
+  projects: ReadonlyArray<Pick<ProjectRow, "savedPrompts" | "title" | "deletedAt" | "taskBatches">>,
   settings: MachineCleanupSettings,
   onlyPath?: string,
 ): Promise<{ items: MachineCleanupItem[]; usage: TaskAttachmentUsage }> {
   const owners = new Map<string, { group: Group; project: string }>();
   for (const project of projects) {
     if (project.deletedAt !== null) continue;
-    for (const task of project.savedPrompts ?? []) {
+    const queued = (project.taskBatches ?? [])
+      .flatMap((batch) => batch.entries)
+      .flatMap((entry) =>
+        (entry.state === "queued" || entry.state === "starting") && entry.brief !== undefined
+          ? [{ ...entry.brief, status: "in-progress" as const, completedAt: null }]
+          : [],
+      );
+    for (const task of [...(project.savedPrompts ?? []), ...queued]) {
       if (task.deletedAt !== undefined) continue;
       for (const item of task.attachments ?? []) {
         if (item.kind !== "stored") continue;
@@ -119,7 +126,7 @@ export async function scanTaskAttachmentCopies(
 }
 export async function deleteTaskAttachmentCopy(
   storage: TaskAttachmentStorage,
-  projects: ReadonlyArray<Pick<ProjectRow, "savedPrompts" | "title" | "deletedAt">>,
+  projects: ReadonlyArray<Pick<ProjectRow, "savedPrompts" | "title" | "deletedAt" | "taskBatches">>,
   settings: MachineCleanupSettings,
   approved: MachineCleanupItem,
 ): Promise<MachineCleanupItem> {

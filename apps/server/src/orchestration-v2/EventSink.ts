@@ -1,6 +1,7 @@
 import {
   CommandId,
   type OrchestrationV2Run,
+  type ProjectSavedPrompt,
   OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2TurnItem,
@@ -37,6 +38,23 @@ import * as EventStore from "./EventStore.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
+
+const taskLinks = (task: ProjectSavedPrompt) =>
+  task.threadLinks ??
+  (task.latestThreadId === undefined
+    ? []
+    : [
+        {
+          threadId: task.latestThreadId,
+          environmentId: task.latestThreadEnvironmentId,
+          userMessageId: task.latestUserMessageId,
+        },
+      ]);
+const taskLinkKey = (
+  taskId: string,
+  link: NonNullable<ProjectSavedPrompt["threadLinks"]>[number],
+) =>
+  JSON.stringify([taskId, link.environmentId ?? null, link.threadId, link.userMessageId ?? null]);
 
 export class EventSinkWriteError extends Schema.TaggedError<EventSinkWriteError>()(
   "EventSinkWriteError",
@@ -277,6 +295,30 @@ const layerBase: Layer.Layer<
         .pipe(Effect.map((thread) => thread.lineage.relationshipToParent === "subagent")),
     );
     // Recorded before publication, so an interrupted publish cannot lose a committed outcome.
+    const taskReviewEffects = (events: ReadonlyArray<OrchestrationV2StoredEvent>) =>
+      events.flatMap((stored) => {
+        const event = stored.event;
+        const runId =
+          event.type === "run.updated" &&
+          ["completed", "interrupted", "failed", "cancelled", "rolled_back", "waiting"].includes(
+            event.payload.status,
+          )
+            ? event.payload.id
+            : event.type === "checkpoint.captured"
+              ? event.payload.runId
+              : undefined;
+        return runId == null
+          ? []
+          : [
+              {
+                id: `effect:task-review:${stored.sequence}`,
+                commandId: CommandId.make(`command:task-review:${stored.sequence}`),
+                threadId: event.threadId,
+                request: { type: "task.review" as const, runId },
+              },
+            ];
+      });
+
     const publishStoredEvents = (
       events: ReadonlyArray<OrchestrationV2StoredEvent>,
       outcomes: ReadonlyArray<RunOutcome>,
@@ -285,6 +327,11 @@ const layerBase: Layer.Layer<
         .record(outcomes)
         .pipe(
           Effect.andThen(eventStore.publishCommitted(events)),
+          Effect.andThen(
+            taskReviewEffects(events).length === 0
+              ? Effect.void
+              : effectOutbox.notifyAvailable(taskReviewEffects(events).length),
+          ),
           Effect.andThen(publishLiveEvents(events)),
         );
 
@@ -392,6 +439,37 @@ const layerBase: Layer.Layer<
         yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
           concurrency: 1,
         });
+        for (const effect of taskReviewEffects(storedEvents)) {
+          const linked =
+            yield* sql`SELECT 1 FROM projection_projects p, json_each(p.saved_prompts_json) t
+            WHERE p.deleted_at IS NULL AND json_extract(t.value, '$.deletedAt') IS NULL
+              AND (json_extract(t.value, '$.latestThreadId') = ${effect.threadId}
+                OR EXISTS (SELECT 1 FROM json_each(t.value, '$.threadLinks') l WHERE json_extract(l.value, '$.threadId') = ${effect.threadId})) LIMIT 1`;
+          if (linked.length > 0) yield* effectOutbox.enqueue([effect]);
+        }
+        for (const stored of storedEvents) {
+          const event = stored.event;
+          if (
+            event.type !== "run.updated" ||
+            !["completed", "failed", "interrupted", "cancelled", "rolled_back", "waiting"].includes(
+              event.payload.status,
+            )
+          )
+            continue;
+          const queued =
+            yield* sql`SELECT 1 FROM projection_projects p, json_each(p.task_batches_json) b, json_each(b.value, '$.entries') e
+            WHERE p.deleted_at IS NULL AND json_extract(e.value, '$.threadId') = ${event.threadId}
+              AND json_extract(e.value, '$.state') IN ('starting', 'running') LIMIT 1`;
+          if (queued.length > 0)
+            yield* effectOutbox.enqueue([
+              {
+                id: `effect:task-batch:${stored.sequence}`,
+                commandId: CommandId.make(`command:task-batch:${stored.sequence}`),
+                threadId: event.threadId,
+                request: { type: "task.batch-pump" },
+              },
+            ]);
+        }
         const sequence = storedEvents.at(-1)?.sequence;
         if (sequence !== undefined) {
           const now = DateTime.formatIso(yield* DateTime.now);
@@ -817,13 +895,72 @@ const layerBase: Layer.Layer<
               return { receipt: yield* existingProjectReceipt(input.commandId), event: undefined };
             }
             const event = yield* eventStore.appendProjectEvent(input.event);
+            const previous =
+              event.type === "project.meta-updated" && event.payload.savedPrompts !== undefined
+                ? Option.getOrUndefined(yield* projectStore.get(event.payload.projectId))
+                : undefined;
             yield* projectStore.apply(event);
+            if (event.type === "project.meta-updated" && event.payload.savedPrompts !== undefined) {
+              const known = new Set(
+                (previous?.savedPrompts ?? [])
+                  .filter((task) => task.deletedAt === undefined)
+                  .flatMap((task) => taskLinks(task).map((link) => taskLinkKey(task.id, link))),
+              );
+              for (const task of event.payload.savedPrompts) {
+                if (task.deletedAt !== undefined) continue;
+                for (const link of taskLinks(task)) {
+                  if (known.has(taskLinkKey(task.id, link))) continue;
+                  const local =
+                    yield* sql`SELECT 1 FROM orchestration_v2_projection_threads WHERE thread_id = ${link.threadId} LIMIT 1`;
+                  if (local.length === 0) continue;
+                  const { runs } = yield* projectionStore.getThreadRecords(link.threadId, ["runs"]);
+                  const run =
+                    link.userMessageId === undefined
+                      ? runs.at(-1)
+                      : runs.find((run) => run.userMessageId === link.userMessageId);
+                  if (run === undefined) continue;
+                  yield* effectOutbox.enqueue([
+                    {
+                      id: `effect:task-link-review:${event.sequence}:${task.id}:${run.id}`,
+                      commandId: CommandId.make(
+                        `command:task-link-review:${event.sequence}:${task.id}:${run.id}`,
+                      ),
+                      threadId: link.threadId,
+                      request: { type: "task.review", runId: run.id },
+                    },
+                  ]);
+                }
+              }
+            }
+            if (event.type === "project.meta-updated") {
+              const active = event.payload.taskBatches
+                ?.flatMap((batch) => batch.entries)
+                .find(
+                  (entry) =>
+                    entry.state === "queued" ||
+                    entry.state === "starting" ||
+                    entry.state === "running",
+                );
+              if (active)
+                yield* effectOutbox.enqueue([
+                  {
+                    id: `effect:task-batch:${event.sequence}`,
+                    commandId: CommandId.make(`command:task-batch:${event.sequence}`),
+                    threadId: active.threadId,
+                    request: { type: "task.batch-pump" },
+                  },
+                ]);
+            }
             const receipt = { ...reserved, resultSequence: event.sequence };
             yield* commandReceipts.upsert(receipt);
             return { receipt, event };
           }),
           (result) =>
-            result.event === undefined ? Effect.void : eventStore.publishCommitted([result.event]),
+            result.event === undefined
+              ? Effect.void
+              : eventStore
+                  .publishCommitted([result.event])
+                  .pipe(Effect.andThen(effectOutbox.notifyAvailable())),
         );
         return { receipt: result.receipt, committed: result.event !== undefined };
       },

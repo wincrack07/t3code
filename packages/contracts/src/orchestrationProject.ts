@@ -1,3 +1,4 @@
+import { ProjectTaskBatches } from "./project.ts";
 import * as Schema from "effect/Schema";
 
 import { IsoDateTime, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -18,6 +19,7 @@ export const OrchestrationProjectShell = Schema.Struct({
   projectIcon: Schema.optional(Schema.NullOr(ReceivedProjectIcon)),
   scripts: Schema.Array(ProjectScript),
   savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
+  taskBatches: Schema.optional(ProjectTaskBatches),
   // Pinned projects lead project pickers; archived ones leave them. Optional so older servers decode.
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),

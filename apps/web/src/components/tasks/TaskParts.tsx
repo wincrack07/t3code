@@ -106,6 +106,7 @@ export function TaskThreadDot({
 const STATUS_BADGE = {
   open: "secondary",
   "in-progress": "info",
+  review: "info",
   done: "success",
 } as const satisfies Record<SavedPromptStatus, "secondary" | "info" | "success">;
 

@@ -1,3 +1,4 @@
+import { RuntimeMode, ProviderInteractionMode } from "./providerPolicy.ts";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
@@ -12,6 +13,8 @@ import {
   NonNegativeInt,
   PositiveInt,
   ProjectId,
+  RunId,
+  MessageId,
   ThreadId,
   TrimmedNonEmptyString,
   TrimmedString,
@@ -152,9 +155,58 @@ export const ReceivedProjectIcon = ForwardCompatibleUnion(projectIconMembers, "k
   ),
 );
 
-export const SavedPromptStatus = Schema.Literals(["open", "in-progress", "done"]);
+export const SavedPromptStatus = Schema.Literals(["open", "in-progress", "review", "done"]);
 export type SavedPromptStatus = typeof SavedPromptStatus.Type;
 const SavedPromptTitle = Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(160)));
+
+export const TaskReviewSnapshot = Schema.Struct({
+  runId: RunId,
+  userMessageId: MessageId,
+  outcome: Schema.Literals(["completed", "failed", "interrupted", "waiting for input"]),
+  finishedAt: IsoDateTime,
+  durationMs: Schema.optional(NonNegativeInt),
+  assistantMessage: Schema.optional(Schema.String.check(Schema.isMaxLength(8000))),
+  changes: Schema.optional(
+    Schema.Struct({ count: NonNegativeInt, additions: NonNegativeInt, deletions: NonNegativeInt }),
+  ),
+  pullRequests: Schema.Array(
+    Schema.Struct({
+      number: PositiveInt,
+      url: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+      state: Schema.optional(Schema.Literals(["open", "closed", "merged"])),
+    }),
+  ).check(Schema.isMaxLength(10)),
+});
+export type TaskReviewSnapshot = typeof TaskReviewSnapshot.Type;
+
+export const TaskRunSettings = Schema.Struct({
+  defaultModelSelection: Schema.optional(ModelSelection),
+  targetEnvironmentId: Schema.optional(EnvironmentId),
+  threadEnvMode: Schema.optional(ThreadEnvMode),
+  runtimeMode: Schema.optional(RuntimeMode),
+  interactionMode: Schema.optional(ProviderInteractionMode),
+});
+export type TaskRunSettings = typeof TaskRunSettings.Type;
+const TaskBriefFields = {
+  runSettings: Schema.optional(Schema.NullOr(TaskRunSettings)),
+  parentTaskId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  acceptanceCriteria: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        text: TrimmedNonEmptyString.check(Schema.isMaxLength(500)),
+        done: Schema.Boolean,
+      }),
+    ).check(Schema.isMaxLength(20)),
+  ),
+};
+
+const TaskInboxFields = {
+  priority: Schema.optional(Schema.Literals(["p1", "p2", "p3"])),
+  tags: Schema.optional(
+    Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(32))).check(Schema.isMaxLength(12)),
+  ),
+  when: Schema.optional(Schema.Literals(["today", "later", "none"])),
+};
 
 export const ProjectTaskAttachment = Schema.Union([
   Schema.Struct({
@@ -226,13 +278,19 @@ export const ProjectSavedPrompt = Schema.Struct({
   completedAt: Schema.NullOr(IsoDateTime),
   title: Schema.optional(SavedPromptTitle),
   status: Schema.optional(SavedPromptStatus),
+  ...TaskInboxFields,
+  ...TaskBriefFields,
   deletedAt: Schema.optional(IsoDateTime),
   latestThreadId: Schema.optional(ThreadId),
+  latestUserMessageId: Schema.optional(MessageId),
+  review: Schema.optional(TaskReviewSnapshot),
   latestThreadEnvironmentId: Schema.optional(EnvironmentId),
   threadLinks: Schema.optional(
     Schema.Array(
       Schema.Struct({
         threadId: ThreadId,
+        userMessageId: Schema.optional(MessageId),
+        snapshot: Schema.optional(TaskReviewSnapshot),
         environmentId: Schema.optional(EnvironmentId),
       }),
     ).check(Schema.isMaxLength(10)),
@@ -240,6 +298,100 @@ export const ProjectSavedPrompt = Schema.Struct({
   attachments: Schema.optional(Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8))),
 });
 export type ProjectSavedPrompt = typeof ProjectSavedPrompt.Type;
+export const TaskBatchSource = Schema.Struct({
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  taskId: TrimmedNonEmptyString,
+});
+const TaskBatchLaunchSettings = Schema.Struct({
+  modelSelection: ModelSelection,
+  runtimeMode: RuntimeMode,
+  interactionMode: ProviderInteractionMode,
+  threadEnvMode: Schema.optional(ThreadEnvMode),
+  baseRef: Schema.optional(TrimmedNonEmptyString),
+});
+const TaskBatchSubmission = Schema.Struct({
+  source: TaskBatchSource,
+  brief: ProjectSavedPrompt,
+  launch: TaskBatchLaunchSettings,
+  overrides: Schema.optional(TaskRunSettings),
+});
+export const TaskBatchEntry = Schema.Struct({
+  expectedThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  expectedUserMessageId: Schema.optional(Schema.NullOr(MessageId)),
+  ...TaskBatchSubmission.fields,
+  brief: Schema.optional(ProjectSavedPrompt),
+  title: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
+  id: TrimmedNonEmptyString,
+  commandId: CommandId,
+  threadId: ThreadId,
+  userMessageId: MessageId,
+  runId: Schema.optional(RunId),
+  state: Schema.Literals([
+    "queued",
+    "starting",
+    "running",
+    "settled",
+    "cancelled",
+    "failed-to-start",
+  ]),
+  reason: Schema.optional(Schema.String.check(Schema.isMaxLength(1000))),
+  snapshot: Schema.optional(TaskReviewSnapshot),
+});
+export type TaskBatchEntry = typeof TaskBatchEntry.Type;
+export const ProjectTaskBatch = Schema.Struct({
+  id: CommandId,
+  concurrency: PositiveInt.check(Schema.isLessThanOrEqualTo(4)),
+  createdAt: IsoDateTime,
+  entries: Schema.Array(TaskBatchEntry).check(Schema.isMaxLength(100)),
+});
+export type ProjectTaskBatch = typeof ProjectTaskBatch.Type;
+export const ProjectTaskBatches = Schema.Array(ProjectTaskBatch).check(Schema.isMaxLength(10));
+export const TaskBatchStartInput = Schema.Struct({
+  commandId: CommandId,
+  projectId: ProjectId,
+  concurrency: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(4))),
+  entries: Schema.Array(TaskBatchSubmission).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+});
+export type TaskBatchStartInput = typeof TaskBatchStartInput.Type;
+export const TaskBatchCancelInput = Schema.Struct({
+  commandId: CommandId,
+  projectId: ProjectId,
+  batchId: CommandId,
+  entryId: Schema.optional(TrimmedNonEmptyString),
+});
+export type TaskBatchCancelInput = typeof TaskBatchCancelInput.Type;
+export class TaskBatchError extends Schema.TaggedError<TaskBatchError>()("TaskBatchError", {
+  operation: Schema.Literals(["start", "cancel", "pump"]),
+  projectId: Schema.optional(ProjectId),
+  reason: Schema.Literals([
+    "invalid-input",
+    "capacity",
+    "missing-project",
+    "missing-batch",
+    "home-only-attachments",
+    "persistence",
+  ]),
+  cause: Schema.optional(Schema.Defect()),
+}) {
+  override get message(): string {
+    switch (this.reason) {
+      case "invalid-input":
+        return "Invalid batch input. Select unique tasks and a concurrency limit from 1 to 4.";
+      case "capacity":
+        return "The environment queue is full (100 pending tasks and 200000 prompt characters maximum).";
+      case "missing-project":
+        return "The destination project is unavailable.";
+      case "missing-batch":
+        return "The batch or queue entry is unavailable.";
+      case "home-only-attachments":
+        return "Tasks with stored attachments must run on their home environment.";
+      case "persistence":
+        return "The task queue could not be updated.";
+    }
+  }
+}
+
 export const TaskAttachmentListResult = Schema.Struct({
   task: Schema.optional(ProjectSavedPrompt),
   attachments: Schema.Array(TaskAttachmentMetadata),
@@ -248,12 +400,33 @@ export type TaskAttachmentListResult = typeof TaskAttachmentListResult.Type;
 
 export const SavedPromptAction = Schema.Union([
   Schema.Struct({
+    kind: Schema.Literal("review"),
+    id: TrimmedNonEmptyString,
+    threadId: ThreadId,
+    environmentId: Schema.optional(EnvironmentId),
+    snapshot: TaskReviewSnapshot,
+  }),
+  Schema.Struct({ kind: Schema.Literal("approve"), id: TrimmedNonEmptyString }),
+  Schema.Struct({
+    kind: Schema.Literal("request-changes"),
+    id: TrimmedNonEmptyString,
+    threadId: ThreadId,
+    environmentId: Schema.optional(EnvironmentId),
+    userMessageId: MessageId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("reorder"),
+    ids: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(100)),
+  }),
+  Schema.Struct({
     kind: Schema.Literal("add"),
     id: TrimmedNonEmptyString,
     text: ProjectSavedPrompt.fields.text,
     attachments: Schema.optional(TaskAttachmentInputs),
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
+    ...TaskInboxFields,
+    ...TaskBriefFields,
   }),
   Schema.Struct({
     kind: Schema.Literal("edit"),
@@ -261,6 +434,8 @@ export const SavedPromptAction = Schema.Union([
     text: Schema.optional(ProjectSavedPrompt.fields.text),
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
+    ...TaskInboxFields,
+    ...TaskBriefFields,
   }),
   Schema.Struct({
     kind: Schema.Literal("complete"),
@@ -271,6 +446,9 @@ export const SavedPromptAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("restore"), id: TrimmedNonEmptyString }),
   Schema.Struct({
     kind: Schema.Literal("link"),
+    expectedThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+    expectedUserMessageId: Schema.optional(Schema.NullOr(MessageId)),
+    userMessageId: Schema.optional(MessageId),
     id: TrimmedNonEmptyString,
     threadId: ThreadId,
     environmentId: Schema.optional(EnvironmentId),
@@ -302,6 +480,7 @@ export const Project = Schema.Struct({
   autoPull: Schema.optional(Schema.Boolean),
   scripts: Schema.Array(ProjectScript),
   savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
+  taskBatches: Schema.optional(ProjectTaskBatches),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   createdAt: IsoDateTime,

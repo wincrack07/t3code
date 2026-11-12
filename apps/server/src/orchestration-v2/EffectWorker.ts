@@ -1,3 +1,5 @@
+import * as TaskBatchService from "../project/TaskBatchService.ts";
+import * as TaskReviewService from "../project/TaskReviewService.ts";
 import { CommandId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -72,6 +74,7 @@ export const layerExecutor: Layer.Layer<
   OrchestrationEffectExecutorV2,
   never,
   | ProviderSessionManager.ProviderSessionManagerV2
+  | TaskReviewService.TaskReviewService
   | RunFinalizationService.RunFinalizationService
   | CheckpointRollbackService.CheckpointRollbackServiceV2
   | ProviderTurnControlService.ProviderTurnControlServiceV2
@@ -83,6 +86,8 @@ export const layerExecutor: Layer.Layer<
 > = Layer.effect(
   OrchestrationEffectExecutorV2,
   Effect.gen(function* () {
+    const taskReview = yield* TaskReviewService.TaskReviewService;
+    const taskBatches = yield* Effect.serviceOption(TaskBatchService.TaskBatchService);
     const runFinalization = yield* RunFinalizationService.RunFinalizationService;
     const resourceCleanup = yield* ResourceCleanupService.ResourceCleanupService;
     const checkpointRollback = yield* CheckpointRollbackService.CheckpointRollbackServiceV2;
@@ -98,6 +103,37 @@ export const layerExecutor: Layer.Layer<
       execute: Effect.fn("OrchestrationEffectExecutorV2.execute")(function (effect, options) {
         const willRetry = options?.willRetry ?? false;
         switch (effect.request.type) {
+          case "task.batch-pump": {
+            if (Option.isNone(taskBatches))
+              return Effect.fail(
+                new OrchestrationEffectExecutionError({
+                  effectId: effect.id,
+                  effectType: effect.request.type,
+                  cause: "The task batch service is unavailable.",
+                }),
+              );
+            return taskBatches.value.pump().pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
+          }
+          case "task.review":
+            return taskReview.reconcile(effect.threadId, effect.request.runId).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
           case "provider-runtime.continue": {
             const sourceRunId = effect.request.sourceRunId;
             return continueRestartedRun({ threadId: effect.threadId, sourceRunId }).pipe(

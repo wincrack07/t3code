@@ -1,5 +1,7 @@
 import {
   SavedPromptAction,
+  ProjectTaskBatches,
+  type ProjectTaskBatch,
   ProjectTaskAttachment,
   getProviderAttachmentLimitError,
   taskAttachmentKey,
@@ -31,6 +33,7 @@ export interface ProjectCreateCommand {
 }
 
 export interface ProjectMetaUpdateCommand {
+  readonly taskBatches?: ReadonlyArray<ProjectTaskBatch>;
   readonly savedPrompt?: SavedPromptAction;
   readonly savedPromptAttachments?: ReadonlyArray<ProjectTaskAttachment>;
   readonly savedPromptThread?: { readonly id: string; readonly threadId: ThreadId };
@@ -114,6 +117,7 @@ export interface ProjectCommandState {
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 const isSavedPromptAction = Schema.is(SavedPromptAction);
+const isTaskBatches = Schema.is(ProjectTaskBatches);
 const isTaskAttachments = Schema.is(
   Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8)),
 );
@@ -201,6 +205,8 @@ export function planProjectCommand(input: {
           }
         }
       }
+      if (command.taskBatches !== undefined && !isTaskBatches(command.taskBatches))
+        return invariant("Invalid persisted task queue.");
       let savedPrompts = project.savedPrompts ?? [];
       const action = command.savedPrompt;
       if (action !== undefined) {
@@ -226,12 +232,38 @@ export function planProjectCommand(input: {
                 id: action.id,
                 text: action.text,
                 title: action.title ?? null,
+                ...(action.runSettings === undefined ? {} : { runSettings: action.runSettings }),
+                ...(action.parentTaskId === undefined ? {} : { parentTaskId: action.parentTaskId }),
+                ...(action.acceptanceCriteria === undefined
+                  ? {}
+                  : { acceptanceCriteria: action.acceptanceCriteria }),
+                ...(action.priority === undefined ? {} : { priority: action.priority }),
+                ...(action.when === undefined ? {} : { when: action.when }),
+                ...(action.tags === undefined
+                  ? {}
+                  : { tags: [...new Set(action.tags.map((tag) => tag.trim().toLowerCase()))] }),
                 status: action.status ?? "open",
                 createdAt: occurredAt,
                 completedAt: action.status === "done" ? occurredAt : null,
               },
               ...savedPrompts,
             ];
+        } else if (action.kind === "reorder") {
+          if (
+            new Set(action.ids).size !== action.ids.length ||
+            action.ids.some(
+              (id) => !savedPrompts.some((item) => item.id === id && item.deletedAt === undefined),
+            )
+          )
+            return invariant("Reorder requires unique active task ids.");
+          const order = new Map(action.ids.map((id, index) => [id, index]));
+          const selected = savedPrompts
+            .filter((item) => order.has(item.id))
+            .sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+          let index = 0;
+          savedPrompts = savedPrompts.map((item) =>
+            order.has(item.id) ? selected[index++]! : item,
+          );
         } else if (action.kind === "clear-done") {
           const completed = savedPrompts.filter(
             (item) => item.deletedAt === undefined && item.completedAt !== null,
@@ -263,45 +295,127 @@ export function planProjectCommand(input: {
             const { deletedAt: _deletedAt, ...restored } = item;
             return restored;
           });
-        } else if (action.kind === "link") {
-          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
-            return invariant("The saved prompt no longer exists.");
+        } else if (action.kind === "review") {
+          savedPrompts = savedPrompts.map((item) => {
+            if (item.id !== action.id || item.deletedAt !== undefined) return item;
+            const current =
+              item.latestThreadId === action.threadId &&
+              item.latestThreadEnvironmentId === action.environmentId &&
+              (item.latestUserMessageId === undefined ||
+                item.latestUserMessageId === action.snapshot.userMessageId);
+            const matches = (link: NonNullable<typeof item.threadLinks>[number]) =>
+              link.threadId === action.threadId &&
+              link.environmentId === action.environmentId &&
+              (link.userMessageId === undefined ||
+                link.userMessageId === action.snapshot.userMessageId);
+            if (!current && !(item.threadLinks ?? []).some(matches)) return item;
+            const withHistory = {
+              ...item,
+              ...(current ? { review: action.snapshot } : {}),
+              threadLinks: (item.threadLinks ?? []).map((link) =>
+                matches(link) ? { ...link, snapshot: action.snapshot } : link,
+              ),
+            };
+            if (
+              !current ||
+              (item.status !== "in-progress" && item.status !== "review") ||
+              (item.review?.runId === action.snapshot.runId && item.status === "in-progress")
+            )
+              return withHistory;
+            return {
+              ...withHistory,
+              status: "review" as const,
+              completedAt: null,
+              review: action.snapshot,
+            };
+          });
+        } else if (action.kind === "approve") {
+          const task = savedPrompts.find(
+            (item) => item.id === action.id && item.deletedAt === undefined,
+          );
+          if (task?.status !== "review") return invariant("Only a task in review can be approved.");
           savedPrompts = savedPrompts.map((item) =>
-            item.id !== action.id
-              ? item
-              : {
+            item.id === action.id
+              ? { ...item, status: "done" as const, completedAt: occurredAt }
+              : item,
+          );
+        } else if (action.kind === "request-changes") {
+          const task = savedPrompts.find(
+            (item) => item.id === action.id && item.deletedAt === undefined,
+          );
+          if (
+            task?.status !== "review" ||
+            task.latestThreadId !== action.threadId ||
+            task.latestThreadEnvironmentId !== action.environmentId
+          )
+            return invariant("Request changes requires the task's current review thread.");
+          savedPrompts = savedPrompts.map((item) =>
+            item.id === action.id
+              ? {
                   ...item,
                   status: "in-progress" as const,
                   completedAt: null,
-                  latestThreadId: action.threadId,
-                  latestThreadEnvironmentId: action.environmentId,
+                  latestUserMessageId: action.userMessageId,
                   threadLinks: [
                     {
                       threadId: action.threadId,
+                      userMessageId: action.userMessageId,
                       ...(action.environmentId === undefined
                         ? {}
                         : { environmentId: action.environmentId }),
                     },
-                    ...(
-                      item.threadLinks ??
-                      (item.latestThreadId === undefined
-                        ? []
-                        : [
-                            {
-                              threadId: item.latestThreadId,
-                              ...(item.latestThreadEnvironmentId === undefined
-                                ? {}
-                                : { environmentId: item.latestThreadEnvironmentId }),
-                            },
-                          ])
-                    ).filter(
-                      (link) =>
-                        link.threadId !== action.threadId ||
-                        link.environmentId !== action.environmentId,
-                    ),
+                    ...(item.threadLinks ?? []),
                   ].slice(0, 10),
-                },
+                }
+              : item,
           );
+        } else if (action.kind === "link") {
+          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
+            return invariant("The saved prompt no longer exists.");
+          savedPrompts = savedPrompts.map((item) => {
+            if (item.id !== action.id) return item;
+            const link = {
+              threadId: action.threadId,
+              ...(action.environmentId === undefined
+                ? {}
+                : { environmentId: action.environmentId }),
+              ...(action.userMessageId === undefined
+                ? {}
+                : { userMessageId: action.userMessageId }),
+            };
+            const previous = (
+              item.threadLinks ??
+              (item.latestThreadId === undefined
+                ? []
+                : [
+                    {
+                      threadId: item.latestThreadId,
+                      environmentId: item.latestThreadEnvironmentId,
+                      userMessageId: item.latestUserMessageId,
+                    },
+                  ])
+            ).filter(
+              (previous) =>
+                previous.threadId !== action.threadId ||
+                previous.environmentId !== action.environmentId ||
+                previous.userMessageId !== action.userMessageId,
+            );
+            const current =
+              (action.expectedThreadId === undefined ||
+                (item.latestThreadId ?? null) === action.expectedThreadId) &&
+              (action.expectedUserMessageId === undefined ||
+                (item.latestUserMessageId ?? null) === action.expectedUserMessageId);
+            if (!current) return { ...item, threadLinks: [...previous, link].slice(0, 10) };
+            return {
+              ...item,
+              status: "in-progress" as const,
+              completedAt: null,
+              latestThreadId: action.threadId,
+              latestThreadEnvironmentId: action.environmentId,
+              latestUserMessageId: action.userMessageId,
+              threadLinks: [link, ...previous].slice(0, 10),
+            };
+          });
         } else {
           if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
             return invariant("The saved prompt no longer exists.");
@@ -319,6 +433,24 @@ export function planProjectCommand(input: {
                     : action.kind === "edit"
                       ? {
                           ...item,
+                          ...(action.runSettings === undefined
+                            ? {}
+                            : { runSettings: action.runSettings }),
+                          ...(action.parentTaskId === undefined
+                            ? {}
+                            : { parentTaskId: action.parentTaskId }),
+                          ...(action.acceptanceCriteria === undefined
+                            ? {}
+                            : { acceptanceCriteria: action.acceptanceCriteria }),
+                          ...(action.priority === undefined ? {} : { priority: action.priority }),
+                          ...(action.when === undefined ? {} : { when: action.when }),
+                          ...(action.tags === undefined
+                            ? {}
+                            : {
+                                tags: [
+                                  ...new Set(action.tags.map((tag) => tag.trim().toLowerCase())),
+                                ],
+                              }),
                           ...(action.text === undefined ? {} : { text: action.text }),
                           ...(action.title === undefined ? {} : { title: action.title }),
                           ...(action.status === undefined
@@ -387,6 +519,14 @@ export function planProjectCommand(input: {
         );
       }
       const activePrompts = savedPrompts.filter((item) => item.deletedAt === undefined);
+      for (const task of activePrompts) {
+        if (task.parentTaskId == null) continue;
+        const parent = activePrompts.find((candidate) => candidate.id === task.parentTaskId);
+        if (!parent || parent.id === task.id || parent.parentTaskId != null)
+          return invariant(
+            "Subtasks require an active top-level parent. Reparent or remove children before deleting their parent.",
+          );
+      }
       if (activePrompts.length > 100)
         return invariant("Clear saved prompts before restoring more (100 maximum).");
       let trashSize = 0;
@@ -423,6 +563,7 @@ export function planProjectCommand(input: {
           ...(command.faviconPath === undefined ? {} : { faviconPath: command.faviconPath }),
           ...(command.projectIcon === undefined ? {} : { projectIcon: command.projectIcon }),
           ...(command.scripts === undefined ? {} : { scripts: command.scripts }),
+          ...(command.taskBatches === undefined ? {} : { taskBatches: command.taskBatches }),
           ...(action === undefined && command.savedPromptThread === undefined
             ? {}
             : { savedPrompts }),

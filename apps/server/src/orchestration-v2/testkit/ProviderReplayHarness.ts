@@ -1,3 +1,4 @@
+import * as TaskReviewService from "../../project/TaskReviewService.ts";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -520,6 +521,7 @@ export function layerWithRegistry<Error>(
   const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
     Layer.provide(
       Layer.mergeAll(
+        Layer.succeed(TaskReviewService.TaskReviewService, { reconcile: () => Effect.void }),
         layerRunFinalizationServiceProvided,
         layerCheckpointRollbackServiceProvided,
         layerProviderSessionManagerProvided,

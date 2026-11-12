@@ -4,6 +4,8 @@ import {
   EventId,
   ProjectId,
   ThreadId,
+  RunId,
+  MessageId,
   type ProjectSavedPrompt,
   type ProjectScript,
 } from "@t3tools/contracts";
@@ -113,6 +115,37 @@ describe("planProjectCommand", () => {
       )._tag,
       "ProjectCommandInvariantError",
     );
+    const inbox = payloadOf(
+      update({
+        kind: "edit",
+        id: "one",
+        priority: "p1",
+        when: "today",
+        tags: ["Bug", "bug", "API"],
+      }),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.deepStrictEqual(inbox[0]?.tags, ["bug", "api"]);
+    assert.strictEqual(inbox[0]?.priority, "p1");
+    assert.strictEqual(inbox[0]?.when, "today");
+    assert.strictEqual(
+      failureOf(update({ kind: "edit", id: "one", tags: ["x".repeat(33)] }))._tag,
+      "ProjectCommandInvariantError",
+    );
+    const reordered = payloadOf(
+      update({ kind: "reorder", ids: ["two", "one"] }, [
+        task,
+        { ...task, id: "middle" },
+        { ...task, id: "two" },
+      ]),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.deepStrictEqual(
+      reordered.map((item) => item.id),
+      ["two", "middle", "one"],
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "reorder", ids: ["one", "one"] }))._tag,
+      "ProjectCommandInvariantError",
+    );
     const max = payloadOf(
       update({
         kind: "edit",
@@ -148,6 +181,133 @@ describe("planProjectCommand", () => {
         threadLinks: [{ threadId: "new-thread" }, { threadId: "old-thread" }],
       },
     ]);
+    const snapshot = {
+      runId: RunId.make("attempt"),
+      userMessageId: MessageId.make("message"),
+      outcome: "completed" as const,
+      finishedAt: DateTime.formatIso(now),
+      pullRequests: [],
+    };
+    const running: ProjectSavedPrompt = {
+      ...task,
+      status: "in-progress",
+      completedAt: null,
+      latestThreadId: ThreadId.make("new-thread"),
+      latestUserMessageId: snapshot.userMessageId,
+      threadLinks: [{ threadId: ThreadId.make("new-thread") }],
+    };
+    const reviewed = payloadOf(
+      update({ kind: "review", id: "one", threadId: running.latestThreadId!, snapshot }, [running]),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(reviewed[0]?.status, "review");
+    assert.strictEqual(reviewed[0]?.completedAt, null);
+    assert.deepStrictEqual(reviewed[0]?.threadLinks?.[0]?.snapshot, snapshot);
+    const approved = payloadOf(update({ kind: "approve", id: "one" }, reviewed))
+      .savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(approved[0]?.status, "done");
+    assert.deepStrictEqual(
+      payloadOf(
+        update(
+          { kind: "review", id: "one", threadId: running.latestThreadId!, snapshot },
+          approved,
+        ),
+      ).savedPrompts,
+      approved,
+    );
+    const changed = payloadOf(
+      update(
+        {
+          kind: "request-changes",
+          id: "one",
+          threadId: running.latestThreadId!,
+          userMessageId: MessageId.make("followup"),
+        },
+        reviewed,
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(changed[0]?.status, "in-progress");
+    assert.deepStrictEqual(
+      payloadOf(
+        update({ kind: "review", id: "one", threadId: running.latestThreadId!, snapshot }, changed),
+      ).savedPrompts,
+      changed,
+    );
+    assert.deepStrictEqual(
+      payloadOf(
+        update({ kind: "review", id: "one", threadId: ThreadId.make("old-thread"), snapshot }, [
+          running,
+        ]),
+      ).savedPrompts,
+      [running],
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "approve", id: "one" }, [running]))._tag,
+      "ProjectCommandInvariantError",
+    );
+    const guarded = payloadOf(
+      update(
+        {
+          kind: "link",
+          id: "one",
+          threadId: ThreadId.make("late-thread"),
+          userMessageId: MessageId.make("late-message"),
+          expectedThreadId: null,
+          expectedUserMessageId: null,
+        },
+        [running],
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(guarded[0]?.latestThreadId, running.latestThreadId);
+    assert.strictEqual(guarded[0]?.status, "in-progress");
+    assert.strictEqual(guarded[0]?.threadLinks?.at(-1)?.threadId, "late-thread");
+    const parent: ProjectSavedPrompt = { ...task, id: "parent" };
+    const childItems = [task, parent];
+    const brief = payloadOf(
+      update(
+        {
+          kind: "edit",
+          id: "one",
+          parentTaskId: "parent",
+          acceptanceCriteria: [{ text: "Keep sessions", done: false }],
+          runSettings: { threadEnvMode: "worktree", runtimeMode: "auto" },
+        },
+        childItems,
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(brief[0]?.parentTaskId, "parent");
+    assert.deepStrictEqual(brief[0]?.acceptanceCriteria, [{ text: "Keep sessions", done: false }]);
+    assert.strictEqual(brief[0]?.runSettings?.threadEnvMode, "worktree");
+    assert.strictEqual(
+      failureOf(update({ kind: "delete", id: "parent" }, brief))._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "edit", id: "parent", parentTaskId: "one" }, brief))._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "edit", id: "one", parentTaskId: "one" }, childItems))._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(
+        update(
+          { kind: "edit", id: "one", acceptanceCriteria: [{ text: "x".repeat(501), done: false }] },
+          childItems,
+        ),
+      )._tag,
+      "ProjectCommandInvariantError",
+    );
+    const detached = payloadOf(
+      update(
+        { kind: "edit", id: "one", parentTaskId: null, runSettings: null, acceptanceCriteria: [] },
+        brief,
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(detached[0]?.parentTaskId, null);
+    assert.strictEqual(detached[0]?.runSettings, null);
+    assert.deepStrictEqual(detached[0]?.acceptanceCriteria, []);
+    assert.isTrue(Result.isSuccess(update({ kind: "delete", id: "parent" }, detached)));
     const history = payloadOf(
       update({ kind: "link", id: "one", threadId: ThreadId.make("new-thread") }, [
         {

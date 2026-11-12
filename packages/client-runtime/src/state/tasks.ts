@@ -1,6 +1,20 @@
-import { savedTaskDraftContent } from "@t3tools/shared/savedTasks";
+import { scopedProjectKey } from "../environment/scoped.ts";
+import * as DateTime from "effect/DateTime";
+import { chooseLoadBalancedEnvironment } from "../load-balancing.ts";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import { startThreadTurn, type StartThreadTurnInput } from "../operations/commands.ts";
+import {
+  savedTaskDraftContent,
+  taskChildCounts,
+  savedTaskLaunchSettings,
+  taskReviewSnapshot,
+} from "@t3tools/shared/savedTasks";
 import {
   CommandId,
+  type TaskBatchStartInput,
+  type TaskRunSettings,
+  MessageId,
+  type OrchestrationV2ThreadProjection,
   TaskAttachmentsHomeOnlyError,
   type EnvironmentId,
   repositoryGroupingKeyOf,
@@ -13,12 +27,17 @@ import {
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
-import type { Atom, AtomRegistry } from "effect/reactivity";
+import { Atom, type AtomRegistry } from "effect/reactivity";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { request, requestGuarded } from "../rpc/client.ts";
 import type { EnvironmentProject } from "./models.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
-import { createRuntimeCommand, runInEnvironment, withCommandPermissions } from "./runtime.ts";
+import {
+  createEnvironmentRpcCommand,
+  createRuntimeCommand,
+  runInEnvironment,
+  withCommandPermissions,
+} from "./runtime.ts";
 
 export const SavedTaskSource = Schema.Struct({ home: ScopedProjectRef, taskId: Schema.String });
 export type SavedTaskSource = typeof SavedTaskSource.Type;
@@ -26,6 +45,9 @@ export const SavedTaskLinkReceipt = Schema.Struct({
   ...SavedTaskSource.fields,
   commandId: CommandId,
   thread: ScopedThreadRef,
+  expectedThreadId: Schema.optional(Schema.NullOr(ScopedThreadRef.fields.threadId)),
+  expectedUserMessageId: Schema.optional(Schema.NullOr(MessageId)),
+  userMessageId: Schema.optional(MessageId),
 });
 export type SavedTaskLinkReceipt = typeof SavedTaskLinkReceipt.Type;
 export const SavedTaskDraftBinding = Schema.Struct({
@@ -45,16 +67,42 @@ export class SavedTaskLaunchError extends Schema.TaggedError<SavedTaskLaunchErro
 ) {}
 
 export function createSavedTaskCommands<R, E>(
-  runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
+  runtime: Atom.AtomRuntime<EnvironmentRegistry | SecureRandom.SecureRandom | R, E>,
   projectAtom: (ref: ScopedProjectRef) => Atom.Atom<EnvironmentProject | null>,
 ) {
   const permissions = createCommandPermissions(runtime, WS_METHODS.projectsMutate);
   const draftFor = Effect.fn("SavedTaskCommands.prepareDraft")(function* (
-    input: { source: SavedTaskSource; target: ScopedProjectRef },
+    input: {
+      source: SavedTaskSource;
+      target?: ScopedProjectRef;
+      targets?: ReadonlyArray<ScopedProjectRef>;
+    },
     registry: AtomRegistry.AtomRegistry,
   ) {
     const home = registry.get(projectAtom(input.source.home));
-    const target = registry.get(projectAtom(input.target));
+    // Autosave can commit before the project stream delivers the updated prompt.
+    const snapshot = yield* runInEnvironment(
+      input.source.home.environmentId,
+      requestGuarded(WS_METHODS.projectsTaskAttachments, {
+        projectId: input.source.home.projectId,
+        taskId: input.source.taskId,
+        includePrompt: true,
+      }),
+    );
+    const task = snapshot.task;
+    if (!task)
+      return yield* new SavedTaskLaunchError({ detail: "The source task is unavailable." });
+    const preferred = task.runSettings?.targetEnvironmentId;
+    const targetRef =
+      input.target ??
+      (preferred === undefined || preferred === input.source.home.environmentId
+        ? input.source.home
+        : input.targets?.find((ref) => ref.environmentId === preferred));
+    if (!targetRef)
+      return yield* new SavedTaskLaunchError({
+        detail: "Load a project on the task's preferred environment, or choose an override.",
+      });
+    const target = registry.get(projectAtom(targetRef));
     if (!home || !target)
       return yield* new SavedTaskLaunchError({
         detail: "Load the source task and destination project before starting.",
@@ -70,31 +118,30 @@ export function createSavedTaskCommands<R, E>(
       return yield* new SavedTaskLaunchError({
         detail: "The destination must belong to the same repository.",
       });
-    // Autosave can commit before the project stream delivers the updated prompt.
-    const snapshot = yield* runInEnvironment(
-      input.source.home.environmentId,
-      requestGuarded(WS_METHODS.projectsTaskAttachments, {
-        projectId: input.source.home.projectId,
-        taskId: input.source.taskId,
-        includePrompt: true,
-      }),
-    );
-    const task = snapshot.task;
-    if (!task)
-      return yield* new SavedTaskLaunchError({ detail: "The source task is unavailable." });
     if (
-      input.source.home.environmentId !== input.target.environmentId &&
+      input.source.home.environmentId !== targetRef.environmentId &&
       (task.attachments ?? []).some((item) => item.kind === "stored")
     )
       return yield* new TaskAttachmentsHomeOnlyError({
         homeEnvironmentId: input.source.home.environmentId,
       });
-    return savedTaskDraftContent(task);
+    return {
+      ...savedTaskDraftContent(task),
+      target: targetRef,
+      runSettings: task.runSettings,
+      task,
+    };
   });
   const prepareDraft = createRuntimeCommand(runtime, {
     label: "environment-data:tasks:prepare-draft",
-    execute: (input: { source: SavedTaskSource; target: ScopedProjectRef }, registry) =>
-      draftFor(input, registry).pipe(withCommandPermissions(runtime, registry)),
+    execute: (
+      input: {
+        source: SavedTaskSource;
+        target?: ScopedProjectRef;
+        targets?: ReadonlyArray<ScopedProjectRef>;
+      },
+      registry,
+    ) => draftFor(input, registry).pipe(withCommandPermissions(runtime, registry)),
   });
   const attachments = createRuntimeCommand(runtime, {
     label: "environment-data:tasks:attachments",
@@ -162,6 +209,9 @@ export function createSavedTaskCommands<R, E>(
       projectId: receipt.home.projectId,
       savedPrompt: {
         kind: "link",
+        expectedThreadId: receipt.expectedThreadId,
+        expectedUserMessageId: receipt.expectedUserMessageId,
+        ...(receipt.userMessageId === undefined ? {} : { userMessageId: receipt.userMessageId }),
         id: receipt.taskId,
         threadId: receipt.thread.threadId,
         environmentId: receipt.thread.environmentId,
@@ -182,29 +232,46 @@ export function createSavedTaskCommands<R, E>(
       function* (
         input: {
           source: SavedTaskSource;
-          target: ScopedProjectRef;
+          target?: ScopedProjectRef;
+          targets?: ReadonlyArray<ScopedProjectRef>;
+          overrides?: OrchestrationV2ThreadLaunchInput["taskOverrides"];
           launch: OrchestrationV2ThreadLaunchInput;
         },
         registry: AtomRegistry.AtomRegistry,
       ) {
         const draft = yield* draftFor(input, registry);
         yield* permissions.authorize(registry, input.source.home.environmentId);
-        yield* permissions.authorize(registry, input.target.environmentId);
+        yield* permissions.authorize(registry, draft.target.environmentId);
         const { savedPromptId: _savedPromptId, ...launchInput } = input.launch;
+        const overrides = input.overrides ?? launchInput.taskOverrides;
+        const settings = savedTaskLaunchSettings(
+          { runSettings: draft.runSettings },
+          launchInput,
+          overrides,
+        );
         const result = yield* runInEnvironment(
-          input.target.environmentId,
+          draft.target.environmentId,
           request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
             ...launchInput,
+            ...settings,
+            taskOverrides: { ...overrides, modelSelection: settings.modelSelection },
             title: draft.title,
             initialMessage: { text: draft.text, attachments: draft.attachments },
-            projectId: input.target.projectId,
-            useProjectDefaultModel: true,
+            projectId: draft.target.projectId,
+            useProjectDefaultModel:
+              draft.runSettings?.defaultModelSelection === undefined &&
+              overrides?.modelSelection === undefined,
           }),
         );
         const receipt: SavedTaskLinkReceipt = {
           ...input.source,
           commandId: input.launch.commandId,
-          thread: { environmentId: input.target.environmentId, threadId: result.threadId },
+          expectedThreadId: draft.task.latestThreadId ?? null,
+          expectedUserMessageId: draft.task.latestUserMessageId ?? null,
+          ...(result.projection?.runs.at(-1) === undefined
+            ? {}
+            : { userMessageId: result.projection.runs.at(-1)!.userMessageId }),
+          thread: { environmentId: draft.target.environmentId, threadId: result.threadId },
         };
         return yield* runInEnvironment(receipt.home.environmentId, retryLinkEffect(receipt)).pipe(
           Effect.orElseSucceed(() => ({ status: "started-not-linked" as const, receipt })),
@@ -213,7 +280,407 @@ export function createSavedTaskCommands<R, E>(
       (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
     ),
   });
+  const reconcileReview = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:reconcile-review",
+    execute: (
+      input: {
+        source: SavedTaskSource;
+        thread: ScopedThreadRef;
+        projection: OrchestrationV2ThreadProjection;
+      },
+      registry,
+    ) => {
+      const run = input.projection.runs.at(-1);
+      const snapshot = run === undefined ? undefined : taskReviewSnapshot(input.projection, run.id);
+      if (input.projection.thread.id !== input.thread.threadId || snapshot === undefined)
+        return Effect.void;
+      return runInEnvironment(
+        input.source.home.environmentId,
+        requestGuarded(WS_METHODS.projectsMutate, {
+          type: "project.update",
+          projectId: input.source.home.projectId,
+          commandId: CommandId.make(
+            `task-review:${input.source.home.projectId}:${input.source.taskId}:${snapshot.runId}:${snapshot.outcome}:${snapshot.changes === undefined ? "result" : "checkpoint"}`,
+          ),
+          savedPrompt: {
+            kind: "review",
+            id: input.source.taskId,
+            threadId: input.thread.threadId,
+            environmentId: input.thread.environmentId,
+            snapshot,
+          },
+        }),
+      ).pipe(withCommandPermissions(runtime, registry), Effect.asVoid);
+    },
+  });
+  const requestChanges = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:request-changes",
+    execute: Effect.fn("SavedTaskCommands.requestChanges")(
+      function* (
+        input: {
+          source: SavedTaskSource;
+          thread: ScopedThreadRef;
+          commandId: CommandId;
+          note: string;
+          turn: Pick<StartThreadTurnInput, "runtimeMode" | "interactionMode" | "modelSelection">;
+        },
+        registry: AtomRegistry.AtomRegistry,
+      ) {
+        if (input.note.trim().length === 0 || input.note.length > 120000)
+          return yield* new SavedTaskLaunchError({
+            detail: "Enter a follow-up note of at most 120000 characters.",
+          });
+        yield* permissions.authorize(registry, input.thread.environmentId);
+        const messageId = MessageId.make(`${input.commandId}:task-followup`);
+        yield* runInEnvironment(
+          input.source.home.environmentId,
+          requestGuarded(WS_METHODS.projectsMutate, {
+            type: "project.update",
+            projectId: input.source.home.projectId,
+            commandId: CommandId.make(`${input.commandId}:request-changes`),
+            savedPrompt: {
+              kind: "request-changes",
+              id: input.source.taskId,
+              threadId: input.thread.threadId,
+              environmentId: input.thread.environmentId,
+              userMessageId: messageId,
+            },
+          }),
+        );
+        return yield* runInEnvironment(
+          input.thread.environmentId,
+          startThreadTurn({
+            ...input.turn,
+            commandId: input.commandId,
+            threadId: input.thread.threadId,
+            message: { messageId, role: "user", text: input.note, attachments: [] },
+            dispatchMode: "start",
+          }),
+        );
+      },
+      (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
+    ),
+  });
+  const quickCreate = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:quick-create",
+    execute: (input: { home: ScopedProjectRef; commandId: CommandId; text: string }, registry) =>
+      runInEnvironment(
+        input.home.environmentId,
+        requestGuarded(WS_METHODS.projectsMutate, {
+          type: "project.update",
+          projectId: input.home.projectId,
+          commandId: input.commandId,
+          savedPrompt: { kind: "add", id: String(input.commandId), text: input.text },
+        }),
+      ).pipe(withCommandPermissions(runtime, registry)),
+  });
+  const batchStart = createEnvironmentRpcCommand(runtime, {
+    label: "environment-data:tasks:batch-start",
+    tag: WS_METHODS.projectsTaskBatchStart,
+  });
+  const batchCancel = createEnvironmentRpcCommand(runtime, {
+    label: "environment-data:tasks:batch-cancel",
+    tag: WS_METHODS.projectsTaskBatchCancel,
+  });
+  const prepareBatch = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:prepare-batch",
+    execute: Effect.fn("SavedTaskCommands.prepareBatch")(
+      function* (
+        input: {
+          commandId: CommandId;
+          sources: ReadonlyArray<SavedTaskSource>;
+          targets: ReadonlyArray<ScopedProjectRef>;
+          target?: ScopedProjectRef;
+          distribute?: boolean;
+          concurrency?: number;
+          weights?: Readonly<Record<string, number>>;
+          launch: TaskBatchStartInput["entries"][number]["launch"];
+          overrides?: TaskRunSettings;
+        },
+        registry: AtomRegistry.AtomRegistry,
+      ) {
+        if (
+          (input.concurrency !== undefined &&
+            (!Number.isInteger(input.concurrency) ||
+              input.concurrency < 1 ||
+              input.concurrency > 4)) ||
+          input.sources.length === 0 ||
+          input.sources.length > 100 ||
+          new Set(
+            input.sources.map((source) =>
+              JSON.stringify([source.home.environmentId, source.home.projectId, source.taskId]),
+            ),
+          ).size !== input.sources.length
+        )
+          return yield* new SavedTaskLaunchError({
+            detail: "Select between 1 and 100 unique tasks.",
+          });
+        const resources = input.distribute
+          ? yield* Effect.forEach(
+              [...new Set(input.targets.map((ref) => ref.environmentId))],
+              (environmentId) =>
+                Effect.gen(function* () {
+                  const value = yield* runInEnvironment(
+                    environmentId,
+                    request(WS_METHODS.serverGetHostResources, {}),
+                  ).pipe(Effect.timeout("5 seconds"), Effect.option);
+                  return {
+                    environmentId,
+                    resources: Option.getOrNull(value),
+                    receivedAt: DateTime.toEpochMillis(yield* DateTime.now),
+                  };
+                }),
+              { concurrency: 1 },
+            )
+          : [];
+        const now = DateTime.toEpochMillis(yield* DateTime.now);
+        const counts = new Map<EnvironmentId, number>();
+        for (const ref of input.targets)
+          counts.set(
+            ref.environmentId,
+            (counts.get(ref.environmentId) ?? 0) +
+              (registry.get(projectAtom(ref))?.taskBatches ?? [])
+                .flatMap((batch) => batch.entries)
+                .filter((entry) => entry.state === "running" || entry.state === "starting").length,
+          );
+        const groups = new Map<
+          string,
+          { environmentId: EnvironmentId; input: TaskBatchStartInput }
+        >();
+        for (const source of input.sources) {
+          const draft = yield* draftFor({ source, target: source.home }, registry);
+          const home = registry.get(projectAtom(source.home));
+          const eligible = input.targets.filter((ref) => {
+            const project = registry.get(projectAtom(ref));
+            return (
+              project !== null &&
+              home !== null &&
+              ((ref.environmentId === source.home.environmentId &&
+                ref.projectId === source.home.projectId) ||
+                (home.repositoryIdentity != null &&
+                  project.repositoryIdentity != null &&
+                  repositoryGroupingKeyOf(home.repositoryIdentity) ===
+                    repositoryGroupingKeyOf(project.repositoryIdentity))) &&
+              (input.weights?.[ref.environmentId] ?? 50) > 0
+            );
+          });
+          const homeOnly = draft.task.attachments?.some((item) => item.kind === "stored");
+          const preferred =
+            input.overrides?.targetEnvironmentId ?? draft.runSettings?.targetEnvironmentId;
+          let target = homeOnly
+            ? source.home
+            : (input.target ??
+              (preferred === undefined
+                ? undefined
+                : preferred === source.home.environmentId
+                  ? source.home
+                  : eligible.find((ref) => ref.environmentId === preferred)));
+          if (!target && preferred !== undefined)
+            return yield* new SavedTaskLaunchError({
+              detail: "The task's preferred environment is unavailable.",
+            });
+          if (!target && input.distribute) {
+            const environmentId = chooseLoadBalancedEnvironment(
+              eligible.map((ref) => ({
+                environmentId: ref.environmentId,
+                resources:
+                  resources.find((item) => item.environmentId === ref.environmentId)?.resources ??
+                  null,
+                receivedAt:
+                  resources.find((item) => item.environmentId === ref.environmentId)?.receivedAt ??
+                  now,
+                weight:
+                  (input.weights?.[ref.environmentId] ?? 50) /
+                  (1 + (counts.get(ref.environmentId) ?? 0)),
+              })),
+              now,
+            );
+            target = eligible.find((ref) => ref.environmentId === environmentId);
+            if (!target)
+              target = eligible
+                .filter(
+                  (ref) =>
+                    resources.find((item) => item.environmentId === ref.environmentId)?.resources ==
+                    null,
+                )
+                .sort(
+                  (a, b) => (counts.get(a.environmentId) ?? 0) - (counts.get(b.environmentId) ?? 0),
+                )[0];
+            if (!target)
+              return yield* new SavedTaskLaunchError({
+                detail: "Auto balance has no available destination. Choose an environment.",
+              });
+          }
+          target ??= source.home;
+          const destination = registry.get(projectAtom(target));
+          if (
+            !destination ||
+            !home ||
+            (!(
+              target.environmentId === source.home.environmentId &&
+              target.projectId === source.home.projectId
+            ) &&
+              (!home.repositoryIdentity ||
+                !destination.repositoryIdentity ||
+                repositoryGroupingKeyOf(home.repositoryIdentity) !==
+                  repositoryGroupingKeyOf(destination.repositoryIdentity)))
+          )
+            return yield* new SavedTaskLaunchError({
+              detail: "The destination must be a loaded project in the same repository.",
+            });
+          yield* permissions.authorize(registry, source.home.environmentId);
+          yield* createCommandPermissions(runtime, WS_METHODS.projectsTaskBatchStart).authorize(
+            registry,
+            target.environmentId,
+          );
+          counts.set(target.environmentId, (counts.get(target.environmentId) ?? 0) + 1);
+          const key = scopedProjectKey(target);
+          const previous = groups.get(key);
+          const entry: TaskBatchStartInput["entries"][number] = {
+            source: { ...source.home, taskId: source.taskId },
+            brief: draft.task,
+            launch: input.launch,
+            ...(input.overrides === undefined ? {} : { overrides: input.overrides }),
+          };
+          groups.set(key, {
+            environmentId: target.environmentId,
+            input: {
+              commandId:
+                previous?.input.commandId ??
+                CommandId.make(
+                  `${input.commandId}:batch:${target.environmentId}:${target.projectId}`,
+                ),
+              projectId: target.projectId,
+              ...(input.concurrency === undefined ? {} : { concurrency: input.concurrency }),
+              entries: [...(previous?.input.entries ?? []), entry],
+            },
+          });
+        }
+        return [...groups.values()];
+      },
+      (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
+    ),
+  });
+  const batchQueueAtom = Atom.family(
+    (input: { source: SavedTaskSource; targets: ReadonlyArray<ScopedProjectRef> }) =>
+      Atom.make((get) => {
+        const entries = input.targets
+          .flatMap((target) =>
+            (get(projectAtom(target))?.taskBatches ?? []).flatMap((batch) =>
+              batch.entries.map((entry) => ({
+                target,
+                batchId: batch.id,
+                createdAt: batch.createdAt,
+                entry,
+              })),
+            ),
+          )
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        return entries
+          .filter(
+            ({ entry }) =>
+              entry.source.environmentId === input.source.home.environmentId &&
+              entry.source.projectId === input.source.home.projectId &&
+              entry.source.taskId === input.source.taskId,
+          )
+          .map((value) => ({
+            ...value,
+            position:
+              value.entry.state !== "queued"
+                ? null
+                : entries
+                    .filter(
+                      (item) =>
+                        item.target.environmentId === value.target.environmentId &&
+                        item.entry.state === "queued",
+                    )
+                    .indexOf(value) + 1,
+          }));
+      }),
+  );
+  const reconcileBatch = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:reconcile-batch",
+    execute: Effect.fn("SavedTaskCommands.reconcileBatch")(
+      function* (
+        input: { target: ScopedProjectRef; batchId: CommandId },
+        registry: AtomRegistry.AtomRegistry,
+      ) {
+        const batch = registry
+          .get(projectAtom(input.target))
+          ?.taskBatches?.find((batch) => batch.id === input.batchId);
+        if (!batch)
+          return yield* new SavedTaskLaunchError({
+            detail: "Load the destination batch before reconciling it.",
+          });
+        return yield* Effect.forEach(
+          batch.entries.filter((entry) => entry.state === "running" || entry.state === "settled"),
+          (entry) =>
+            Effect.gen(function* () {
+              const home = {
+                environmentId: entry.source.environmentId,
+                projectId: entry.source.projectId,
+              };
+              const receipt: SavedTaskLinkReceipt = {
+                home,
+                taskId: entry.source.taskId,
+                commandId: entry.commandId,
+                thread: { environmentId: input.target.environmentId, threadId: entry.threadId },
+                userMessageId: entry.userMessageId,
+                expectedThreadId: entry.expectedThreadId,
+                expectedUserMessageId: entry.expectedUserMessageId,
+              };
+              return {
+                entryId: entry.id,
+                result: yield* runInEnvironment(
+                  home.environmentId,
+                  Effect.gen(function* () {
+                    yield* retryLinkEffect(receipt);
+                    const snapshot = entry.snapshot;
+                    if (snapshot)
+                      yield* requestGuarded(WS_METHODS.projectsMutate, {
+                        type: "project.update",
+                        projectId: home.projectId,
+                        commandId: CommandId.make(
+                          `task-review:${home.projectId}:${entry.source.taskId}:${snapshot.runId}:${snapshot.outcome}:${snapshot.changes === undefined ? "result" : "checkpoint"}`,
+                        ),
+                        savedPrompt: {
+                          kind: "review",
+                          id: entry.source.taskId,
+                          threadId: entry.threadId,
+                          environmentId: input.target.environmentId,
+                          snapshot,
+                        },
+                      });
+                  }),
+                ).pipe(Effect.result),
+              };
+            }),
+          { concurrency: 1 },
+        );
+      },
+      (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
+    ),
+  });
+
+  const childCountsAtom = Atom.family((source: SavedTaskSource) =>
+    Atom.make((get) =>
+      taskChildCounts(get(projectAtom(source.home))?.savedPrompts ?? [], source.taskId),
+    ),
+  );
   return {
+    batchStart,
+    batchCancel,
+    prepareBatch: {
+      ...prepareBatch,
+      permissionAtom: createCommandPermissions(runtime, WS_METHODS.projectsTaskBatchStart)
+        .permissionAtom,
+    },
+    batchQueueAtom,
+    reconcileBatch: { ...reconcileBatch, permissionAtom: permissions.permissionAtom },
+    childCountsAtom,
+    reconcileReview: { ...reconcileReview, permissionAtom: permissions.permissionAtom },
+    requestChanges: { ...requestChanges, permissionAtom: permissions.permissionAtom },
+    quickCreate: { ...quickCreate, permissionAtom: permissions.permissionAtom },
     launch: { ...launch, permissionAtom: permissions.permissionAtom },
     retryLink: { ...retryLink, permissionAtom: permissions.permissionAtom },
     prepareDraft: { ...prepareDraft, permissionAtom: permissions.permissionAtom },

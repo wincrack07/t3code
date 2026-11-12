@@ -1,3 +1,4 @@
+import * as TaskBatchService from "./project/TaskBatchService.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
 import * as KeepAwake from "./keepAwake/KeepAwake.ts";
@@ -793,6 +794,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
+  Layer.mock(TaskBatchService.TaskBatchService)({}),
   Layer.mock(Decisions.Decisions)({}),
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),

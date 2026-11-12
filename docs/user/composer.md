@@ -27,8 +27,8 @@ title, edit its prompt, and change its status as work progresses. Edits save aut
 **Polish** previews a rewrite using your prompt polish settings; accept or revert it, and
 undo an accepted rewrite until you edit again.
 
-**Start thread** sends the task's prompt in a new thread using the project's default
-model. The task becomes **In progress** and links to the thread. Finishing the thread
+**Start thread** sends the task's prompt and acceptance criteria in a new thread, using
+the task's saved run settings when present and otherwise the project's defaults. The task becomes **In progress** and links to the thread. Finishing the thread
 does not mark the task done. **Open without sending**, in the start menu, opens the task
 with its attachments as a draft so you can choose a model or adjust it first; sending that
 draft links the thread to the task too. A task keeps its last ten threads: the newest shows

@@ -1,3 +1,4 @@
+import { ProjectTaskBatches } from "./project.ts";
 import * as Schema from "effect/Schema";
 
 import {
@@ -61,6 +62,7 @@ export const ApplicationProjectMetaUpdatedPayload = Schema.Struct({
   projectIcon: Schema.optional(Schema.NullOr(StoredProjectIcon)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
+  taskBatches: Schema.optional(ProjectTaskBatches),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   updatedAt: IsoDateTime,
