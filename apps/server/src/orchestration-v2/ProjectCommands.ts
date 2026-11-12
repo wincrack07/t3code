@@ -226,6 +226,11 @@ export function planProjectCommand(input: {
                 id: action.id,
                 text: action.text,
                 title: action.title ?? null,
+                ...(action.runSettings === undefined ? {} : { runSettings: action.runSettings }),
+                ...(action.parentTaskId === undefined ? {} : { parentTaskId: action.parentTaskId }),
+                ...(action.acceptanceCriteria === undefined
+                  ? {}
+                  : { acceptanceCriteria: action.acceptanceCriteria }),
                 ...(action.priority === undefined ? {} : { priority: action.priority }),
                 ...(action.when === undefined ? {} : { when: action.when }),
                 ...(action.tags === undefined
@@ -409,6 +414,15 @@ export function planProjectCommand(input: {
                     : action.kind === "edit"
                       ? {
                           ...item,
+                          ...(action.runSettings === undefined
+                            ? {}
+                            : { runSettings: action.runSettings }),
+                          ...(action.parentTaskId === undefined
+                            ? {}
+                            : { parentTaskId: action.parentTaskId }),
+                          ...(action.acceptanceCriteria === undefined
+                            ? {}
+                            : { acceptanceCriteria: action.acceptanceCriteria }),
                           ...(action.priority === undefined ? {} : { priority: action.priority }),
                           ...(action.when === undefined ? {} : { when: action.when }),
                           ...(action.tags === undefined
@@ -486,6 +500,14 @@ export function planProjectCommand(input: {
         );
       }
       const activePrompts = savedPrompts.filter((item) => item.deletedAt === undefined);
+      for (const task of activePrompts) {
+        if (task.parentTaskId == null) continue;
+        const parent = activePrompts.find((candidate) => candidate.id === task.parentTaskId);
+        if (!parent || parent.id === task.id || parent.parentTaskId != null)
+          return invariant(
+            "Subtasks require an active top-level parent. Reparent or remove children before deleting their parent.",
+          );
+      }
       if (activePrompts.length > 100)
         return invariant("Clear saved prompts before restoring more (100 maximum).");
       let trashSize = 0;

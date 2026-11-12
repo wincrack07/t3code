@@ -1,7 +1,7 @@
 import * as FileSystem from "effect/FileSystem";
 import * as ServerConfig from "../config.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
-import { savedTaskDraftContent } from "@t3tools/shared/savedTasks";
+import { savedTaskDraftContent, savedTaskLaunchSettings } from "@t3tools/shared/savedTasks";
 import * as AttachmentClaims from "./AttachmentClaims.ts";
 import * as Decisions from "../decisions/Decisions.ts";
 import { AUTO_MODEL } from "@t3tools/contracts";
@@ -86,6 +86,7 @@ export interface ThreadLaunchInitialMessage {
 }
 
 export interface ThreadLaunchInput {
+  readonly taskOverrides?: import("@t3tools/contracts").OrchestrationV2ThreadLaunchInput["taskOverrides"];
   readonly savedPromptId?: string;
   readonly useProjectDefaultModel?: boolean;
   readonly commandId: CommandId;
@@ -968,7 +969,11 @@ const make = Effect.gen(function* () {
         input = {
           ...input,
           title: savedTaskDraftContent(task).title,
-          modelSelection: settings.defaultModelSelection ?? input.modelSelection,
+          ...savedTaskLaunchSettings(
+            task,
+            { ...input, modelSelection: settings.defaultModelSelection ?? input.modelSelection },
+            input.taskOverrides,
+          ),
           initialMessage: savedTaskDraftContent(task),
         };
       }

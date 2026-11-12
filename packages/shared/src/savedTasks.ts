@@ -4,6 +4,7 @@ import type {
   RunId,
   TaskReviewSnapshot,
   ProjectSavedPrompt,
+  OrchestrationV2ThreadLaunchInput,
 } from "@t3tools/contracts";
 import { serializeComposerFileLink } from "./composerTrigger.ts";
 export function savedTaskDraftContent(task: ProjectSavedPrompt) {
@@ -12,7 +13,19 @@ export function savedTaskDraftContent(task: ProjectSavedPrompt) {
   );
   return {
     title: task.title ?? task.text.split("\n")[0]!.slice(0, 160),
-    text: [task.text, ...references].join("\n\n"),
+    text: [
+      task.text,
+      ...(task.acceptanceCriteria?.length
+        ? [
+            "<acceptance_criteria>\n" +
+              task.acceptanceCriteria
+                .map((item) => `- [${item.done ? "x" : " "}] ${item.text.replace(/\s+/g, " ")}`)
+                .join("\n") +
+              "\n</acceptance_criteria>",
+          ]
+        : []),
+      ...references,
+    ].join("\n\n"),
     attachments: (task.attachments ?? []).flatMap((item) =>
       item.kind === "stored" ? [item.attachment] : [],
     ),
@@ -85,5 +98,44 @@ export function taskReviewSnapshot(
         url: link.url,
         ...(link.snapshot === null ? {} : { state: link.snapshot.state }),
       })),
+  };
+}
+
+export function taskChildCounts(tasks: ReadonlyArray<ProjectSavedPrompt>, parentId: string) {
+  const children = tasks.filter(
+    (task) => task.deletedAt === undefined && task.parentTaskId === parentId,
+  );
+  return {
+    total: children.length,
+    done: children.filter(
+      (task) => task.status === "done" || (task.status === undefined && task.completedAt !== null),
+    ).length,
+  };
+}
+
+type LaunchSettings = Pick<
+  OrchestrationV2ThreadLaunchInput,
+  "modelSelection" | "runtimeMode" | "interactionMode" | "workspaceStrategy"
+>;
+export function savedTaskLaunchSettings(
+  task: Pick<ProjectSavedPrompt, "runSettings">,
+  fallback: LaunchSettings,
+  overrides: NonNullable<OrchestrationV2ThreadLaunchInput["taskOverrides"]> = {},
+) {
+  const settings = task.runSettings;
+  const mode = settings?.threadEnvMode;
+  return {
+    modelSelection:
+      overrides.modelSelection ?? settings?.defaultModelSelection ?? fallback.modelSelection,
+    runtimeMode: overrides.runtimeMode ?? settings?.runtimeMode ?? fallback.runtimeMode,
+    interactionMode:
+      overrides.interactionMode ?? settings?.interactionMode ?? fallback.interactionMode,
+    workspaceStrategy:
+      overrides.workspaceStrategy ??
+      (mode === "local" && fallback.workspaceStrategy.type !== "root"
+        ? { type: "root" as const }
+        : mode === "worktree" && fallback.workspaceStrategy.type !== "worktree"
+          ? { type: "worktree" as const, baseRef: "HEAD" }
+          : fallback.workspaceStrategy),
   };
 }

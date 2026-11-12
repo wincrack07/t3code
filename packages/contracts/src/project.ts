@@ -1,3 +1,4 @@
+import { RuntimeMode, ProviderInteractionMode } from "./providerPolicy.ts";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
@@ -178,6 +179,27 @@ export const TaskReviewSnapshot = Schema.Struct({
 });
 export type TaskReviewSnapshot = typeof TaskReviewSnapshot.Type;
 
+export const TaskRunSettings = Schema.Struct({
+  defaultModelSelection: Schema.optional(ModelSelection),
+  targetEnvironmentId: Schema.optional(EnvironmentId),
+  threadEnvMode: Schema.optional(ThreadEnvMode),
+  runtimeMode: Schema.optional(RuntimeMode),
+  interactionMode: Schema.optional(ProviderInteractionMode),
+});
+export type TaskRunSettings = typeof TaskRunSettings.Type;
+const TaskBriefFields = {
+  runSettings: Schema.optional(Schema.NullOr(TaskRunSettings)),
+  parentTaskId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  acceptanceCriteria: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        text: TrimmedNonEmptyString.check(Schema.isMaxLength(500)),
+        done: Schema.Boolean,
+      }),
+    ).check(Schema.isMaxLength(20)),
+  ),
+};
+
 const TaskInboxFields = {
   priority: Schema.optional(Schema.Literals(["p1", "p2", "p3"])),
   tags: Schema.optional(
@@ -257,6 +279,7 @@ export const ProjectSavedPrompt = Schema.Struct({
   title: Schema.optional(SavedPromptTitle),
   status: Schema.optional(SavedPromptStatus),
   ...TaskInboxFields,
+  ...TaskBriefFields,
   deletedAt: Schema.optional(IsoDateTime),
   latestThreadId: Schema.optional(ThreadId),
   latestUserMessageId: Schema.optional(MessageId),
@@ -309,6 +332,7 @@ export const SavedPromptAction = Schema.Union([
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
     ...TaskInboxFields,
+    ...TaskBriefFields,
   }),
   Schema.Struct({
     kind: Schema.Literal("edit"),
@@ -317,6 +341,7 @@ export const SavedPromptAction = Schema.Union([
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
     ...TaskInboxFields,
+    ...TaskBriefFields,
   }),
   Schema.Struct({
     kind: Schema.Literal("complete"),

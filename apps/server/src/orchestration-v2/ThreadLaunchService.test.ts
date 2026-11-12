@@ -435,6 +435,41 @@ it.effect(
         linkedAgain?.kind === "link" ? linkedAgain.threadId : undefined,
         resent.threadId,
       );
+      savedPrompts[0] = {
+        ...savedPrompts[0]!,
+        runSettings: {
+          defaultModelSelection: {
+            ...modelSelection,
+            model: "task-model",
+            options: [{ id: "effort", value: "high" }],
+          },
+          runtimeMode: "auto",
+          threadEnvMode: "local",
+        },
+        acceptanceCriteria: [{ text: "Preserve sessions", done: false }],
+      };
+      const configured = yield* launches.launch({
+        ...request,
+        commandId: CommandId.make("task:configured"),
+        threadId: ThreadId.make("task:configured"),
+      });
+      assert.equal(configured.projection.thread.modelSelection.model, "task-model");
+      assert.equal(configured.projection.thread.runtimeMode, "auto");
+      assert.include(
+        configured.projection.messages[0]!.text,
+        "<acceptance_criteria>\n- [ ] Preserve sessions\n</acceptance_criteria>",
+      );
+      const overridden = yield* launches.launch({
+        ...request,
+        commandId: CommandId.make("task:override"),
+        threadId: ThreadId.make("task:override"),
+        taskOverrides: {
+          modelSelection: { ...modelSelection, model: "override-model" },
+          runtimeMode: "approval-required",
+        },
+      });
+      assert.equal(overridden.projection.thread.modelSelection.model, "override-model");
+      assert.equal(overridden.projection.thread.runtimeMode, "approval-required");
       const before = updates.length;
       for (const invalid of [
         { ...request, projectId: otherProjectId },

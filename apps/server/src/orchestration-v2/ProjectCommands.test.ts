@@ -244,6 +244,54 @@ describe("planProjectCommand", () => {
       failureOf(update({ kind: "approve", id: "one" }, [running]))._tag,
       "ProjectCommandInvariantError",
     );
+    const parent: ProjectSavedPrompt = { ...task, id: "parent" };
+    const childItems = [task, parent];
+    const brief = payloadOf(
+      update(
+        {
+          kind: "edit",
+          id: "one",
+          parentTaskId: "parent",
+          acceptanceCriteria: [{ text: "Keep sessions", done: false }],
+          runSettings: { threadEnvMode: "worktree", runtimeMode: "auto" },
+        },
+        childItems,
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(brief[0]?.parentTaskId, "parent");
+    assert.deepStrictEqual(brief[0]?.acceptanceCriteria, [{ text: "Keep sessions", done: false }]);
+    assert.strictEqual(brief[0]?.runSettings?.threadEnvMode, "worktree");
+    assert.strictEqual(
+      failureOf(update({ kind: "delete", id: "parent" }, brief))._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "edit", id: "parent", parentTaskId: "one" }, brief))._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "edit", id: "one", parentTaskId: "one" }, childItems))._tag,
+      "ProjectCommandInvariantError",
+    );
+    assert.strictEqual(
+      failureOf(
+        update(
+          { kind: "edit", id: "one", acceptanceCriteria: [{ text: "x".repeat(501), done: false }] },
+          childItems,
+        ),
+      )._tag,
+      "ProjectCommandInvariantError",
+    );
+    const detached = payloadOf(
+      update(
+        { kind: "edit", id: "one", parentTaskId: null, runSettings: null, acceptanceCriteria: [] },
+        brief,
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(detached[0]?.parentTaskId, null);
+    assert.strictEqual(detached[0]?.runSettings, null);
+    assert.deepStrictEqual(detached[0]?.acceptanceCriteria, []);
+    assert.isTrue(Result.isSuccess(update({ kind: "delete", id: "parent" }, detached)));
     const history = payloadOf(
       update({ kind: "link", id: "one", threadId: ThreadId.make("new-thread") }, [
         {

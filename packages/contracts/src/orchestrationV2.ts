@@ -3750,6 +3750,14 @@ export const OrchestrationV2ArchivedShellSnapshot = Schema.Struct({
 export type OrchestrationV2ArchivedShellSnapshot = typeof OrchestrationV2ArchivedShellSnapshot.Type;
 
 export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
+  taskOverrides: Schema.optional(
+    Schema.Struct({
+      modelSelection: Schema.optional(ModelSelection),
+      runtimeMode: Schema.optional(RuntimeMode),
+      interactionMode: Schema.optional(ProviderInteractionMode),
+      workspaceStrategy: Schema.optional(OrchestrationV2ThreadLaunchWorkspaceStrategy),
+    }),
+  ),
   savedPromptId: Schema.optional(TrimmedNonEmptyString),
   useProjectDefaultModel: Schema.optional(Schema.Boolean),
   commandId: CommandId,

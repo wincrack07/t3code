@@ -1,6 +1,11 @@
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import { startThreadTurn, type StartThreadTurnInput } from "../operations/commands.ts";
-import { savedTaskDraftContent, taskReviewSnapshot } from "@t3tools/shared/savedTasks";
+import {
+  savedTaskDraftContent,
+  taskChildCounts,
+  savedTaskLaunchSettings,
+  taskReviewSnapshot,
+} from "@t3tools/shared/savedTasks";
 import {
   CommandId,
   MessageId,
@@ -17,7 +22,7 @@ import {
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
-import type { Atom, AtomRegistry } from "effect/reactivity";
+import { Atom, type AtomRegistry } from "effect/reactivity";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { request, requestGuarded } from "../rpc/client.ts";
 import type { EnvironmentProject } from "./models.ts";
@@ -55,11 +60,37 @@ export function createSavedTaskCommands<R, E>(
 ) {
   const permissions = createCommandPermissions(runtime, WS_METHODS.projectsMutate);
   const draftFor = Effect.fn("SavedTaskCommands.prepareDraft")(function* (
-    input: { source: SavedTaskSource; target: ScopedProjectRef },
+    input: {
+      source: SavedTaskSource;
+      target?: ScopedProjectRef;
+      targets?: ReadonlyArray<ScopedProjectRef>;
+    },
     registry: AtomRegistry.AtomRegistry,
   ) {
     const home = registry.get(projectAtom(input.source.home));
-    const target = registry.get(projectAtom(input.target));
+    // Autosave can commit before the project stream delivers the updated prompt.
+    const snapshot = yield* runInEnvironment(
+      input.source.home.environmentId,
+      requestGuarded(WS_METHODS.projectsTaskAttachments, {
+        projectId: input.source.home.projectId,
+        taskId: input.source.taskId,
+        includePrompt: true,
+      }),
+    );
+    const task = snapshot.task;
+    if (!task)
+      return yield* new SavedTaskLaunchError({ detail: "The source task is unavailable." });
+    const preferred = task.runSettings?.targetEnvironmentId;
+    const targetRef =
+      input.target ??
+      (preferred === undefined || preferred === input.source.home.environmentId
+        ? input.source.home
+        : input.targets?.find((ref) => ref.environmentId === preferred));
+    if (!targetRef)
+      return yield* new SavedTaskLaunchError({
+        detail: "Load a project on the task's preferred environment, or choose an override.",
+      });
+    const target = registry.get(projectAtom(targetRef));
     if (!home || !target)
       return yield* new SavedTaskLaunchError({
         detail: "Load the source task and destination project before starting.",
@@ -75,31 +106,25 @@ export function createSavedTaskCommands<R, E>(
       return yield* new SavedTaskLaunchError({
         detail: "The destination must belong to the same repository.",
       });
-    // Autosave can commit before the project stream delivers the updated prompt.
-    const snapshot = yield* runInEnvironment(
-      input.source.home.environmentId,
-      requestGuarded(WS_METHODS.projectsTaskAttachments, {
-        projectId: input.source.home.projectId,
-        taskId: input.source.taskId,
-        includePrompt: true,
-      }),
-    );
-    const task = snapshot.task;
-    if (!task)
-      return yield* new SavedTaskLaunchError({ detail: "The source task is unavailable." });
     if (
-      input.source.home.environmentId !== input.target.environmentId &&
+      input.source.home.environmentId !== targetRef.environmentId &&
       (task.attachments ?? []).some((item) => item.kind === "stored")
     )
       return yield* new TaskAttachmentsHomeOnlyError({
         homeEnvironmentId: input.source.home.environmentId,
       });
-    return savedTaskDraftContent(task);
+    return { ...savedTaskDraftContent(task), target: targetRef, runSettings: task.runSettings };
   });
   const prepareDraft = createRuntimeCommand(runtime, {
     label: "environment-data:tasks:prepare-draft",
-    execute: (input: { source: SavedTaskSource; target: ScopedProjectRef }, registry) =>
-      draftFor(input, registry).pipe(withCommandPermissions(runtime, registry)),
+    execute: (
+      input: {
+        source: SavedTaskSource;
+        target?: ScopedProjectRef;
+        targets?: ReadonlyArray<ScopedProjectRef>;
+      },
+      registry,
+    ) => draftFor(input, registry).pipe(withCommandPermissions(runtime, registry)),
   });
   const attachments = createRuntimeCommand(runtime, {
     label: "environment-data:tasks:attachments",
@@ -188,23 +213,32 @@ export function createSavedTaskCommands<R, E>(
       function* (
         input: {
           source: SavedTaskSource;
-          target: ScopedProjectRef;
+          target?: ScopedProjectRef;
+          targets?: ReadonlyArray<ScopedProjectRef>;
+          overrides?: OrchestrationV2ThreadLaunchInput["taskOverrides"];
           launch: OrchestrationV2ThreadLaunchInput;
         },
         registry: AtomRegistry.AtomRegistry,
       ) {
         const draft = yield* draftFor(input, registry);
         yield* permissions.authorize(registry, input.source.home.environmentId);
-        yield* permissions.authorize(registry, input.target.environmentId);
+        yield* permissions.authorize(registry, draft.target.environmentId);
         const { savedPromptId: _savedPromptId, ...launchInput } = input.launch;
         const result = yield* runInEnvironment(
-          input.target.environmentId,
+          draft.target.environmentId,
           request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
             ...launchInput,
+            ...savedTaskLaunchSettings(
+              { runSettings: draft.runSettings },
+              launchInput,
+              input.overrides,
+            ),
             title: draft.title,
             initialMessage: { text: draft.text, attachments: draft.attachments },
-            projectId: input.target.projectId,
-            useProjectDefaultModel: true,
+            projectId: draft.target.projectId,
+            useProjectDefaultModel:
+              draft.runSettings?.defaultModelSelection === undefined &&
+              input.overrides?.modelSelection === undefined,
           }),
         );
         const receipt: SavedTaskLinkReceipt = {
@@ -213,7 +247,7 @@ export function createSavedTaskCommands<R, E>(
           ...(result.projection?.runs.at(-1) === undefined
             ? {}
             : { userMessageId: result.projection.runs.at(-1)!.userMessageId }),
-          thread: { environmentId: input.target.environmentId, threadId: result.threadId },
+          thread: { environmentId: draft.target.environmentId, threadId: result.threadId },
         };
         return yield* runInEnvironment(receipt.home.environmentId, retryLinkEffect(receipt)).pipe(
           Effect.orElseSucceed(() => ({ status: "started-not-linked" as const, receipt })),
@@ -316,7 +350,13 @@ export function createSavedTaskCommands<R, E>(
         }),
       ).pipe(withCommandPermissions(runtime, registry)),
   });
+  const childCountsAtom = Atom.family((source: SavedTaskSource) =>
+    Atom.make((get) =>
+      taskChildCounts(get(projectAtom(source.home))?.savedPrompts ?? [], source.taskId),
+    ),
+  );
   return {
+    childCountsAtom,
     reconcileReview: { ...reconcileReview, permissionAtom: permissions.permissionAtom },
     requestChanges: { ...requestChanges, permissionAtom: permissions.permissionAtom },
     quickCreate: { ...quickCreate, permissionAtom: permissions.permissionAtom },

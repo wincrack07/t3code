@@ -11,6 +11,7 @@ import {
   WS_METHODS,
   type OrchestrationV2ThreadLaunchInput,
   type ProjectTaskAttachment,
+  type TaskRunSettings,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -42,6 +43,7 @@ it.effect("retries the link without sending a second turn after the home environ
       projectId: ProjectId.make("target-project"),
     };
     let taskAttachments: ProjectTaskAttachment[] = [];
+    let taskSettings: TaskRunSettings | undefined;
     let launches = 0;
     let links = 0;
     const supervisors = new Map<EnvironmentId, EnvironmentSupervisor["Service"]>();
@@ -54,12 +56,23 @@ it.effect("retries the link without sending a second turn after the home environ
             ) => {
               launches++;
               expect(input.initialMessage?.text).toBe("Implement login");
-              expect(input.useProjectDefaultModel).toBe(true);
+              expect(input.useProjectDefaultModel).toBe(
+                taskSettings?.defaultModelSelection === undefined,
+              );
+              if (taskSettings?.defaultModelSelection)
+                expect(input.modelSelection).toEqual(taskSettings.defaultModelSelection);
+              if (taskSettings?.threadEnvMode === "worktree")
+                expect(input.workspaceStrategy).toEqual({ type: "worktree", baseRef: "HEAD" });
               return Effect.succeed({ threadId: ThreadId.make("launched") });
             },
             [WS_METHODS.projectsTaskAttachments]: () =>
               Effect.succeed({
-                task: { id: "task", text: "Implement login", attachments: taskAttachments },
+                task: {
+                  id: "task",
+                  text: "Implement login",
+                  attachments: taskAttachments,
+                  runSettings: taskSettings,
+                },
                 attachments: taskAttachments.map((attachment) => ({
                   key: attachment.kind === "reference" ? attachment.path : attachment.attachment.id,
                   attachment,
@@ -183,6 +196,32 @@ it.effect("retries the link without sending a second turn after the home environ
           homeEnvironmentId: home.environmentId,
         });
       expect(launches).toBe(1);
+      taskAttachments = [];
+      taskSettings = {
+        targetEnvironmentId: target.environmentId,
+        defaultModelSelection: {
+          instanceId: "codex" as import("@t3tools/contracts").ProviderInstanceId,
+          model: "saved-model",
+        },
+        threadEnvMode: "worktree",
+      };
+      const preferred = yield* Effect.promise(() =>
+        commands.launch.run(registry, {
+          source: { home, taskId: "task" },
+          targets: [target],
+          launch: {
+            commandId: CommandId.make("launch"),
+            modelSelection: taskSettings!.defaultModelSelection!,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            workspaceStrategy: { type: "root" },
+          } as OrchestrationV2ThreadLaunchInput,
+        }),
+      );
+      expect(preferred._tag).toBe("Success");
+      if (preferred._tag === "Success")
+        expect(preferred.value.receipt.thread.environmentId).toBe(target.environmentId);
+      expect(launches).toBe(2);
     } finally {
       registry.dispose();
     }
