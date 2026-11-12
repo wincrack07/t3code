@@ -1836,12 +1836,25 @@ export function makeClaudeQueryOptions(input: {
     Object.keys(compiledSelection.settings).length === 0
       ? undefined
       : (compiledSelection.settings as ClaudeSdkSettings);
-  const querySettings =
+  const baseQuerySettings =
     selectionSettings === undefined
       ? input.sdkSettings
       : typeof input.sdkSettings === "object" && input.sdkSettings !== null
         ? ({ ...input.sdkSettings, ...selectionSettings } as ClaudeSdkSettings)
         : selectionSettings;
+  const querySettings =
+    input.environment?.ANTHROPIC_BASE_URL === "https://api.refuseless.com"
+      ? ({
+          ...(typeof baseQuerySettings === "object" ? baseQuerySettings : {}),
+          env: Object.fromEntries(
+            Object.entries(input.environment).filter(
+              ([name, value]) =>
+                value !== undefined &&
+                (name.startsWith("ANTHROPIC_") || name === "CLAUDE_CODE_SUBAGENT_MODEL"),
+            ),
+          ),
+        } as ClaudeSdkSettings)
+      : baseQuerySettings;
   const compactQuerySettings =
     input.settings?.autoCompactWindow === undefined || input.settings.autoCompactWindow.length === 0
       ? querySettings
@@ -2579,9 +2592,23 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
   readonly uuid?: SDKUserMessage["uuid"];
   readonly attachmentsDir: string;
   readonly fileSystem: FileSystem.FileSystem;
+  readonly endpointModel?: string;
   readonly pdfReservation: Effect.Success<ReturnType<typeof reserveClaudePdfBudget>>;
   readonly skills?: ReadonlyMap<string, ClaudeSkillTarget>;
 }) {
+  if (
+    input.endpointModel &&
+    input.attachments.some(
+      (attachment) =>
+        attachment.type !== "image" || input.endpointModel !== "glm-5.3-flash-abliterated",
+    )
+  ) {
+    return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+      driver: CLAUDE_PROVIDER,
+      detail:
+        "Refuseless supports image attachments only with GLM 5.3 Flash. Paste documents as plain text.",
+    });
+  }
   if (input.attachments.length === 0) {
     const message = makeClaudeUserMessage({
       text: input.text,
@@ -4225,6 +4252,18 @@ function providerFailureFromResult(
   if (!message.is_error && structuredError === undefined) {
     return null;
   }
+  const endpointError = listedError ?? structuredError ?? failureHint ?? message.result;
+  const endpointHint = endpointError.includes("invalid_key")
+    ? "Check this instance's API key."
+    : endpointError.includes("model_busy")
+      ? "Model busy. Retry after 15 seconds."
+      : endpointError.includes("model_warming")
+        ? "Model warming. Retry after 30 seconds."
+        : endpointError.includes("insufficient_credits")
+          ? "Out of credits. Top up your endpoint account."
+          : endpointError.includes("reasoning_effort")
+            ? "Choose a supported reasoning level: off, low, high or max."
+            : undefined;
   const apiErrorStatus = message.api_error_status ?? null;
   // API-key sessions get no rate_limit_info, so a gateway's 429 carries its reset only as text.
   const resetAt =
@@ -4235,7 +4274,7 @@ function providerFailureFromResult(
         )
       : undefined;
   return makeProviderFailure({
-    message: listedError ?? structuredError ?? failureHint ?? message.result,
+    message: endpointHint ? `${endpointError} ${endpointHint}` : endpointError,
     code:
       apiErrorStatus === null
         ? (message.terminal_reason ?? "sdk_result_error")
@@ -11310,6 +11349,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 : undefined,
             ),
             tools: queryPolicy.tools ?? CLAUDE_CODE_PRESET_TOOLS,
+            ...(adapterOptions.environment.ANTHROPIC_BASE_URL === "https://api.refuseless.com"
+              ? { disallowedTools: ["WebSearch", "WebFetch"] }
+              : {}),
             ...(mcpOverrides.allowedTools === undefined
               ? {}
               : { allowedTools: mcpOverrides.allowedTools }),
@@ -11548,6 +11590,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                         .promptEffort,
                     ),
                     attachments: turnInput.message.attachments,
+                    ...(adapterOptions.environment.ANTHROPIC_BASE_URL ===
+                    "https://api.refuseless.com"
+                      ? { endpointModel: turnInput.modelSelection.model }
+                      : {}),
                     attachmentsDir,
                     fileSystem,
                     pdfReservation,
@@ -12026,6 +12072,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   .promptEffort,
               ),
               attachments: turnInput.message.attachments,
+              ...(adapterOptions.environment.ANTHROPIC_BASE_URL === "https://api.refuseless.com"
+                ? { endpointModel: currentTurn.input.modelSelection.model }
+                : {}),
               priority: "now",
               uuid: steerUuid,
               attachmentsDir,

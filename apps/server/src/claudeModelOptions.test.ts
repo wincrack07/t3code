@@ -18,6 +18,17 @@ const selection = (
 });
 
 describe("compileClaudeModelSelection", () => {
+  it.each(["off", "low", "medium", "high", "max", "xhigh", "minimal", "ultracode"])(
+    "keeps Refuseless effort %s within supported reasoning levels",
+    (value) => {
+      const result = compileClaudeModelSelection(
+        selection("glm-5.3-abliterated", [{ id: "effort", value }]),
+      );
+      expect([undefined, "low", "high", "max"]).toContain(result.effort);
+      expect(result.apiModelId).toBe("glm-5.3-abliterated");
+    },
+  );
+
   it("compiles context, effort, and settings together", () => {
     expect(
       compileClaudeModelSelection(

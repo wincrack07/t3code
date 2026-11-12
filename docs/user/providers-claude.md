@@ -154,3 +154,18 @@ config directory and put the router's endpoint and credential variables in that
 instance's **Environment variables**. The router must run where the environment
 can reach it. Follow the [Claude Code Router instructions](https://github.com/musistudio/claude-code-router)
 for its installation and routing configuration.
+
+## Refuseless custom endpoint
+
+Install Claude Code on the environment's machine, then open **Settings > Providers >
+Add provider > Custom endpoint > Refuseless**. Continue to configuration and paste
+an API key into `ANTHROPIC_AUTH_TOKEN`; it is stored as a secret. No Claude login
+is needed. The preset routes the main model and background model aliases to
+Refuseless and offers its six documented model IDs.
+
+Refuseless receives project prompts, code and tool output. Some models have refusal
+behaviour removed: review the agent's actions and prefer a restricted access mode.
+Choose Low, High or Max reasoning; the Messages API translates these to supported
+levels. Attach images only with GLM 5.3 Flash, and paste documents as plain text.
+Anthropic account quotas and hosted web tools are unavailable. Use another
+provider for title generation, prompt polish and prompt completion.

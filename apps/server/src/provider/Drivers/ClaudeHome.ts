@@ -116,7 +116,10 @@ export const makeClaudeContinuationGroupKey = Effect.fn("makeClaudeContinuationG
     environment?: NodeJS.ProcessEnv,
   ): Effect.fn.Return<string, never, Path.Path> {
     const resolvedHomePath = yield* resolveClaudeHomePath(config, environment);
-    return `claude:home:${resolvedHomePath}`;
+    const endpoint = environment?.ANTHROPIC_BASE_URL?.trim();
+    return endpoint
+      ? `claude:home:${resolvedHomePath}:endpoint:${endpoint}`
+      : `claude:home:${resolvedHomePath}`;
   },
 );
 

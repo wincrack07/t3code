@@ -630,7 +630,16 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     slug: typeof entry === "string" ? entry : entry.slug,
     name: typeof entry === "string" ? entry : (entry.name ?? entry.slug),
     isCustom: true,
-    capabilities: createModelCapabilities({ optionDescriptors: [{ id: "effort", label: "Reasoning", type: "select", options: ["low", "high", "max"].map((id) => ({ id, label: id })) }] }),
+    capabilities: createModelCapabilities({
+      optionDescriptors: [
+        {
+          id: "effort",
+          label: "Reasoning",
+          type: "select",
+          options: ["low", "high", "max"].map((id) => ({ id, label: id })),
+        },
+      ],
+    }),
   }));
   const allModels = refuseless
     ? endpointModels
