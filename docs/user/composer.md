@@ -18,11 +18,18 @@ Use **Save for later** beside Send, or `Cmd+Alt+S` (`Ctrl+Alt+S` on
 Windows and Linux), to park the draft text in the current project. You can also
 find it in the command palette. Attachments and rich context stay in the composer.
 
-Open the bookmark count beside the project name in the chat header to manage saved prompts.
-**Use** adds one to the current thread's draft; **Start thread** opens a draft in
-that project. Both mark the prompt done. Expand **Done** to reopen it or clear
-completed prompts. Prompts belong to the project's server, so other devices
-connected to that environment see the same list.
+Open **Tasks** in the sidebar to manage saved prompts across the current environment, or
+use the bookmark count beside the project name to filter to that project. Give a task a
+short title, expand its prompt in the editor, and change its status as work progresses.
+Edits save automatically. **Polish** previews a rewrite using your prompt polish settings;
+you can accept or revert it, then undo an accepted rewrite once.
+
+**Start thread** sends the task's prompt in a new thread using the project's default
+model. The task becomes **In progress** and links to the thread. Finishing the thread
+does not mark the task done. **Open in composer**, also available as **Open without
+sending** in the start menu, lets you choose a model or adjust the draft first. Mark
+tasks done yourself, reopen them, or clear completed tasks. Deleting a task offers Undo.
+Tasks belong to the project's server, so connected devices share the same list.
 
 ## Formatting
 
