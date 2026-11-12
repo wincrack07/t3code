@@ -302,8 +302,8 @@ jobs:
             cmp "$scratch/helper-identity" "$scratch/app-identity"
             cat "$scratch/helper-identity"
             lipo -archs "$helper"
-            strings "$helper" > "$scratch/helper-strings"
-            if grep -q SpeechAnalyzer "$scratch/helper-strings"; then
+            nm -u "$helper" | xcrun swift-demangle > "$scratch/helper-symbols"
+            if grep -q 'Speech[.]SpeechAnalyzer' "$scratch/helper-symbols"; then
               echo "$payload: Apple speech helper includes SpeechAnalyzer and the legacy fallback."
             else
               test "$xcode_major" -lt 26
