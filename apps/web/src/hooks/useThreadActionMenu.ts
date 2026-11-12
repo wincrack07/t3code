@@ -49,6 +49,8 @@ import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
+import { openMoveThreadToProject } from "../components/MoveThreadToProjectDialog";
+import { cancelThreadProjectMove, threadProjectMoveMenuState } from "../threadProjectMove";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -156,6 +158,7 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        projectMove: threadProjectMoveMenuState(threadRef),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -277,6 +280,12 @@ export function useThreadActionMenu(input: {
           return;
         case "share-guest":
           openGuestShareDialog(threadRef);
+          return;
+        case "move-to-project":
+          openMoveThreadToProject(threadRef);
+          return;
+        case "cancel-project-move":
+          void cancelThreadProjectMove(threadRef);
           return;
         case "turn-into-project": {
           const result = await turnThreadIntoProject(threadRef);

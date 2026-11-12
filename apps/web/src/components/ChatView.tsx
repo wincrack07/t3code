@@ -47,6 +47,12 @@ import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { freshSessionBannerItem } from "./chat/ComposerFreshSession";
+import { pendingProjectMoveBannerItem } from "./chat/ComposerProjectMove";
+import { cancelThreadProjectMove } from "../threadProjectMove";
+import {
+  NO_PREVIOUS_PROJECT_CHECKPOINTS,
+  previousProjectCheckpoints,
+} from "@t3tools/client-runtime/state/thread-project-move";
 import { armFreshSession, disarmFreshSession, useFreshSessionArmed } from "./chat/freshSessionArms";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
 import { useWorktreeSetup } from "./chat/useWorktreeSetup";
@@ -1611,6 +1617,10 @@ export default function ChatView(props: ChatViewProps) {
   );
   const turnDiffSummaries = useThreadCheckpointSummaries(routeThreadDetailRef);
   const availableRevertTurnCounts = deriveAvailableRevertTurnCounts(serverProjection);
+  const previousProjectTurnCheckpoints =
+    serverProjection === null
+      ? NO_PREVIOUS_PROJECT_CHECKPOINTS
+      : previousProjectCheckpoints(serverProjection);
   // A paged history window cannot identify the first loaded run as the thread start.
   const threadStartCheckpointAvailable =
     !serverThreadHistory.hasMoreHistory &&
@@ -2551,6 +2561,12 @@ export default function ChatView(props: ChatViewProps) {
           },
         })
       : null;
+  const pendingProjectMove = activeThreadShell?.pendingProjectMove ?? null;
+  const pendingMoveProject = useProject(
+    activeThreadShell && pendingProjectMove
+      ? scopeProjectRef(activeThreadShell.environmentId, pendingProjectMove.projectId)
+      : null,
+  );
   const composerBannerItems = (() => {
     const fallbackSelection = draftFallback?.selection;
     const defaultSelection =
@@ -2609,6 +2625,15 @@ export default function ChatView(props: ChatViewProps) {
       freshSessionAvailable && freshSessionArmed && activePendingApproval === null
         ? [freshSessionBannerItem(() => disarmFreshSession(routeThreadKey))]
         : [];
+    const pendingMoveItems =
+      activeThreadRef && pendingProjectMove
+        ? [
+            pendingProjectMoveBannerItem({
+              targetTitle: pendingMoveProject?.title ?? "another project",
+              onCancel: () => void cancelThreadProjectMove(activeThreadRef),
+            }),
+          ]
+        : [];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...feedbackBannerItems,
@@ -2618,6 +2643,7 @@ export default function ChatView(props: ChatViewProps) {
         ...usageLimitsItems,
         ...projectCloneItems,
         ...freshSessionItems,
+        ...pendingMoveItems,
         ...systemComposerBannerItems,
       ];
     }
@@ -2629,6 +2655,7 @@ export default function ChatView(props: ChatViewProps) {
       ...usageLimitsItems,
       ...projectCloneItems,
       ...freshSessionItems,
+      ...pendingMoveItems,
       ...systemComposerBannerItems,
       branchMismatchBannerItem({
         mismatchKey: activeBranchMismatchKey,
@@ -3450,6 +3477,7 @@ export default function ChatView(props: ChatViewProps) {
                   supportsConversationRollback={supportsConversationRollback}
                   threadStartCheckpointAvailable={threadStartCheckpointAvailable}
                   availableRevertTurnCounts={availableRevertTurnCounts}
+                  previousProjectCheckpoints={previousProjectTurnCheckpoints}
                   onRevertToTurnCount={onRevertTimelineTurnStable}
                   onUseArtifactTemplate={insertArtifactTemplateStable}
                   onSendAppMessage={sendAppMessageStable}

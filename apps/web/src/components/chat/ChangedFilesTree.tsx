@@ -39,9 +39,12 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   resolvedTheme: "light" | "dark";
   onToggleAllDirectories: () => void;
   onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
+  /** Set when the server cannot open this turn's diff, such as after a project move. */
+  unavailableReason?: string | null;
   onFileContextMenu?: ChangedFileContextMenuHandler | undefined;
 }) {
   const {
+    unavailableReason = null,
     runId,
     files,
     totals,
@@ -116,6 +119,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                   size="xs"
                   variant="ghost-muted"
                   aria-label="Open diff"
+                  disabled={unavailableReason !== null}
                   onClick={() => onOpenTurnDiff(runId, files[0]?.path)}
                 />
               }
@@ -123,7 +127,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
               <FileDiffIcon className="size-3" />
               <span className="hidden @[24rem]/changed-files:inline">Open diff</span>
             </TooltipTrigger>
-            <TooltipPopup side="top">Open the full diff</TooltipPopup>
+            <TooltipPopup side="top">{unavailableReason ?? "Open the full diff"}</TooltipPopup>
           </Tooltip>
         </div>
       </div>
@@ -134,6 +138,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
         allDirectoriesExpanded={allDirectoriesExpanded}
         resolvedTheme={resolvedTheme}
         onOpenTurnDiff={onOpenTurnDiff}
+        diffDisabled={unavailableReason !== null}
         onFileContextMenu={onFileContextMenu}
       />
       {hiddenFileCount > 0 && (
@@ -142,6 +147,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
             type="button"
             size="xs"
             variant="ghost-muted"
+            disabled={unavailableReason !== null}
             onClick={() => onOpenTurnDiff(runId, files[0]?.path)}
           >
             {hiddenFileCount.toLocaleString()} more file{hiddenFileCount === 1 ? "" : "s"} in the
@@ -159,10 +165,18 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
   allDirectoriesExpanded: boolean;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
+  diffDisabled: boolean;
   onFileContextMenu?: ChangedFileContextMenuHandler | undefined;
 }) {
-  const { files, allDirectoriesExpanded, onOpenTurnDiff, resolvedTheme, runId, onFileContextMenu } =
-    props;
+  const {
+    files,
+    allDirectoriesExpanded,
+    onOpenTurnDiff,
+    diffDisabled,
+    resolvedTheme,
+    runId,
+    onFileContextMenu,
+  } = props;
   // Place state before tree derivation to preserve its compiler cache.
   const [directoryExpansionState, setDirectoryExpansionState] = useState<{
     key: string | null;
@@ -238,8 +252,9 @@ const ChangedFilesTree = memo(function ChangedFilesTree(props: {
       <button
         key={`file:${node.path}`}
         type="button"
-        className="group flex h-7 w-full cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        className="group flex h-7 w-full cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 text-left transition-colors hover:bg-accent/60 disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
         style={{ paddingLeft: `${leftPadding}px` }}
+        disabled={diffDisabled}
         onClick={() => onOpenTurnDiff(runId, node.path)}
         onContextMenu={
           onFileContextMenu

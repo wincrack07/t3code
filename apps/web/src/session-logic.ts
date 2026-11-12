@@ -553,6 +553,16 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
     const createdAt = projectedItemCreatedAt(row);
     const attempt = resolveAttempt(item);
     const attemptMetadata = attempt === undefined ? {} : { attempt };
+    if (item.type === "notification" && item.projectMove !== undefined) {
+      entries.push({
+        id: item.id,
+        kind: "event",
+        createdAt,
+        projectedItem: row,
+        ...attemptMetadata,
+      });
+      continue;
+    }
     if (item.type === "notification") {
       entries.push({
         id: item.id,

@@ -25,8 +25,10 @@ import {
   parseSidebarTreeDragId,
   parseSidebarTreeRow,
   sidebarTreeIndent,
+  sidebarProjectKeyAtPoint,
   sidebarTreeRow,
 } from "./sidebar/sidebarTreeDrag";
+import { resolveThreadMoveTarget, type ThreadMoveTarget } from "../threadProjectMove.logic";
 import { SIDEBAR_COLORS } from "../sidebarColors";
 import { useProjectSidebarColor } from "../hooks/useProjectSidebarColor";
 import { ProjectFolderEditor } from "./sidebar/ProjectFolderEditor";
@@ -46,6 +48,12 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { openMoveThreadToProject } from "./MoveThreadToProjectDialog";
+import {
+  cancelThreadProjectMove,
+  moveThreadToProject,
+  threadProjectMoveMenuState,
+} from "../threadProjectMove";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -1277,6 +1285,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const [treeDragActive, setTreeDragActive] = useState(false);
   const treeDragRef = useRef<SidebarTreeDragItem | null>(null);
   const treeDropRef = useRef<{ target: SidebarTreeDropTarget; row: HTMLElement } | null>(null);
+  const threadProjectDropRef = useRef<{
+    readonly row: HTMLElement;
+    readonly target: ThreadMoveTarget<SidebarProjectSnapshot>;
+  } | null>(null);
+  const environmentLabelByIdRef = useRef(environmentLabelById);
   const treeExpandTimerRef = useRef<{ folderId: string; timer: number } | null>(null);
   const namedProjectFoldersRef = useRef(namedProjectFolders);
   const [actionSweep, setActionSweep] = useState<{
@@ -2130,7 +2143,59 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       projectGroupsRef.current,
     );
   };
+  const setThreadProjectDrop = (next: typeof threadProjectDropRef.current) => {
+    threadProjectDropRef.current?.row.removeAttribute("data-tree-drop");
+    threadProjectDropRef.current = next;
+    // A project on another machine shows no drop target; the drop explains why.
+    if (next && next.target.disabledReason === null)
+      next.row.setAttribute("data-tree-drop", "into");
+  };
+  // Grouped by project, a thread dropped on a project row or its threads moves there.
+  const moveThreadProjectDrag = (point: { x: number; y: number }) => {
+    const threadRef = parseScopedThreadKey(contextDragKeyRef.current ?? "");
+    const thread = threadRef ? threadByKeyRef.current.get(scopedThreadKey(threadRef)) : undefined;
+    const projectKey = sidebarProjectKeyAtPoint(threadListRef.current, point);
+    const group =
+      projectKey === null
+        ? undefined
+        : projectGroupsRef.current.find((candidate) => candidate.projectKey === projectKey);
+    const row =
+      group === undefined
+        ? null
+        : threadListRef.current?.querySelector<HTMLElement>(
+            `[data-tree-row="${CSS.escape(sidebarTreeRow({ kind: "project", key: group.projectKey }))}"]`,
+          );
+    if (!thread || !group || !row || contextDragThreads().length !== 1)
+      return setThreadProjectDrop(null);
+    const target = resolveThreadMoveTarget({
+      group,
+      thread,
+      machineLabel: environmentLabelByIdRef.current.get(thread.environmentId) ?? "this machine",
+    });
+    if (target.current) return setThreadProjectDrop(null);
+    if (threadProjectDropRef.current?.row === row) return;
+    setThreadProjectDrop({ row, target });
+  };
+  const dropThreadProjectDrag = (): boolean => {
+    const drop = threadProjectDropRef.current;
+    const threadRef = parseScopedThreadKey(contextDragKeyRef.current ?? "");
+    setThreadProjectDrop(null);
+    if (!drop || !threadRef) return false;
+    if (drop.target.project === null) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Could not move thread",
+          description: `${drop.target.group.displayName} is ${drop.target.disabledReason?.toLowerCase() ?? "not available"}.`,
+        }),
+      );
+      return true;
+    }
+    void moveThreadToProject(threadRef, drop.target.project.id);
+    return true;
+  };
   const finishThreadDrag = (started: boolean) => {
+    setThreadProjectDrop(null);
     const treeItem = treeDragRef.current;
     if (treeItem) {
       treeDragRef.current = null;
@@ -2188,8 +2253,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     );
     if (!contextDrag) {
       endThreadContextDrag();
+      moveThreadProjectDrag(point);
       return false;
     }
+    setThreadProjectDrop(null);
     restoreDragScroll();
     const threads = contextDragThreads();
     const threadRef = parseScopedThreadKey(contextDragKeyRef.current ?? "");
@@ -2202,6 +2269,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       dropTreeDrag(treeDragRef.current);
       return true;
     }
+    if (dropThreadProjectDrag()) return true;
     if (!pointerOutsideThreadList(point)) return false;
     restoreDragScroll();
     dropThreadContext(point, contextDragThreads());
@@ -2223,6 +2291,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     namedProjectFoldersRef.current = namedProjectFolders;
     orderedThreadKeysRef.current = orderedThreadKeys;
     threadByKeyRef.current = threadByKey;
+    environmentLabelByIdRef.current = environmentLabelById;
     settledThreadKeysRef.current = settledThreadKeys;
     snoozedThreadKeysRef.current = snoozedThreadKeys;
     sectionByThreadKeyRef.current = sectionByThreadKey;
@@ -3091,6 +3160,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              projectMove: threadProjectMoveMenuState(threadRef),
               supports: {
                 settlement: configLoaded,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -3179,6 +3249,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             return;
           case "unpin":
             attemptUnpin(threadRef);
+            return;
+          case "move-to-project":
+            openMoveThreadToProject(threadRef);
+            return;
+          case "cancel-project-move":
+            void cancelThreadProjectMove(threadRef);
             return;
           case "turn-into-project": {
             const result = await turnThreadIntoProject(threadRef);

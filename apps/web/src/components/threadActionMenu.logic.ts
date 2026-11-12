@@ -8,6 +8,8 @@ export type ThreadActionMenuId =
   | "new-thread-on-branch"
   | "filter-by-project"
   | "turn-into-project"
+  | "move-to-project"
+  | "cancel-project-move"
   | "project-settings"
   | "pin"
   | "unpin"
@@ -99,6 +101,8 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  /** Absent for threads that cannot move, such as subagents. */
+  readonly projectMove?: { readonly pendingTargetTitle: string | null } | undefined;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -203,6 +207,20 @@ export function buildThreadActionMenuItems(
               : `Filter by ${state.projectFilter.label}`,
             icon: "folder-tree",
           },
+        ]
+      : []),
+    ...(state.projectMove
+      ? [
+          { id: "move-to-project" as const, label: "Move to project…", icon: "folder-input" },
+          ...(state.projectMove.pendingTargetTitle === null
+            ? []
+            : [
+                {
+                  id: "cancel-project-move" as const,
+                  label: `Cancel move to ${state.projectMove.pendingTargetTitle}`,
+                  icon: "x",
+                },
+              ]),
         ]
       : []),
     ...(state.canTurnIntoProject

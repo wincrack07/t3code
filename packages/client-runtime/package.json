@@ -403,6 +403,10 @@
       "types": "./src/state/threadUndo.ts",
       "default": "./src/state/threadUndo.ts"
     },
+    "./state/thread-project-move": {
+      "types": "./src/state/threadProjectMove.ts",
+      "default": "./src/state/threadProjectMove.ts"
+    },
     "./state/thread-settled": {
       "types": "./src/state/threadSettled.ts",
       "default": "./src/state/threadSettled.ts"

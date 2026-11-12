@@ -77,6 +77,7 @@ import {
   MessageSquareIcon,
   PaletteIcon,
   RotateCcwIcon,
+  FolderInputIcon,
   SettingsIcon,
   MonitorIcon,
   PinIcon,
@@ -127,6 +128,8 @@ import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
 import { threadEnvironment } from "../state/threads";
+import { canMoveThreadToProject } from "@t3tools/client-runtime/state/thread-project-move";
+import { openMoveThreadToProject } from "./MoveThreadToProjectDialog";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { sourceControlEnvironment } from "../state/sourceControl";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -735,6 +738,9 @@ function OpenCommandPaletteDialog(props: {
       .map((environment) => environment.environmentId),
     supportsTriage,
   });
+  const canMoveActiveThread = useAtomValue(
+    threadEnvironment.moveToProject.permissionAtom(activeThread?.environmentId ?? null),
+  );
   const canRequestPrReview = useAtomValue(
     serverEnvironment.requestPrReview.permissionAtom(activeThread?.environmentId ?? null),
   );
@@ -1651,6 +1657,18 @@ function OpenCommandPaletteDialog(props: {
         });
         if (refreshed._tag === "Failure") throw squashAtomCommandFailure(refreshed);
       },
+    });
+  }
+
+  if (activeThread !== null && canMoveActiveThread && canMoveThreadToProject(activeThread)) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:move-thread-to-project",
+      searchTerms: ["move", "project", "change project", "transfer", "relocate"],
+      title: "Move thread to project…",
+      icon: <FolderInputIcon className={ITEM_ICON_CLASS} />,
+      run: async () => openMoveThreadToProject(threadRef),
     });
   }
 

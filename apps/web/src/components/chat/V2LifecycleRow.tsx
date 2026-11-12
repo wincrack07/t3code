@@ -44,6 +44,7 @@ import {
   ArrowRightLeftIcon,
   ArrowRightIcon,
   EraserIcon,
+  FolderInputIcon,
   GitForkIcon,
   MessageSquareIcon,
 } from "lucide-react";
@@ -596,6 +597,21 @@ function EnvironmentHandoffRow({
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
   return <HandoffRow {...props} environmentId={environmentId} providers={providers} />;
+}
+
+/** Marks where the thread moved to another project; the summary names both projects. */
+export function ProjectMoveRow(props: {
+  readonly summary: string;
+  readonly movedAt: string;
+  readonly timestampFormat: TimestampFormat;
+}) {
+  return (
+    <TimelineSystemDivider
+      label={props.summary}
+      icon={FolderInputIcon}
+      detail={formatShortTimestamp(props.movedAt, props.timestampFormat)}
+    />
+  );
 }
 
 /** Marks where `/clear` or an automation started a new provider session in this thread. */

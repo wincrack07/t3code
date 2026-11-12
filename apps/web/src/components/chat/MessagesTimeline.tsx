@@ -1,4 +1,8 @@
 import { threadEnvironment } from "../../state/threads";
+import {
+  NO_PREVIOUS_PROJECT_CHECKPOINTS,
+  type PreviousProjectCheckpoints,
+} from "@t3tools/client-runtime/state/thread-project-move";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
 import { AudioPreviewUnmountContext } from "../files/AudioPreview";
@@ -283,6 +287,7 @@ interface MessagesTimelineProps {
   threadStartCheckpointAvailable?: boolean;
   availableRevertTurnCounts?: ReadonlySet<number> | undefined;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
+  previousProjectCheckpoints?: PreviousProjectCheckpoints | undefined;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   onSendAppMessage?: (text: string) => Promise<void>;
   onRunShellCommand?: (command: string) => void;
@@ -382,6 +387,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   threadStartCheckpointAvailable = false,
   availableRevertTurnCounts,
   onRevertToTurnCount,
+  previousProjectCheckpoints = NO_PREVIOUS_PROJECT_CHECKPOINTS,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
   onSendAppMessage,
   onRunShellCommand,
@@ -1090,6 +1096,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     runs,
     activeThreadEnvironmentId,
     onRevertToTurnCount,
+    previousProjectCheckpoints,
     onRunShellCommand,
     findActive,
     onImageExpand,

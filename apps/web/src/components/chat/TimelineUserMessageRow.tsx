@@ -12,7 +12,7 @@ import {
 } from "@t3tools/contracts";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
-import { useQuietThreadShell } from "../../state/entities";
+import { useProject, useQuietThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
@@ -1023,6 +1023,14 @@ function RevertUserMessageButton({
 }) {
   const ctx = use(TimelineRowCtx);
   const activity = use(TimelineRowActivityCtx);
+  const owner = ctx.previousProjectCheckpoints.byTurnCount.get(turnCount);
+  const ownerProject = useProject(
+    owner === undefined ? null : { environmentId: ctx.activeThreadEnvironmentId, projectId: owner },
+  );
+  const unavailable =
+    owner === undefined
+      ? null
+      : `Belongs to ${ownerProject?.title ?? "the previous project"}. Move the thread back to use it.`;
 
   return (
     <Tooltip>
@@ -1032,7 +1040,7 @@ function RevertUserMessageButton({
             type="button"
             size="xs"
             variant="ghost"
-            disabled={activity.isRevertingCheckpoint || activity.isWorking}
+            disabled={unavailable !== null || activity.isRevertingCheckpoint || activity.isWorking}
             onClick={() => ctx.onRevertToTurnCount(turnCount, messageId)}
             aria-label="Edit from here"
           />
@@ -1040,7 +1048,7 @@ function RevertUserMessageButton({
       >
         <PencilIcon className="size-3" />
       </TooltipTrigger>
-      <TooltipPopup side="top">Edit from here</TooltipPopup>
+      <TooltipPopup side="top">{unavailable ?? "Edit from here"}</TooltipPopup>
     </Tooltip>
   );
 }
