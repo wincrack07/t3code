@@ -14,6 +14,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Switch } from "../ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import {
   AlertDialog,
   AlertDialogPopup,
@@ -25,6 +26,11 @@ import {
 } from "../ui/alert-dialog";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSettingsScope } from "./SettingsScopeContext";
+
+const ROW_DETAIL_CLASSNAME = "space-y-2 pt-2 pb-2 text-xs text-muted-foreground";
+const SUMMARY_CLASSNAME = "cursor-pointer py-1 text-xs text-muted-foreground hover:text-foreground";
+const JSON_CLASSNAME =
+  "max-h-80 overflow-auto rounded-lg border border-border/60 p-3 font-mono text-xs text-foreground";
 
 export function MachineCleanupSettings() {
   const { connectedEnvironments } = useSettingsScope();
@@ -107,8 +113,9 @@ function EnvironmentCleanup({
             : "Scan to measure this environment and review cleanup candidates."
         }
         control={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
+              size="sm"
               variant="outline"
               disabled={!allowed || busy}
               onClick={() => {
@@ -119,44 +126,73 @@ function EnvironmentCleanup({
               Scan
             </Button>
             <Button
+              size="sm"
               disabled={!allowed || busy}
               onClick={() => void phaseA({ environmentId, input: {} })}
             >
               Clean regenerable files now
             </Button>
             {busy && (
-              <Button variant="outline" onClick={() => void cancel({ environmentId, input: {} })}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void cancel({ environmentId, input: {} })}
+              >
                 Cancel
               </Button>
             )}
           </div>
         }
       >
-        {state?.freeNow !== undefined && <p>{formatBytes(state.freeNow)} available now</p>}
-        {busy && <p role="status">{state?.progress || "Scanning…"}</p>}
-        {!busy && state?.progress && <p role="status">{state.progress}</p>}
-        {history.length > 1 && (
-          <svg role="img" aria-label="Free disk space over cleanup history" viewBox="0 0 400 100">
-            <polyline fill="none" stroke="currentColor" strokeWidth="2" points={points} />
-          </svg>
-        )}
+        <div className={ROW_DETAIL_CLASSNAME}>
+          {state?.freeNow !== undefined && (
+            <p className="text-foreground tabular-nums">
+              {formatBytes(state.freeNow)} available now
+            </p>
+          )}
+          {busy && <p role="status">{state?.progress || "Scanning…"}</p>}
+          {!busy && state?.progress && <p role="status">{state.progress}</p>}
+          {history.length > 1 && (
+            <svg
+              role="img"
+              aria-label="Free disk space over cleanup history"
+              viewBox="0 0 400 100"
+              preserveAspectRatio="none"
+              className="h-12 w-full"
+            >
+              <polyline
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+                points={points}
+              />
+            </svg>
+          )}
+        </div>
       </SettingsRow>
       {report && (
         <SettingsRow
           title="Cleanup report"
           description="Measured space freed, plus estimates for items you can review."
         >
-          <CleanupReportSummary report={report} />
-          <details>
-            <summary>Regenerable files and skips</summary>
-            {report.items
-              .filter((item) => item.phase === "A")
-              .map((item) => (
-                <p key={item.id}>
-                  {item.path} · {formatBytes(item.bytes)} · {item.reason || item.effect}
-                </p>
-              ))}
-          </details>
+          <div className={ROW_DETAIL_CLASSNAME}>
+            <div className="-mx-2 tabular-nums">
+              <CleanupReportSummary report={report} />
+            </div>
+            <details>
+              <summary className={SUMMARY_CLASSNAME}>Regenerable files and skips</summary>
+              <ul className="space-y-1 pt-1">
+                {report.items
+                  .filter((item) => item.phase === "A")
+                  .map((item) => (
+                    <li key={item.id} className="break-all">
+                      {item.path} · {formatBytes(item.bytes)} · {item.reason || item.effect}
+                    </li>
+                  ))}
+              </ul>
+            </details>
+          </div>
         </SettingsRow>
       )}
       <SettingsRow
@@ -164,6 +200,7 @@ function EnvironmentCleanup({
         description="The latest 100 reports are retained on this environment. Full history is loaded only when requested."
         control={
           <Button
+            size="sm"
             variant="outline"
             disabled={!allowed || busy}
             onClick={async () => {
@@ -176,8 +213,8 @@ function EnvironmentCleanup({
         }
       >
         {historyJson && (
-          <div className="max-h-80 overflow-auto">
-            <pre>{historyJson}</pre>
+          <div className={ROW_DETAIL_CLASSNAME}>
+            <pre className={JSON_CLASSNAME}>{historyJson}</pre>
           </div>
         )}
       </SettingsRow>
@@ -186,6 +223,7 @@ function EnvironmentCleanup({
         description="One absolute path or ~/path per line. Scanned to depth seven."
         control={
           <Textarea
+            className="w-full sm:w-64"
             aria-label="Cleanup project roots"
             disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.projectRoots.join("\n")}
@@ -206,6 +244,7 @@ function EnvironmentCleanup({
         description="These paths and everything inside them are always retained."
         control={
           <Textarea
+            className="w-full sm:w-64"
             aria-label="Cleanup protected paths"
             disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.protectedPaths.join("\n")}
@@ -226,6 +265,8 @@ function EnvironmentCleanup({
         description="Both source files and the last commit must be older than this."
         control={
           <Input
+            size="sm"
+            className="w-full sm:w-32"
             aria-label="Cleanup inactivity days"
             type="number"
             min={1}
@@ -258,6 +299,8 @@ function EnvironmentCleanup({
         description="Local time on this environment. A missed run starts when the server next becomes available."
         control={
           <Input
+            size="sm"
+            className="w-full sm:w-32"
             type="time"
             aria-label="Daily cleanup time"
             value={settings.scheduleTime}
@@ -274,6 +317,8 @@ function EnvironmentCleanup({
         description="Notify below this many GiB, even when no approval candidates exist. Notification delivery depends on the environment's native notification service."
         control={
           <Input
+            size="sm"
+            className="w-full sm:w-32"
             type="number"
             aria-label="Low-space threshold GiB"
             min={0}
@@ -328,6 +373,7 @@ function EnvironmentCleanup({
         description="Select exact paths to remove. Probably active worktrees are best kept. Every selection is checked again before deletion."
         control={
           <Button
+            size="sm"
             variant="outline"
             disabled={!allowed || busy || !candidates.some((item) => selected.includes(item.id))}
             onClick={() => {
@@ -372,6 +418,7 @@ function EnvironmentCleanup({
             description={`${item.path} · ${formatBytes(item.bytes)}. ${item.effect}`}
             control={
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!allowed || busy}
                 onClick={() => {
@@ -388,28 +435,30 @@ function EnvironmentCleanup({
           title="Retained files and worktrees"
           description="Dirty worktrees and protected or active paths are never removed."
         >
-          {protectedItems.map((item) => (
-            <p key={item.id}>
-              {item.path}
-              {item.branch ? ` · ${item.branch}` : ""}
-              {item.changes ? ` · ${item.changes} changes` : ""} · {item.reason}
-            </p>
-          ))}
+          <ul className={ROW_DETAIL_CLASSNAME}>
+            {protectedItems.map((item) => (
+              <li key={item.id} className="break-all">
+                {item.path}
+                {item.branch ? ` · ${item.branch}` : ""}
+                {item.changes ? ` · ${item.changes} changes` : ""} · {item.reason}
+              </li>
+            ))}
+          </ul>
         </SettingsRow>
       )}
       {[...new Set(report?.notes ?? [])].map((note) => (
-        <p key={note}>{note}</p>
+        <p key={note} className="break-all px-3 py-3 text-xs text-muted-foreground sm:px-4">
+          {note}
+        </p>
       ))}
       {report && (
         <SettingsRow
           title="Report JSON"
           description="Includes exact paths, measurements, outcomes and operational notes."
         >
-          <details>
-            <summary>View JSON</summary>
-            <div className="max-h-80 overflow-auto">
-              <pre>{JSON.stringify(report, null, 2)}</pre>
-            </div>
+          <details className={ROW_DETAIL_CLASSNAME}>
+            <summary className={SUMMARY_CLASSNAME}>View JSON</summary>
+            <pre className={JSON_CLASSNAME}>{JSON.stringify(report, null, 2)}</pre>
           </details>
         </SettingsRow>
       )}
@@ -427,11 +476,13 @@ function EnvironmentCleanup({
               retained.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {confirming?.items.map((item) => (
-            <p key={item.id}>
-              {item.path} · {formatBytes(item.bytes)} · {item.effect}
-            </p>
-          ))}
+          <ul className="space-y-1 px-6 pb-4 text-sm text-muted-foreground">
+            {confirming?.items.map((item) => (
+              <li key={item.id} className="break-all">
+                {item.path} · {formatBytes(item.bytes)} · {item.effect}
+              </li>
+            ))}
+          </ul>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
             <Button
@@ -472,16 +523,16 @@ function cleanupCategory(item: MachineCleanupItem) {
 function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
   const categories = [...new Set(report.items.map(cleanupCategory))];
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Category</th>
-          <th>GB freed in A</th>
-          <th>GB pending in B</th>
-          <th>GB in C</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Category</TableHead>
+          <TableHead className="text-right">GB freed in A</TableHead>
+          <TableHead className="text-right">GB pending in B</TableHead>
+          <TableHead className="text-right">GB in C</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {categories.map((category) => {
           const items = report.items.filter((item) => cleanupCategory(item) === category);
           const ids = new Set(items.map((item) => item.id));
@@ -493,15 +544,15 @@ function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
               .filter((item) => item.phase === phase && item.outcome === "pending")
               .reduce((sum, item) => sum + item.bytes, 0);
           return (
-            <tr key={category}>
-              <td>{category}</td>
-              <td>{(freed / 1e9).toFixed(2)}</td>
-              <td>{(bytes("B") / 1e9).toFixed(2)}</td>
-              <td>{(bytes("C") / 1e9).toFixed(2)}</td>
-            </tr>
+            <TableRow key={category}>
+              <TableCell>{category}</TableCell>
+              <TableCell className="text-right">{(freed / 1e9).toFixed(2)}</TableCell>
+              <TableCell className="text-right">{(bytes("B") / 1e9).toFixed(2)}</TableCell>
+              <TableCell className="text-right">{(bytes("C") / 1e9).toFixed(2)}</TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

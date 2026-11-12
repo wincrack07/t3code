@@ -315,6 +315,7 @@ export function SettingsRow({
   managedPaths = EMPTY_MANAGED_PATHS,
   mixed: mixedOverride,
   managed,
+  controlAlign = "center",
   children,
   className,
   ...rowProps
@@ -332,6 +333,8 @@ export function SettingsRow({
   mixed?: boolean;
   /** Why an administrator's policy turns this row's control off, from the contract's denial helpers. */
   managed?: string | undefined;
+  /** `start` keeps the title beside the top of a tall control, such as a checklist. */
+  controlAlign?: "center" | "start";
   children?: ReactNode;
 }) {
   const targetRef = useSettingsSearchTarget<HTMLDivElement>(rowProps.id);
@@ -501,7 +504,14 @@ export function SettingsRow({
         className,
       )}
     >
-      <div className="flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_auto] @min-[32rem]/settings-row:items-center @min-[32rem]/settings-row:gap-8">
+      <div
+        className={cn(
+          "flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_auto] @min-[32rem]/settings-row:gap-8",
+          controlAlign === "start"
+            ? "@min-[32rem]/settings-row:items-start"
+            : "@min-[32rem]/settings-row:items-center",
+        )}
+      >
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
             <h3 className="text-sm font-medium text-foreground">{title}</h3>

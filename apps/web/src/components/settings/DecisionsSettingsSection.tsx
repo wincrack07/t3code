@@ -88,13 +88,16 @@ function Checklist({
 }) {
   const missing = value.filter((id) => !choices.some((choice) => choice.value === id));
   return (
-    <fieldset aria-label={label} className="max-h-56 min-w-0 space-y-2 overflow-y-auto sm:w-64">
+    <fieldset
+      aria-label={label}
+      className="max-h-56 min-w-0 overflow-y-auto sm:w-64 @min-[32rem]/settings-row:-my-1.5"
+    >
       {choices.length === 0 ? (
         <p className="text-xs text-muted-foreground">No options available.</p>
       ) : null}
       {[...choices, ...missing.map((id) => ({ value: id, label: `Unavailable (${id})` }))].map(
         (choice) => (
-          <label key={choice.value} className="flex items-center gap-2 text-sm">
+          <label key={choice.value} className="flex min-h-8 items-center gap-2 py-1 text-sm">
             <Checkbox
               checked={value.includes(choice.value)}
               onCheckedChange={(checked) =>
@@ -362,6 +365,7 @@ export function DecisionsSettingsSection() {
       </SettingsSection>
       <SettingsSection title="Routing options">
         <SettingsRow
+          controlAlign="start"
           title="Allowed environments"
           description="Leave all unchecked to allow every environment."
           control={
@@ -374,6 +378,7 @@ export function DecisionsSettingsSection() {
           }
         />
         <SettingsRow
+          controlAlign="start"
           title="Allowed providers"
           description="Leave all unchecked to allow every provider instance."
           control={
@@ -520,6 +525,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Project"
                       description="All projects when none are selected."
                       control={
@@ -540,6 +546,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Kind of work"
                       control={
                         <Checklist
@@ -561,6 +568,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Author provider"
                       control={
                         <Checklist
@@ -580,6 +588,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Author instance"
                       control={
                         <Checklist
@@ -620,6 +629,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Provider instance"
                       control={
                         <Checklist
@@ -641,6 +651,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Provider type"
                       control={
                         <Checklist
@@ -660,6 +671,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Model"
                       control={
                         <Checklist
@@ -679,6 +691,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Effort"
                       description="All efforts when none are selected."
                       control={
@@ -699,6 +712,7 @@ export function DecisionsSettingsSection() {
                       }
                     />
                     <SettingsRow
+                      controlAlign="start"
                       title="Environment"
                       control={
                         <Checklist
