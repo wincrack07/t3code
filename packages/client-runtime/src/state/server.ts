@@ -1207,6 +1207,40 @@ export function createServerEnvironmentAtoms<R, E>(
 
   return {
     configValueAtom,
+    machineCleanupHistory: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-history",
+      tag: WS_METHODS.machineCleanupHistory,
+    }),
+    scanMachineCleanup: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-scanMachineCleanup",
+      tag: WS_METHODS.machineCleanupScan,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    runMachineCleanupPhaseA: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-runMachineCleanupPhaseA",
+      tag: WS_METHODS.machineCleanupRunPhaseA,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    deleteMachineCleanupApproved: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-deleteMachineCleanupApproved",
+      tag: WS_METHODS.machineCleanupDeleteApproved,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    runMachineCleanupPhaseC: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-runMachineCleanupPhaseC",
+      tag: WS_METHODS.machineCleanupRunPhaseC,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    cancelMachineCleanup: createEnvironmentRpcCommand(runtime, {
+      label: "machine-cleanup-cancelMachineCleanup",
+      tag: WS_METHODS.machineCleanupCancel,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    machineCleanupState: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "machine-cleanup-state",
+      tag: WS_METHODS.machineCleanupSubscribe,
+      idleTtlMs: 0,
+    }),
     runStorageCleanup: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:run-storage-cleanup",
       tag: WS_METHODS.serverRunStorageCleanup,

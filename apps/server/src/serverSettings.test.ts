@@ -644,7 +644,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           usageModelAliases,
           usageLimitSources,
         });
+        const machineCleanup = {
+          ...DEFAULT_SERVER_SETTINGS.machineCleanup,
+          projectRoots: ["/fixture/projects"],
+        };
         const updated = yield* serverSettings.updateSettings({
+          machineCleanup,
           storageCleanup: { worktreeSettledAfterDays: 0, worktreeKeepWhen: "any-local-files" },
         });
         assert.deepStrictEqual(updated.usageLimitSources, saved.usageLimitSources);
@@ -652,6 +657,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.deepStrictEqual(persisted.usagePriceOverrides, { "example-model": prices });
         assert.deepStrictEqual(persisted.usageModelAliases, usageModelAliases);
         assert.deepStrictEqual(persisted.usageLimitSources, usageLimitSources);
+        assert.deepStrictEqual(persisted.machineCleanup, machineCleanup);
         assert.equal(persisted.storageCleanup.worktreeSettledAfterDays, 0);
         assert.equal(persisted.storageCleanup.worktreeKeepWhen, "any-local-files");
 

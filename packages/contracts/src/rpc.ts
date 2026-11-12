@@ -1,3 +1,9 @@
+import {
+  MachineCleanupReport,
+  MachineCleanupState,
+  MachineCleanupSelection,
+  MachineCleanupError,
+} from "./machineCleanup.ts";
 import { DecisionInput, DecisionResult } from "./decisions.ts";
 import { KeepAwakeAuthorize, KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";
@@ -539,6 +545,13 @@ export const WS_METHODS = {
   serverCommitDesktopUpdate: "server.commitDesktopUpdate",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
+  machineCleanupHistory: "machineCleanup.history",
+  machineCleanupScan: "machineCleanup.scan",
+  machineCleanupRunPhaseA: "machineCleanup.runPhaseA",
+  machineCleanupDeleteApproved: "machineCleanup.deleteApproved",
+  machineCleanupRunPhaseC: "machineCleanup.runPhaseC",
+  machineCleanupCancel: "machineCleanup.cancel",
+  machineCleanupSubscribe: "machineCleanup.subscribe",
   serverRunStorageCleanup: "server.runStorageCleanup",
   serverGetStorageCleanupReport: "server.getStorageCleanupReport",
   serverGetDatabaseStorage: "server.getDatabaseStorage",
@@ -837,6 +850,43 @@ const WsServerCommitDesktopUpdateRpc = Rpc.make(WS_METHODS.serverCommitDesktopUp
   payload: DesktopUpdateCommitInput,
   success: ServerSelfUpdateResult,
   error: Schema.Union([ServerSelfUpdateError, EnvironmentAuthorizationError]),
+});
+
+const WsMachineCleanupHistoryRpc = Rpc.make(WS_METHODS.machineCleanupHistory, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(MachineCleanupReport),
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
+const WsMachineCleanupScanRpc = Rpc.make(WS_METHODS.machineCleanupScan, {
+  payload: Schema.Struct({}),
+  success: Schema.Void,
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
+const WsMachineCleanupRunPhaseARpc = Rpc.make(WS_METHODS.machineCleanupRunPhaseA, {
+  payload: Schema.Struct({}),
+  success: Schema.Void,
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
+const WsMachineCleanupDeleteApprovedRpc = Rpc.make(WS_METHODS.machineCleanupDeleteApproved, {
+  payload: MachineCleanupSelection,
+  success: Schema.Void,
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
+const WsMachineCleanupRunPhaseCRpc = Rpc.make(WS_METHODS.machineCleanupRunPhaseC, {
+  payload: MachineCleanupSelection,
+  success: Schema.Void,
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
+const WsMachineCleanupCancelRpc = Rpc.make(WS_METHODS.machineCleanupCancel, {
+  payload: Schema.Struct({}),
+  success: Schema.Void,
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+});
+const WsMachineCleanupSubscribeRpc = Rpc.make(WS_METHODS.machineCleanupSubscribe, {
+  payload: Schema.Struct({}),
+  success: MachineCleanupState,
+  error: Schema.Union([MachineCleanupError, EnvironmentAuthorizationError]),
+  stream: true,
 });
 
 const WsServerRunStorageCleanupRpc = Rpc.make(WS_METHODS.serverRunStorageCleanup, {
@@ -2221,6 +2271,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerCommitDesktopUpdateRpc,
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
+  WsMachineCleanupHistoryRpc,
+  WsMachineCleanupScanRpc,
+  WsMachineCleanupRunPhaseARpc,
+  WsMachineCleanupDeleteApprovedRpc,
+  WsMachineCleanupRunPhaseCRpc,
+  WsMachineCleanupCancelRpc,
+  WsMachineCleanupSubscribeRpc,
   WsServerRunStorageCleanupRpc,
   WsServerGetStorageCleanupReportRpc,
   WsServerGetDatabaseStorageRpc,

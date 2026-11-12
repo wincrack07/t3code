@@ -1,3 +1,4 @@
+import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
 import * as KeepAwake from "./keepAwake/KeepAwake.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
@@ -1520,6 +1521,7 @@ export const layerWsRpc = (
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
+      const machineCleanup = yield* MachineCleanup.MachineCleanup;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
       const secretResolver = yield* SecretResolver.SecretResolver;
@@ -2712,6 +2714,14 @@ export const layerWsRpc = (
           Effect.fnUntraced(function* (rule) {
             return yield* keybindings.removeKeybindingRule(rule);
           }),
+        [WS_METHODS.machineCleanupHistory]: () => machineCleanup.history,
+        [WS_METHODS.machineCleanupScan]: () => machineCleanup.scan,
+        [WS_METHODS.machineCleanupRunPhaseA]: () => machineCleanup.runPhaseA,
+        [WS_METHODS.machineCleanupDeleteApproved]: (selection) =>
+          machineCleanup.deleteApproved(selection),
+        [WS_METHODS.machineCleanupRunPhaseC]: (selection) => machineCleanup.runPhaseC(selection),
+        [WS_METHODS.machineCleanupCancel]: () => machineCleanup.cancel,
+        [WS_METHODS.machineCleanupSubscribe]: () => machineCleanup.state,
         [WS_METHODS.serverRunStorageCleanup]: () => storageCleanup.runNow,
         [WS_METHODS.serverGetStorageCleanupReport]: () => storageCleanup.reports,
         [WS_METHODS.serverGetDatabaseStorage]: () => databaseStorage.status,
