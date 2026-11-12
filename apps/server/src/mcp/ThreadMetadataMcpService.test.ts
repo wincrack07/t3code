@@ -7,6 +7,7 @@ import {
   ProviderInstanceId,
   RunId,
   ThreadId,
+  ThreadProjectMoveRejectedError,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -155,6 +156,37 @@ it.effect("records a self move and says the current cwd remains until the turn e
               if (command.type === "thread.project.move") assert.equal(command.threadId, threadId);
               return Effect.succeed({ sequence: 1, storedEvents: [] });
             },
+          }),
+        ),
+      ),
+    ),
+  );
+});
+
+it.effect("explains why a child thread cannot move", () => {
+  const target = ProjectId.make("project:destination");
+  return Effect.gen(function* () {
+    const service = yield* ThreadMetadataMcpService.ThreadMetadataMcpService;
+    const error = yield* service
+      .update(scope, { action: "move", moveToProjectId: target })
+      .pipe(Effect.flip);
+    assert.equal(error.code, "invalid_request");
+    assert.include(error.message, "Only top-level threads can be moved");
+  }).pipe(
+    Effect.provide(
+      ThreadMetadataMcpService.layer.pipe(
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadShell: () => Effect.succeed(McpToolAccessTestkit.liveThreadShell(threadId)),
+            dispatch: () =>
+              Effect.fail(
+                new ThreadProjectMoveRejectedError({
+                  threadId,
+                  projectId: target,
+                  reason: "child_thread",
+                }),
+              ),
           }),
         ),
       ),

@@ -23,7 +23,7 @@ export interface TurnItemPositionStoreV2Shape {
     readonly runId: RunId | null;
     readonly runOrdinal?: number;
     // `run_start` takes the run's unused first slot, ahead of its items, and appends once it is taken.
-    readonly placement?: "append" | "run_start";
+    readonly placement?: "append" | "run_start" | "thread_end";
   }) => Effect.Effect<number, TurnItemPositionStoreError>;
   readonly normalize: (
     item: OrchestrationV2TurnItem,
@@ -69,8 +69,14 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
                 LIMIT 1
               `;
           const runOrdinal = suppliedRunOrdinal ?? runRows[0]?.ordinal ?? null;
-          const lowerBound = runOrdinal === null ? 0 : runOrdinal * 1_000_000;
-          const upperBound = runOrdinal === null ? 999_999 : lowerBound + 999_999;
+          const lowerBound =
+            placement === "thread_end" || runOrdinal === null ? 0 : runOrdinal * 1_000_000;
+          const upperBound =
+            placement === "thread_end"
+              ? Number.MAX_SAFE_INTEGER
+              : runOrdinal === null
+                ? 999_999
+                : lowerBound + 999_999;
           yield* sql`
           INSERT INTO orchestration_v2_turn_item_positions (thread_id, turn_item_id, ordinal)
           SELECT
@@ -121,6 +127,9 @@ export const layer: Layer.Layer<TurnItemPositionStoreV2, never, SqlClient.SqlCli
           threadId: item.threadId,
           turnItemId: item.id,
           runId: item.runId,
+          ...(item.type === "notification" && item.projectMove !== undefined
+            ? { placement: "thread_end" as const }
+            : {}),
           ...(runOrdinal === undefined ? {} : { runOrdinal }),
         }).pipe(Effect.map((ordinal) => (item.ordinal === ordinal ? item : { ...item, ordinal })));
       }),

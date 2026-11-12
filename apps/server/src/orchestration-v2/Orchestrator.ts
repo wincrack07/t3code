@@ -5163,6 +5163,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         reason,
       });
     if (thread.deletedAt !== null) return yield* reject("thread_deleted");
+    if (thread.lineage.relationshipToParent !== null) return yield* reject("child_thread");
     if (command.projectId === thread.projectId) {
       if (thread.pendingProjectMove == null) return yield* reject("same_project");
       const now = yield* DateTime.now;
