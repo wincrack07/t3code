@@ -47,7 +47,7 @@ export function ContextUsageControl(props: {
         render={
           <button
             type="button"
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md ps-1.5 py-1 outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-popup-open:bg-accent"
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-popup-open:bg-accent"
             aria-label={`Context window: ${used} tokens${percent === null ? "" : `, ${percent}%`}`}
           />
         }

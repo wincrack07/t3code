@@ -3808,7 +3808,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ) : (
           <div
             data-composer-quiet-row
-            className="composer-quiet-row flex min-w-0 items-center gap-1 pt-1 text-xs text-muted-foreground"
+            className="composer-quiet-row flex min-w-0 items-center gap-1 px-2 pt-1 text-xs text-muted-foreground"
           >
             {props.locationControls ? (
               <div className="flex min-w-0 flex-1 items-center gap-1">{props.locationControls}</div>
