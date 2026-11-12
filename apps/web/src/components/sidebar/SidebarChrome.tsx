@@ -35,6 +35,7 @@ import {
 } from "../SidebarStageBackdrop";
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuItemDetail } from "../ui/menu";
 import { openTaskCount, reviewTaskCount } from "../tasks/tasks.logic";
+import { TaskBatchReconcilers } from "../tasks/TaskBatch";
 import { TaskReviewReconcilers } from "../tasks/TaskReview";
 import { useTaskProjectGroups } from "../tasks/useTaskProjects";
 import { Badge } from "../ui/badge";
@@ -402,6 +403,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
         </SidebarMenuItem>
       ) : null}
       <TaskReviewReconcilers groups={taskGroups} />
+      <TaskBatchReconcilers groups={taskGroups} />
     </SidebarMenu>
   );
 });

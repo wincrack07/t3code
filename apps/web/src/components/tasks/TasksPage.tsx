@@ -1,7 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { ArrowLeftIcon, ListFilterIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ListChecksIcon,
+  ListFilterIcon,
+  PlusIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { isElectron } from "../../env";
@@ -30,11 +37,15 @@ import { NewTaskDraft, type NewTaskSeed } from "./NewTaskDraft";
 import { TaskBoard } from "./TaskBoard";
 import { TaskCapture } from "./TaskCapture";
 import { TaskDetail } from "./TaskDetail";
-import { TaskList } from "./TaskList";
+import { TaskBatchBar, TaskQueueBar } from "./TaskBatch";
+import { TaskList, type TaskSelection } from "./TaskList";
 import {
   buildTaskBoard,
   buildTaskList,
+  nextTaskSelection,
   NO_TASK_FILTER,
+  TASK_STATUSES,
+  taskListOrder,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
   taskTagsInUse,
@@ -81,6 +92,31 @@ export function TasksPage({
   const tagsInUse = taskTagsInUse(groups);
   const captureRef = useRef<HTMLInputElement>(null);
   const [tagRequestKey, setTagRequestKey] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<{ keys: ReadonlySet<string>; anchor: string | null }>({
+    keys: new Set(),
+    anchor: null,
+  });
+  const boardModel = buildTaskBoard(groups, filter);
+  const viewOrder = board
+    ? TASK_STATUSES.flatMap((status) => boardModel[status].map((row) => row.entry.key))
+    : taskListOrder(model, false);
+  const pickedEntries = entries
+    .map(({ entry }) => entry)
+    .filter((entry) => picked.keys.has(entry.key) && entry.status !== "done");
+  const clearPicked = () => {
+    setPicked({ keys: new Set(), anchor: null });
+    setPicking(false);
+  };
+  const selection: TaskSelection = {
+    active: picking || picked.keys.size > 0,
+    keys: picked.keys,
+    onToggle: (key, range) =>
+      setPicked((current) => ({
+        keys: nextTaskSelection(current.keys, viewOrder, key, current.anchor, range),
+        anchor: key,
+      })),
+  };
   const go = (next: TasksSearch, replace = true) =>
     void navigate({
       to: "/tasks",
@@ -97,6 +133,12 @@ export function TasksPage({
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- N focuses the capture field from anywhere on the page, a window-level shortcut
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isEditable(event.target)) {
+        if (document.querySelector("[role=dialog],[role=alertdialog],[role=menu]")) return;
+        setPicked({ keys: new Set(), anchor: null });
+        setPicking(false);
+        return;
+      }
       if (event.key !== "n" && event.key !== "N") return;
       if (event.metaKey || event.ctrlKey || event.altKey || isEditable(event.target)) return;
       if (document.querySelector("[role=dialog],[role=menu]")) return;
@@ -149,6 +191,15 @@ export function TasksPage({
                 </Toggle>
               ))}
             </ToggleGroup>
+            <Button
+              size="compact"
+              variant={selection.active ? "outline" : "ghost"}
+              aria-pressed={selection.active}
+              onClick={() => (selection.active ? clearPicked() : setPicking(true))}
+            >
+              <ListChecksIcon />
+              {selection.active ? "Done selecting" : "Select"}
+            </Button>
             <Button size="compact" variant="ghost" onClick={newTask}>
               <PlusIcon />
               New task
@@ -170,12 +221,14 @@ export function TasksPage({
               onCreated={() => {}}
             />
             {toolbar}
+            <TaskQueueBar groups={groups} />
             {board ? (
               model.empty !== null ? (
                 empty
               ) : (
                 <TaskBoard
-                  board={buildTaskBoard(groups, filter)}
+                  board={boardModel}
+                  selection={selection}
                   showProject={projectKey === null}
                   selectedKey={selected?.entry.key ?? null}
                   onSelect={(key) => go({ ...search, task: key })}
@@ -187,7 +240,8 @@ export function TasksPage({
                 selectedKey={selected?.entry.key ?? null}
                 showSectionHeaders={view === "inbox" || projectKey === null}
                 showProject={view === "inbox" && projectKey === null}
-                sortable
+                sortable={!selection.active}
+                selection={selection}
                 tagsInUse={tagsInUse}
                 onSelect={(key) => go({ ...search, task: key })}
                 onOpen={(key) => go({ ...search, task: key })}
@@ -198,6 +252,9 @@ export function TasksPage({
                 empty={empty}
               />
             )}
+            {selection.active ? (
+              <TaskBatchBar groups={groups} selected={pickedEntries} onClear={clearPicked} />
+            ) : null}
           </section>
           <main
             className={cn(

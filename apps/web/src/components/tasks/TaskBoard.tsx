@@ -30,10 +30,14 @@ import {
   taskPriority,
   taskTitle,
   type TaskEntry,
+  type TaskProjectGroup,
   type TaskRow,
 } from "./tasks.logic";
 import { TaskPriorityChip } from "./TaskFields";
 import { TaskReviewActions, TaskReviewSummary } from "./TaskReview";
+import { TaskQueueChip, useTaskQueue } from "./TaskBatch";
+import type { TaskSelection } from "./TaskList";
+import { Checkbox } from "../ui/checkbox";
 import { useEnvironmentLabel } from "./useTaskProjects";
 
 export function TaskBoard({
@@ -41,11 +45,13 @@ export function TaskBoard({
   showProject,
   selectedKey,
   onSelect,
+  selection,
 }: {
   board: Record<SavedPromptStatus, TaskRow[]>;
   showProject: boolean;
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  selection: TaskSelection;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const entries = TASK_STATUSES.flatMap((status) => board[status].map((row) => row.entry));
@@ -79,7 +85,9 @@ export function TaskBoard({
                 entry={entry}
                 projectLabel={showProject ? group.label : null}
                 showMachine={group.multiMachine}
+                group={group}
                 selected={entry.key === selectedKey}
+                selection={selection}
                 onSelect={() => onSelect(entry.key)}
               />
             ))}
@@ -134,15 +142,22 @@ function TaskCard({
   entry,
   projectLabel,
   showMachine,
+  group,
   selected,
+  selection,
   onSelect,
 }: {
   entry: TaskEntry;
   projectLabel: string | null;
   showMachine: boolean;
+  group: TaskProjectGroup;
   selected: boolean;
+  selection: TaskSelection;
   onSelect: () => void;
 }) {
+  const queue = useTaskQueue(entry);
+  const pickable = entry.status !== "done";
+  const picked = selection.keys.has(entry.key);
   const { allowed, update } = useSavedPrompts(entry.home.environmentId, entry.home.id);
   const labelOf = useEnvironmentLabel();
   const thread = useTaskThread(entry);
@@ -159,7 +174,7 @@ function TaskCard({
       }
       className={cn(
         "relative flex flex-col gap-1.5 rounded-md border bg-background p-2.5 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring",
-        selected ? "border-ring" : "border-border hover:bg-accent/40",
+        selected || picked ? "border-ring" : "border-border hover:bg-accent/40",
         isDragging && "z-10 shadow-lg",
       )}
       {...listeners}
@@ -168,13 +183,31 @@ function TaskCard({
       role="group"
       aria-roledescription="Task card"
     >
-      <button
-        type="button"
-        className="truncate text-left text-sm font-medium outline-none after:absolute after:inset-0 after:content-['']"
-        onClick={onSelect}
-      >
-        {taskTitle(entry.task)}
-      </button>
+      <div className="flex min-w-0 items-center gap-2">
+        {selection.active && pickable ? (
+          <span className="relative z-1 flex">
+            <Checkbox
+              aria-label={picked ? "Deselect task" : "Select task"}
+              checked={picked}
+              onCheckedChange={() => selection.onToggle(entry.key, false)}
+            />
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-sm font-medium outline-none after:absolute after:inset-0 after:content-['']"
+          onClick={(event) => {
+            const modified = event.metaKey || event.ctrlKey || event.shiftKey;
+            if (pickable && (selection.active || modified)) {
+              selection.onToggle(entry.key, event.shiftKey);
+              return;
+            }
+            onSelect();
+          }}
+        >
+          {taskTitle(entry.task)}
+        </button>
+      </div>
       {review ? (
         <div className="relative z-1">
           <TaskReviewSummary entry={entry} density="card" />
@@ -203,6 +236,9 @@ function TaskCard({
           </span>
         ) : null}
         <TaskAttachmentCount count={entry.task.attachments?.length ?? 0} />
+        {queue && thread.state !== "running" ? (
+          <TaskQueueChip entry={entry} group={group} queue={queue} />
+        ) : null}
         <span className="ml-auto shrink-0">
           <TaskStatusMenu
             status={entry.status}

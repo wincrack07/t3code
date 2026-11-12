@@ -19,6 +19,12 @@ import {
   NO_TASK_FILTER,
   normalizeTaskTags,
   taskCaptureProjectKey,
+  taskRunningMinutes,
+  nextTaskSelection,
+  taskBatchSummary,
+  taskQueueTotals,
+  taskQueueView,
+  taskQueueItems,
   taskRunProject,
   editTaskCriteria,
   taskAttempts,
@@ -391,6 +397,15 @@ describe("review", () => {
   });
 });
 
+describe("taskRunningMinutes", () => {
+  it("counts whole minutes once the first one has passed", () => {
+    const start = "2026-11-12T10:00:00.000Z";
+    expect(taskRunningMinutes(start, "2026-11-12T10:00:40Z")).toBeNull();
+    expect(taskRunningMinutes(start, "2026-11-12T10:04:10Z")).toBe(4);
+    expect(taskRunningMinutes(null, "2026-11-12T10:04:10Z")).toBeNull();
+  });
+});
+
 describe("taskThreadState", () => {
   const linked = { latestThreadId: ThreadId.make("t1") };
   it("reads the linked thread's runtime", () => {
@@ -672,5 +687,163 @@ describe("subtasks and attempts", () => {
       [mac, false, null],
     ]);
     expect(new Set(attempts.map((a) => a.key)).size).toBe(3);
+  });
+});
+
+describe("batch", () => {
+  it("toggles one task, or with Shift adds the range from the anchor in view order", () => {
+    const order = ["a", "b", "c", "d"];
+    expect([...nextTaskSelection(new Set(), order, "b", null, false)]).toEqual(["b"]);
+    expect([...nextTaskSelection(new Set(["b"]), order, "b", "b", false)]).toEqual([]);
+    expect([...nextTaskSelection(new Set(["a"]), order, "c", "a", true)].toSorted()).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect([...nextTaskSelection(new Set(["d"]), order, "b", "d", true)].toSorted()).toEqual([
+      "b",
+      "c",
+      "d",
+    ]);
+    // No anchor in this view: Shift falls back to a toggle.
+    expect([...nextTaskSelection(new Set(), order, "c", "gone", true)]).toEqual(["c"]);
+  });
+
+  const stored = {
+    kind: "stored",
+    attachment: {
+      type: "image",
+      id: ChatAttachmentId.make("img-1"),
+      name: "a.png",
+      mimeType: "image/png",
+      sizeBytes: 10,
+    },
+  } as unknown as ProjectTaskAttachment;
+  const groups = buildTaskProjectGroups({
+    projects: [
+      project(mac, "orbit", [
+        task("m1", "2026-11-09T00:00:00Z"),
+        task("m2", "2026-11-08T00:00:00Z", { attachments: [stored] }),
+      ]),
+      project(vpsA, "orbit", []),
+    ],
+    settings,
+    primaryEnvironmentId: mac,
+    connected: new Set([mac, vpsA]),
+  });
+  const entries = groups[0]!.tasks;
+  const labels: Record<string, string> = { mac: "Mac", "vps-a": "Alpha" };
+  const label = (environmentId: EnvironmentId) => labels[environmentId] ?? environmentId;
+  const plan = [
+    {
+      environmentId: vpsA,
+      input: {
+        projectId: "orbit-vps-a",
+        entries: [{ source: { environmentId: mac, taskId: "m1" } }],
+      },
+    },
+    {
+      environmentId: mac,
+      input: {
+        projectId: "orbit-mac",
+        entries: [{ source: { environmentId: mac, taskId: "m2" } }],
+      },
+    },
+  ];
+
+  it("summarises where each task runs and why one stays on its own machine", () => {
+    expect(
+      taskBatchSummary(plan, entries, { distribute: true, environmentId: null }, label),
+    ).toEqual([
+      {
+        environmentId: vpsA,
+        machine: "Alpha",
+        tasks: [{ key: entries[0]!.key, title: "Prompt m1", pinned: null }],
+      },
+      {
+        environmentId: mac,
+        machine: "Mac",
+        tasks: [
+          { key: entries[1]!.key, title: "Prompt m2", pinned: "Has attachments stored on Mac" },
+        ],
+      },
+    ]);
+    // Running everything on the task's own machine pins nothing.
+    const home = taskBatchSummary(plan, entries, { distribute: false, environmentId: mac }, label);
+    expect(home.flatMap((row) => row.tasks.map((t) => t.pinned))).toEqual([null, null]);
+  });
+
+  it("shows a task's newest live queue entry and sums every batch", () => {
+    const target = { environmentId: mac, projectId: "orbit-mac" };
+    const item = (state: string, createdAt: string, position: number | null = null) => ({
+      target,
+      batchId: `b-${createdAt}`,
+      createdAt,
+      entry: {
+        id: `e-${createdAt}`,
+        state,
+        reason: state === "failed-to-start" ? "No model" : undefined,
+      } as never,
+      position,
+    });
+    expect(taskQueueView([])).toBeNull();
+    expect(taskQueueView([item("failed-to-start", "1"), item("queued", "2", 3)])).toMatchObject({
+      state: "queued",
+      position: 3,
+    });
+    expect(taskQueueView([item("queued", "1", 1), item("settled", "2")])).toBeNull();
+    expect(taskQueueView([item("failed-to-start", "1")])?.reason).toBe("No model");
+
+    const withBatches = {
+      ...project(mac, "orbit", []),
+      taskBatches: [
+        {
+          id: "b1",
+          concurrency: 2,
+          createdAt: "1",
+          entries: [{ state: "running" }, { state: "queued" }, { state: "queued" }],
+        },
+        {
+          id: "b2",
+          concurrency: 2,
+          createdAt: "2",
+          entries: [{ state: "failed-to-start" }, { state: "settled" }],
+        },
+      ],
+    } as unknown as EnvironmentProject;
+    const queuedTask = (id: string) => ({
+      environmentId: mac,
+      projectId: withBatches.id,
+      taskId: id,
+    });
+    const queue = {
+      ...withBatches,
+      taskBatches: [
+        {
+          id: "b1",
+          concurrency: 2,
+          createdAt: "1",
+          entries: [
+            { id: "e1", state: "queued", source: queuedTask("x") },
+            { id: "e2", state: "running", source: queuedTask("y") },
+            { id: "e3", state: "queued", source: queuedTask("y") },
+          ],
+        },
+      ],
+    } as unknown as EnvironmentProject;
+    const forTask = (id: string) =>
+      taskQueueItems({ home: withBatches, task: { id } as ProjectSavedPrompt }, [queue]);
+    expect(forTask("y").map((item) => [item.entry.state, item.position])).toEqual([
+      ["running", null],
+      ["queued", 2],
+    ]);
+    expect(taskQueueView(forTask("x"))?.position).toBe(1);
+    expect(taskQueueTotals([withBatches])).toEqual({
+      queued: 2,
+      starting: 0,
+      running: 1,
+      failed: 1,
+      cancellable: [{ environmentId: mac, projectId: withBatches.id, batchId: "b1" }],
+    });
   });
 });

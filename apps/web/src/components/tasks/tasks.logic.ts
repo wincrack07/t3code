@@ -23,6 +23,7 @@ import {
   type SavedPromptStatus,
   type ScopedThreadRef,
   taskAttachmentKey,
+  type TaskBatchEntry,
   type TaskReviewSnapshot,
 } from "@t3tools/contracts";
 import { buildNewThreadLink, PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
@@ -592,11 +593,11 @@ export function taskReviewToReconcile(
 
 export type TaskThreadState = "running" | "finished" | "missing";
 
-/** Whole minutes a run has been going, at least 1; null when it has not started. */
+/** Whole minutes a run has been going; null before its first full minute or its start. */
 export function taskRunningMinutes(startedAt: string | null, now: string): number | null {
   if (startedAt === null) return null;
-  const elapsed = Date.parse(now) - Date.parse(startedAt);
-  return Number.isFinite(elapsed) ? Math.max(1, Math.floor(elapsed / 60_000)) : null;
+  const minutes = Math.floor((Date.parse(now) - Date.parse(startedAt)) / 60_000);
+  return Number.isFinite(minutes) && minutes >= 1 ? minutes : null;
 }
 
 export function taskThreadState(
@@ -916,4 +917,208 @@ export function taskRunProject(
     group.members.find((member) => member.reachable && member.project.environmentId === preferred)
       ?.project ?? entry.home
   );
+}
+
+/**
+ * The selection after a click: a plain toggle, or with Shift every task between the last
+ * clicked one and this one, in the order the view lists them.
+ */
+export function nextTaskSelection(
+  current: ReadonlySet<string>,
+  order: ReadonlyArray<string>,
+  key: string,
+  anchor: string | null,
+  range: boolean,
+): Set<string> {
+  const next = new Set(current);
+  const from = anchor === null ? -1 : order.indexOf(anchor);
+  const to = order.indexOf(key);
+  if (range && from !== -1 && to !== -1) {
+    for (const item of order.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(item);
+    return next;
+  }
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
+}
+
+export const TASK_BATCH_MAX_CONCURRENCY = 4;
+export const TASK_BATCH_DEFAULT_CONCURRENCY = 2;
+
+export interface TaskBatchPlanGroup {
+  readonly environmentId: EnvironmentId;
+  readonly input: {
+    readonly projectId: string;
+    readonly concurrency?: number | undefined;
+    readonly entries: ReadonlyArray<{
+      readonly source: { readonly environmentId: EnvironmentId; readonly taskId: string };
+    }>;
+  };
+}
+
+export interface TaskBatchSummaryRow {
+  readonly environmentId: EnvironmentId;
+  readonly machine: string;
+  readonly tasks: ReadonlyArray<{
+    readonly key: string;
+    readonly title: string;
+    /** Why this task runs on its own machine whatever was chosen. */
+    readonly pinned: string | null;
+  }>;
+}
+
+/** Where each prepared task runs, grouped by machine, naming tasks held to their home. */
+export function taskBatchSummary(
+  groups: ReadonlyArray<TaskBatchPlanGroup>,
+  entries: ReadonlyArray<TaskEntry>,
+  choice: { readonly distribute: boolean; readonly environmentId: EnvironmentId | null },
+  labelOf: (environmentId: EnvironmentId) => string,
+): TaskBatchSummaryRow[] {
+  const byTask = new Map(
+    entries.map((entry) => [`${entry.home.environmentId}:${entry.task.id}`, entry] as const),
+  );
+  const rows = new Map<EnvironmentId, TaskBatchSummaryRow["tasks"][number][]>();
+  for (const group of groups) {
+    for (const item of group.input.entries) {
+      const entry = byTask.get(`${item.source.environmentId}:${item.source.taskId}`);
+      if (!entry) continue;
+      const stored = (entry.task.attachments ?? []).some((a) => a.kind === "stored");
+      const movedAway =
+        choice.distribute ||
+        (choice.environmentId !== null && choice.environmentId !== entry.home.environmentId);
+      rows.set(group.environmentId, [
+        ...(rows.get(group.environmentId) ?? []),
+        {
+          key: entry.key,
+          title: taskTitle(entry.task),
+          pinned:
+            stored && movedAway && group.environmentId === entry.home.environmentId
+              ? `Has attachments stored on ${labelOf(entry.home.environmentId)}`
+              : null,
+        },
+      ]);
+    }
+  }
+  return [...rows.entries()]
+    .map(([environmentId, tasks]) => ({ environmentId, machine: labelOf(environmentId), tasks }))
+    .toSorted((left, right) => left.machine.localeCompare(right.machine));
+}
+
+export type TaskQueueState = TaskBatchEntry["state"];
+
+export interface TaskQueueView {
+  readonly state: TaskQueueState;
+  readonly position: number | null;
+  readonly reason: string | null;
+  readonly target: { readonly environmentId: EnvironmentId; readonly projectId: string };
+  readonly batchId: string;
+  readonly entryId: string;
+}
+
+/**
+ * A task's place in the newest batch that holds it, while that place still matters: settled
+ * and cancelled entries hand over to the task's own status.
+ */
+export function taskQueueView(
+  items: ReadonlyArray<{
+    readonly target: { readonly environmentId: EnvironmentId; readonly projectId: string };
+    readonly batchId: string;
+    readonly createdAt: string;
+    readonly entry: Pick<TaskBatchEntry, "id" | "state" | "reason">;
+    readonly position: number | null;
+  }>,
+): TaskQueueView | null {
+  const latest = items
+    .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .at(-1);
+  if (!latest || latest.entry.state === "settled" || latest.entry.state === "cancelled")
+    return null;
+  return {
+    state: latest.entry.state,
+    position: latest.position,
+    reason: latest.entry.reason ?? null,
+    target: latest.target,
+    batchId: latest.batchId,
+    entryId: latest.entry.id,
+  };
+}
+
+export interface TaskQueueTotals {
+  readonly queued: number;
+  readonly starting: number;
+  readonly running: number;
+  readonly failed: number;
+  /** Batches that still hold queued entries, to cancel by machine. */
+  readonly cancellable: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly projectId: string;
+    readonly batchId: string;
+  }>;
+}
+
+/** Every batch a loaded project holds, summed for the queue bar. */
+export function taskQueueTotals(projects: ReadonlyArray<EnvironmentProject>): TaskQueueTotals {
+  const count = (state: TaskQueueState) =>
+    projects.reduce(
+      (total, project) =>
+        total +
+        (project.taskBatches ?? [])
+          .flatMap((batch) => batch.entries)
+          .filter((entry) => entry.state === state).length,
+      0,
+    );
+  return {
+    queued: count("queued"),
+    starting: count("starting"),
+    running: count("running"),
+    failed: count("failed-to-start"),
+    cancellable: projects.flatMap((project) =>
+      (project.taskBatches ?? [])
+        .filter((batch) => batch.entries.some((entry) => entry.state === "queued"))
+        .map((batch) => ({
+          environmentId: project.environmentId,
+          projectId: project.id,
+          batchId: batch.id,
+        })),
+    ),
+  };
+}
+
+/** The task's entries in every batch its project's machines hold, with queue positions. */
+export function taskQueueItems(
+  entry: Pick<TaskEntry, "task" | "home">,
+  projects: ReadonlyArray<EnvironmentProject>,
+) {
+  const all = projects
+    .flatMap((project) =>
+      (project.taskBatches ?? []).flatMap((batch) =>
+        batch.entries.map((item) => ({
+          target: { environmentId: project.environmentId, projectId: project.id as string },
+          batchId: batch.id as string,
+          createdAt: batch.createdAt,
+          entry: item,
+        })),
+      ),
+    )
+    .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return all
+    .filter(
+      (item) =>
+        item.entry.source.environmentId === entry.home.environmentId &&
+        item.entry.source.projectId === entry.home.id &&
+        item.entry.source.taskId === entry.task.id,
+    )
+    .map((item) => ({
+      ...item,
+      position:
+        item.entry.state !== "queued"
+          ? null
+          : all
+              .filter(
+                (other) =>
+                  other.target.environmentId === item.target.environmentId &&
+                  other.entry.state === "queued",
+              )
+              .indexOf(item) + 1,
+    }));
 }

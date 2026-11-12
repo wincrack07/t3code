@@ -24,6 +24,7 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } f
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { TaskAttachmentCount } from "./TaskAttachments";
+import { TaskQueueChip, useTaskQueue } from "./TaskBatch";
 import { TaskFieldMenuItems, TaskPriorityChip, taskShortcutAction } from "./TaskFields";
 import { TaskMachineChip, TaskRunningLabel, TaskThreadDot, useTaskThread } from "./TaskParts";
 import {
@@ -44,6 +45,13 @@ import { useEnvironmentLabel } from "./useTaskProjects";
 
 const SECTION_DROP_PREFIX = "section:";
 
+/** Multi-select for batch runs: Cmd/Ctrl-click toggles, Shift-click selects a range. */
+export interface TaskSelection {
+  readonly active: boolean;
+  readonly keys: ReadonlySet<string>;
+  readonly onToggle: (key: string, range: boolean) => void;
+}
+
 export function TaskList({
   model,
   selectedKey,
@@ -56,6 +64,7 @@ export function TaskList({
   onEditTags,
   empty,
   renderExpanded,
+  selection = null,
 }: {
   model: TaskListModel;
   selectedKey: string | null;
@@ -72,6 +81,7 @@ export function TaskList({
   empty: ReactNode;
   /** Shown under the selected row, for editors that open in place. */
   renderExpanded?: (entry: TaskEntry) => ReactNode;
+  selection?: TaskSelection | null;
 }) {
   const [doneExpanded, setDoneExpanded] = useState(false);
   const clearDone = useClearDone(model);
@@ -142,6 +152,7 @@ export function TaskList({
           showProject={showProject}
           draggable={draggable}
           tagsInUse={tagsInUse}
+          selection={selection}
           onSelect={() => onSelect(row.entry.key)}
           onEditTags={onEditTags ? () => onEditTags(row.entry.key) : null}
         />
@@ -282,6 +293,7 @@ function TaskRow({
   showProject,
   draggable,
   tagsInUse,
+  selection,
   onSelect,
   onEditTags,
 }: {
@@ -291,10 +303,14 @@ function TaskRow({
   showProject: boolean;
   draggable: boolean;
   tagsInUse: ReadonlyArray<string>;
+  selection: TaskSelection | null;
   onSelect: () => void;
   onEditTags: (() => void) | null;
 }) {
   const { entry, group, depth } = row;
+  const queue = useTaskQueue(entry);
+  const picking = selection !== null && selection.active && entry.status !== "done";
+  const picked = selection?.keys.has(entry.key) ?? false;
   const { allowed, update } = useSavedPrompts(entry.home.environmentId, entry.home.id);
   const labelOf = useEnvironmentLabel();
   const thread = useTaskThread(entry);
@@ -324,7 +340,7 @@ function TaskRow({
       className={cn(
         "group/row relative flex h-8 min-w-0 shrink-0 items-center gap-2 rounded-md pr-1 text-sm has-focus-visible:ring-1 has-focus-visible:ring-ring has-focus-visible:ring-inset",
         depth === 1 ? "pl-8" : "pl-2",
-        selected ? "bg-accent" : "hover:bg-accent/50",
+        selected || picked ? "bg-accent" : "hover:bg-accent/50",
         isDragging && "z-10 bg-accent shadow-md",
       )}
       {...attributes}
@@ -333,25 +349,35 @@ function TaskRow({
       tabIndex={-1}
     >
       <span className="relative flex size-4 shrink-0 items-center justify-center">
-        {dot ? (
+        {picking ? (
+          <Checkbox
+            aria-label={picked ? "Deselect task" : "Select task"}
+            checked={picked}
+            tabIndex={-1}
+            onCheckedChange={() => selection!.onToggle(entry.key, false)}
+          />
+        ) : null}
+        {!picking && dot ? (
           <span className="flex group-hover/row:hidden group-has-focus-visible/row:hidden">
             <TaskThreadDot state={thread.state!} />
           </span>
         ) : null}
-        <span
-          className={cn(
-            "flex",
-            dot && "hidden group-hover/row:flex group-has-focus-visible/row:flex",
-          )}
-        >
-          <Checkbox
-            aria-label={done ? "Reopen task" : "Mark task done"}
-            checked={done}
-            disabled={!allowed}
-            tabIndex={-1}
-            onCheckedChange={toggleDone}
-          />
-        </span>
+        {picking ? null : (
+          <span
+            className={cn(
+              "flex",
+              dot && "hidden group-hover/row:flex group-has-focus-visible/row:flex",
+            )}
+          >
+            <Checkbox
+              aria-label={done ? "Reopen task" : "Mark task done"}
+              checked={done}
+              disabled={!allowed}
+              tabIndex={-1}
+              onCheckedChange={toggleDone}
+            />
+          </span>
+        )}
       </span>
       <span className="flex w-6 shrink-0 justify-center">
         <TaskPriorityChip priority={taskPriority(entry.task)} />
@@ -365,7 +391,15 @@ function TaskRow({
           "min-w-0 flex-1 truncate text-left outline-none",
           done && "text-muted-foreground line-through decoration-muted-foreground/50",
         )}
-        onClick={onSelect}
+        onClick={(event) => {
+          const modified = event.metaKey || event.ctrlKey || event.shiftKey;
+          if (selection && entry.status !== "done" && (selection.active || modified)) {
+            event.preventDefault();
+            selection.onToggle(entry.key, event.shiftKey);
+            return;
+          }
+          onSelect();
+        }}
         onKeyDown={(event) => {
           if ((event.key === "x" || event.key === "X") && !event.metaKey && !event.ctrlKey) {
             event.preventDefault();
@@ -416,6 +450,9 @@ function TaskRow({
       ) : null}
       <TaskAttachmentCount count={entry.task.attachments?.length ?? 0} />
       {running ? <TaskRunningLabel startedAt={thread.shell?.latestRun?.startedAt ?? null} /> : null}
+      {queue && !done && !running ? (
+        <TaskQueueChip entry={entry} group={group} queue={queue} />
+      ) : null}
       {entry.status === "review" && entry.task.review ? (
         <Badge variant={taskReviewView(entry.task.review).tone} size="sm">
           {taskReviewView(entry.task.review).outcome}
