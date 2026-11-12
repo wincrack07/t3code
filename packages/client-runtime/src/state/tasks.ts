@@ -482,7 +482,12 @@ export function createSavedTaskCommands<R, E>(
           );
         const groups = new Map<
           string,
-          { environmentId: EnvironmentId; input: TaskBatchStartInput }
+          {
+            environmentId: EnvironmentId;
+            currentEffectiveConcurrency: number;
+            effectiveConcurrency: number;
+            input: TaskBatchStartInput;
+          }
         >();
         for (const source of input.sources) {
           const draft = yield* draftFor({ source, target: source.home }, registry);
@@ -583,6 +588,12 @@ export function createSavedTaskCommands<R, E>(
           };
           groups.set(key, {
             environmentId: target.environmentId,
+            currentEffectiveConcurrency: taskBatchEffectiveConcurrency(
+              input.targets
+                .filter((ref) => ref.environmentId === target.environmentId)
+                .flatMap((ref) => registry.get(projectAtom(ref))?.taskBatches ?? []),
+            ),
+            effectiveConcurrency: input.concurrency ?? 2,
             input: {
               commandId:
                 previous?.input.commandId ??

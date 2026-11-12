@@ -447,6 +447,19 @@ it.effect(
         (yield* read(second)).entries.filter((entry) => entry.state === "queued").length,
         1,
       );
+      assert.strictEqual((yield* read(first)).effectiveConcurrency, 4);
+      const third = yield* seed("third", 1, 1);
+      yield* batches.start(third);
+      yield* worker.drain();
+      assert.strictEqual(fixture.accepted.size, 4);
+      assert.strictEqual((yield* read(first)).effectiveConcurrency, 1);
+      yield* batches.cancel({
+        projectId: third.projectId,
+        batchId: third.commandId,
+        commandId: CommandId.make("cancel-latest"),
+      });
+      yield* worker.drain();
+      assert.strictEqual((yield* read(first)).effectiveConcurrency, 4);
     }).pipe(Effect.provide(fixture.layer));
   },
 );
@@ -456,15 +469,33 @@ it.effect("refuses changed task settings and changed briefs at enqueue", () => {
   return Effect.gen(function* () {
     const batches = yield* TaskBatchService.TaskBatchService;
     const projects = yield* ProjectService.ProjectService;
-    const input = yield* seed("stale", 2);
+    const original = yield* seed("stale", 3);
+    const input = {
+      ...original,
+      entries: original.entries.map((entry, index) =>
+        index === 1 ? { ...entry, overrides: { defaultModelSelection: modelSelection } } : entry,
+      ),
+    };
     yield* projects.update({
       projectId: input.projectId,
       commandId: CommandId.make("change-default"),
       defaultModelSelection: { ...modelSelection, model: "unexpected-paid" },
     });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("change-brief"),
+      savedPrompt: { kind: "edit", id: "stale-1", text: "Edited before enqueue" },
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("delete-before-start"),
+      savedPrompt: { kind: "delete", id: "stale-2" },
+    });
     const result = yield* batches.start(input);
     assert.strictEqual(result.entries[0]?.state, "cancelled");
     assert.strictEqual(result.entries[0]?.failureReason, "settings-changed");
+    assert.strictEqual(result.entries[1]?.failureReason, "task-changed");
+    assert.strictEqual(result.entries[2]?.failureReason, "source-deleted");
     assert.strictEqual(fixture.accepted.size, 0);
   }).pipe(Effect.provide(fixture.layer));
 });

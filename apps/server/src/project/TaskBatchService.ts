@@ -48,6 +48,8 @@ const isUnfinished = (entry: TaskBatchEntry) =>
 const isBatchStart = Schema.is(TaskBatchStartInput);
 const isBatchCancel = Schema.is(TaskBatchCancelInput);
 const isBatchError = Schema.is(TaskBatchError);
+const sourceProjectKey = (source: TaskBatchEntry["source"]) =>
+  JSON.stringify([source.environmentId, source.projectId]);
 const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const peers = yield* PeerMcpClient.PeerMcpClient;
@@ -106,10 +108,27 @@ const make = Effect.gen(function* () {
         limits: { runtimeMode: "full-access", interactionMode: "default" },
         success: Project,
       })
-      .pipe(Effect.result);
+      .pipe(Effect.timeout("10 seconds"), Effect.result);
     return result._tag === "Success"
       ? { project: result.success, verified: true }
       : { project: undefined, verified: false };
+  });
+  const readSources = Effect.fn("TaskBatchService.readSources")(function* (
+    entries: ReadonlyArray<Pick<TaskBatchEntry, "source">>,
+  ) {
+    const sources = [
+      ...new Map(entries.map(({ source }) => [sourceProjectKey(source), source])).values(),
+    ];
+    return new Map(
+      yield* Effect.forEach(
+        sources,
+        (source) =>
+          readSource(source).pipe(
+            Effect.map((result) => [sourceProjectKey(source), result] as const),
+          ),
+        { concurrency: 1 },
+      ),
+    );
   });
   const start: TaskBatchService["Service"]["start"] = Effect.fn("TaskBatchService.start")(
     function* (input) {
@@ -176,39 +195,37 @@ const make = Effect.gen(function* () {
           reason: "capacity",
           projectId: input.projectId,
         });
-      const failures = yield* Effect.forEach(
-        input.entries,
-        Effect.fn("TaskBatchService.validateEntry")(function* (entry) {
-          if (
-            entry.destination !== undefined &&
-            (entry.destination.environmentId !== environmentId ||
-              entry.destination.projectId !== input.projectId)
-          )
-            return "settings-changed" as const;
-          const sourceResult = yield* readSource(entry.source);
-          if (!sourceResult.verified) return "source-unverifiable" as const;
-          const source = sourceResult.project;
-          const task =
-            source?.deletedAt === null
-              ? source.savedPrompts?.find(
-                  (task) => task.id === entry.source.taskId && task.deletedAt === undefined,
-                )
-              : undefined;
-          if (!task || !source) return "source-deleted" as const;
-          const resolved = resolveTaskBatchLaunch(
-            task,
-            source,
-            entry.fallback ?? entry.launch,
-            entry.overrides,
-          );
-          const prepared = resolveTaskBatchLaunch({}, {}, entry.launch);
-          if (stableStringify(resolved) !== stableStringify(prepared))
-            return "settings-changed" as const;
-          if (taskBatchBriefKey(task) !== taskBatchBriefKey(entry.brief))
-            return "task-changed" as const;
-          return undefined;
-        }),
-      );
+      const sources = yield* readSources(input.entries);
+      const failures = input.entries.map((entry) => {
+        if (
+          entry.destination !== undefined &&
+          (entry.destination.environmentId !== environmentId ||
+            entry.destination.projectId !== input.projectId)
+        )
+          return "settings-changed" as const;
+        const sourceResult = sources.get(sourceProjectKey(entry.source))!;
+        if (!sourceResult.verified) return "source-unverifiable" as const;
+        const source = sourceResult.project;
+        const task =
+          source?.deletedAt === null
+            ? source.savedPrompts?.find(
+                (task) => task.id === entry.source.taskId && task.deletedAt === undefined,
+              )
+            : undefined;
+        if (!task || !source) return "source-deleted" as const;
+        const resolved = resolveTaskBatchLaunch(
+          task,
+          source,
+          entry.fallback ?? entry.launch,
+          entry.overrides,
+        );
+        const prepared = resolveTaskBatchLaunch({}, {}, entry.launch);
+        if (stableStringify(resolved) !== stableStringify(prepared))
+          return "settings-changed" as const;
+        if (taskBatchBriefKey(task) !== taskBatchBriefKey(entry.brief))
+          return "task-changed" as const;
+        return undefined;
+      });
       const batch: ProjectTaskBatch = {
         id: input.commandId,
         concurrency: input.concurrency ?? 2,
@@ -356,6 +373,12 @@ const make = Effect.gen(function* () {
   const pump: TaskBatchService["Service"]["pump"] = Effect.fn("TaskBatchService.pump")(
     function* () {
       let rows = yield* store.list({ pendingTaskBatchesOnly: true });
+      const sources = yield* readSources(
+        rows
+          .flatMap((row) => row.taskBatches ?? [])
+          .flatMap((batch) => batch.entries)
+          .filter((entry) => entry.state === "queued"),
+      );
       for (const row of rows) {
         let changed = false;
         const batches: ProjectTaskBatch[] = [];
@@ -363,7 +386,7 @@ const make = Effect.gen(function* () {
           const entries: TaskBatchEntry[] = [];
           for (const entry of batch.entries) {
             if (entry.state === "queued") {
-              const sourceResult = yield* readSource(entry.source);
+              const sourceResult = sources.get(sourceProjectKey(entry.source))!;
               const source = sourceResult.project;
               if (
                 !sourceResult.verified ||
@@ -481,10 +504,14 @@ const make = Effect.gen(function* () {
                   ),
                 },
           );
-        if (entry.state === "queued" && entry.source.environmentId === environmentId) {
-          const source = Option.getOrUndefined(yield* store.get(entry.source.projectId));
+        if (entry.state === "queued") {
+          const sourceResult = yield* readSource(entry.source);
+          const source = sourceResult.project;
           if (
-            !source?.savedPrompts?.some(
+            !sourceResult.verified ||
+            !source ||
+            source.deletedAt !== null ||
+            !source.savedPrompts?.some(
               (task) => task.id === entry.source.taskId && task.deletedAt === undefined,
             )
           ) {
@@ -494,8 +521,8 @@ const make = Effect.gen(function* () {
                 ...entry,
                 brief: undefined,
                 state: "cancelled",
-                failureReason: "source-deleted",
-                reason: "The source task is no longer available.",
+                failureReason: sourceResult.verified ? "source-deleted" : "source-unverifiable",
+                reason: "The source task could not be verified.",
               }),
               CommandId.make(`${entry.commandId}:source-unavailable`),
             );
