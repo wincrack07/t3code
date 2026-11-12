@@ -253,9 +253,12 @@ jobs:
           xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$xcode" ]; then
             echo "::warning::Xcode 26 not found; the Apple speech helper builds without SpeechAnalyzer."
-            exit 0
+          else
+            export DEVELOPER_DIR="$xcode/Contents/Developer"
+            echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
           fi
-          echo "DEVELOPER_DIR=$xcode/Contents/Developer" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcrun swiftc --version
 
       - name: Build DMG
         env:
@@ -266,6 +269,53 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64 --build-version "$BUILD_VERSION" --verbose
+
+      - name: Verify Apple speech in DMG and ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch=$(mktemp -d)
+          trap 'hdiutil detach "$scratch/mount" >/dev/null 2>&1 || true; rm -rf "$scratch"' EXIT
+          mkdir "$scratch/zip" "$scratch/mount"
+          archives=(release/*.zip)
+          images=(release/*.dmg)
+          test "${#archives[@]}" -eq 1
+          test "${#images[@]}" -eq 1
+          ditto -x -k "${archives[0]}" "$scratch/zip"
+          hdiutil attach "${images[0]}" -readonly -nobrowse -mountpoint "$scratch/mount"
+          xcode_major=$(xcodebuild -version | awk '/^Xcode / { split($2, version, "."); print version[1] }')
+          helper_hash=""
+          for payload in zip mount; do
+            applications=("$scratch/$payload"/*.app)
+            test "${#applications[@]}" -eq 1
+            application="${applications[0]}"
+            helper="$application/Contents/Resources/apple-speech/t3-apple-speech"
+            test -x "$helper"
+            /usr/libexec/PlistBuddy -c 'Print :NSSpeechRecognitionUsageDescription' "$application/Contents/Info.plist"
+            codesign --verify --strict --all-architectures --verbose=2 "$helper"
+            codesign --verify --deep --strict --verbose=2 "$application"
+            codesign -dv --verbose=4 "$helper" 2> "$scratch/helper-signature"
+            codesign -dv --verbose=4 "$application" 2> "$scratch/app-signature"
+            sed -nE '/^(Signature=|Authority=|TeamIdentifier=)/p' "$scratch/helper-signature" > "$scratch/helper-identity"
+            sed -nE '/^(Signature=|Authority=|TeamIdentifier=)/p' "$scratch/app-signature" > "$scratch/app-identity"
+            test -s "$scratch/helper-identity"
+            cmp "$scratch/helper-identity" "$scratch/app-identity"
+            cat "$scratch/helper-identity"
+            lipo -archs "$helper"
+            strings "$helper" > "$scratch/helper-strings"
+            if grep -q SpeechAnalyzer "$scratch/helper-strings"; then
+              echo "$payload: Apple speech helper includes SpeechAnalyzer and the legacy fallback."
+            else
+              test "$xcode_major" -lt 26
+              echo "::warning::$payload: Apple speech helper includes only the legacy fallback."
+            fi
+            current_hash=$(shasum -a 256 "$helper" | awk '{ print $1 }')
+            if [ -n "$helper_hash" ]; then
+              test "$current_hash" = "$helper_hash"
+            fi
+            helper_hash="$current_hash"
+            echo "$payload: verified Resources/apple-speech/t3-apple-speech, matching app signing identity, SHA256 $helper_hash"
+          done
 
       - name: Upload DMG
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
