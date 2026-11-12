@@ -8,7 +8,6 @@ import {
   ChevronRightIcon,
   LayoutGridIcon,
   ListTodoIcon,
-  SquareKanbanIcon,
   MoreHorizontalIcon,
   SettingsIcon,
 } from "lucide-react";
@@ -34,7 +33,9 @@ import {
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
-import { Menu, MenuTrigger, MenuPopup, MenuItem } from "../ui/menu";
+import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuItemDetail } from "../ui/menu";
+import { openTaskCount } from "../tasks/tasks.logic";
+import { useTaskProjectGroups } from "../tasks/useTaskProjects";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -52,8 +53,6 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
-import { useProjects } from "../../state/entities";
-import { usePrimaryEnvironmentId } from "../../state/environments";
 import { observeResize } from "~/lib/observeResize";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
@@ -219,23 +218,31 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
 function SidebarUtilityItem({
   icon,
   label,
+  count,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  count?: number;
   onClick: () => void;
 }) {
+  const name = count ? `${label} · ${count} open` : label;
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+            <SidebarMenuButton aria-label={name} onClick={onClick} size="icon" className="relative">
               {icon}
+              {count ? (
+                <span className="pointer-events-none absolute right-0.5 bottom-0.5 min-w-3 rounded-sm bg-sidebar px-0.5 text-center text-3xs leading-3 font-medium text-sidebar-muted-foreground tabular-nums">
+                  {count > 99 ? "99+" : count}
+                </span>
+              ) : null}
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{label}</TooltipPopup>
+        <TooltipPopup side="top">{name}</TooltipPopup>
       </Tooltip>
     </SidebarMenuItem>
   );
@@ -249,6 +256,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const openTasks = useTaskProjectGroups().reduce(
+    (total, group) => total + openTaskCount(group),
+    0,
+  );
   const [utilityWidth, setUtilityWidth] = useState(0);
   const observeUtilityWidth = (row: HTMLUListElement) =>
     observeResize(row, ([entry]) => {
@@ -278,6 +289,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/usage" });
   };
 
+  const handleTasksClick = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/tasks" });
+  };
+
   const handleArtifactsClick = () => {
     closeMobileSidebar();
     void navigate({ to: "/artifacts" });
@@ -294,6 +310,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   };
 
   const secondaryActions = [
+    { label: "Tasks", icon: <ListTodoIcon />, count: openTasks, onClick: handleTasksClick },
     ...(pullRequestsSupported
       ? [
           {
@@ -353,6 +370,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
                 <MenuItem key={action.label} onClick={action.onClick}>
                   {action.icon}
                   {action.label}
+                  {"count" in action && action.count ? (
+                    <MenuItemDetail>{action.count}</MenuItemDetail>
+                  ) : null}
                 </MenuItem>
               ))}
             </MenuPopup>
@@ -364,46 +384,8 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 });
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
-  const projects = useProjects();
-  const environmentId = usePrimaryEnvironmentId();
-  const count = projects
-    .filter((project) => project.environmentId === environmentId)
-    .reduce(
-      (total, project) =>
-        total + (project.savedPrompts ?? []).filter((task) => task.completedAt === null).length,
-      0,
-    );
-  const navigate = useNavigate();
   return (
     <SidebarFooter>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton onClick={() => void navigate({ to: "/activity" })}>
-            <SquareKanbanIcon />
-            <span>Activity</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton onClick={() => void navigate({ to: "/artifacts" })}>
-            <LayoutGridIcon />
-            <span>Artifacts</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            onClick={() =>
-              void navigate({
-                to: "/tasks",
-                search: environmentId ? { environment: environmentId } : {},
-              })
-            }
-          >
-            <ListTodoIcon />
-            <span>Tasks</span>
-            <span className="ml-auto text-xs text-muted-foreground">{count}</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />

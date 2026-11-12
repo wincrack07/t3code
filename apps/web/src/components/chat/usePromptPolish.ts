@@ -15,8 +15,10 @@ export function usePromptPolish(input: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId | null;
   readonly promptRef: RefObject<string>;
+  /** The caller shows the rewrite for review, so success needs no toast or undo. */
+  readonly reviewsResult?: boolean;
 }) {
-  const { environmentId, projectId, promptRef } = input;
+  const { environmentId, projectId, promptRef, reviewsResult = false } = input;
   const available = useAtomValue(serverEnvironment.polishPrompt.permissionAtom(environmentId));
   const run = useAtomCommand(serverEnvironment.polishPrompt, { reportFailure: false });
   const [running, setRunning] = useState(false);
@@ -53,6 +55,10 @@ export function usePromptPolish(input: {
         title: "Prompt not polished",
         description: "The draft changed while the rewrite was running.",
       });
+      return;
+    }
+    if (reviewsResult) {
+      toastManager.close(toastId);
       return;
     }
     toastManager.update(toastId, {
