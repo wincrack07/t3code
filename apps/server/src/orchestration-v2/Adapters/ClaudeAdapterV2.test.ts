@@ -6963,6 +6963,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       ["insufficient_credits", "Out of credits. Top up your endpoint account."],
       ["reasoning_effort", "Choose a supported reasoning level: off, low, high or max."],
     ].map(([code, hint]) => ({
+      apiErrorStatus: undefined,
+      terminalReason: undefined,
+      errors: undefined,
+      environment: undefined,
       name: `Refuseless ${code}`,
       isError: true,
       result: `API Error: ${code}`,
