@@ -55,6 +55,7 @@ import { formatEnvironmentQueryError } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { PreviewPanel } from "../preview/PreviewPanel";
 import { previewBridge } from "../preview/previewBridge";
@@ -211,10 +212,25 @@ export function ArtifactsPage() {
     accountListingsAtom(JSON.stringify(accounts.map((account) => sourcesKey(account.sources)))),
   );
   const registry = useContext(RegistryContext);
-  const refresh = () => {
-    for (const account of accounts) {
-      for (const source of account.sources) registry.refresh(listingAtomFor(source));
-    }
+  const fetchFresh = useAtomQueryRunner(serverEnvironment.claudeArtifacts, {
+    reportFailure: false,
+    refresh: true,
+  });
+  const [refreshPending, setRefreshPending] = useState(false);
+  // The forced read refills the server's cache, so the shown listings then reload from it.
+  const refresh = async () => {
+    setRefreshPending(true);
+    await Promise.all(
+      accounts.flatMap((account) =>
+        account.sources.map(async (source) => {
+          await fetchFresh({
+            environmentId: source.environmentId,
+            input: { instanceId: source.instanceId, limit: LISTING_LIMIT, refresh: true },
+          });
+          registry.refresh(listingAtomFor(source));
+        }),
+      ),
+    ).finally(() => setRefreshPending(false));
   };
   const loadedLists = accounts.flatMap((account, index) => {
     const result = listings[index]?.result;
@@ -225,7 +241,7 @@ export function ArtifactsPage() {
   const all = mergeArtifacts(loadedLists);
   const byId = new Map(all.map((entry) => [entry.artifact.id, entry]));
   const accountByKey = new Map(accounts.map((account) => [account.key, account]));
-  const refreshing = listings.some((listing) => listing.result.waiting);
+  const refreshing = refreshPending || listings.some((listing) => listing.result.waiting);
 
   const viewer = useArtifactViewer();
   const openLink = useOpenLink(null);
@@ -305,8 +321,8 @@ export function ArtifactsPage() {
               variant="ghost"
               aria-label="Refresh artifacts"
               title="Refresh"
-              disabled={accounts.length === 0}
-              onClick={refresh}
+              disabled={accounts.length === 0 || refreshPending}
+              onClick={() => void refresh()}
             >
               <RefreshIcon refreshing={refreshing} />
             </Button>

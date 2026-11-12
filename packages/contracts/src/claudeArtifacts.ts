@@ -27,6 +27,8 @@ export const ClaudeArtifactsListInput = Schema.Struct({
   scope: Schema.optional(ClaudeArtifactScope),
   limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(200))),
   cursor: Schema.optional(Schema.String),
+  /** Skips the server's short-lived listing cache, for an explicit refresh. */
+  refresh: Schema.optional(Schema.Boolean),
 });
 export type ClaudeArtifactsListInput = typeof ClaudeArtifactsListInput.Type;
 

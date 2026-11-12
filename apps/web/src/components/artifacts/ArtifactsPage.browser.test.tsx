@@ -13,6 +13,7 @@ import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 
 import { render } from "../../../test/render";
 import { __setClientSettingsForTests } from "../../hooks/useSettings";
+import { AppAtomRegistryProvider } from "../../rpc/atomRegistry";
 import { useArtifactRecentsStore } from "../../artifacts/artifactRecentsStore";
 import {
   applyPreviewServerSnapshot,
@@ -147,18 +148,25 @@ function setup() {
 
 it("views an artifact beside the list and refocuses its tab when picked again", async () => {
   setup();
-  await using _screen = await render(<ArtifactsPage />);
-  const dashboard = page.getByRole("link", { name: /Sales dashboard/ });
-  const roadmap = page.getByRole("link", { name: /Roadmap/ });
+  await using _screen = await render(
+    <AppAtomRegistryProvider>
+      <ArtifactsPage />
+    </AppAtomRegistryProvider>,
+  );
+  const list = page.getByRole("region", { name: "Artifacts", exact: true });
+  const dashboard = list.getByRole("link", { name: /Sales dashboard/ });
+  const roadmap = list.getByRole("link", { name: /Roadmap/ });
 
   await userEvent.click(dashboard);
   await expect.element(page.getByTestId("embedded-browser")).toHaveTextContent("tab-1");
   const [{ input }] = state.openPreview.mock.lastCall!;
   expect(input.url).toBe(ARTIFACTS[0]!.url);
   const viewerRef = { environmentId: local, threadId: input.threadId };
-  await expect
-    .element(page.getByRole("region", { name: "Artifact viewer" }))
-    .toHaveTextContent("Sales dashboard");
+  await vi.waitFor(() =>
+    expect(page.getByRole("region", { name: "Artifact viewer" }).element().textContent).toMatch(
+      /Sales dashboard/,
+    ),
+  );
 
   await userEvent.click(roadmap);
   await expect.element(page.getByTestId("embedded-browser")).toHaveTextContent("tab-2");
@@ -172,20 +180,28 @@ it("views an artifact beside the list and refocuses its tab when picked again", 
     "tab-2",
   ]);
   // Both were opened, so both lead the recents, newest first.
-  await expect
-    .element(page.getByRole("region", { name: "Recent artifacts" }))
-    .toHaveTextContent(/Sales dashboard[\s\S]*Roadmap/);
+  await vi.waitFor(() =>
+    expect(page.getByRole("region", { name: "Recent artifacts" }).element().textContent).toMatch(
+      /Sales dashboard[\s\S]*Roadmap/,
+    ),
+  );
 });
 
 it("opens the sort select and a row's actions menu", async () => {
   setup();
-  await using _screen = await render(<ArtifactsPage />);
+  await using _screen = await render(
+    <AppAtomRegistryProvider>
+      <ArtifactsPage />
+    </AppAtomRegistryProvider>,
+  );
 
   await userEvent.click(page.getByRole("combobox", { name: "Sort artifacts" }));
   await userEvent.click(page.getByRole("option", { name: "Title" }));
-  await expect
-    .element(page.getByRole("region", { name: "Artifacts", exact: true }))
-    .toHaveTextContent(/Roadmap[\s\S]*Sales dashboard/);
+  await vi.waitFor(() =>
+    expect(
+      page.getByRole("region", { name: "Artifacts", exact: true }).element().textContent,
+    ).toMatch(/Roadmap[\s\S]*Sales dashboard/),
+  );
 
   await userEvent.click(page.getByRole("button", { name: "Artifact actions" }).first());
   await expect
