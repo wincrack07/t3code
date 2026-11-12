@@ -7,7 +7,12 @@ import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
 import { TaskDetail } from "./TaskDetail";
 import { TaskList } from "./TaskList";
-import { buildTaskList, findTaskGroupForProject } from "./tasks.logic";
+import {
+  buildTaskList,
+  findTaskGroupForProject,
+  NO_TASK_FILTER,
+  taskTagsInUse,
+} from "./tasks.logic";
 import { useTaskProjectGroups } from "./useTaskProjects";
 
 /** The chat's quick view of its logical project's tasks, inside the right panel. */
@@ -23,7 +28,7 @@ export function TasksPanel({
   const group = findTaskGroupForProject(groups, environmentId, projectId);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   if (!group) return null;
-  const model = buildTaskList([group], group.key);
+  const model = buildTaskList([group], { ...NO_TASK_FILTER, projectKey: group.key });
   return (
     <section aria-label="Tasks" className="flex h-full min-h-0 flex-col">
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
@@ -58,11 +63,21 @@ export function TasksPanel({
       <TaskList
         model={model}
         selectedKey={selectedKey}
-        showProjectCaptions={false}
+        showSectionHeaders={false}
+        showProject={false}
+        sortable
+        tagsInUse={taskTagsInUse([group])}
+        onEditTags={null}
         onSelect={(key) => setSelectedKey(key === selectedKey ? null : key)}
         onOpen={(key) => setSelectedKey(key)}
         renderExpanded={(entry) => (
-          <TaskDetail key={entry.key} entry={entry} group={group} density="compact" />
+          <TaskDetail
+            key={entry.key}
+            entry={entry}
+            group={group}
+            density="compact"
+            tagsInUse={taskTagsInUse([group])}
+          />
         )}
         empty={
           <Empty size="compact">

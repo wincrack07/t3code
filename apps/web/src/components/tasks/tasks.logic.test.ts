@@ -16,6 +16,11 @@ import {
   buildTaskList,
   buildTaskProjectGroups,
   findTaskGroupForProject,
+  NO_TASK_FILTER,
+  normalizeTaskTags,
+  taskCaptureProjectKey,
+  taskDropPlan,
+  type TaskFilter,
   openTaskCount,
   pendingTaskLink,
   pickTaskHomeProject,
@@ -149,16 +154,17 @@ describe("buildTaskList", () => {
     primaryEnvironmentId: mac,
     connected: new Set([mac, vpsA]),
   });
+  const filter = (extra: Partial<TaskFilter>): TaskFilter => ({ ...NO_TASK_FILTER, ...extra });
+  const ids = (rows: ReadonlyArray<{ entry: { task: { id: string } }; depth: number }>) =>
+    rows.map((row) => `${"  ".repeat(row.depth)}${row.entry.task.id}`);
 
   it("splits open and done sections and counts unreachable machines once", () => {
-    const list = buildTaskList(groups, null);
-    expect(list.open.map((section) => [section.group.label, section.tasks.length])).toEqual([
+    const list = buildTaskList(groups, NO_TASK_FILTER);
+    expect(list.sections.map((section) => [section.label, section.rows.length])).toEqual([
       ["lumen", 1],
       ["orbit", 2],
     ]);
-    expect(list.done.map((section) => section.tasks.map((entry) => entry.task.id))).toEqual([
-      ["a2"],
-    ]);
+    expect(ids(list.done)).toEqual(["a2"]);
     expect([list.openCount, list.doneCount, list.unreachable, list.empty]).toEqual([3, 1, 1, null]);
     expect(taskListOrder(list, false)).toHaveLength(3);
     expect(taskListOrder(list, true)).toHaveLength(4);
@@ -166,10 +172,97 @@ describe("buildTaskList", () => {
 
   it("filters to one logical project and explains an empty result", () => {
     const lumen = groups.find((group) => group.label === "lumen")!;
-    expect(buildTaskList(groups, lumen.key).openCount).toBe(1);
-    expect(buildTaskList(groups, lumen.key).unreachable).toBe(0);
-    expect(buildTaskList(groups, "missing").empty).toBe("filtered");
-    expect(buildTaskList([], null).empty).toBe("none");
+    expect(buildTaskList(groups, filter({ projectKey: lumen.key })).openCount).toBe(1);
+    expect(buildTaskList(groups, filter({ projectKey: lumen.key })).unreachable).toBe(0);
+    expect(buildTaskList(groups, filter({ projectKey: "missing" })).empty).toBe("filtered");
+    expect(buildTaskList(groups, filter({ query: "nothing matches" })).empty).toBe("filtered");
+    expect(buildTaskList([], NO_TASK_FILTER).empty).toBe("none");
+  });
+
+  const inboxGroups = buildTaskProjectGroups({
+    projects: [
+      project(mac, "orbit", [
+        task("t1", "2026-11-09T00:00:00Z", { when: "today", priority: "p1", tags: ["ui"] }),
+        task("c1", "2026-11-08T00:00:00Z", { parentTaskId: "t1", when: "later" }),
+        task("l1", "2026-11-07T00:00:00Z", { when: "later", tags: ["api"] }),
+        task("n1", "2026-11-06T00:00:00Z", { title: "Fix login" }),
+        task("t2", "2026-11-05T00:00:00Z", { when: "today" }),
+        task("d1", "2026-11-04T00:00:00Z", { status: "done", completedAt: "2026-11-10T00:00:00Z" }),
+      ]),
+      project(vpsA, "orbit", [task("v1", "2026-11-10T00:00:00Z", { when: "today" })]),
+      project(mac, "lumen", [task("x1", "2026-11-06T12:00:00Z")]),
+    ],
+    settings,
+    primaryEnvironmentId: mac,
+    connected: new Set([mac, vpsA]),
+  });
+
+  it("groups the inbox by when in manual order, with subtasks under their parent", () => {
+    const inbox = buildTaskList(inboxGroups, NO_TASK_FILTER, "inbox");
+    expect(inbox.sections.map((section) => [section.id, ids(section.rows)])).toEqual([
+      ["today", ["v1", "t1", "  c1", "t2"]],
+      ["later", ["l1"]],
+      // Projects interleave by their newer head, so lumen's x1 sits between orbit's tasks.
+      ["none", ["x1", "n1"]],
+    ]);
+    expect(ids(inbox.done)).toEqual(["d1"]);
+    expect([inbox.openCount, inbox.doneCount]).toEqual([7, 1]);
+  });
+
+  it("filters by priority, tag, machine and words, and lifts a subtask whose parent is hidden", () => {
+    const rows = (extra: Partial<TaskFilter>) =>
+      buildTaskList(inboxGroups, filter(extra), "inbox").sections.flatMap((section) =>
+        ids(section.rows),
+      );
+    expect(rows({ priority: "p1" })).toEqual(["t1"]);
+    expect(rows({ priority: "p3" })).toEqual(["v1", "t2", "c1", "l1", "x1", "n1"]);
+    expect(rows({ tag: "api" })).toEqual(["l1"]);
+    expect(rows({ environmentId: vpsA })).toEqual(["v1"]);
+    expect(rows({ query: "fix LOGIN" })).toEqual(["n1"]);
+    expect(rows({ query: "orbit api" })).toEqual(["l1"]);
+  });
+
+  it("plans reorders within one machine's siblings and section moves that set when", () => {
+    const inbox = buildTaskList(inboxGroups, NO_TASK_FILTER, "inbox");
+    const key = (environmentId: EnvironmentId, id: string) =>
+      `${environmentId}:orbit-${environmentId}:${id}`;
+    // t2 above t1: only mac's top-level today tasks are permuted; vps-a's v1 is left alone.
+    expect(
+      taskDropPlan(inbox, key(mac, "t2"), { sectionId: "today", overKey: key(mac, "t1") }),
+    ).toMatchObject({ when: null, reorder: ["t2", "t1"] });
+    // A drop beside another machine's task changes nothing.
+    expect(
+      taskDropPlan(inbox, key(mac, "t2"), { sectionId: "today", overKey: key(vpsA, "v1") }),
+    ).toBeNull();
+    // Into Later above l1: sets when and places it first.
+    expect(
+      taskDropPlan(inbox, key(mac, "n1"), { sectionId: "later", overKey: key(mac, "l1") }),
+    ).toMatchObject({ when: "later", reorder: ["n1", "l1"] });
+    // Onto an empty section header: only when.
+    expect(taskDropPlan(inbox, key(mac, "l1"), { sectionId: "none", overKey: null })).toMatchObject(
+      { when: "none", reorder: null },
+    );
+    // A subtask follows its parent, so it never changes section on its own.
+    expect(
+      taskDropPlan(inbox, key(mac, "c1"), { sectionId: "later", overKey: key(mac, "l1") }),
+    ).toBeNull();
+  });
+});
+
+describe("taskCaptureProjectKey", () => {
+  it("takes the first preference that can store tasks, else the first project", () => {
+    const storable = [{ key: "a" }, { key: "b" }];
+    expect(taskCaptureProjectKey(storable, [null, "b", "a"])).toBe("b");
+    expect(taskCaptureProjectKey(storable, ["gone", null])).toBe("a");
+    expect(taskCaptureProjectKey([], ["a"])).toBeNull();
+  });
+});
+
+describe("normalizeTaskTags", () => {
+  it("trims, lowercases, deduplicates and caps tags like the server", () => {
+    expect(normalizeTaskTags([" UI ", "ui", "", "Api"])).toEqual(["ui", "api"]);
+    expect(normalizeTaskTags(["x".repeat(40)])).toEqual(["x".repeat(32)]);
+    expect(normalizeTaskTags(Array.from({ length: 15 }, (_, i) => `t${i}`))).toHaveLength(12);
   });
 });
 
@@ -195,12 +288,16 @@ describe("board", () => {
   });
 
   it("places tasks by status, newest first, within the project filter", () => {
-    const board = buildTaskBoard(groups, null);
-    expect(board.open.map((entry) => entry.task.id)).toEqual(["b1", "a1", "m1"]);
-    expect(board["in-progress"].map((entry) => entry.task.id)).toEqual(["l1"]);
-    expect(board.done.map((entry) => entry.task.id)).toEqual(["a2"]);
+    const board = buildTaskBoard(groups, NO_TASK_FILTER);
+    const ids = (rows: ReadonlyArray<{ entry: { task: { id: string } } }>) =>
+      rows.map((row) => row.entry.task.id);
+    expect(ids(board.open)).toEqual(["b1", "a1", "m1"]);
+    expect(ids(board["in-progress"])).toEqual(["l1"]);
+    expect(ids(board.done)).toEqual(["a2"]);
     const orbitKey = groups.find((group) => group.label === "orbit")!.key;
-    expect(buildTaskBoard(groups, orbitKey)["in-progress"]).toEqual([]);
+    expect(
+      buildTaskBoard(groups, { ...NO_TASK_FILTER, projectKey: orbitKey })["in-progress"],
+    ).toEqual([]);
   });
 
   it("changes status only for a drop on a different column", () => {

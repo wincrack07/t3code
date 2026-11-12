@@ -2,6 +2,7 @@ import type { SavedPromptStatus, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ServerIcon } from "lucide-react";
 
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { cn } from "../../lib/utils";
 import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -11,6 +12,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   TASK_STATUS_LABELS,
   TASK_STATUSES,
+  taskRunningMinutes,
   taskThreadRefs,
   taskThreadState,
   type TaskEntry,
@@ -160,5 +162,18 @@ export function TaskMachineChip({ label }: { label: string }) {
       </TooltipTrigger>
       <TooltipPopup>Stored on {label}</TooltipPopup>
     </Tooltip>
+  );
+}
+
+/** "running · 4 min" for a task whose latest thread is working; repaints once a minute. */
+export function TaskRunningLabel({ startedAt }: { startedAt: string | null }) {
+  const now = useNowMinute();
+  // The tick is a UTC minute without its zone (2026-11-12T17:32).
+  const minutes = taskRunningMinutes(startedAt, `${now}:00Z`);
+  return (
+    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+      <TaskThreadDot state="running" />
+      {minutes === null ? "running" : `running · ${minutes} min`}
+    </span>
   );
 }

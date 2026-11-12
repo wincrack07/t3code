@@ -64,11 +64,17 @@ import {
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { TaskAddPathForm, TaskAttachmentCount, TaskAttachmentStrip } from "./TaskAttachments";
+import { TASK_PRIORITY_BADGE, TASK_WHEN_ORDER, TaskChoiceChip, TaskTagsEditor } from "./TaskFields";
 import { TaskMachineChip, TaskStatusMenu, TaskThreadRow } from "./TaskParts";
 import {
   type InspectedTaskAttachment,
   pendingTaskLink,
   TASK_POLISH_MAX_LENGTH,
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  TASK_WHEN_LABELS,
+  taskPriority,
+  taskWhen,
   TASK_TEXT_MAX_LENGTH,
   TASK_TITLE_MAX_LENGTH,
   taskAttachmentLimitError,
@@ -90,10 +96,17 @@ export function TaskDetail({
   entry,
   group,
   density = "page",
+  tagsInUse,
+  startAddingTag = false,
+  onAddingTagChange,
 }: {
   entry: TaskEntry;
   group: TaskProjectGroup;
   density?: TaskDetailDensity;
+  tagsInUse: ReadonlyArray<string>;
+  /** The row menu's "New tag…" opens the tag field. */
+  startAddingTag?: boolean;
+  onAddingTagChange?: (adding: boolean) => void;
 }) {
   const { task, home } = entry;
   const environmentId = home.environmentId;
@@ -121,6 +134,16 @@ export function TaskDetail({
   const promptRef = useRef(text);
   const polish = usePromptPolish({ environmentId, projectId, promptRef, reviewsResult: true });
   const start = useTaskStart(entry);
+  const [addingTag, setAddingTag] = useState(startAddingTag);
+  const [tagRequest, setTagRequest] = useState(startAddingTag);
+  if (tagRequest !== startAddingTag) {
+    setTagRequest(startAddingTag);
+    if (startAddingTag) setAddingTag(true);
+  }
+  const changeAddingTag = (adding: boolean) => {
+    setAddingTag(adding);
+    onAddingTagChange?.(adding);
+  };
   // Another window or machine edited the task: take its text unless this editor changed it too.
   if (source.text !== task.text || source.title !== task.title) {
     if (text === source.text) setText(task.text);
@@ -319,11 +342,36 @@ export function TaskDetail({
           </Menu>
         </div>
       </div>
-      {compact ? null : (
-        <div className="-mt-2 flex h-4 min-w-0 items-center gap-3 px-1">
-          <TaskMachineChip label={labelOf(environmentId)} />
-        </div>
-      )}
+      <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5">
+        <TaskChoiceChip
+          label="Priority"
+          value={taskPriority(task)}
+          variant={TASK_PRIORITY_BADGE[taskPriority(task)]}
+          options={TASK_PRIORITIES.map((value) => ({ value, label: TASK_PRIORITY_LABELS[value] }))}
+          disabled={!allowed}
+          onChange={(priority) => void update({ kind: "edit", id: task.id, priority })}
+        />
+        <TaskChoiceChip
+          label="When"
+          value={taskWhen(task)}
+          options={TASK_WHEN_ORDER.map((value) => ({ value, label: TASK_WHEN_LABELS[value] }))}
+          disabled={!allowed}
+          onChange={(when) => void update({ kind: "edit", id: task.id, when })}
+        />
+        <TaskTagsEditor
+          tags={task.tags ?? []}
+          suggestions={tagsInUse}
+          disabled={!allowed}
+          adding={addingTag}
+          onAddingChange={changeAddingTag}
+          onChange={(tags) => void update({ kind: "edit", id: task.id, tags })}
+        />
+        {compact ? null : (
+          <span className="ml-auto flex min-w-0 max-w-40">
+            <TaskMachineChip label={labelOf(environmentId)} />
+          </span>
+        )}
+      </div>
       <div
         className={cn(
           "flex min-h-0 flex-col rounded-lg border border-border has-focus-visible:border-ring",

@@ -27,31 +27,27 @@ import {
   TASK_STATUS_LABELS,
   TASK_STATUSES,
   taskStatusForDrop,
+  taskPriority,
   taskTitle,
   type TaskEntry,
-  type TaskProjectGroup,
+  type TaskRow,
 } from "./tasks.logic";
+import { TaskPriorityChip } from "./TaskFields";
 import { useEnvironmentLabel } from "./useTaskProjects";
 
 export function TaskBoard({
   board,
-  groups,
+  showProject,
   selectedKey,
   onSelect,
 }: {
-  board: Record<SavedPromptStatus, TaskEntry[]>;
-  groups: ReadonlyArray<TaskProjectGroup>;
+  board: Record<SavedPromptStatus, TaskRow[]>;
+  showProject: boolean;
   selectedKey: string | null;
   onSelect: (key: string) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const entries = TASK_STATUSES.flatMap((status) => board[status]);
-  const multiMachine = new Set(
-    groups.filter((group) => group.multiMachine).map((group) => group.key),
-  );
-  const groupOf = new Map(
-    groups.flatMap((group) => group.tasks.map((entry) => [entry.key, group] as const)),
-  );
+  const entries = TASK_STATUSES.flatMap((status) => board[status].map((row) => row.entry));
   const updateTask = useAtomCommand(projectEnvironment.savedPromptUpdate);
   // A drop writes to the task's own machine, like every other task edit.
   const onDragEnd = (event: DragEndEvent) => {
@@ -73,12 +69,12 @@ export function TaskBoard({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:flex-row md:overflow-x-auto md:overflow-y-hidden">
         {TASK_STATUSES.map((status) => (
           <BoardColumn key={status} status={status} count={board[status].length}>
-            {board[status].map((entry) => (
+            {board[status].map(({ entry, group }) => (
               <TaskCard
                 key={entry.key}
                 entry={entry}
-                projectLabel={groupOf.get(entry.key)?.label ?? entry.home.title}
-                showMachine={multiMachine.has(groupOf.get(entry.key)?.key ?? "")}
+                projectLabel={showProject ? group.label : null}
+                showMachine={group.multiMachine}
                 selected={entry.key === selectedKey}
                 onSelect={() => onSelect(entry.key)}
               />
@@ -136,7 +132,7 @@ function TaskCard({
   onSelect,
 }: {
   entry: TaskEntry;
-  projectLabel: string;
+  projectLabel: string | null;
   showMachine: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -174,9 +170,12 @@ function TaskCard({
       </button>
       <p className="line-clamp-2 text-xs leading-4 text-muted-foreground">{entry.task.text}</p>
       <div className="relative z-1 flex min-w-0 items-center gap-1.5">
-        <Badge variant="outline" size="sm" className="min-w-0 max-w-36">
-          <span className="truncate">{projectLabel}</span>
-        </Badge>
+        <TaskPriorityChip priority={taskPriority(entry.task)} />
+        {projectLabel !== null ? (
+          <Badge variant="outline" size="sm" className="min-w-0 max-w-36">
+            <span className="truncate">{projectLabel}</span>
+          </Badge>
+        ) : null}
         {entry.status === "in-progress" && thread.state !== null ? (
           <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <TaskThreadDot state={thread.state} />

@@ -56,6 +56,8 @@ export interface TaskEntry {
   readonly task: ProjectSavedPrompt;
   readonly home: EnvironmentProject;
   readonly status: SavedPromptStatus;
+  /** Position in its home project's task array, which is the manual order. */
+  readonly order: number;
 }
 
 export interface TaskProjectMember {
@@ -78,8 +80,32 @@ export interface TaskProjectGroup {
 export const taskKey = (environmentId: EnvironmentId, projectId: string, taskId: string) =>
   `${environmentId}:${projectId}:${taskId}`;
 
-const byNewest = (left: TaskEntry, right: TaskEntry) =>
-  right.task.createdAt.localeCompare(left.task.createdAt);
+/**
+ * Each machine keeps its own manual order (new tasks first). Merging those lists by their newer
+ * head keeps every machine's order intact and reads newest-first until someone reorders.
+ */
+function mergeManualOrder<T>(items: ReadonlyArray<T>, entryOf: (item: T) => TaskEntry): T[] {
+  const lists = new Map<string, T[]>();
+  for (const item of items) {
+    const { home } = entryOf(item);
+    const key = `${home.environmentId}\u0000${home.id}`;
+    lists.set(key, [...(lists.get(key) ?? []), item]);
+  }
+  const queues = [...lists.entries()]
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .map(([, list]) => list.toSorted((left, right) => entryOf(left).order - entryOf(right).order));
+  const merged: T[] = [];
+  for (;;) {
+    let best: T[] | null = null;
+    for (const queue of queues) {
+      if (queue.length === 0) continue;
+      if (best === null || entryOf(queue[0]!).task.createdAt > entryOf(best[0]!).task.createdAt)
+        best = queue;
+    }
+    if (best === null) return merged;
+    merged.push(best.shift()!);
+  }
+}
 
 /**
  * Groups projects exactly as the sidebar does and unions their tasks. Tasks stay on the
@@ -112,19 +138,19 @@ export function buildTaskProjectGroups(input: {
       const tasks = members
         .filter((member) => member.reachable)
         .flatMap(({ project }) =>
-          (project.savedPrompts ?? []).map((task) => ({
+          (project.savedPrompts ?? []).map((task, order) => ({
             key: taskKey(project.environmentId, project.id, task.id),
             task,
             home: project,
             status: taskStatus(task),
+            order,
           })),
-        )
-        .toSorted(byNewest);
+        );
       return {
         key: group.key,
         label: group.label,
         members,
-        tasks,
+        tasks: mergeManualOrder(tasks, (entry) => entry),
         unreachable: new Set(
           members.filter((member) => !member.reachable).map((m) => m.project.environmentId),
         ).size,
@@ -173,57 +199,217 @@ export function pickTaskHomeProject(
   );
 }
 
-export interface TaskListSection {
+export const TASK_PRIORITIES = ["p1", "p2", "p3"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  p1: "P1",
+  p2: "P2",
+  p3: "P3",
+};
+export const taskPriority = (task: Pick<ProjectSavedPrompt, "priority">): TaskPriority =>
+  task.priority ?? "p3";
+
+export type TaskWhen = "today" | "later" | "none";
+export const TASK_WHEN_LABELS: Record<TaskWhen, string> = {
+  today: "Today",
+  later: "Later",
+  none: "Anytime",
+};
+export const taskWhen = (task: Pick<ProjectSavedPrompt, "when">): TaskWhen => task.when ?? "none";
+
+export const TASK_TAG_MAX_COUNT = 12;
+export const TASK_TAG_MAX_LENGTH = 32;
+
+/** Tags as the server stores them: trimmed, lowercased, unique, within the limits. */
+export function normalizeTaskTags(tags: ReadonlyArray<string>): string[] {
+  return [
+    ...new Set(
+      tags
+        .map((tag) => tag.trim().toLowerCase().slice(0, TASK_TAG_MAX_LENGTH).trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, TASK_TAG_MAX_COUNT);
+}
+
+export interface TaskFilter {
+  readonly query: string;
+  readonly projectKey: string | null;
+  readonly priority: TaskPriority | null;
+  readonly tag: string | null;
+  readonly environmentId: EnvironmentId | null;
+}
+
+export const NO_TASK_FILTER: TaskFilter = {
+  query: "",
+  projectKey: null,
+  priority: null,
+  tag: null,
+  environmentId: null,
+};
+
+/** True when anything but the project narrows the list. */
+const taskFilterActive = (filter: TaskFilter) =>
+  filter.query.trim() !== "" ||
+  filter.priority !== null ||
+  filter.tag !== null ||
+  filter.environmentId !== null;
+
+function taskMatchesFilter(
+  entry: TaskEntry,
+  group: Pick<TaskProjectGroup, "key" | "label">,
+  filter: TaskFilter,
+): boolean {
+  if (filter.projectKey !== null && group.key !== filter.projectKey) return false;
+  if (filter.priority !== null && taskPriority(entry.task) !== filter.priority) return false;
+  if (filter.tag !== null && !(entry.task.tags ?? []).includes(filter.tag)) return false;
+  if (filter.environmentId !== null && entry.home.environmentId !== filter.environmentId)
+    return false;
+  const words = filter.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const haystack = [taskTitle(entry.task), entry.task.text, group.label, ...(entry.task.tags ?? [])]
+    .join("\n")
+    .toLowerCase();
+  return words.every((word) => haystack.includes(word));
+}
+
+/** Every tag in use, for the filter and the tag editor's suggestions. */
+export const taskTagsInUse = (groups: ReadonlyArray<TaskProjectGroup>) =>
+  [
+    ...new Set(groups.flatMap((group) => group.tasks.flatMap((entry) => entry.task.tags ?? []))),
+  ].toSorted();
+
+export interface TaskRow {
+  readonly entry: TaskEntry;
   readonly group: TaskProjectGroup;
-  readonly tasks: ReadonlyArray<TaskEntry>;
+  /** 1 for a subtask listed under its parent. */
+  readonly depth: 0 | 1;
+}
+
+export type TaskListView = "inbox" | "project";
+
+/** The capture field's project: the first preference that can store tasks, else the first one. */
+export function taskCaptureProjectKey(
+  storable: ReadonlyArray<Pick<TaskProjectGroup, "key">>,
+  preferences: ReadonlyArray<string | null>,
+): string | null {
+  const keys = new Set(storable.map((group) => group.key));
+  return preferences.find((key) => key !== null && keys.has(key)) ?? storable[0]?.key ?? null;
+}
+
+export interface TaskListSection {
+  readonly id: string;
+  readonly label: string;
+  /** The `when` a drop into this section sets; null where order is per project only. */
+  readonly when: TaskWhen | null;
+  readonly group: TaskProjectGroup | null;
+  readonly rows: ReadonlyArray<TaskRow>;
 }
 
 export interface TaskListModel {
-  readonly open: ReadonlyArray<TaskListSection>;
-  readonly done: ReadonlyArray<TaskListSection>;
+  readonly sections: ReadonlyArray<TaskListSection>;
+  readonly done: ReadonlyArray<TaskRow>;
   readonly openCount: number;
   readonly doneCount: number;
   readonly unreachable: number;
-  /** Why nothing is listed: no tasks anywhere, or none in the chosen project. */
+  /** Why nothing is listed: no tasks anywhere, or none that match the filter. */
   readonly empty: "none" | "filtered" | null;
 }
 
-export function buildTaskList(
-  groups: ReadonlyArray<TaskProjectGroup>,
-  projectKey: string | null,
-): TaskListModel {
-  const visible = projectKey === null ? groups : groups.filter((group) => group.key === projectKey);
-  const sections = (keep: (entry: TaskEntry) => boolean) =>
-    visible.flatMap((group) => {
-      const tasks = group.tasks.filter(keep);
-      return tasks.length > 0 ? [{ group, tasks }] : [];
-    });
-  const open = sections((entry) => entry.status !== "done");
-  const done = sections((entry) => entry.status === "done");
-  const count = (list: ReadonlyArray<TaskListSection>) =>
-    list.reduce((total, section) => total + section.tasks.length, 0);
-  const anyTasks = groups.some((group) => group.tasks.length > 0);
-  const visibleTasks = count(open) + count(done);
+const parentKey = (entry: TaskEntry) =>
+  entry.task.parentTaskId
+    ? taskKey(entry.home.environmentId, entry.home.id, entry.task.parentTaskId)
+    : null;
+
+type ListedTask = { readonly entry: TaskEntry; readonly group: TaskProjectGroup };
+
+/**
+ * Puts each subtask right under its parent when the parent is listed in the same set; a subtask
+ * whose parent is filtered out or elsewhere stands on its own.
+ */
+function nestRows(entries: ReadonlyArray<ListedTask>) {
+  const listed = new Set(entries.map(({ entry }) => entry.key));
+  const children = new Map<string, TaskRow[]>();
+  const top: ListedTask[] = [];
+  for (const item of entries) {
+    const parent = parentKey(item.entry);
+    if (parent !== null && listed.has(parent)) {
+      children.set(parent, [...(children.get(parent) ?? []), { ...item, depth: 1 }]);
+    } else top.push(item);
+  }
   return {
-    open,
-    done,
-    openCount: count(open),
-    doneCount: count(done),
-    // Unknown counts can't be attributed, so a machine counts once however many projects it holds.
-    unreachable: new Set(
-      visible.flatMap((group) =>
-        group.members.filter((m) => !m.reachable).map((m) => m.project.environmentId),
-      ),
-    ).size,
-    empty: visibleTasks > 0 ? null : anyTasks && projectKey !== null ? "filtered" : "none",
+    top,
+    rows: (items: ReadonlyArray<ListedTask>): TaskRow[] =>
+      items.flatMap((item) => [
+        { ...item, depth: 0 as const },
+        ...(children.get(item.entry.key) ?? []),
+      ]),
   };
 }
 
-/** The keyboard order of a list: open sections, then done ones when that group is expanded. */
-export function taskListOrder(model: TaskListModel, doneExpanded: boolean): string[] {
-  return [...model.open, ...(doneExpanded ? model.done : [])].flatMap((section) =>
-    section.tasks.map((entry) => entry.key),
+/**
+ * The list views. Inbox groups open tasks by when (Today, Later, then the rest); By project
+ * groups them by logical project. Both keep manual order and collapse done tasks into one list.
+ */
+export function buildTaskList(
+  groups: ReadonlyArray<TaskProjectGroup>,
+  filter: TaskFilter,
+  view: TaskListView = "project",
+): TaskListModel {
+  const visibleGroups =
+    filter.projectKey === null ? groups : groups.filter((group) => group.key === filter.projectKey);
+  const matching = mergeManualOrder(
+    visibleGroups.flatMap((group) =>
+      group.tasks
+        .filter((entry) => taskMatchesFilter(entry, group, filter))
+        .map((entry) => ({ entry, group })),
+    ),
+    (item) => item.entry,
   );
+  const open = nestRows(matching.filter(({ entry }) => entry.status !== "done"));
+  const done = nestRows(matching.filter(({ entry }) => entry.status === "done"));
+  const sections: TaskListSection[] =
+    view === "inbox"
+      ? (["today", "later", "none"] as const).map((when) => ({
+          id: when,
+          label: TASK_WHEN_LABELS[when],
+          when,
+          group: null,
+          rows: open.rows(open.top.filter(({ entry }) => taskWhen(entry.task) === when)),
+        }))
+      : visibleGroups.flatMap((group) => {
+          const rows = open.rows(open.top.filter((item) => item.group.key === group.key));
+          return rows.length > 0
+            ? [{ id: group.key, label: group.label, when: null, group, rows }]
+            : [];
+        });
+  const openCount = matching.filter(({ entry }) => entry.status !== "done").length;
+  const anyTasks = groups.some((group) => group.tasks.length > 0);
+  return {
+    sections,
+    done: done.rows(done.top),
+    openCount,
+    doneCount: matching.length - openCount,
+    // Unknown counts can't be attributed, so a machine counts once however many projects it holds.
+    unreachable: new Set(
+      visibleGroups.flatMap((group) =>
+        group.members.filter((m) => !m.reachable).map((m) => m.project.environmentId),
+      ),
+    ).size,
+    empty:
+      matching.length > 0
+        ? null
+        : anyTasks && (filter.projectKey !== null || taskFilterActive(filter))
+          ? "filtered"
+          : "none",
+  };
+}
+
+/** The keyboard order of a list: open sections, then done tasks when that list is expanded. */
+export function taskListOrder(model: TaskListModel, doneExpanded: boolean): string[] {
+  return [
+    ...model.sections.flatMap((section) => section.rows),
+    ...(doneExpanded ? model.done : []),
+  ].map((row) => row.entry.key);
 }
 
 export function adjacentTaskKey(
@@ -237,21 +423,71 @@ export function adjacentTaskKey(
   return order[Math.min(order.length - 1, Math.max(0, index + direction))]!;
 }
 
+export interface TaskDropPlan {
+  readonly entry: TaskEntry;
+  readonly when: TaskWhen | null;
+  /** The home project's ids in their new order; the server permutes them among their slots. */
+  readonly reorder: ReadonlyArray<string> | null;
+}
+
+/**
+ * What a row dropped in a section changes. Order is per home project and per parent, so a drop
+ * beside a task from another machine or another parent only moves the task between sections.
+ */
+export function taskDropPlan(
+  model: Pick<TaskListModel, "sections">,
+  activeKey: string,
+  target: { readonly sectionId: string; readonly overKey: string | null },
+): TaskDropPlan | null {
+  const rows = model.sections.flatMap((section) => section.rows);
+  const active = rows.find((row) => row.entry.key === activeKey);
+  const section = model.sections.find((candidate) => candidate.id === target.sectionId);
+  if (!active || !section) return null;
+  const from = model.sections.find((candidate) =>
+    candidate.rows.some((row) => row.entry.key === activeKey),
+  );
+  const when =
+    section.when !== null && active.depth === 0 && section.id !== from?.id ? section.when : null;
+  const siblings = section.rows.filter(
+    (row) =>
+      row.entry.home.environmentId === active.entry.home.environmentId &&
+      row.entry.home.id === active.entry.home.id &&
+      (row.entry.task.parentTaskId ?? null) === (active.entry.task.parentTaskId ?? null) &&
+      row.depth === active.depth,
+  );
+  const over = siblings.find((row) => row.entry.key === target.overKey);
+  let reorder: string[] | null = null;
+  if (over && over.entry.key !== activeKey) {
+    const ids = siblings.map((row) => row.entry.task.id);
+    const fromIndex = ids.indexOf(active.entry.task.id);
+    const toIndex = ids.indexOf(over.entry.task.id);
+    if (fromIndex === -1) ids.splice(toIndex, 0, active.entry.task.id);
+    else {
+      ids.splice(fromIndex, 1);
+      ids.splice(toIndex, 0, active.entry.task.id);
+    }
+    reorder = ids;
+  }
+  if (when === null && reorder === null) return null;
+  return { entry: active.entry, when, reorder };
+}
+
 export function buildTaskBoard(
   groups: ReadonlyArray<TaskProjectGroup>,
-  projectKey: string | null,
-): Record<SavedPromptStatus, TaskEntry[]> {
-  const board: Record<SavedPromptStatus, TaskEntry[]> = {
+  filter: TaskFilter,
+): Record<SavedPromptStatus, TaskRow[]> {
+  const board: Record<SavedPromptStatus, TaskRow[]> = {
     open: [],
     "in-progress": [],
     review: [],
     done: [],
   };
   for (const group of groups) {
-    if (projectKey !== null && group.key !== projectKey) continue;
-    for (const entry of group.tasks) board[entry.status].push(entry);
+    for (const entry of group.tasks) {
+      if (taskMatchesFilter(entry, group, filter))
+        board[entry.status].push({ entry, group, depth: 0 });
+    }
   }
-  for (const status of TASK_STATUSES) board[status].sort(byNewest);
   return board;
 }
 
@@ -265,6 +501,13 @@ export function taskStatusForDrop(
 }
 
 export type TaskThreadState = "running" | "finished" | "missing";
+
+/** Whole minutes a run has been going, at least 1; null when it has not started. */
+export function taskRunningMinutes(startedAt: string | null, now: string): number | null {
+  if (startedAt === null) return null;
+  const elapsed = Date.parse(now) - Date.parse(startedAt);
+  return Number.isFinite(elapsed) ? Math.max(1, Math.floor(elapsed / 60_000)) : null;
+}
 
 export function taskThreadState(
   task: Pick<ProjectSavedPrompt, "latestThreadId">,

@@ -1,30 +1,65 @@
 import { useNavigate } from "@tanstack/react-router";
+import type { EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { ArrowLeftIcon, KanbanIcon, ListIcon, PlusIcon } from "lucide-react";
-import { useRef } from "react";
+import { ArrowLeftIcon, ListFilterIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../../lib/utils";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SidebarInset } from "../ui/sidebar";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { NewTaskDraft, type NewTaskSeed } from "./NewTaskDraft";
 import { TaskBoard } from "./TaskBoard";
+import { TaskCapture } from "./TaskCapture";
 import { TaskDetail } from "./TaskDetail";
 import { TaskList } from "./TaskList";
-import { buildTaskBoard, buildTaskList, type TaskProjectGroup } from "./tasks.logic";
-import { useTaskProjectGroups } from "./useTaskProjects";
+import {
+  buildTaskBoard,
+  buildTaskList,
+  NO_TASK_FILTER,
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  taskTagsInUse,
+  type TaskFilter,
+  type TaskPriority,
+  type TaskProjectGroup,
+} from "./tasks.logic";
+import { useEnvironmentLabel, useTaskProjectGroups } from "./useTaskProjects";
 
-const TasksView = Schema.Literals(["list", "board"]);
+const TasksView = Schema.Literals(["inbox", "project", "board"]);
+type TasksView = typeof TasksView.Type;
+const VIEW_LABELS: Record<TasksView, string> = {
+  inbox: "Inbox",
+  project: "By project",
+  board: "Board",
+};
 
 export interface TasksSearch {
   readonly project?: string | undefined;
   readonly task?: string | undefined;
 }
+
+const isEditable = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 export function TasksPage({
   search,
@@ -36,10 +71,16 @@ export function TasksPage({
   const navigate = useNavigate();
   const groups = useTaskProjectGroups();
   const projectKey = search.project ?? null;
-  const model = buildTaskList(groups, projectKey);
+  const [refine, setRefine] = useState<Omit<TaskFilter, "projectKey">>(NO_TASK_FILTER);
+  const filter: TaskFilter = { ...refine, projectKey };
+  const [view, setView] = useLocalStorage("t3code:tasks:view-v2", "inbox", TasksView);
+  const board = view === "board";
+  const model = buildTaskList(groups, filter, view === "inbox" ? "inbox" : "project");
   const entries = groups.flatMap((group) => group.tasks.map((entry) => ({ entry, group })));
   const selected = entries.find(({ entry }) => entry.key === search.task) ?? null;
-  const detailRef = useRef<HTMLDivElement>(null);
+  const tagsInUse = taskTagsInUse(groups);
+  const captureRef = useRef<HTMLInputElement>(null);
+  const [tagRequestKey, setTagRequestKey] = useState<string | null>(null);
   const go = (next: TasksSearch, replace = true) =>
     void navigate({
       to: "/tasks",
@@ -52,51 +93,39 @@ export function TasksPage({
   const newTask = () =>
     void navigate({ to: "/tasks/new", search: projectKey ? { project: projectKey } : {} });
   const filterLabel = groups.find((group) => group.key === projectKey)?.label ?? "Project";
-  const filterOptions = groups.filter(
-    (group) => group.tasks.length > 0 || group.key === projectKey,
-  );
   const showingDetail = draft !== null || selected !== null;
-  const [view, setView] = useLocalStorage("t3code:tasks:view", "list", TasksView);
-  const board = view === "board";
-  const filter = (
-    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
-      <div className={cn("min-w-0", board ? "w-64" : "flex-1")}>
-        <Select
-          value={projectKey ?? "all"}
-          onValueChange={(value) => go(value && value !== "all" ? { project: value } : {}, false)}
-        >
-          <SelectTrigger size="compact" aria-label="Filter tasks by project">
-            <SelectValue>
-              {(value: string) => (value === "all" ? "All projects" : filterLabel)}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup>
-            <SelectItem value="all">All projects</SelectItem>
-            {filterOptions.map((group) => (
-              <SelectItem key={group.key} value={group.key}>
-                {group.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </div>
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-        {model.openCount} open
-      </span>
-      {board && model.unreachable > 0 ? (
-        <span className="truncate text-xs text-muted-foreground">
-          · {model.unreachable} {model.unreachable === 1 ? "machine" : "machines"} not reachable
-        </span>
-      ) : null}
-    </div>
-  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- N focuses the capture field from anywhere on the page, a window-level shortcut
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "n" && event.key !== "N") return;
+      if (event.metaKey || event.ctrlKey || event.altKey || isEditable(event.target)) return;
+      if (document.querySelector("[role=dialog],[role=menu]")) return;
+      event.preventDefault();
+      captureRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const empty = (
     <TasksEmpty
       kind={model.empty === "filtered" ? "filtered" : "none"}
       label={filterLabel}
       unreachable={model.unreachable}
-      onNewTask={newTask}
-      onShowAll={() => go({})}
+      onNewTask={() => captureRef.current?.focus()}
+      onShowAll={() => {
+        setRefine(NO_TASK_FILTER);
+        go({});
+      }}
+    />
+  );
+  const toolbar = (
+    <TasksToolbar
+      groups={groups}
+      filter={filter}
+      tagsInUse={tagsInUse}
+      openCount={model.openCount}
+      onRefine={setRefine}
+      onProject={(key) => go(key ? { project: key } : {}, false)}
     />
   );
 
@@ -108,19 +137,17 @@ export function TasksPage({
           <div className="ml-auto flex items-center gap-2">
             <ToggleGroup
               aria-label="Tasks view"
-              size="compact"
               value={[view]}
               onValueChange={(next) => {
                 const value = next[0];
-                if (value === "list" || value === "board") setView(value);
+                if (value === "inbox" || value === "project" || value === "board") setView(value);
               }}
             >
-              <Toggle value="list" aria-label="List">
-                <ListIcon />
-              </Toggle>
-              <Toggle value="board" aria-label="Board">
-                <KanbanIcon />
-              </Toggle>
+              {(["inbox", "project", "board"] as const).map((value) => (
+                <Toggle key={value} value={value}>
+                  {VIEW_LABELS[value]}
+                </Toggle>
+              ))}
             </ToggleGroup>
             <Button size="compact" variant="ghost" onClick={newTask}>
               <PlusIcon />
@@ -129,69 +156,74 @@ export function TasksPage({
           </div>
         </WorkspacePageHeader>
         <div className="flex min-h-0 flex-1">
-          {board ? (
-            <section
-              aria-label="Task board"
-              className={cn(
-                "min-h-0 min-w-0 flex-1 flex-col md:flex",
-                showingDetail ? "hidden" : "flex",
-              )}
-            >
-              {filter}
-              {model.empty !== null ? (
+          <section
+            aria-label={board ? "Task board" : "Task list"}
+            className={cn(
+              "min-h-0 min-w-0 flex-1 flex-col md:flex",
+              showingDetail ? "hidden" : "flex",
+            )}
+          >
+            <TaskCapture
+              groups={groups}
+              filterProjectKey={projectKey}
+              inputRef={captureRef}
+              onCreated={() => {}}
+            />
+            {toolbar}
+            {board ? (
+              model.empty !== null ? (
                 empty
               ) : (
                 <TaskBoard
-                  board={buildTaskBoard(groups, projectKey)}
-                  groups={groups}
+                  board={buildTaskBoard(groups, filter)}
+                  showProject={projectKey === null}
                   selectedKey={selected?.entry.key ?? null}
                   onSelect={(key) => go({ ...search, task: key })}
                 />
-              )}
-            </section>
-          ) : (
-            <aside
-              aria-label="Task list"
-              className={cn(
-                "min-h-0 w-full shrink-0 flex-col border-r border-border md:flex md:w-80",
-                showingDetail ? "hidden" : "flex",
-              )}
-            >
-              {filter}
+              )
+            ) : (
               <TaskList
                 model={model}
                 selectedKey={selected?.entry.key ?? null}
-                showProjectCaptions={projectKey === null}
+                showSectionHeaders={view === "inbox" || projectKey === null}
+                showProject={view === "inbox" && projectKey === null}
+                sortable
+                tagsInUse={tagsInUse}
                 onSelect={(key) => go({ ...search, task: key })}
-                onOpen={(key) => {
+                onOpen={(key) => go({ ...search, task: key })}
+                onEditTags={(key) => {
                   go({ ...search, task: key });
-                  detailRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+                  setTagRequestKey(key);
                 }}
                 empty={empty}
               />
-            </aside>
-          )}
+            )}
+          </section>
           <main
-            ref={detailRef}
             className={cn(
-              "min-h-0 min-w-0 flex-1 flex-col",
-              board
-                ? cn(
-                    "md:w-[30rem] md:flex-none md:border-l md:border-border",
-                    showingDetail ? "flex" : "hidden",
-                  )
-                : cn("md:flex", showingDetail ? "flex" : "hidden"),
+              "min-h-0 min-w-0 flex-1 flex-col md:w-[30rem] md:flex-none md:border-l md:border-border",
+              showingDetail ? "flex" : "hidden",
             )}
           >
             {showingDetail ? (
-              <div className="flex h-10 shrink-0 items-center px-2 md:hidden">
+              <div className="flex h-10 shrink-0 items-center justify-between px-2">
                 <Button
                   size="compact"
                   variant="ghost"
+                  className="md:hidden"
                   onClick={() => go({ project: search.project })}
                 >
                   <ArrowLeftIcon />
                   Tasks
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost-muted"
+                  aria-label="Close task"
+                  className="ml-auto hidden md:inline-flex"
+                  onClick={() => go({ project: search.project })}
+                >
+                  <XIcon />
                 </Button>
               </div>
             ) : null}
@@ -203,14 +235,204 @@ export function TasksPage({
                 onDiscard={() => go({ project: search.project })}
               />
             ) : selected ? (
-              <TaskDetail key={selected.entry.key} entry={selected.entry} group={selected.group} />
-            ) : board ? null : (
-              <NoSelection groups={groups} onNewTask={newTask} />
-            )}
+              <TaskDetail
+                key={selected.entry.key}
+                entry={selected.entry}
+                group={selected.group}
+                tagsInUse={tagsInUse}
+                startAddingTag={tagRequestKey === selected.entry.key}
+                onAddingTagChange={(adding) => {
+                  if (!adding) setTagRequestKey(null);
+                }}
+              />
+            ) : null}
           </main>
         </div>
       </div>
     </SidebarInset>
+  );
+}
+
+/** Search, the project filter and the narrower filters, with active ones as removable chips. */
+function TasksToolbar({
+  groups,
+  filter,
+  tagsInUse,
+  openCount,
+  onRefine,
+  onProject,
+}: {
+  groups: ReadonlyArray<TaskProjectGroup>;
+  filter: TaskFilter;
+  tagsInUse: ReadonlyArray<string>;
+  openCount: number;
+  onRefine: (next: Omit<TaskFilter, "projectKey">) => void;
+  onProject: (key: string | null) => void;
+}) {
+  const labelOf = useEnvironmentLabel();
+  const { projectKey: _projectKey, ...refine } = filter;
+  const set = (patch: Partial<Omit<TaskFilter, "projectKey">>) => onRefine({ ...refine, ...patch });
+  const projectLabel = groups.find((group) => group.key === filter.projectKey)?.label ?? "Project";
+  const projectOptions = groups.filter(
+    (group) => group.tasks.length > 0 || group.key === filter.projectKey,
+  );
+  const machines = [
+    ...new Set(groups.flatMap((group) => group.tasks.map((entry) => entry.home.environmentId))),
+  ].toSorted((left, right) => labelOf(left).localeCompare(labelOf(right)));
+  const chips: Array<{ key: string; label: string; clear: () => void }> = [
+    ...(filter.priority
+      ? [
+          {
+            key: "priority",
+            label: TASK_PRIORITY_LABELS[filter.priority],
+            clear: () => set({ priority: null }),
+          },
+        ]
+      : []),
+    ...(filter.tag
+      ? [{ key: "tag", label: `#${filter.tag}`, clear: () => set({ tag: null }) }]
+      : []),
+    ...(filter.environmentId
+      ? [
+          {
+            key: "machine",
+            label: labelOf(filter.environmentId),
+            clear: () => set({ environmentId: null }),
+          },
+        ]
+      : []),
+  ];
+  return (
+    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
+      <InputGroup className="w-56 shrink">
+        <InputGroupAddon>
+          <SearchIcon aria-hidden />
+        </InputGroupAddon>
+        <InputGroupInput
+          size="compact"
+          type="search"
+          aria-label="Search tasks"
+          placeholder="Search"
+          value={filter.query}
+          onChange={(event) => set({ query: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && filter.query) {
+              event.preventDefault();
+              set({ query: "" });
+            }
+          }}
+        />
+      </InputGroup>
+      <div className="w-40 min-w-0 shrink">
+        <Select
+          value={filter.projectKey ?? "all"}
+          onValueChange={(value) => onProject(value && value !== "all" ? value : null)}
+        >
+          <SelectTrigger size="compact" aria-label="Filter tasks by project">
+            <SelectValue>
+              {(value: string) => (value === "all" ? "All projects" : projectLabel)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="all">All projects</SelectItem>
+            {projectOptions.map((group) => (
+              <SelectItem key={group.key} value={group.key}>
+                {group.label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </div>
+      <Menu>
+        <MenuTrigger render={<Button size="icon-sm" variant="ghost-muted" aria-label="Filter" />}>
+          <ListFilterIcon />
+        </MenuTrigger>
+        <MenuPopup align="start" className="min-w-44">
+          <MenuSub>
+            <MenuSubTrigger>Priority</MenuSubTrigger>
+            <MenuSubPopup>
+              <FilterRadio
+                value={filter.priority ?? ""}
+                options={[
+                  { value: "", label: "Any priority" },
+                  ...TASK_PRIORITIES.map((value) => ({
+                    value,
+                    label: TASK_PRIORITY_LABELS[value],
+                  })),
+                ]}
+                onChange={(value) => set({ priority: (value || null) as TaskPriority | null })}
+              />
+            </MenuSubPopup>
+          </MenuSub>
+          <MenuSub>
+            <MenuSubTrigger disabled={tagsInUse.length === 0}>Tag</MenuSubTrigger>
+            <MenuSubPopup>
+              <FilterRadio
+                value={filter.tag ?? ""}
+                options={[
+                  { value: "", label: "Any tag" },
+                  ...tagsInUse.map((tag) => ({ value: tag, label: tag })),
+                ]}
+                onChange={(value) => set({ tag: value || null })}
+              />
+            </MenuSubPopup>
+          </MenuSub>
+          <MenuSub>
+            <MenuSubTrigger disabled={machines.length < 2}>Machine</MenuSubTrigger>
+            <MenuSubPopup>
+              <FilterRadio
+                value={filter.environmentId ?? ""}
+                options={[
+                  { value: "", label: "Any machine" },
+                  ...machines.map((id) => ({ value: id, label: labelOf(id) })),
+                ]}
+                onChange={(value) =>
+                  set({ environmentId: (value || null) as EnvironmentId | null })
+                }
+              />
+            </MenuSubPopup>
+          </MenuSub>
+        </MenuPopup>
+      </Menu>
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+        {chips.map((chip) => (
+          <Badge
+            key={chip.key}
+            variant="outline"
+            size="control"
+            render={<button type="button" aria-label={`Clear filter ${chip.label}`} />}
+            onClick={chip.clear}
+          >
+            <span className="max-w-28 truncate">{chip.label}</span>
+            <XIcon />
+          </Badge>
+        ))}
+      </div>
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{openCount} open</span>
+    </div>
+  );
+}
+
+function FilterRadio({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: ReadonlyArray<{ readonly value: string; readonly label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <MenuRadioGroup value={value} onValueChange={(next: string) => onChange(next)}>
+      {options.map((option) => (
+        <MenuRadioItem key={option.value || "any"} value={option.value} closeOnClick>
+          <span className="flex min-w-0 items-center gap-2">
+            <MenuRadioItemIndicator className="w-3.5" />
+            <span className="truncate">{option.label}</span>
+          </span>
+        </MenuRadioItem>
+      ))}
+    </MenuRadioGroup>
   );
 }
 
@@ -230,11 +452,11 @@ function TasksEmpty({
   return (
     <Empty size="compact">
       <EmptyHeader>
-        <EmptyTitle>{kind === "none" ? "No tasks yet" : `No tasks in ${label}`}</EmptyTitle>
+        <EmptyTitle>{kind === "none" ? "No tasks yet" : "No matching tasks"}</EmptyTitle>
         <EmptyDescription>
           {kind === "none"
-            ? "Save a prompt from the composer with Save for later, or write one here."
-            : "Tasks saved in other projects are under All projects."}
+            ? "Type one above and press Enter, or save a prompt from the composer with Save for later."
+            : `Nothing in ${label === "Project" ? "this view" : label} matches the filters.`}
           {unreachable > 0
             ? ` ${unreachable} ${unreachable === 1 ? "machine is" : "machines are"} not reachable, so some tasks may be missing.`
             : ""}
@@ -244,44 +466,14 @@ function TasksEmpty({
         {kind === "none" ? (
           <Button size="compact" variant="outline" onClick={onNewTask}>
             <PlusIcon />
-            New task
+            Add a task
           </Button>
         ) : (
           <Button size="compact" variant="outline" onClick={onShowAll}>
-            Show all projects
+            Clear filters
           </Button>
         )}
       </EmptyContent>
-    </Empty>
-  );
-}
-
-function NoSelection({
-  groups,
-  onNewTask,
-}: {
-  groups: ReadonlyArray<TaskProjectGroup>;
-  onNewTask: () => void;
-}) {
-  const any = groups.some((group) => group.tasks.length > 0);
-  return (
-    <Empty size="compact">
-      <EmptyHeader>
-        <EmptyTitle>{any ? "No task selected" : "Write down what's next"}</EmptyTitle>
-        <EmptyDescription>
-          {any
-            ? "Choose a task to edit its prompt or start a thread from it."
-            : "Tasks keep prompts for later, per project, on every machine you connect."}
-        </EmptyDescription>
-      </EmptyHeader>
-      {any ? null : (
-        <EmptyContent>
-          <Button size="compact" variant="outline" onClick={onNewTask}>
-            <PlusIcon />
-            New task
-          </Button>
-        </EmptyContent>
-      )}
     </Empty>
   );
 }
