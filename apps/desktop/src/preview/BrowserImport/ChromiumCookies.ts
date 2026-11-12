@@ -204,10 +204,15 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
     const cookies: ImportedCookie[] = [];
     let undecryptable = 0;
     const undecryptableHosts = new Set<string>();
+    let partitioned = 0;
+    const partitionedHosts = new Set<string>();
+    const decryptFailedHosts = new Set<string>();
     for (const row of result.rows) {
       if (row.top_frame_site_key !== "") {
         undecryptable += 1;
         undecryptableHosts.add(bareHost(row.host_key));
+        partitioned += 1;
+        partitionedHosts.add(bareHost(row.host_key));
         continue;
       }
       const value =
@@ -223,6 +228,7 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
       if (value === null) {
         undecryptable += 1;
         undecryptableHosts.add(bareHost(row.host_key));
+        decryptFailedHosts.add(bareHost(row.host_key));
         continue;
       }
       const secure = row.is_secure === 1;
@@ -254,6 +260,13 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
       cookies,
       undecryptable,
       undecryptableHosts: [...undecryptableHosts],
+      ...(partitioned > 0
+        ? {
+            partitioned,
+            partitionedHosts: [...partitionedHosts],
+            decryptFailedHosts: [...decryptFailedHosts],
+          }
+        : {}),
     } satisfies CookieReadResult;
   },
 );

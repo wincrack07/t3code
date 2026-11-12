@@ -161,6 +161,10 @@ export const writeCookies = Effect.fn("BrowserImport.writeCookies")(function* (
   let imported = 0;
   let skipped = read.undecryptable;
   const skippedDomains = new Set(read.undecryptableHosts);
+  const partitioned = read.partitioned ?? 0;
+  const partitionedHosts = new Set(read.partitionedHosts ?? []);
+  let rejected = 0;
+  const rejectedHosts = new Set<string>();
   for (const cookie of read.cookies) {
     const written = yield* Effect.tryPromise({
       try: () =>
@@ -188,6 +192,8 @@ export const writeCookies = Effect.fn("BrowserImport.writeCookies")(function* (
     } else {
       skipped += 1;
       skippedDomains.add(cookieHost(cookie.url));
+      rejected += 1;
+      rejectedHosts.add(cookieHost(cookie.url));
     }
   }
   // Cookie writes settle in memory; flush to disk before reporting a durable import.
@@ -202,7 +208,18 @@ export const writeCookies = Effect.fn("BrowserImport.writeCookies")(function* (
       Effect.ignore,
     );
   }
-  return { imported, skipped, skippedDomains: [...skippedDomains].slice(0, 20) };
+  const skippedReasons = [
+    { reason: "partitioned" as const, count: partitioned, domains: [...partitionedHosts] },
+    {
+      reason: "undecryptable" as const,
+      count: read.undecryptable - partitioned,
+      domains: read.decryptFailedHosts ?? read.undecryptableHosts,
+    },
+    { reason: "rejected" as const, count: rejected, domains: [...rejectedHosts] },
+  ]
+    .filter((group) => group.count > 0)
+    .map((group) => ({ ...group, domains: group.domains.slice(0, 20) }));
+  return { imported, skipped, skippedDomains: [...skippedDomains].slice(0, 20), skippedReasons };
 });
 
 /** @public */

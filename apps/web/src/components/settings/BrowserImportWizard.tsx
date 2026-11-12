@@ -1,6 +1,6 @@
 import { PermissionChecklist, PermissionContinueButton } from "../permissions/PermissionChecklist";
 import { usePermissionStatus } from "../permissions/usePermissionStatus";
-import type { BrowserImportSource } from "@t3tools/contracts";
+import type { BrowserImportSkippedGroup, BrowserImportSource } from "@t3tools/contracts";
 import { BROWSER_IMPORT_FAILURE_COPY } from "@t3tools/contracts";
 import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "lucide-react";
 import { useRef, useState } from "react";
@@ -25,6 +25,7 @@ import {
   canCloseWizard,
   isRetryableReason,
   formatSkippedDomains,
+  skipReasonCopy,
   fullDiskAccessRecheckStep,
   outcomeToStep,
   refreshedSourceProfileDirectory,
@@ -506,10 +507,12 @@ function DoneStep({
   imported,
   skipped,
   skippedDomains,
+  skippedReasons,
   targetName,
   destinationEnvironmentName,
   onClose,
 }: {
+  readonly skippedReasons?: ReadonlyArray<BrowserImportSkippedGroup> | undefined;
   readonly imported: number;
   readonly skipped: number;
   readonly skippedDomains: ReadonlyArray<string>;
@@ -535,7 +538,24 @@ function DoneStep({
               : `There were no cookies to import for ${destinationEnvironmentName}.`}
         </DialogDescription>
       </DialogHeader>
-      {skippedDomains.length > 0 ? (
+      {skippedReasons !== undefined && skippedReasons.length > 0 ? (
+        <DialogPanel>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Skipped
+          </p>
+          <ul className="mt-1 flex flex-col gap-3">
+            {skippedReasons.map((group) => (
+              <li key={group.reason}>
+                <p className="text-sm text-foreground">
+                  {cookieResultCount(group.count)}
+                  {group.domains.length > 0 ? ` · ${formatSkippedDomains(group.domains)}` : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">{skipReasonCopy(group.reason)}</p>
+              </li>
+            ))}
+          </ul>
+        </DialogPanel>
+      ) : skippedDomains.length > 0 ? (
         <DialogPanel>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Skipped
