@@ -7053,7 +7053,9 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   ])("reports terminal API error text for $name", (input) =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarnessWithOptions(
-        "environment" in input ? { environment: input.environment } : undefined,
+        "environment" in input && input.environment !== undefined
+          ? { environment: input.environment }
+          : undefined,
       );
       const now = yield* DateTime.now;
       yield* harness.runtime.startTurn(
