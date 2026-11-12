@@ -16,6 +16,25 @@ import {
   buildTaskList,
   buildTaskProjectGroups,
   findTaskGroupForProject,
+  NO_TASK_FILTER,
+  normalizeTaskTags,
+  taskCaptureProjectKey,
+  taskRunningMinutes,
+  nextTaskSelection,
+  taskBatchSummary,
+  taskQueueTotals,
+  taskQueueView,
+  taskQueueItems,
+  taskRunProject,
+  editTaskCriteria,
+  taskAttempts,
+  taskSubtaskCounts,
+  taskSubtasks,
+  taskReviewToReconcile,
+  taskReviewView,
+  reviewTaskCount,
+  taskDropPlan,
+  type TaskFilter,
   openTaskCount,
   pendingTaskLink,
   pickTaskHomeProject,
@@ -149,16 +168,17 @@ describe("buildTaskList", () => {
     primaryEnvironmentId: mac,
     connected: new Set([mac, vpsA]),
   });
+  const filter = (extra: Partial<TaskFilter>): TaskFilter => ({ ...NO_TASK_FILTER, ...extra });
+  const ids = (rows: ReadonlyArray<{ entry: { task: { id: string } }; depth: number }>) =>
+    rows.map((row) => `${"  ".repeat(row.depth)}${row.entry.task.id}`);
 
   it("splits open and done sections and counts unreachable machines once", () => {
-    const list = buildTaskList(groups, null);
-    expect(list.open.map((section) => [section.group.label, section.tasks.length])).toEqual([
+    const list = buildTaskList(groups, NO_TASK_FILTER);
+    expect(list.sections.map((section) => [section.label, section.rows.length])).toEqual([
       ["lumen", 1],
       ["orbit", 2],
     ]);
-    expect(list.done.map((section) => section.tasks.map((entry) => entry.task.id))).toEqual([
-      ["a2"],
-    ]);
+    expect(ids(list.done)).toEqual(["a2"]);
     expect([list.openCount, list.doneCount, list.unreachable, list.empty]).toEqual([3, 1, 1, null]);
     expect(taskListOrder(list, false)).toHaveLength(3);
     expect(taskListOrder(list, true)).toHaveLength(4);
@@ -166,10 +186,97 @@ describe("buildTaskList", () => {
 
   it("filters to one logical project and explains an empty result", () => {
     const lumen = groups.find((group) => group.label === "lumen")!;
-    expect(buildTaskList(groups, lumen.key).openCount).toBe(1);
-    expect(buildTaskList(groups, lumen.key).unreachable).toBe(0);
-    expect(buildTaskList(groups, "missing").empty).toBe("filtered");
-    expect(buildTaskList([], null).empty).toBe("none");
+    expect(buildTaskList(groups, filter({ projectKey: lumen.key })).openCount).toBe(1);
+    expect(buildTaskList(groups, filter({ projectKey: lumen.key })).unreachable).toBe(0);
+    expect(buildTaskList(groups, filter({ projectKey: "missing" })).empty).toBe("filtered");
+    expect(buildTaskList(groups, filter({ query: "nothing matches" })).empty).toBe("filtered");
+    expect(buildTaskList([], NO_TASK_FILTER).empty).toBe("none");
+  });
+
+  const inboxGroups = buildTaskProjectGroups({
+    projects: [
+      project(mac, "orbit", [
+        task("t1", "2026-11-09T00:00:00Z", { when: "today", priority: "p1", tags: ["ui"] }),
+        task("c1", "2026-11-08T00:00:00Z", { parentTaskId: "t1", when: "later" }),
+        task("l1", "2026-11-07T00:00:00Z", { when: "later", tags: ["api"] }),
+        task("n1", "2026-11-06T00:00:00Z", { title: "Fix login" }),
+        task("t2", "2026-11-05T00:00:00Z", { when: "today" }),
+        task("d1", "2026-11-04T00:00:00Z", { status: "done", completedAt: "2026-11-10T00:00:00Z" }),
+      ]),
+      project(vpsA, "orbit", [task("v1", "2026-11-10T00:00:00Z", { when: "today" })]),
+      project(mac, "lumen", [task("x1", "2026-11-06T12:00:00Z")]),
+    ],
+    settings,
+    primaryEnvironmentId: mac,
+    connected: new Set([mac, vpsA]),
+  });
+
+  it("groups the inbox by when in manual order, with subtasks under their parent", () => {
+    const inbox = buildTaskList(inboxGroups, NO_TASK_FILTER, "inbox");
+    expect(inbox.sections.map((section) => [section.id, ids(section.rows)])).toEqual([
+      ["today", ["v1", "t1", "  c1", "t2"]],
+      ["later", ["l1"]],
+      // Projects interleave by their newer head, so lumen's x1 sits between orbit's tasks.
+      ["none", ["x1", "n1"]],
+    ]);
+    expect(ids(inbox.done)).toEqual(["d1"]);
+    expect([inbox.openCount, inbox.doneCount]).toEqual([7, 1]);
+  });
+
+  it("filters by priority, tag, machine and words, and lifts a subtask whose parent is hidden", () => {
+    const rows = (extra: Partial<TaskFilter>) =>
+      buildTaskList(inboxGroups, filter(extra), "inbox").sections.flatMap((section) =>
+        ids(section.rows),
+      );
+    expect(rows({ priority: "p1" })).toEqual(["t1"]);
+    expect(rows({ priority: "p3" })).toEqual(["v1", "t2", "c1", "l1", "x1", "n1"]);
+    expect(rows({ tag: "api" })).toEqual(["l1"]);
+    expect(rows({ environmentId: vpsA })).toEqual(["v1"]);
+    expect(rows({ query: "fix LOGIN" })).toEqual(["n1"]);
+    expect(rows({ query: "orbit api" })).toEqual(["l1"]);
+  });
+
+  it("plans reorders within one machine's siblings and section moves that set when", () => {
+    const inbox = buildTaskList(inboxGroups, NO_TASK_FILTER, "inbox");
+    const key = (environmentId: EnvironmentId, id: string) =>
+      `${environmentId}:orbit-${environmentId}:${id}`;
+    // t2 above t1: only mac's top-level today tasks are permuted; vps-a's v1 is left alone.
+    expect(
+      taskDropPlan(inbox, key(mac, "t2"), { sectionId: "today", overKey: key(mac, "t1") }),
+    ).toMatchObject({ when: null, reorder: ["t2", "t1"] });
+    // A drop beside another machine's task changes nothing.
+    expect(
+      taskDropPlan(inbox, key(mac, "t2"), { sectionId: "today", overKey: key(vpsA, "v1") }),
+    ).toBeNull();
+    // Into Later above l1: sets when and places it first.
+    expect(
+      taskDropPlan(inbox, key(mac, "n1"), { sectionId: "later", overKey: key(mac, "l1") }),
+    ).toMatchObject({ when: "later", reorder: ["n1", "l1"] });
+    // Onto an empty section header: only when.
+    expect(taskDropPlan(inbox, key(mac, "l1"), { sectionId: "none", overKey: null })).toMatchObject(
+      { when: "none", reorder: null },
+    );
+    // A subtask follows its parent, so it never changes section on its own.
+    expect(
+      taskDropPlan(inbox, key(mac, "c1"), { sectionId: "later", overKey: key(mac, "l1") }),
+    ).toBeNull();
+  });
+});
+
+describe("taskCaptureProjectKey", () => {
+  it("takes the first preference that can store tasks, else the first project", () => {
+    const storable = [{ key: "a" }, { key: "b" }];
+    expect(taskCaptureProjectKey(storable, [null, "b", "a"])).toBe("b");
+    expect(taskCaptureProjectKey(storable, ["gone", null])).toBe("a");
+    expect(taskCaptureProjectKey([], ["a"])).toBeNull();
+  });
+});
+
+describe("normalizeTaskTags", () => {
+  it("trims, lowercases, deduplicates and caps tags like the server", () => {
+    expect(normalizeTaskTags([" UI ", "ui", "", "Api"])).toEqual(["ui", "api"]);
+    expect(normalizeTaskTags(["x".repeat(40)])).toEqual(["x".repeat(32)]);
+    expect(normalizeTaskTags(Array.from({ length: 15 }, (_, i) => `t${i}`))).toHaveLength(12);
   });
 });
 
@@ -195,19 +302,107 @@ describe("board", () => {
   });
 
   it("places tasks by status, newest first, within the project filter", () => {
-    const board = buildTaskBoard(groups, null);
-    expect(board.open.map((entry) => entry.task.id)).toEqual(["b1", "a1", "m1"]);
-    expect(board["in-progress"].map((entry) => entry.task.id)).toEqual(["l1"]);
-    expect(board.done.map((entry) => entry.task.id)).toEqual(["a2"]);
+    const board = buildTaskBoard(groups, NO_TASK_FILTER);
+    const ids = (rows: ReadonlyArray<{ entry: { task: { id: string } } }>) =>
+      rows.map((row) => row.entry.task.id);
+    expect(ids(board.open)).toEqual(["b1", "a1", "m1"]);
+    expect(ids(board["in-progress"])).toEqual(["l1"]);
+    expect(ids(board.done)).toEqual(["a2"]);
     const orbitKey = groups.find((group) => group.label === "orbit")!.key;
-    expect(buildTaskBoard(groups, orbitKey)["in-progress"]).toEqual([]);
+    expect(
+      buildTaskBoard(groups, { ...NO_TASK_FILTER, projectKey: orbitKey })["in-progress"],
+    ).toEqual([]);
   });
 
   it("changes status only for a drop on a different column", () => {
     expect(taskStatusForDrop({ status: "open" }, "done")).toBe("done");
     expect(taskStatusForDrop({ status: "open" }, "open")).toBeNull();
+    // Review fills only from a settled thread; a review card on Done is an approval.
+    expect(taskStatusForDrop({ status: "in-progress" }, "review")).toBeNull();
+    expect(taskStatusForDrop({ status: "review" }, "done")).toBe("approve");
+    expect(taskStatusForDrop({ status: "review" }, "open")).toBe("open");
     expect(taskStatusForDrop({ status: "open" }, "task:abc")).toBeNull();
     expect(taskStatusForDrop({ status: "open" }, null)).toBeNull();
+  });
+});
+
+describe("review", () => {
+  const snapshot = {
+    runId: "run-1",
+    userMessageId: "msg-1",
+    outcome: "completed",
+    finishedAt: "2026-11-12T10:04:00.000Z",
+    durationMs: 245_000,
+    assistantMessage:
+      "## Done\n\nAdded **pagination** to `GET /events`.\n\n```ts\nconst x = 1;\n```\n- see [docs](https://x.dev)",
+    changes: { count: 3, additions: 84, deletions: 12 },
+    pullRequests: [{ number: 42, url: "https://github.com/acme/orbit/pull/42", state: "open" }],
+  } as unknown as NonNullable<ProjectSavedPrompt["review"]>;
+
+  it("presents the outcome, a plain excerpt, change stats and duration", () => {
+    expect(taskReviewView(snapshot)).toMatchObject({
+      outcome: "Finished",
+      tone: "success",
+      excerpt: "Done Added pagination to GET /events. see docs",
+      changes: { files: 3, label: "+84 \u221212" },
+      duration: "4 min",
+    });
+    expect(
+      taskReviewView({
+        ...snapshot,
+        outcome: "waiting for input",
+        assistantMessage: undefined,
+        changes: undefined,
+        durationMs: undefined,
+      } as typeof snapshot),
+    ).toMatchObject({
+      outcome: "Finished with questions",
+      tone: "warning",
+      excerpt: null,
+      changes: null,
+      duration: null,
+    });
+    expect(taskReviewView({ ...snapshot, outcome: "failed" }).tone).toBe("error");
+    expect(taskReviewView({ ...snapshot, durationMs: 3_900_000 }).duration).toBe("1 h 5 min");
+  });
+
+  it("reconciles only a settled thread that ran on another machine", () => {
+    const home = project(mac, "orbit", []);
+    const entry = (
+      extra: Partial<ProjectSavedPrompt>,
+      status: "in-progress" | "review" = "in-progress",
+    ) => ({
+      home,
+      status,
+      task: task("r1", "2026-11-01T00:00:00Z", { latestThreadId: ThreadId.make("t9"), ...extra }),
+    });
+    expect(taskReviewToReconcile(entry({ latestThreadEnvironmentId: vpsA }), "finished")).toEqual({
+      environmentId: vpsA,
+      threadId: "t9",
+    });
+    expect(taskReviewToReconcile(entry({ latestThreadEnvironmentId: vpsA }), "running")).toBeNull();
+    expect(taskReviewToReconcile(entry({ latestThreadEnvironmentId: mac }), "finished")).toBeNull();
+    expect(taskReviewToReconcile(entry({}), "finished")).toBeNull();
+    expect(
+      taskReviewToReconcile(entry({ latestThreadEnvironmentId: vpsA }, "review"), "finished"),
+    ).toBeNull();
+  });
+
+  it("counts review tasks as needing attention", () => {
+    expect(
+      reviewTaskCount({
+        tasks: [{ status: "review" }, { status: "open" }, { status: "review" }] as never,
+      }),
+    ).toBe(2);
+  });
+});
+
+describe("taskRunningMinutes", () => {
+  it("counts whole minutes once the first one has passed", () => {
+    const start = "2026-11-12T10:00:00.000Z";
+    expect(taskRunningMinutes(start, "2026-11-12T10:00:40Z")).toBeNull();
+    expect(taskRunningMinutes(start, "2026-11-12T10:04:10Z")).toBe(4);
+    expect(taskRunningMinutes(null, "2026-11-12T10:04:10Z")).toBeNull();
   });
 });
 
@@ -392,5 +587,263 @@ describe("taskThreadRefs", () => {
     ).toBeNull();
     expect(pendingTaskLink(receipt, { latestThreadId: ThreadId.make("t9") }, mac)).toBe(receipt);
     expect(pendingTaskLink(undefined, {}, mac)).toBeNull();
+  });
+});
+
+describe("editTaskCriteria", () => {
+  const list = [
+    { text: "Tests pass", done: false },
+    { text: "Docs updated", done: true },
+  ];
+  it("adds, edits, toggles, moves and removes within the limits", () => {
+    expect(editTaskCriteria(list, { kind: "add", text: "  No  regressions " })?.at(-1)).toEqual({
+      text: "No regressions",
+      done: false,
+    });
+    expect(editTaskCriteria(list, { kind: "add", text: "   " })).toBeNull();
+    const full = Array.from({ length: 20 }, (_, i) => ({ text: `c${i}`, done: false }));
+    expect(editTaskCriteria(full, { kind: "add", text: "one more" })).toBeNull();
+    expect(
+      editTaskCriteria(list, { kind: "add", text: "x".repeat(600) })?.at(-1)?.text,
+    ).toHaveLength(500);
+    expect(editTaskCriteria(list, { kind: "edit", index: 0, text: "Tests pass" })).toBeNull();
+    expect(editTaskCriteria(list, { kind: "edit", index: 0, text: "" })).toEqual([list[1]]);
+    expect(editTaskCriteria(list, { kind: "toggle", index: 0 })?.[0]?.done).toBe(true);
+    expect(editTaskCriteria(list, { kind: "move", from: 1, to: 0 })?.map((c) => c.text)).toEqual([
+      "Docs updated",
+      "Tests pass",
+    ]);
+    expect(editTaskCriteria(list, { kind: "move", from: 0, to: -3 })).toBeNull();
+    expect(editTaskCriteria(list, { kind: "remove", index: 5 })).toBeNull();
+  });
+});
+
+describe("subtasks and attempts", () => {
+  const groups = buildTaskProjectGroups({
+    projects: [
+      project(mac, "orbit", [
+        task("p1", "2026-11-09T00:00:00Z"),
+        task("c1", "2026-11-08T00:00:00Z", {
+          parentTaskId: "p1",
+          status: "done",
+          completedAt: "2026-11-10T00:00:00Z",
+        }),
+        task("c2", "2026-11-07T00:00:00Z", { parentTaskId: "p1" }),
+      ]),
+      project(vpsA, "orbit", [task("c3", "2026-11-07T00:00:00Z", { parentTaskId: "p1" })]),
+    ],
+    settings,
+    primaryEnvironmentId: mac,
+    connected: new Set([mac, vpsA]),
+  });
+  const orbit = groups[0]!;
+
+  it("runs on the saved machine when it is connected, else the task's own", () => {
+    const parent = orbit.tasks.find((entry) => entry.task.id === "p1")!;
+    const on = (targetEnvironmentId: EnvironmentId) =>
+      taskRunProject(
+        { ...parent, task: { ...parent.task, runSettings: { targetEnvironmentId } } },
+        orbit,
+      ).environmentId;
+    expect(on(vpsA)).toBe(vpsA);
+    expect(on(vpsB)).toBe(mac);
+    expect(taskRunProject(parent, orbit).environmentId).toBe(mac);
+  });
+
+  it("counts only subtasks on the parent's own machine", () => {
+    const parent = orbit.tasks.find((entry) => entry.task.id === "p1")!;
+    const subtasks = taskSubtasks(orbit, parent);
+    expect(subtasks.map((entry) => entry.task.id)).toEqual(["c1", "c2"]);
+    expect(taskSubtaskCounts(subtasks)).toEqual({ total: 2, done: 1 });
+  });
+
+  it("lists attempts newest first with the machine and result of each", () => {
+    const attempts = taskAttempts(
+      {
+        threadLinks: [
+          { threadId: ThreadId.make("t1"), userMessageId: "m2" as never, environmentId: vpsA },
+          {
+            threadId: ThreadId.make("t1"),
+            userMessageId: "m1" as never,
+            environmentId: vpsA,
+            snapshot: {
+              runId: "r1",
+              userMessageId: "m1",
+              outcome: "failed",
+              finishedAt: "2026-11-10T00:00:00.000Z",
+              pullRequests: [],
+            } as never,
+          },
+          { threadId: ThreadId.make("t0") },
+        ],
+      },
+      mac,
+    );
+    expect(
+      attempts.map((a) => [a.thread.environmentId, a.remote, a.review?.outcome ?? null]),
+    ).toEqual([
+      [vpsA, true, null],
+      [vpsA, true, "Failed"],
+      [mac, false, null],
+    ]);
+    expect(new Set(attempts.map((a) => a.key)).size).toBe(3);
+  });
+});
+
+describe("batch", () => {
+  it("toggles one task, or with Shift adds the range from the anchor in view order", () => {
+    const order = ["a", "b", "c", "d"];
+    expect([...nextTaskSelection(new Set(), order, "b", null, false)]).toEqual(["b"]);
+    expect([...nextTaskSelection(new Set(["b"]), order, "b", "b", false)]).toEqual([]);
+    expect([...nextTaskSelection(new Set(["a"]), order, "c", "a", true)].toSorted()).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect([...nextTaskSelection(new Set(["d"]), order, "b", "d", true)].toSorted()).toEqual([
+      "b",
+      "c",
+      "d",
+    ]);
+    // No anchor in this view: Shift falls back to a toggle.
+    expect([...nextTaskSelection(new Set(), order, "c", "gone", true)]).toEqual(["c"]);
+  });
+
+  const stored = {
+    kind: "stored",
+    attachment: {
+      type: "image",
+      id: ChatAttachmentId.make("img-1"),
+      name: "a.png",
+      mimeType: "image/png",
+      sizeBytes: 10,
+    },
+  } as unknown as ProjectTaskAttachment;
+  const groups = buildTaskProjectGroups({
+    projects: [
+      project(mac, "orbit", [
+        task("m1", "2026-11-09T00:00:00Z"),
+        task("m2", "2026-11-08T00:00:00Z", { attachments: [stored] }),
+      ]),
+      project(vpsA, "orbit", []),
+    ],
+    settings,
+    primaryEnvironmentId: mac,
+    connected: new Set([mac, vpsA]),
+  });
+  const entries = groups[0]!.tasks;
+  const labels: Record<string, string> = { mac: "Mac", "vps-a": "Alpha" };
+  const label = (environmentId: EnvironmentId) => labels[environmentId] ?? environmentId;
+  const plan = [
+    {
+      environmentId: vpsA,
+      input: {
+        projectId: "orbit-vps-a",
+        entries: [{ source: { environmentId: mac, taskId: "m1" } }],
+      },
+    },
+    {
+      environmentId: mac,
+      input: {
+        projectId: "orbit-mac",
+        entries: [{ source: { environmentId: mac, taskId: "m2" } }],
+      },
+    },
+  ];
+
+  it("summarises where each task runs and why one stays on its own machine", () => {
+    expect(
+      taskBatchSummary(plan, entries, { distribute: true, environmentId: null }, label),
+    ).toEqual([
+      {
+        environmentId: vpsA,
+        machine: "Alpha",
+        tasks: [{ key: entries[0]!.key, title: "Prompt m1", pinned: null }],
+      },
+      {
+        environmentId: mac,
+        machine: "Mac",
+        tasks: [
+          { key: entries[1]!.key, title: "Prompt m2", pinned: "Has attachments stored on Mac" },
+        ],
+      },
+    ]);
+    // Running everything on the task's own machine pins nothing.
+    const home = taskBatchSummary(plan, entries, { distribute: false, environmentId: mac }, label);
+    expect(home.flatMap((row) => row.tasks.map((t) => t.pinned))).toEqual([null, null]);
+  });
+
+  it("shows a task's newest live queue entry and sums every batch", () => {
+    const target = { environmentId: mac, projectId: "orbit-mac" };
+    const item = (state: string, createdAt: string, position: number | null = null) => ({
+      target,
+      batchId: `b-${createdAt}`,
+      createdAt,
+      entry: {
+        id: `e-${createdAt}`,
+        state,
+        reason: state === "failed-to-start" ? "No model" : undefined,
+      } as never,
+      position,
+    });
+    expect(taskQueueView([])).toBeNull();
+    expect(taskQueueView([item("failed-to-start", "1"), item("queued", "2", 3)])).toMatchObject({
+      state: "queued",
+      position: 3,
+    });
+    expect(taskQueueView([item("queued", "1", 1), item("settled", "2")])).toBeNull();
+    expect(taskQueueView([item("failed-to-start", "1")])?.reason).toBe("No model");
+
+    const withBatches = {
+      ...project(mac, "orbit", []),
+      taskBatches: [
+        {
+          id: "b1",
+          concurrency: 2,
+          createdAt: "1",
+          entries: [{ state: "running" }, { state: "queued" }, { state: "queued" }],
+        },
+        {
+          id: "b2",
+          concurrency: 2,
+          createdAt: "2",
+          entries: [{ state: "failed-to-start" }, { state: "settled" }],
+        },
+      ],
+    } as unknown as EnvironmentProject;
+    const queuedTask = (id: string) => ({
+      environmentId: mac,
+      projectId: withBatches.id,
+      taskId: id,
+    });
+    const queue = {
+      ...withBatches,
+      taskBatches: [
+        {
+          id: "b1",
+          concurrency: 2,
+          createdAt: "1",
+          entries: [
+            { id: "e1", state: "queued", source: queuedTask("x") },
+            { id: "e2", state: "running", source: queuedTask("y") },
+            { id: "e3", state: "queued", source: queuedTask("y") },
+          ],
+        },
+      ],
+    } as unknown as EnvironmentProject;
+    const forTask = (id: string) =>
+      taskQueueItems({ home: withBatches, task: { id } as ProjectSavedPrompt }, [queue]);
+    expect(forTask("y").map((item) => [item.entry.state, item.position])).toEqual([
+      ["running", null],
+      ["queued", 2],
+    ]);
+    expect(taskQueueView(forTask("x"))?.position).toBe(1);
+    expect(taskQueueTotals([withBatches])).toEqual({
+      queued: 2,
+      starting: 0,
+      running: 1,
+      failed: 1,
+      cancellable: [{ environmentId: mac, projectId: withBatches.id, batchId: "b1" }],
+    });
   });
 });

@@ -2,6 +2,7 @@ import type { SavedPromptStatus, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ServerIcon } from "lucide-react";
 
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { cn } from "../../lib/utils";
 import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -10,7 +11,8 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   TASK_STATUS_LABELS,
-  TASK_STATUSES,
+  TASK_MANUAL_STATUSES,
+  taskRunningMinutes,
   taskThreadRefs,
   taskThreadState,
   type TaskEntry,
@@ -106,9 +108,9 @@ export function TaskThreadDot({
 const STATUS_BADGE = {
   open: "secondary",
   "in-progress": "info",
-  review: "info",
+  review: "warning",
   done: "success",
-} as const satisfies Record<SavedPromptStatus, "secondary" | "info" | "success">;
+} as const satisfies Record<SavedPromptStatus, "secondary" | "info" | "warning" | "success">;
 
 /** A status chip that opens the status menu; the keyboard path for every status change. */
 export function TaskStatusMenu({
@@ -136,12 +138,14 @@ export function TaskStatusMenu({
         <ChevronDownIcon />
       </MenuTrigger>
       <MenuPopup align="start">
-        {TASK_STATUSES.map((value) => (
-          <MenuItem key={value} onClick={() => value !== status && onChange(value)}>
-            <CheckIcon className={value === status ? undefined : "invisible"} />
-            {TASK_STATUS_LABELS[value]}
-          </MenuItem>
-        ))}
+        {[...TASK_MANUAL_STATUSES, ...(status === "review" ? (["review"] as const) : [])].map(
+          (value) => (
+            <MenuItem key={value} onClick={() => value !== status && onChange(value)}>
+              <CheckIcon className={value === status ? undefined : "invisible"} />
+              {TASK_STATUS_LABELS[value]}
+            </MenuItem>
+          ),
+        )}
       </MenuPopup>
     </Menu>
   );
@@ -160,5 +164,18 @@ export function TaskMachineChip({ label }: { label: string }) {
       </TooltipTrigger>
       <TooltipPopup>Stored on {label}</TooltipPopup>
     </Tooltip>
+  );
+}
+
+/** "running · 4 min" for a task whose latest thread is working; repaints once a minute. */
+export function TaskRunningLabel({ startedAt }: { startedAt: string | null }) {
+  const now = useNowMinute();
+  // The tick is a UTC minute without its zone (2026-11-12T17:32).
+  const minutes = taskRunningMinutes(startedAt, `${now}:00Z`);
+  return (
+    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+      <TaskThreadDot state="running" />
+      {minutes === null ? "running" : `running · ${minutes} min`}
+    </span>
   );
 }

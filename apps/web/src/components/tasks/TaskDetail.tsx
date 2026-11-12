@@ -19,7 +19,6 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
   FolderPlusIcon,
   LinkIcon,
   MoreHorizontalIcon,
@@ -64,16 +63,26 @@ import {
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { TaskAddPathForm, TaskAttachmentCount, TaskAttachmentStrip } from "./TaskAttachments";
+import { TASK_PRIORITY_BADGE, TASK_WHEN_ORDER, TaskChoiceChip, TaskTagsEditor } from "./TaskFields";
 import { TaskMachineChip, TaskStatusMenu, TaskThreadRow } from "./TaskParts";
+import { TaskReviewActions, TaskReviewSummary } from "./TaskReview";
+import { TaskCriteriaEditor, TaskHistory, TaskRunWith, TaskSubtasks } from "./TaskBrief";
 import {
   type InspectedTaskAttachment,
   pendingTaskLink,
   TASK_POLISH_MAX_LENGTH,
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  TASK_WHEN_LABELS,
+  taskPriority,
+  taskWhen,
   TASK_TEXT_MAX_LENGTH,
   TASK_TITLE_MAX_LENGTH,
   taskAttachmentLimitError,
   taskAttachmentViews,
+  taskRunProject,
   taskStartTargets,
+  taskSubtasks,
   taskThreadLink,
   taskThreadRefs,
   taskTitle,
@@ -90,10 +99,17 @@ export function TaskDetail({
   entry,
   group,
   density = "page",
+  tagsInUse,
+  startAddingTag = false,
+  onAddingTagChange,
 }: {
   entry: TaskEntry;
   group: TaskProjectGroup;
   density?: TaskDetailDensity;
+  tagsInUse: ReadonlyArray<string>;
+  /** The row menu's "New tag…" opens the tag field. */
+  startAddingTag?: boolean;
+  onAddingTagChange?: (adding: boolean) => void;
 }) {
   const { task, home } = entry;
   const environmentId = home.environmentId;
@@ -102,7 +118,6 @@ export function TaskDetail({
   const { allowed, update, attempt } = useSavedPrompts(environmentId, projectId);
   const labelOf = useEnvironmentLabel();
   const threads = taskThreadRefs(task, environmentId);
-  const [showPrevious, setShowPrevious] = useState(false);
   const pendingLink = pendingTaskLink(
     useAtomValue(taskLinkReceiptsAtom)[entry.key],
     task,
@@ -121,6 +136,16 @@ export function TaskDetail({
   const promptRef = useRef(text);
   const polish = usePromptPolish({ environmentId, projectId, promptRef, reviewsResult: true });
   const start = useTaskStart(entry);
+  const [addingTag, setAddingTag] = useState(startAddingTag);
+  const [tagRequest, setTagRequest] = useState(startAddingTag);
+  if (tagRequest !== startAddingTag) {
+    setTagRequest(startAddingTag);
+    if (startAddingTag) setAddingTag(true);
+  }
+  const changeAddingTag = (adding: boolean) => {
+    setAddingTag(adding);
+    onAddingTagChange?.(adding);
+  };
   // Another window or machine edited the task: take its text unless this editor changed it too.
   if (source.text !== task.text || source.title !== task.title) {
     if (text === source.text) setText(task.text);
@@ -247,7 +272,36 @@ export function TaskDetail({
   };
   const busy = start.busy;
   const canStart = allowed && start.allowed && valid && !busy && review === null;
-  const startThread = async (send: boolean, target: EnvironmentProject = home) => {
+  const parent =
+    group.tasks.find(
+      (candidate) =>
+        candidate.task.id === task.parentTaskId &&
+        candidate.home.environmentId === environmentId &&
+        candidate.home.id === projectId,
+    ) ?? null;
+  // New tasks are stored first, so a reorder keeps subtasks in the order they were written.
+  const addSubtasks = async (titles: ReadonlyArray<string>) => {
+    const existing = taskSubtasks(group, entry).map((child) => child.task.id);
+    const added: string[] = [];
+    for (const text of titles) {
+      const id = randomUUID();
+      const ok = await update({
+        kind: "add",
+        id,
+        text,
+        parentTaskId: task.id,
+        ...(task.priority ? { priority: task.priority } : {}),
+      });
+      if (!ok) break;
+      added.push(id);
+    }
+    if (added.length > 0) await update({ kind: "reorder", ids: [...existing, ...added] });
+    return added.length === titles.length;
+  };
+  const startThread = async (
+    send: boolean,
+    target: EnvironmentProject = taskRunProject(entry, group),
+  ) => {
     if (!(await save())) return;
     await start.run(send, target);
   };
@@ -266,7 +320,10 @@ export function TaskDetail({
   return (
     <section
       aria-label="Task details"
-      className={cn("flex min-h-0 min-w-0 flex-col", compact ? "gap-2" : "h-full gap-3 p-4")}
+      className={cn(
+        "flex min-h-0 min-w-0 flex-col",
+        compact ? "gap-2" : "h-full gap-3 overflow-y-auto p-4 pb-0",
+      )}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <input
@@ -319,15 +376,49 @@ export function TaskDetail({
           </Menu>
         </div>
       </div>
-      {compact ? null : (
-        <div className="-mt-2 flex h-4 min-w-0 items-center gap-3 px-1">
-          <TaskMachineChip label={labelOf(environmentId)} />
-        </div>
-      )}
+      <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5">
+        <TaskChoiceChip
+          label="Priority"
+          value={taskPriority(task)}
+          variant={TASK_PRIORITY_BADGE[taskPriority(task)]}
+          options={TASK_PRIORITIES.map((value) => ({ value, label: TASK_PRIORITY_LABELS[value] }))}
+          disabled={!allowed}
+          onChange={(priority) => void update({ kind: "edit", id: task.id, priority })}
+        />
+        <TaskChoiceChip
+          label="When"
+          value={taskWhen(task)}
+          options={TASK_WHEN_ORDER.map((value) => ({ value, label: TASK_WHEN_LABELS[value] }))}
+          disabled={!allowed}
+          onChange={(when) => void update({ kind: "edit", id: task.id, when })}
+        />
+        <TaskTagsEditor
+          tags={task.tags ?? []}
+          suggestions={tagsInUse}
+          disabled={!allowed}
+          adding={addingTag}
+          onAddingChange={changeAddingTag}
+          onChange={(tags) => void update({ kind: "edit", id: task.id, tags })}
+        />
+        {compact ? null : (
+          <span className="ml-auto flex min-w-0 max-w-40">
+            <TaskMachineChip label={labelOf(environmentId)} />
+          </span>
+        )}
+      </div>
+      {entry.status === "review" && task.review ? (
+        <section
+          aria-label="Result"
+          className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-3"
+        >
+          <TaskReviewSummary entry={entry} density="detail" />
+          <TaskReviewActions entry={entry} showOpenThread />
+        </section>
+      ) : null}
       <div
         className={cn(
-          "flex min-h-0 flex-col rounded-lg border border-border has-focus-visible:border-ring",
-          compact ? "h-48" : "flex-1",
+          "flex flex-col rounded-lg border border-border has-focus-visible:border-ring",
+          compact ? "h-48 min-h-0" : "min-h-40 flex-1",
         )}
       >
         {review !== null ? (
@@ -464,29 +555,40 @@ export function TaskDetail({
           }
         />
       ) : null}
-      {threads.previous.length > 0 ? (
-        <div className="flex min-w-0 flex-col">
-          <button
-            type="button"
-            aria-expanded={showPrevious}
-            className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
-            onClick={() => setShowPrevious(!showPrevious)}
-          >
-            <ChevronRightIcon className={cn("size-3.5 shrink-0", showPrevious && "rotate-90")} />
-            Previous threads <span className="tabular-nums">· {threads.previous.length}</span>
-          </button>
-          {showPrevious
-            ? threads.previous.map((ref) => (
-                <TaskThreadRow
-                  key={`${ref.environmentId}:${ref.threadId}`}
-                  threadRef={ref}
-                  machineLabel={labelOf(ref.environmentId)}
-                />
-              ))
-            : null}
-        </div>
-      ) : null}
-      <div className="flex min-w-0 items-center gap-1">
+      {compact ? null : (
+        <>
+          <TaskCriteriaEditor
+            criteria={task.acceptanceCriteria ?? []}
+            disabled={!allowed}
+            onChange={(acceptanceCriteria) =>
+              void update({ kind: "edit", id: task.id, acceptanceCriteria })
+            }
+          />
+          <TaskRunWith
+            entry={entry}
+            group={group}
+            disabled={!allowed}
+            onChange={(runSettings) => void update({ kind: "edit", id: task.id, runSettings })}
+          />
+          <TaskSubtasks
+            entry={entry}
+            subtasks={taskSubtasks(group, entry)}
+            parent={parent}
+            disabled={!allowed}
+            onAdd={addSubtasks}
+            onUpdate={(action) => void update(action)}
+            onOpen={(key) => void navigate({ to: "/tasks", search: { task: key } })}
+          />
+          <TaskHistory entry={entry} />
+        </>
+      )}
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-1",
+          !compact &&
+            "sticky bottom-0 z-10 -mx-4 mt-auto border-t border-border bg-background px-4 py-3",
+        )}
+      >
         {polishTooLong ? (
           <Tooltip>
             <TooltipTrigger render={<span tabIndex={0} className="rounded-md" />}>
@@ -523,15 +625,15 @@ export function TaskDetail({
           </Button>
         ) : null}
         <div className="ml-auto flex items-center gap-1">
-          <Group aria-label="Start thread">
+          <Group aria-label="Run">
             <Button size="compact" disabled={!canStart} onClick={() => void startThread(true)}>
-              {busy ? "Starting…" : "Start thread"}
+              {busy ? "Starting…" : "Run"}
             </Button>
             <GroupSeparator />
             <Menu>
               <MenuTrigger
                 disabled={!valid || busy || review !== null}
-                render={<Button size="compact" aria-label="More ways to start" />}
+                render={<Button size="compact" aria-label="More ways to run" />}
               >
                 <ChevronDownIcon />
               </MenuTrigger>
@@ -569,7 +671,7 @@ function StartMachineItems({
   if (targets.length < 2) return null;
   return (
     <MenuGroup>
-      <MenuGroupLabel>Start on</MenuGroupLabel>
+      <MenuGroupLabel>Run on</MenuGroupLabel>
       {targets.map((target) => (
         <StartMachineItem
           key={target.project.environmentId}
@@ -799,7 +901,9 @@ function useTaskStart(entry: TaskEntry) {
       projectId: target.id,
       now: Date.now(),
     }).selection;
-    if (!selection) {
+    // The task's saved model wins on the server; the project's is only the fallback.
+    const modelSelection = task.runSettings?.defaultModelSelection ?? selection;
+    if (!modelSelection) {
       toastManager.add({ type: "error", title: "Choose a default model in project settings" });
       return;
     }
@@ -813,10 +917,13 @@ function useTaskStart(entry: TaskEntry) {
         threadId: newThreadId(),
         projectId: target.id,
         title: task.title ?? taskTitle(task),
-        modelSelection: selection,
+        modelSelection,
         runtimeMode: settings.defaultRuntimeMode,
         interactionMode: "default",
-        workspaceStrategy: { type: "root" },
+        workspaceStrategy:
+          settings.defaultThreadEnvMode === "worktree"
+            ? { type: "worktree", baseRef: "HEAD" }
+            : { type: "root" },
       },
     });
     setBusy(false);
