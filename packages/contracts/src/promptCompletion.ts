@@ -30,6 +30,8 @@ export const PROMPT_CONTINUE_INSTRUCTIONS = `Continue the developer's unfinished
 
 ${SHARED_RULES}
 
+The current draft is provided as a JSON string in <draft>. It is already typed and cannot be changed. Never repeat, rephrase, correct spelling, add accents to, or capitalize any part of it. Continue from its last character, including finishing a partial word without a leading space. For a complete question or sentence, prefer returning nothing.
+
 Return only the words that come right after the draft, at most 12 words, on one line, with a leading space when the next word needs one. Return nothing when no continuation is clearly likely.`;
 
 export const PROMPT_NEXT_INSTRUCTIONS = `Suggest the developer's next message to their coding agent, now that the agent's last reply has finished.

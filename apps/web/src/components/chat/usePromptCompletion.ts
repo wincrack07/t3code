@@ -1,3 +1,4 @@
+import { promptContinuation } from "@t3tools/shared/promptContinuation";
 import {
   makePromptCompletionScheduler,
   promptCompletionKey,
@@ -137,7 +138,10 @@ export function usePromptCompletion(input: {
       : shown?.key === key
         ? shown.suggestions
         : (scheduler.peek(key) ?? NO_SUGGESTIONS);
-  const inline = mode?.mode === "continue" ? (generated[0] ?? null) : null;
+  const inline =
+    mode?.mode === "continue" && generated[0] !== undefined
+      ? promptContinuation(input.draft, generated[0])
+      : null;
   const nextCandidates =
     input.draft.length === 0
       ? dedupe([

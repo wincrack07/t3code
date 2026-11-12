@@ -10,6 +10,15 @@ const finishedReply = [
 
 export const cases = [
   {
+    id: "continue-draft-no-restatement",
+    mode: "continue",
+    project: "acme-app",
+    messages: finishedReply,
+    draft: "ya esta todo donde lo quiero entonces?",
+    rubric:
+      "Owner duplicate ghost suggestion report: draft present means continuation only. Empty or a short Spanish addition; never repeat or correct the draft as Ya está todo donde lo quiero entonces?.",
+  },
+  {
     id: "continue-english",
     mode: "continue",
     project: "acme-app",
