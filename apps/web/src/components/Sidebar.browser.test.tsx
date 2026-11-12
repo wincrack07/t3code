@@ -416,7 +416,7 @@ async function pointerDrag(source: Element, target: Element) {
   await act(() => document.dispatchEvent(pointer("pointerup", endX, endY, 0)));
 }
 
-it("nests groups and moves projects through the group and project menus", async () => {
+it("nests and unnests groups through the group menu", async () => {
   const { stack, projectKeys } = await setupGroupedSidebar(["Alpha", "Beta"], ([alpha, beta]) => [
     { id: "clau", name: "Clau", emoji: "", projectKeys: [alpha!] },
     { id: "staff", name: "StaffPass", emoji: "", projectKeys: [beta!] },
@@ -426,20 +426,45 @@ it("nests groups and moves projects through the group and project menus", async 
   using _environment = installFakeEnvironment([]);
   const [alpha, beta] = projectKeys as [string, string];
   await using screen = await render(<GroupedSidebar />);
-  await vi.waitFor(() =>
-    expect(treeRows(screen.container)).toEqual([
-      "folder:clau",
-      `project:${alpha}`,
-      "folder:staff",
-      `project:${beta}`,
-      "folder:backend",
-    ]),
-  );
+  const topLevelRows = [
+    "folder:clau",
+    `project:${alpha}`,
+    "folder:staff",
+    `project:${beta}`,
+    "folder:backend",
+  ];
+  await vi.waitFor(() => expect(treeRows(screen.container)).toEqual(topLevelRows));
 
   await userEvent.click(screen.getByRole("button", { name: "Group actions for Backend" }));
   await userEvent.hover(page.getByRole("menuitem", { name: "Move to group", exact: true }));
   await userEvent.click(page.getByRole("menuitem", { name: "Clau", exact: true }));
   await vi.waitFor(() => expect(folderById("backend")?.parentId).toBe("clau"));
+  await vi.waitFor(() =>
+    expect(treeRows(screen.container)).toEqual([
+      "folder:clau",
+      "folder:backend",
+      `project:${alpha}`,
+      "folder:staff",
+      `project:${beta}`,
+    ]),
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "Group actions for Backend" }));
+  await userEvent.click(page.getByRole("menuitem", { name: "Move to top level", exact: true }));
+  await vi.waitFor(() => expect(folderById("backend")).not.toHaveProperty("parentId"));
+  await vi.waitFor(() => expect(treeRows(screen.container)).toEqual(topLevelRows));
+});
+
+it("moves a project into a nested group and back to the top level through its menu", async () => {
+  const { stack, projectKeys } = await setupGroupedSidebar(["Alpha", "Beta"], ([alpha, beta]) => [
+    { id: "clau", name: "Clau", emoji: "", projectKeys: [alpha!] },
+    { id: "staff", name: "StaffPass", emoji: "", projectKeys: [beta!] },
+    { id: "backend", name: "Backend", emoji: "", parentId: "clau", projectKeys: [] },
+  ]);
+  using _settings = stack;
+  using _environment = installFakeEnvironment([]);
+  const [alpha, beta] = projectKeys as [string, string];
+  await using screen = await render(<GroupedSidebar />);
   await vi.waitFor(() =>
     expect(treeRows(screen.container)).toEqual([
       "folder:clau",
@@ -459,11 +484,16 @@ it("nests groups and moves projects through the group and project menus", async 
   await openProjectMenu(screen.container, beta);
   await userEvent.click(page.getByRole("menuitem", { name: "Move to top level", exact: true }));
   await vi.waitFor(() => expect(folderById("backend")?.projectKeys).toEqual([]));
+  expect(folderById("clau")?.projectKeys).toEqual([alpha]);
+});
 
-  await userEvent.click(screen.getByRole("button", { name: "Group actions for Backend" }));
-  await userEvent.click(page.getByRole("menuitem", { name: "Move to top level", exact: true }));
-  await vi.waitFor(() => expect(folderById("backend")).not.toHaveProperty("parentId"));
-
+it("creates a nested group and promotes it when deleting its parent", async () => {
+  const { stack } = await setupGroupedSidebar(["Alpha"], ([alpha]) => [
+    { id: "clau", name: "Clau", emoji: "", projectKeys: [alpha!] },
+  ]);
+  using _settings = stack;
+  using _environment = installFakeEnvironment([]);
+  await using screen = await render(<GroupedSidebar />);
   await userEvent.click(screen.getByRole("button", { name: "Group actions for Clau" }));
   await userEvent.click(page.getByRole("menuitem", { name: "New group inside…", exact: true }));
   await userEvent.fill(page.getByRole("textbox", { name: "Group name", exact: true }), "Nested");
