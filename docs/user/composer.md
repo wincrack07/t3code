@@ -18,18 +18,25 @@ Use **Save for later** beside Send, or `Cmd+Alt+S` (`Ctrl+Alt+S` on
 Windows and Linux), to park the draft text in the current project. You can also
 find it in the command palette. Attachments and rich context stay in the composer.
 
-Open **Tasks** in the sidebar to manage saved prompts across the current environment, or
-use the bookmark count beside the project name to filter to that project. Give a task a
-short title, expand its prompt in the editor, and change its status as work progresses.
-Edits save automatically. **Polish** previews a rewrite using your prompt polish settings;
-you can accept or revert it, then undo an accepted rewrite once.
+Open **Tasks** in the sidebar to manage saved prompts for every project, or click the
+bookmark count beside the project name to open that project's tasks beside the chat
+(**Open in Tasks** there goes to the full page). Switch between a list and a board in the
+page header; drag a card, or use its status chip, to change its status. Give a task a short
+title, edit its prompt, and change its status as work progresses. Edits save automatically.
+**Polish** previews a rewrite using your prompt polish settings; accept or revert it, and
+undo an accepted rewrite until you edit again.
 
 **Start thread** sends the task's prompt in a new thread using the project's default
 model. The task becomes **In progress** and links to the thread. Finishing the thread
-does not mark the task done. **Open in composer**, also available as **Open without
-sending** in the start menu, lets you choose a model or adjust the draft first. Mark
-tasks done yourself, reopen them, or clear completed tasks. Deleting a task offers Undo.
-Tasks belong to the project's server, so connected devices share the same list.
+does not mark the task done. **Open in composer**, also **Open without sending** in the
+start menu, lets you choose a model or adjust the draft first. Deleting a task offers Undo.
+
+A project on several machines shows one task list: each task is stored on one machine and
+edits go there. Tasks on a machine that is not connected are missing until it reconnects,
+and the list says how many machines it could not reach. A thread started from a task runs
+on the task's machine. Links of the form `/tasks/new?prompt=…&title=…` open a new task
+draft; nothing is saved until you press **Save task**. **Copy link** in a task's menu copies
+a `/new?prompt=…` thread link, for prompts up to 8,000 characters.
 
 ## Formatting
 

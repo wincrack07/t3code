@@ -1,6 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { BookmarkIcon } from "lucide-react";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
+
+import { useRightPanelStore } from "../rightPanelStore";
 
 import { findTaskGroupForProject, openTaskCount } from "./tasks/tasks.logic";
 import { useTaskProjectGroups } from "./tasks/useTaskProjects";
@@ -11,9 +13,12 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 export function SavedPrompts({
   environmentId,
   projectId,
+  threadRef,
 }: {
   environmentId: EnvironmentId;
   projectId: ProjectId;
+  /** Opens the quick panel beside this chat; without one the count opens the Tasks page. */
+  threadRef: ScopedThreadRef | null;
 }) {
   const group = findTaskGroupForProject(useTaskProjectGroups(), environmentId, projectId);
   const navigate = useNavigate();
@@ -31,7 +36,10 @@ export function SavedPrompts({
             variant="ghost"
             size="sm"
             aria-label={label}
-            onClick={() => void navigate({ to: "/tasks", search: { project: group.key } })}
+            onClick={() => {
+              if (threadRef) useRightPanelStore.getState().open(threadRef, "tasks");
+              else void navigate({ to: "/tasks", search: { project: group.key } });
+            }}
           />
         }
       >

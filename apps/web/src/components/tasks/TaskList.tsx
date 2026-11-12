@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useRef, useState } from "react";
+import { Fragment, type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
 import { cn } from "../../lib/utils";
@@ -25,6 +25,7 @@ export function TaskList({
   onOpen,
   showProjectCaptions,
   empty,
+  renderExpanded,
 }: {
   model: TaskListModel;
   selectedKey: string | null;
@@ -32,6 +33,8 @@ export function TaskList({
   onOpen: (key: string) => void;
   showProjectCaptions: boolean;
   empty: ReactNode;
+  /** Shown under the selected row, for editors that open in place. */
+  renderExpanded?: (entry: TaskEntry) => ReactNode;
 }) {
   const [doneExpanded, setDoneExpanded] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -42,6 +45,9 @@ export function TaskList({
       ?.querySelector<HTMLButtonElement>(`[data-task-key="${CSS.escape(key)}"] [data-task-title]`)
       ?.focus();
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof HTMLElement) || !event.target.hasAttribute("data-task-title")) {
+      return;
+    }
     const current = (event.target as HTMLElement).closest<HTMLElement>("[data-task-key]")?.dataset
       .taskKey;
     if (current === undefined) return;
@@ -52,7 +58,7 @@ export function TaskList({
         onSelect(next);
         focusRow(next);
       }
-    } else if (event.key === "Enter" && event.target instanceof HTMLButtonElement) {
+    } else if (event.key === "Enter") {
       event.preventDefault();
       onOpen(current);
     }
@@ -68,14 +74,18 @@ export function TaskList({
         </h3>
       ) : null}
       {section.tasks.map((entry) => (
-        <TaskRow
-          key={entry.key}
-          entry={entry}
-          selected={entry.key === selectedKey}
-          focusable={entry.key === focusKey}
-          showMachine={section.group.multiMachine}
-          onSelect={() => onSelect(entry.key)}
-        />
+        <Fragment key={entry.key}>
+          <TaskRow
+            entry={entry}
+            selected={entry.key === selectedKey}
+            focusable={entry.key === focusKey}
+            showMachine={section.group.multiMachine}
+            onSelect={() => onSelect(entry.key)}
+          />
+          {renderExpanded && entry.key === selectedKey ? (
+            <div className="px-2 pt-1 pb-3">{renderExpanded(entry)}</div>
+          ) : null}
+        </Fragment>
       ))}
     </section>
   );

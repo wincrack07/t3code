@@ -282,6 +282,7 @@ export const ChatHeader = memo(function ChatHeader({
               <SavedPrompts
                 environmentId={activeProject.environmentId}
                 projectId={activeProject.id}
+                threadRef={activeThreadRef}
               />
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator>

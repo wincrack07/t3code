@@ -88,6 +88,8 @@ export function TaskDetail({
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [review, setReview] = useState<string | null>(null);
+  // The text an accepted polish replaced; offered back until the next edit.
+  const [beforePolish, setBeforePolish] = useState<string | null>(null);
   const promptRef = useRef(text);
   const polish = usePromptPolish({ environmentId, projectId, promptRef, reviewsResult: true });
   const start = useTaskStart(entry);
@@ -260,7 +262,9 @@ export function TaskDetail({
               size="compact"
               disabled={review.length > TASK_TEXT_MAX_LENGTH || !review.trim()}
               onClick={() => {
+                const previous = text;
                 changeText(review);
+                setBeforePolish(previous);
                 setReview(null);
               }}
             >
@@ -275,7 +279,10 @@ export function TaskDetail({
           readOnly={review !== null}
           maxLength={TASK_TEXT_MAX_LENGTH}
           disabled={!allowed}
-          onChange={(event) => changeText(event.target.value)}
+          onChange={(event) => {
+            changeText(event.target.value);
+            setBeforePolish(null);
+          }}
           onBlur={() => void save()}
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canStart) {
@@ -373,6 +380,18 @@ export function TaskDetail({
             {polish.running ? "Polishing…" : "Polish"}
           </Button>
         )}
+        {beforePolish !== null ? (
+          <Button
+            size="compact"
+            variant="ghost-muted"
+            onClick={() => {
+              changeText(beforePolish);
+              setBeforePolish(null);
+            }}
+          >
+            Undo polish
+          </Button>
+        ) : null}
         <div className="ml-auto flex items-center gap-1">
           {compact ? null : (
             <Button
