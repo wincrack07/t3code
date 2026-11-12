@@ -12,6 +12,8 @@ import {
   NonNegativeInt,
   PositiveInt,
   ProjectId,
+  RunId,
+  MessageId,
   ThreadId,
   TrimmedNonEmptyString,
   TrimmedString,
@@ -152,9 +154,29 @@ export const ReceivedProjectIcon = ForwardCompatibleUnion(projectIconMembers, "k
   ),
 );
 
-export const SavedPromptStatus = Schema.Literals(["open", "in-progress", "done"]);
+export const SavedPromptStatus = Schema.Literals(["open", "in-progress", "review", "done"]);
 export type SavedPromptStatus = typeof SavedPromptStatus.Type;
 const SavedPromptTitle = Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(160)));
+
+export const TaskReviewSnapshot = Schema.Struct({
+  runId: RunId,
+  userMessageId: MessageId,
+  outcome: Schema.Literals(["completed", "failed", "interrupted", "waiting for input"]),
+  finishedAt: IsoDateTime,
+  durationMs: Schema.optional(NonNegativeInt),
+  assistantMessage: Schema.optional(Schema.String.check(Schema.isMaxLength(8000))),
+  changes: Schema.optional(
+    Schema.Struct({ count: NonNegativeInt, additions: NonNegativeInt, deletions: NonNegativeInt }),
+  ),
+  pullRequests: Schema.Array(
+    Schema.Struct({
+      number: PositiveInt,
+      url: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+      state: Schema.optional(Schema.Literals(["open", "closed", "merged"])),
+    }),
+  ).check(Schema.isMaxLength(10)),
+});
+export type TaskReviewSnapshot = typeof TaskReviewSnapshot.Type;
 
 const TaskInboxFields = {
   priority: Schema.optional(Schema.Literals(["p1", "p2", "p3"])),
@@ -237,11 +259,15 @@ export const ProjectSavedPrompt = Schema.Struct({
   ...TaskInboxFields,
   deletedAt: Schema.optional(IsoDateTime),
   latestThreadId: Schema.optional(ThreadId),
+  latestUserMessageId: Schema.optional(MessageId),
+  review: Schema.optional(TaskReviewSnapshot),
   latestThreadEnvironmentId: Schema.optional(EnvironmentId),
   threadLinks: Schema.optional(
     Schema.Array(
       Schema.Struct({
         threadId: ThreadId,
+        userMessageId: Schema.optional(MessageId),
+        snapshot: Schema.optional(TaskReviewSnapshot),
         environmentId: Schema.optional(EnvironmentId),
       }),
     ).check(Schema.isMaxLength(10)),
@@ -256,6 +282,21 @@ export const TaskAttachmentListResult = Schema.Struct({
 export type TaskAttachmentListResult = typeof TaskAttachmentListResult.Type;
 
 export const SavedPromptAction = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("review"),
+    id: TrimmedNonEmptyString,
+    threadId: ThreadId,
+    environmentId: Schema.optional(EnvironmentId),
+    snapshot: TaskReviewSnapshot,
+  }),
+  Schema.Struct({ kind: Schema.Literal("approve"), id: TrimmedNonEmptyString }),
+  Schema.Struct({
+    kind: Schema.Literal("request-changes"),
+    id: TrimmedNonEmptyString,
+    threadId: ThreadId,
+    environmentId: Schema.optional(EnvironmentId),
+    userMessageId: MessageId,
+  }),
   Schema.Struct({
     kind: Schema.Literal("reorder"),
     ids: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(100)),
@@ -286,6 +327,7 @@ export const SavedPromptAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("restore"), id: TrimmedNonEmptyString }),
   Schema.Struct({
     kind: Schema.Literal("link"),
+    userMessageId: Schema.optional(MessageId),
     id: TrimmedNonEmptyString,
     threadId: ThreadId,
     environmentId: Schema.optional(EnvironmentId),

@@ -277,6 +277,30 @@ const layerBase: Layer.Layer<
         .pipe(Effect.map((thread) => thread.lineage.relationshipToParent === "subagent")),
     );
     // Recorded before publication, so an interrupted publish cannot lose a committed outcome.
+    const taskReviewEffects = (events: ReadonlyArray<OrchestrationV2StoredEvent>) =>
+      events.flatMap((stored) => {
+        const event = stored.event;
+        const runId =
+          event.type === "run.updated" &&
+          ["completed", "interrupted", "failed", "cancelled", "waiting"].includes(
+            event.payload.status,
+          )
+            ? event.payload.id
+            : event.type === "checkpoint.captured"
+              ? event.payload.runId
+              : undefined;
+        return runId == null
+          ? []
+          : [
+              {
+                id: `effect:task-review:${stored.sequence}`,
+                commandId: CommandId.make(`command:task-review:${stored.sequence}`),
+                threadId: event.threadId,
+                request: { type: "task.review" as const, runId },
+              },
+            ];
+      });
+
     const publishStoredEvents = (
       events: ReadonlyArray<OrchestrationV2StoredEvent>,
       outcomes: ReadonlyArray<RunOutcome>,
@@ -285,6 +309,11 @@ const layerBase: Layer.Layer<
         .record(outcomes)
         .pipe(
           Effect.andThen(eventStore.publishCommitted(events)),
+          Effect.andThen(
+            taskReviewEffects(events).length === 0
+              ? Effect.void
+              : effectOutbox.notifyAvailable(taskReviewEffects(events).length),
+          ),
           Effect.andThen(publishLiveEvents(events)),
         );
 
@@ -392,6 +421,14 @@ const layerBase: Layer.Layer<
         yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
           concurrency: 1,
         });
+        for (const effect of taskReviewEffects(storedEvents)) {
+          const linked =
+            yield* sql`SELECT 1 FROM projection_projects p, json_each(p.saved_prompts_json) t
+            WHERE p.deleted_at IS NULL AND json_extract(t.value, '$.deletedAt') IS NULL
+              AND json_extract(t.value, '$.latestThreadId') = ${effect.threadId}
+              AND json_extract(t.value, '$.status') IN ('in-progress', 'review') LIMIT 1`;
+          if (linked.length > 0) yield* effectOutbox.enqueue([effect]);
+        }
         const sequence = storedEvents.at(-1)?.sequence;
         if (sequence !== undefined) {
           const now = DateTime.formatIso(yield* DateTime.now);
@@ -818,12 +855,43 @@ const layerBase: Layer.Layer<
             }
             const event = yield* eventStore.appendProjectEvent(input.event);
             yield* projectStore.apply(event);
+            if (event.type === "project.meta-updated")
+              for (const task of event.payload.savedPrompts ?? []) {
+                if (
+                  task.deletedAt !== undefined ||
+                  task.status !== "in-progress" ||
+                  task.latestThreadId === undefined
+                )
+                  continue;
+                const local =
+                  yield* sql`SELECT 1 FROM orchestration_v2_projection_threads WHERE thread_id = ${task.latestThreadId} LIMIT 1`;
+                if (local.length === 0) continue;
+                const { runs } = yield* projectionStore.getThreadRecords(task.latestThreadId, [
+                  "runs",
+                ]);
+                const run = runs.at(-1);
+                if (run === undefined) continue;
+                yield* effectOutbox.enqueue([
+                  {
+                    id: `effect:task-link-review:${event.sequence}:${task.id}`,
+                    commandId: CommandId.make(
+                      `command:task-link-review:${event.sequence}:${task.id}`,
+                    ),
+                    threadId: task.latestThreadId,
+                    request: { type: "task.review", runId: run.id },
+                  },
+                ]);
+              }
             const receipt = { ...reserved, resultSequence: event.sequence };
             yield* commandReceipts.upsert(receipt);
             return { receipt, event };
           }),
           (result) =>
-            result.event === undefined ? Effect.void : eventStore.publishCommitted([result.event]),
+            result.event === undefined
+              ? Effect.void
+              : eventStore
+                  .publishCommitted([result.event])
+                  .pipe(Effect.andThen(effectOutbox.notifyAvailable())),
         );
         return { receipt: result.receipt, committed: result.event !== undefined };
       },

@@ -417,7 +417,12 @@ it.effect(
       yield* fs.writeFileString(sourcePath, "data");
       assert.deepEqual(wire.thread.modelSelection, project.defaultModelSelection);
       assert.equal(wire.thread.title, "Login");
-      assert.deepEqual(updates[0]?.savedPromptThread, { id: task.id, threadId: launched.threadId });
+      assert.deepEqual(updates[0]?.savedPrompt, {
+        kind: "link",
+        id: task.id,
+        threadId: launched.threadId,
+        userMessageId: launched.projection.runs.at(-1)?.userMessageId,
+      });
       assert.equal(updates[0]?.commandId, "task:send:saved-prompt");
       yield* launches.launch(request);
       const resent = yield* launches.launch({
@@ -425,7 +430,11 @@ it.effect(
         commandId: CommandId.make("task:resend"),
         threadId: ThreadId.make("task:resend"),
       });
-      assert.equal(updates.at(-1)?.savedPromptThread?.threadId, resent.threadId);
+      const linkedAgain = updates.at(-1)?.savedPrompt;
+      assert.equal(
+        linkedAgain?.kind === "link" ? linkedAgain.threadId : undefined,
+        resent.threadId,
+      );
       const before = updates.length;
       for (const invalid of [
         { ...request, projectId: otherProjectId },

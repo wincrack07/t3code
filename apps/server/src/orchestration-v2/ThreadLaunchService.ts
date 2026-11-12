@@ -1224,7 +1224,12 @@ const make = Effect.gen(function* () {
             .update({
               commandId: CommandId.make(`${input.commandId}:saved-prompt`),
               projectId: input.projectId,
-              savedPromptThread: { id: input.savedPromptId, threadId },
+              savedPrompt: {
+                kind: "link",
+                id: input.savedPromptId,
+                threadId,
+                userMessageId: projection.runs.find((run) => run.id === runId)?.userMessageId,
+              },
             })
             .pipe(Effect.mapError(mapError(input, "link-saved-prompt", threadId)));
         }

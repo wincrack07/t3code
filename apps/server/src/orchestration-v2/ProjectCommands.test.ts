@@ -4,6 +4,8 @@ import {
   EventId,
   ProjectId,
   ThreadId,
+  RunId,
+  MessageId,
   type ProjectSavedPrompt,
   type ProjectScript,
 } from "@t3tools/contracts";
@@ -179,6 +181,69 @@ describe("planProjectCommand", () => {
         threadLinks: [{ threadId: "new-thread" }, { threadId: "old-thread" }],
       },
     ]);
+    const snapshot = {
+      runId: RunId.make("attempt"),
+      userMessageId: MessageId.make("message"),
+      outcome: "completed" as const,
+      finishedAt: DateTime.formatIso(now),
+      pullRequests: [],
+    };
+    const running: ProjectSavedPrompt = {
+      ...task,
+      status: "in-progress",
+      completedAt: null,
+      latestThreadId: ThreadId.make("new-thread"),
+      latestUserMessageId: snapshot.userMessageId,
+      threadLinks: [{ threadId: ThreadId.make("new-thread") }],
+    };
+    const reviewed = payloadOf(
+      update({ kind: "review", id: "one", threadId: running.latestThreadId!, snapshot }, [running]),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(reviewed[0]?.status, "review");
+    assert.strictEqual(reviewed[0]?.completedAt, null);
+    assert.deepStrictEqual(reviewed[0]?.threadLinks?.[0]?.snapshot, snapshot);
+    const approved = payloadOf(update({ kind: "approve", id: "one" }, reviewed))
+      .savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(approved[0]?.status, "done");
+    assert.deepStrictEqual(
+      payloadOf(
+        update(
+          { kind: "review", id: "one", threadId: running.latestThreadId!, snapshot },
+          approved,
+        ),
+      ).savedPrompts,
+      approved,
+    );
+    const changed = payloadOf(
+      update(
+        {
+          kind: "request-changes",
+          id: "one",
+          threadId: running.latestThreadId!,
+          userMessageId: MessageId.make("followup"),
+        },
+        reviewed,
+      ),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.strictEqual(changed[0]?.status, "in-progress");
+    assert.deepStrictEqual(
+      payloadOf(
+        update({ kind: "review", id: "one", threadId: running.latestThreadId!, snapshot }, changed),
+      ).savedPrompts,
+      changed,
+    );
+    assert.deepStrictEqual(
+      payloadOf(
+        update({ kind: "review", id: "one", threadId: ThreadId.make("old-thread"), snapshot }, [
+          running,
+        ]),
+      ).savedPrompts,
+      [running],
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "approve", id: "one" }, [running]))._tag,
+      "ProjectCommandInvariantError",
+    );
     const history = payloadOf(
       update({ kind: "link", id: "one", threadId: ThreadId.make("new-thread") }, [
         {

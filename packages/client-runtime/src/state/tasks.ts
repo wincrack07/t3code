@@ -1,6 +1,10 @@
-import { savedTaskDraftContent } from "@t3tools/shared/savedTasks";
+import * as SecureRandom from "effect/crypto/SecureRandom";
+import { startThreadTurn, type StartThreadTurnInput } from "../operations/commands.ts";
+import { savedTaskDraftContent, taskReviewSnapshot } from "@t3tools/shared/savedTasks";
 import {
   CommandId,
+  MessageId,
+  type OrchestrationV2ThreadProjection,
   TaskAttachmentsHomeOnlyError,
   type EnvironmentId,
   repositoryGroupingKeyOf,
@@ -26,6 +30,7 @@ export const SavedTaskLinkReceipt = Schema.Struct({
   ...SavedTaskSource.fields,
   commandId: CommandId,
   thread: ScopedThreadRef,
+  userMessageId: Schema.optional(MessageId),
 });
 export type SavedTaskLinkReceipt = typeof SavedTaskLinkReceipt.Type;
 export const SavedTaskDraftBinding = Schema.Struct({
@@ -45,7 +50,7 @@ export class SavedTaskLaunchError extends Schema.TaggedError<SavedTaskLaunchErro
 ) {}
 
 export function createSavedTaskCommands<R, E>(
-  runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
+  runtime: Atom.AtomRuntime<EnvironmentRegistry | SecureRandom.SecureRandom | R, E>,
   projectAtom: (ref: ScopedProjectRef) => Atom.Atom<EnvironmentProject | null>,
 ) {
   const permissions = createCommandPermissions(runtime, WS_METHODS.projectsMutate);
@@ -162,6 +167,7 @@ export function createSavedTaskCommands<R, E>(
       projectId: receipt.home.projectId,
       savedPrompt: {
         kind: "link",
+        ...(receipt.userMessageId === undefined ? {} : { userMessageId: receipt.userMessageId }),
         id: receipt.taskId,
         threadId: receipt.thread.threadId,
         environmentId: receipt.thread.environmentId,
@@ -204,10 +210,94 @@ export function createSavedTaskCommands<R, E>(
         const receipt: SavedTaskLinkReceipt = {
           ...input.source,
           commandId: input.launch.commandId,
+          ...(result.projection?.runs.at(-1) === undefined
+            ? {}
+            : { userMessageId: result.projection.runs.at(-1)!.userMessageId }),
           thread: { environmentId: input.target.environmentId, threadId: result.threadId },
         };
         return yield* runInEnvironment(receipt.home.environmentId, retryLinkEffect(receipt)).pipe(
           Effect.orElseSucceed(() => ({ status: "started-not-linked" as const, receipt })),
+        );
+      },
+      (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
+    ),
+  });
+  const reconcileReview = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:reconcile-review",
+    execute: (
+      input: {
+        source: SavedTaskSource;
+        thread: ScopedThreadRef;
+        projection: OrchestrationV2ThreadProjection;
+      },
+      registry,
+    ) => {
+      const run = input.projection.runs.at(-1);
+      const snapshot = run === undefined ? undefined : taskReviewSnapshot(input.projection, run.id);
+      if (input.projection.thread.id !== input.thread.threadId || snapshot === undefined)
+        return Effect.void;
+      return runInEnvironment(
+        input.source.home.environmentId,
+        requestGuarded(WS_METHODS.projectsMutate, {
+          type: "project.update",
+          projectId: input.source.home.projectId,
+          commandId: CommandId.make(
+            `task-review:${input.source.home.projectId}:${input.source.taskId}:${snapshot.runId}:${snapshot.outcome}:${snapshot.changes === undefined ? "result" : "checkpoint"}`,
+          ),
+          savedPrompt: {
+            kind: "review",
+            id: input.source.taskId,
+            threadId: input.thread.threadId,
+            environmentId: input.thread.environmentId,
+            snapshot,
+          },
+        }),
+      ).pipe(withCommandPermissions(runtime, registry), Effect.asVoid);
+    },
+  });
+  const requestChanges = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:request-changes",
+    execute: Effect.fn("SavedTaskCommands.requestChanges")(
+      function* (
+        input: {
+          source: SavedTaskSource;
+          thread: ScopedThreadRef;
+          commandId: CommandId;
+          note: string;
+          turn: Pick<StartThreadTurnInput, "runtimeMode" | "interactionMode" | "modelSelection">;
+        },
+        registry: AtomRegistry.AtomRegistry,
+      ) {
+        if (input.note.trim().length === 0 || input.note.length > 120000)
+          return yield* new SavedTaskLaunchError({
+            detail: "Enter a follow-up note of at most 120000 characters.",
+          });
+        yield* permissions.authorize(registry, input.thread.environmentId);
+        const messageId = MessageId.make(`${input.commandId}:task-followup`);
+        yield* runInEnvironment(
+          input.source.home.environmentId,
+          requestGuarded(WS_METHODS.projectsMutate, {
+            type: "project.update",
+            projectId: input.source.home.projectId,
+            commandId: CommandId.make(`${input.commandId}:request-changes`),
+            savedPrompt: {
+              kind: "request-changes",
+              id: input.source.taskId,
+              threadId: input.thread.threadId,
+              environmentId: input.thread.environmentId,
+              userMessageId: messageId,
+            },
+          }),
+        );
+        return yield* runInEnvironment(
+          input.thread.environmentId,
+          startThreadTurn({
+            ...input.turn,
+            commandId: input.commandId,
+            threadId: input.thread.threadId,
+            message: { messageId, role: "user", text: input.note, attachments: [] },
+            dispatchMode: "start",
+          }),
         );
       },
       (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
@@ -227,6 +317,8 @@ export function createSavedTaskCommands<R, E>(
       ).pipe(withCommandPermissions(runtime, registry)),
   });
   return {
+    reconcileReview: { ...reconcileReview, permissionAtom: permissions.permissionAtom },
+    requestChanges: { ...requestChanges, permissionAtom: permissions.permissionAtom },
     quickCreate: { ...quickCreate, permissionAtom: permissions.permissionAtom },
     launch: { ...launch, permissionAtom: permissions.permissionAtom },
     retryLink: { ...retryLink, permissionAtom: permissions.permissionAtom },

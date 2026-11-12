@@ -1,3 +1,4 @@
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Cause from "effect/Cause";
 import { vi } from "vite-plus/test";
 import { it, expect } from "@effect/vitest";
@@ -96,10 +97,16 @@ it.effect("retries the link without sending a second turn after the home environ
       );
     }
     const runtime = Atom.runtime(
-      Layer.succeed(EnvironmentRegistry, {
-        run: (id, effect) =>
-          Effect.provideService(effect, EnvironmentSupervisor, supervisors.get(id)),
-      } as EnvironmentRegistry["Service"]),
+      Layer.merge(
+        Layer.succeed(
+          SecureRandom.SecureRandom,
+          SecureRandom.make((size) => new Uint8Array(size)),
+        ),
+        Layer.succeed(EnvironmentRegistry, {
+          run: (id, effect) =>
+            Effect.provideService(effect, EnvironmentSupervisor, supervisors.get(id)),
+        } as EnvironmentRegistry["Service"]),
+      ),
     );
     const projectAtom = (ref: typeof home) =>
       Atom.make({

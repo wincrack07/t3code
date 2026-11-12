@@ -284,6 +284,70 @@ export function planProjectCommand(input: {
             const { deletedAt: _deletedAt, ...restored } = item;
             return restored;
           });
+        } else if (action.kind === "review") {
+          savedPrompts = savedPrompts.map((item) => {
+            if (
+              item.id !== action.id ||
+              item.deletedAt !== undefined ||
+              item.latestThreadId !== action.threadId ||
+              item.latestThreadEnvironmentId !== action.environmentId ||
+              (item.latestUserMessageId !== undefined &&
+                item.latestUserMessageId !== action.snapshot.userMessageId) ||
+              (item.status !== "in-progress" && item.status !== "review")
+            )
+              return item;
+            if (item.review?.runId === action.snapshot.runId && item.status === "in-progress")
+              return item;
+            return {
+              ...item,
+              status: "review" as const,
+              completedAt: null,
+              review: action.snapshot,
+              threadLinks: (item.threadLinks ?? []).map((link, index) =>
+                index === 0 ? { ...link, snapshot: action.snapshot } : link,
+              ),
+            };
+          });
+        } else if (action.kind === "approve") {
+          const task = savedPrompts.find(
+            (item) => item.id === action.id && item.deletedAt === undefined,
+          );
+          if (task?.status !== "review") return invariant("Only a task in review can be approved.");
+          savedPrompts = savedPrompts.map((item) =>
+            item.id === action.id
+              ? { ...item, status: "done" as const, completedAt: occurredAt }
+              : item,
+          );
+        } else if (action.kind === "request-changes") {
+          const task = savedPrompts.find(
+            (item) => item.id === action.id && item.deletedAt === undefined,
+          );
+          if (
+            task?.status !== "review" ||
+            task.latestThreadId !== action.threadId ||
+            task.latestThreadEnvironmentId !== action.environmentId
+          )
+            return invariant("Request changes requires the task's current review thread.");
+          savedPrompts = savedPrompts.map((item) =>
+            item.id === action.id
+              ? {
+                  ...item,
+                  status: "in-progress" as const,
+                  completedAt: null,
+                  latestUserMessageId: action.userMessageId,
+                  threadLinks: [
+                    {
+                      threadId: action.threadId,
+                      userMessageId: action.userMessageId,
+                      ...(action.environmentId === undefined
+                        ? {}
+                        : { environmentId: action.environmentId }),
+                    },
+                    ...(item.threadLinks ?? []),
+                  ].slice(0, 10),
+                }
+              : item,
+          );
         } else if (action.kind === "link") {
           if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
             return invariant("The saved prompt no longer exists.");
@@ -295,10 +359,14 @@ export function planProjectCommand(input: {
                   status: "in-progress" as const,
                   completedAt: null,
                   latestThreadId: action.threadId,
+                  latestUserMessageId: action.userMessageId,
                   latestThreadEnvironmentId: action.environmentId,
                   threadLinks: [
                     {
                       threadId: action.threadId,
+                      ...(action.userMessageId === undefined
+                        ? {}
+                        : { userMessageId: action.userMessageId }),
                       ...(action.environmentId === undefined
                         ? {}
                         : { environmentId: action.environmentId }),
@@ -317,6 +385,7 @@ export function planProjectCommand(input: {
                           ])
                     ).filter(
                       (link) =>
+                        link.userMessageId !== action.userMessageId ||
                         link.threadId !== action.threadId ||
                         link.environmentId !== action.environmentId,
                     ),
