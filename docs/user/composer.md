@@ -28,8 +28,7 @@ undo an accepted rewrite until you edit again.
 
 **Start thread** sends the task's prompt in a new thread using the project's default
 model. The task becomes **In progress** and links to the thread. Finishing the thread
-does not mark the task done. **Open in composer**, also **Open without sending** in the
-start menu, lets you choose a model or adjust the draft first. Deleting a task offers Undo.
+does not mark the task done. **Open without sending**, in the start menu, lets you choose a model or adjust the draft first. Deleting a task offers Undo.
 
 A project on several machines shows one task list: each task is stored on one machine and
 edits go there. Tasks on a machine that is not connected are missing until it reconnects,

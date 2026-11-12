@@ -393,16 +393,6 @@ export function TaskDetail({
           </Button>
         ) : null}
         <div className="ml-auto flex items-center gap-1">
-          {compact ? null : (
-            <Button
-              size="compact"
-              variant="ghost"
-              disabled={!valid || busy || review !== null}
-              onClick={() => void startThread(false)}
-            >
-              Open in composer
-            </Button>
-          )}
           <Group aria-label="Start thread">
             <Button size="compact" disabled={!canStart} onClick={() => void startThread(true)}>
               {busy ? "Starting…" : "Start thread"}
