@@ -133,7 +133,7 @@ import {
   OrchestrationGetTurnDiffError,
 } from "./checkpointDiff.ts";
 import { PromptCompletionInput, PromptCompletionResult } from "./promptCompletion.ts";
-import { PromptPolishInput, PromptPolishResult } from "./promptPolish.ts";
+import { PromptPolishLimitError, PromptPolishInput, PromptPolishResult } from "./promptPolish.ts";
 import {
   WorktreeSetupCancelInput,
   WorktreeSetupCancelResult,
@@ -1089,7 +1089,7 @@ const WsServerDecideRpc = Rpc.make(WS_METHODS.serverDecide, {
 const WsServerPolishPromptRpc = Rpc.make(WS_METHODS.serverPolishPrompt, {
   payload: PromptPolishInput,
   success: PromptPolishResult,
-  error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+  error: Schema.Union([TextGenerationError, PromptPolishLimitError, EnvironmentAuthorizationError]),
 });
 
 const WsServerCompletePromptRpc = Rpc.make(WS_METHODS.serverCompletePrompt, {

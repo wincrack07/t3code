@@ -70,7 +70,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     faviconPath: row.faviconPath,
     projectIcon: row.projectIcon,
     scripts: row.scripts,
-    savedPrompts: row.savedPrompts ?? [],
+    savedPrompts: (row.savedPrompts ?? []).filter((item) => item.deletedAt === undefined),
     pinnedAt: row.pinnedAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,

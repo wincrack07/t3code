@@ -2134,6 +2134,9 @@ export const layerWsRpc = (
                     .pipe(
                       Effect.andThen(
                         ThreadMessageIntake.launchThread({
+                          ...(input.useProjectDefaultModel === undefined
+                            ? {}
+                            : { useProjectDefaultModel: input.useProjectDefaultModel }),
                           ...(input.savedPromptId === undefined
                             ? {}
                             : { savedPromptId: input.savedPromptId }),

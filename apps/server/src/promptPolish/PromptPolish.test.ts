@@ -115,6 +115,16 @@ it.effect(
         Effect.flatMap((service) => service.polish({ prompt: "  " })),
         Effect.provide(run("unused", calls)),
       );
+      const tooLarge = yield* PromptPolish.PromptPolish.pipe(
+        Effect.flatMap((service) => service.polish({ prompt: "x".repeat(20001) })),
+        Effect.flip,
+        Effect.provide(run("unused", calls)),
+      );
+      expect(tooLarge).toMatchObject({
+        _tag: "PromptPolishLimitError",
+        length: 20001,
+        maxLength: 20000,
+      });
       expect(blank).toEqual({ prompt: "  " });
       expect(calls).toHaveLength(2);
     }),

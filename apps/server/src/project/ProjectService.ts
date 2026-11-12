@@ -200,7 +200,7 @@ export const make = Effect.gen(function* () {
     autoPull: row.autoPull,
     projectIcon: row.projectIcon,
     scripts: row.scripts,
-    savedPrompts: row.savedPrompts ?? [],
+    savedPrompts: (row.savedPrompts ?? []).filter((item) => item.deletedAt === undefined),
     pinnedAt: row.pinnedAt,
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,

@@ -5,6 +5,7 @@ import { ChatAttachment } from "./chatAttachment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import {
   CommandId,
+  EnvironmentId,
   ForwardCompatibleUnion,
   isUnknownUnionMember,
   IsoDateTime,
@@ -172,7 +173,17 @@ export const ProjectSavedPrompt = Schema.Struct({
   completedAt: Schema.NullOr(IsoDateTime),
   title: Schema.optional(SavedPromptTitle),
   status: Schema.optional(SavedPromptStatus),
+  deletedAt: Schema.optional(IsoDateTime),
   latestThreadId: Schema.optional(ThreadId),
+  latestThreadEnvironmentId: Schema.optional(EnvironmentId),
+  threadLinks: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        threadId: ThreadId,
+        environmentId: Schema.optional(EnvironmentId),
+      }),
+    ).check(Schema.isMaxLength(10)),
+  ),
   attachments: Schema.optional(Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8))),
 });
 export type ProjectSavedPrompt = typeof ProjectSavedPrompt.Type;
@@ -198,6 +209,13 @@ export const SavedPromptAction = Schema.Union([
     done: Schema.Boolean,
   }),
   Schema.Struct({ kind: Schema.Literal("delete"), id: TrimmedNonEmptyString }),
+  Schema.Struct({ kind: Schema.Literal("restore"), id: TrimmedNonEmptyString }),
+  Schema.Struct({
+    kind: Schema.Literal("link"),
+    id: TrimmedNonEmptyString,
+    threadId: ThreadId,
+    environmentId: Schema.optional(EnvironmentId),
+  }),
   Schema.Struct({ kind: Schema.Literal("clear-done") }),
 ]);
 export type SavedPromptAction = typeof SavedPromptAction.Type;

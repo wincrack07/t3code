@@ -1,14 +1,17 @@
-import type { ModelSelection, ThreadId } from "@t3tools/contracts";
+import { CommandId, type ModelSelection, type ThreadId } from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { Atom } from "effect/reactivity";
+import { Atom, type AtomRegistry } from "effect/reactivity";
 import {
   WS_METHODS,
   type EnvironmentId,
   type OrchestrationV2ShellSnapshot,
 } from "@t3tools/contracts";
 
+import type { SavedTaskDraftBindings, SavedTaskLinkReceipt } from "./tasks.ts";
+import { requestGuarded } from "../rpc/client.ts";
+import { runInEnvironment, withCommandPermissions } from "./runtime.ts";
 import { createOptimisticThreadLifecycle } from "./threadLifecycle.ts";
 import * as DateTime from "effect/DateTime";
 
@@ -19,6 +22,7 @@ import {
 } from "./runtime.ts";
 import {
   type InterruptThreadTurnInput,
+  type StartThreadTurnInput,
   type UpdateThreadMetadataInput,
   archiveThread,
   closeGuestShare,
@@ -72,6 +76,7 @@ export type LoadEarlierThreadHistoryInput = {
 export function createThreadEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | SecureRandom.SecureRandom | R, E>,
   snapshotAtom: (environmentId: EnvironmentId) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
+  taskDrafts?: SavedTaskDraftBindings,
 ) {
   const scheduler = createAtomCommandScheduler();
   const concurrency = {
@@ -267,7 +272,45 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
     startTurn: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:start-turn",
-      execute: startThreadTurn,
+      execute: Effect.fn("ThreadCommands.startTurn")(function* (
+        input: StartThreadTurnInput,
+        registry: AtomRegistry.AtomRegistry,
+        environmentId: EnvironmentId,
+      ) {
+        const thread = { environmentId, threadId: input.threadId };
+        const binding = taskDrafts?.get(thread);
+        const result = yield* startThreadTurn(input);
+        if (binding !== undefined && binding.receipt === undefined) {
+          const receipt: SavedTaskLinkReceipt = {
+            home: binding.home,
+            taskId: binding.taskId,
+            commandId: CommandId.make(`${input.message.messageId}:task`),
+            thread,
+          };
+          taskDrafts?.set(thread, { ...binding, receipt, linked: false });
+          yield* runInEnvironment(
+            binding.home.environmentId,
+            requestGuarded(WS_METHODS.projectsMutate, {
+              type: "project.update",
+              commandId: CommandId.make(`${receipt.commandId}:task-link`),
+              projectId: binding.home.projectId,
+              savedPrompt: {
+                kind: "link",
+                id: binding.taskId,
+                threadId: input.threadId,
+                environmentId,
+              },
+            }),
+          ).pipe(
+            withCommandPermissions(runtime, registry),
+            Effect.tap(() =>
+              Effect.sync(() => taskDrafts?.set(thread, { ...binding, receipt, linked: true })),
+            ),
+            Effect.catch(() => Effect.void),
+          );
+        }
+        return result;
+      }),
       scheduler,
       concurrency,
     }),

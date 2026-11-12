@@ -139,8 +139,30 @@ describe("planProjectCommand", () => {
       ),
     );
     assert.deepStrictEqual(linked.savedPrompts, [
-      { ...task, status: "in-progress", completedAt: null, latestThreadId: "new-thread" },
+      {
+        ...task,
+        status: "in-progress",
+        completedAt: null,
+        latestThreadId: "new-thread",
+        latestThreadEnvironmentId: undefined,
+        threadLinks: [{ threadId: "new-thread" }, { threadId: "old-thread" }],
+      },
     ]);
+    const history = payloadOf(
+      update({ kind: "link", id: "one", threadId: ThreadId.make("new-thread") }, [
+        {
+          ...task,
+          threadLinks: Array.from({ length: 10 }, (_, index) => ({
+            threadId: ThreadId.make(`previous-${index}`),
+          })),
+        },
+      ]),
+    );
+    assert.strictEqual((history.savedPrompts as ProjectSavedPrompt[])[0]?.threadLinks?.length, 10);
+    assert.strictEqual(
+      (history.savedPrompts as ProjectSavedPrompt[])[0]?.threadLinks?.at(-1)?.threadId,
+      "previous-8",
+    );
     assert.strictEqual(
       failureOf(
         plan(

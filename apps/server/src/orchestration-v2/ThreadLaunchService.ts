@@ -82,6 +82,7 @@ export interface ThreadLaunchInitialMessage {
 
 export interface ThreadLaunchInput {
   readonly savedPromptId?: string;
+  readonly useProjectDefaultModel?: boolean;
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
@@ -929,6 +930,19 @@ const make = Effect.gen(function* () {
           }),
         ),
       );
+      if (input.useProjectDefaultModel === true) {
+        const settings = resolveProjectSettings(
+          yield* serverSettings.getSettings.pipe(
+            Effect.mapError(mapError(input, "resolve-project")),
+          ),
+          project.id,
+          project,
+        ).settings;
+        input = {
+          ...input,
+          modelSelection: settings.defaultModelSelection ?? input.modelSelection,
+        };
+      }
       if (input.savedPromptId !== undefined) {
         if (input.reuseExistingThread === true) {
           return yield* mapError(input, "resolve-project")("A saved task starts a new thread.");
@@ -951,7 +965,7 @@ const make = Effect.gen(function* () {
         };
       }
       if (
-        input.savedPromptId !== undefined &&
+        (input.savedPromptId !== undefined || input.useProjectDefaultModel === true) &&
         (input.modelSelection.model === AUTO_MODEL || input.modelSelection.routing === "auto")
       ) {
         const decisions = yield* Effect.serviceOption(Decisions.Decisions);

@@ -19,6 +19,7 @@ import {
   request,
   requestGuarded,
 } from "../rpc/client.ts";
+import { createSavedTaskCommands } from "./tasks.ts";
 import type { EnvironmentProject } from "./models.ts";
 import {
   createAtomCommandScheduler,
@@ -92,6 +93,7 @@ export function createProjectEnvironmentAtoms<R, E>(
       JSON.stringify([environmentId, input.projectId]),
   };
   return {
+    tasks: createSavedTaskCommands(runtime, options.projectAtom),
     savedPromptUpdate: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:projects:saved-prompts",
       tag: WS_METHODS.projectsMutate,

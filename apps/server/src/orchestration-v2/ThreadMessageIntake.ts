@@ -239,6 +239,7 @@ export const launchThread = Effect.fn("ThreadMessageIntake.launchThread")(functi
   const launches = yield* ThreadLaunch.ThreadLaunchService;
   if (
     input.savedPromptId === undefined &&
+    input.useProjectDefaultModel !== true &&
     (input.modelSelection.model === AUTO_MODEL || input.modelSelection.routing === "auto")
   ) {
     const decisions = yield* Effect.serviceOption(Decisions.Decisions);

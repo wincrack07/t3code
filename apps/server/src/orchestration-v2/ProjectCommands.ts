@@ -204,7 +204,7 @@ export function planProjectCommand(input: {
         );
         if (action.kind === "add") {
           if (exists) return invariant("A saved prompt with this id already exists.");
-          if (savedPrompts.length >= 100)
+          if (savedPrompts.filter((item) => item.deletedAt === undefined).length >= 100)
             return invariant("Clear saved prompts before adding more (100 maximum).");
           savedPrompts = [
             {
@@ -218,12 +218,70 @@ export function planProjectCommand(input: {
             ...savedPrompts,
           ];
         } else if (action.kind === "clear-done") {
-          savedPrompts = savedPrompts.filter((item) => item.completedAt === null);
+          const completed = savedPrompts.filter(
+            (item) => item.deletedAt === undefined && item.completedAt !== null,
+          );
+          savedPrompts = [
+            ...completed.map((item) => ({ ...item, deletedAt: occurredAt })),
+            ...savedPrompts.filter((item) => !completed.includes(item)),
+          ];
+        } else if (action.kind === "restore") {
+          if (!exists) return invariant("The saved prompt can no longer be restored.");
+          savedPrompts = savedPrompts.map((item) => {
+            if (item.id !== action.id) return item;
+            const { deletedAt: _deletedAt, ...restored } = item;
+            return restored;
+          });
+        } else if (action.kind === "link") {
+          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
+            return invariant("The saved prompt no longer exists.");
+          savedPrompts = savedPrompts.map((item) =>
+            item.id !== action.id
+              ? item
+              : {
+                  ...item,
+                  status: "in-progress" as const,
+                  completedAt: null,
+                  latestThreadId: action.threadId,
+                  latestThreadEnvironmentId: action.environmentId,
+                  threadLinks: [
+                    {
+                      threadId: action.threadId,
+                      ...(action.environmentId === undefined
+                        ? {}
+                        : { environmentId: action.environmentId }),
+                    },
+                    ...(
+                      item.threadLinks ??
+                      (item.latestThreadId === undefined
+                        ? []
+                        : [
+                            {
+                              threadId: item.latestThreadId,
+                              ...(item.latestThreadEnvironmentId === undefined
+                                ? {}
+                                : { environmentId: item.latestThreadEnvironmentId }),
+                            },
+                          ])
+                    ).filter(
+                      (link) =>
+                        link.threadId !== action.threadId ||
+                        link.environmentId !== action.environmentId,
+                    ),
+                  ].slice(0, 10),
+                },
+          );
         } else {
-          if (!exists) return invariant("The saved prompt no longer exists.");
+          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
+            return invariant("The saved prompt no longer exists.");
           savedPrompts =
             action.kind === "delete"
-              ? savedPrompts.filter((item) => item.id !== action.id)
+              ? [
+                  ...savedPrompts
+                    .filter((item) => item.id === action.id)
+                    .map((item) => ({ ...item, deletedAt: occurredAt })),
+                  ...savedPrompts.filter((item) => item.id !== action.id),
+                ]
               : savedPrompts.map((item) =>
                   item.id !== action.id
                     ? item
@@ -261,13 +319,31 @@ export function planProjectCommand(input: {
                 status: "in-progress" as const,
                 completedAt: null,
                 latestThreadId: link.threadId,
+                latestThreadEnvironmentId: undefined,
+                threadLinks: [
+                  { threadId: link.threadId },
+                  ...(
+                    item.threadLinks ??
+                    (item.latestThreadId === undefined ? [] : [{ threadId: item.latestThreadId }])
+                  ).filter((previous) => previous.threadId !== link.threadId),
+                ].slice(0, 10),
               }
             : item,
         );
       }
+      const activePrompts = savedPrompts.filter((item) => item.deletedAt === undefined);
+      if (activePrompts.length > 100)
+        return invariant("Clear saved prompts before restoring more (100 maximum).");
+      let trashSize = 0;
+      let trashCount = 0;
+      savedPrompts = savedPrompts.filter((item) => {
+        if (item.deletedAt === undefined) return true;
+        trashSize += item.text.length;
+        return ++trashCount <= 100 && trashSize <= 200000;
+      });
       if (
         action !== undefined &&
-        savedPrompts.reduce((size, item) => size + item.text.length, 0) > 200000
+        activePrompts.reduce((size, item) => size + item.text.length, 0) > 200000
       ) {
         return invariant("Saved prompts exceed the project text limit. Delete some prompts first.");
       }

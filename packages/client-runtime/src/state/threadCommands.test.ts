@@ -1,6 +1,8 @@
+import { vi } from "vite-plus/test";
 import { describe, expect, it } from "@effect/vitest";
 import {
   CommandId,
+  WS_METHODS,
   RuntimeRequestId,
   EnvironmentId,
   MessageId,
@@ -29,8 +31,16 @@ import * as EnvironmentRegistry from "../connection/registry.ts";
 import { BearerConnectionTarget } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type { RpcSession } from "../rpc/session.ts";
+import type { SavedTaskDraftBindings, SavedTaskDraftBinding } from "./tasks.ts";
 import { createThreadEnvironmentAtoms } from "./threadCommands.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
+
+vi.mock("./commandPermissions.ts", () => ({
+  createCommandPermissions: () => ({
+    authorize: () => Effect.void,
+    permissionAtom: () => Atom.make(true),
+  }),
+}));
 
 const ENVIRONMENT_ID = EnvironmentId.make("remote");
 const THREAD_ID = ThreadId.make("thread");
@@ -88,6 +98,8 @@ const SNAPSHOT: OrchestrationV2ShellSnapshot = {
 };
 
 const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (options?: {
+  readonly taskDrafts?: SavedTaskDraftBindings;
+  readonly taskUpdates?: Array<unknown>;
   readonly loadEarlier?: () => Effect.Effect<ThreadHistoryController.ThreadHistoryLoadEarlierResult>;
   readonly reconcilePendingWork?: (threadId: ThreadId) => Effect.Effect<void>;
 }) {
@@ -105,6 +117,10 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (optio
     session: yield* SubscriptionRef.make(
       Option.some({
         client: {
+          [WS_METHODS.projectsMutate]: (input: unknown) => {
+            options?.taskUpdates?.push(input);
+            return Effect.succeed({});
+          },
           [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command: OrchestrationV2Command) =>
             Effect.gen(function* () {
               const reply = yield* Deferred.make<{ sequence: number }, Error>();
@@ -138,7 +154,7 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (optio
     ),
   );
   const snapshotAtom = Atom.family((_environmentId: EnvironmentId) => Atom.make(SNAPSHOT));
-  const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom);
+  const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom, options?.taskDrafts);
   const registry = AtomRegistry.make();
   yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
   const visibleAtom = commands.snapshotAtom(ENVIRONMENT_ID);
@@ -152,7 +168,22 @@ describe("history loading", () => {
       const historyStarted = yield* Deferred.make<void>();
       const historyReply =
         yield* Deferred.make<ThreadHistoryController.ThreadHistoryLoadEarlierResult>();
+      let taskBinding: SavedTaskDraftBinding = {
+        home: {
+          environmentId: EnvironmentId.make("home"),
+          projectId: ProjectId.make("source-project"),
+        },
+        taskId: "source-task",
+      };
+      const taskUpdates: Array<unknown> = [];
       const h = yield* makeHarness({
+        taskUpdates,
+        taskDrafts: {
+          get: () => taskBinding,
+          set: (_thread, binding) => {
+            taskBinding = binding;
+          },
+        },
         loadEarlier: () =>
           Deferred.succeed(historyStarted, undefined).pipe(
             Effect.andThen(Deferred.await(historyReply)),
@@ -192,6 +223,23 @@ describe("history loading", () => {
       yield* Deferred.succeed(second.reply, { sequence: 2 });
       const results = yield* Effect.promise(() => Promise.all([history, send, control]));
 
+      expect(taskBinding).toMatchObject({
+        linked: true,
+        receipt: {
+          home: { environmentId: "home" },
+          thread: { environmentId: ENVIRONMENT_ID, threadId: THREAD_ID },
+        },
+      });
+      expect(taskUpdates).toHaveLength(1);
+      expect(taskUpdates[0]).toMatchObject({
+        projectId: "source-project",
+        savedPrompt: {
+          kind: "link",
+          id: "source-task",
+          threadId: THREAD_ID,
+          environmentId: ENVIRONMENT_ID,
+        },
+      });
       expect(first.command).toMatchObject({ type: "message.dispatch", threadId: THREAD_ID });
       expect(second.command).toMatchObject({ type: "run.interrupt", threadId: controlThreadId });
       expect(results.map((value) => value._tag)).toEqual(["Success", "Success", "Success"]);

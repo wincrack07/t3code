@@ -7,6 +7,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,
+  EnvironmentId,
   type Project,
   ProjectId,
   ProviderInstanceId,
@@ -290,6 +291,20 @@ it.layer(layerTest)("ProjectService", (it) => {
         linked.savedPrompts?.find((item) => item.id === "one")?.latestThreadId,
         "task-thread",
       );
+      const remote = yield* service.update({
+        commandId: CommandId.make("saved:remote"),
+        projectId,
+        savedPrompt: {
+          kind: "link",
+          id: "one",
+          threadId: ThreadId.make("remote-thread"),
+          environmentId: EnvironmentId.make("remote"),
+        },
+      });
+      assert.deepStrictEqual(remote.savedPrompts?.find((item) => item.id === "one")?.threadLinks, [
+        { threadId: ThreadId.make("remote-thread"), environmentId: EnvironmentId.make("remote") },
+        { threadId: ThreadId.make("task-thread") },
+      ]);
       const complete = yield* service.update({
         commandId: CommandId.make("saved:complete"),
         projectId,
@@ -297,6 +312,20 @@ it.layer(layerTest)("ProjectService", (it) => {
       });
       assert.isNotNull(complete.savedPrompts?.find((item) => item.id === "one")?.completedAt);
       assert.strictEqual(complete.savedPrompts?.find((item) => item.id === "one")?.status, "done");
+      yield* service.update({
+        commandId: CommandId.make("saved:soft-delete"),
+        projectId,
+        savedPrompt: { kind: "delete", id: "one" },
+      });
+      const restored = yield* service.update({
+        commandId: CommandId.make("saved:restore"),
+        projectId,
+        savedPrompt: { kind: "restore", id: "one" },
+      });
+      assert.deepStrictEqual(
+        restored.savedPrompts?.find((item) => item.id === "one"),
+        complete.savedPrompts?.find((item) => item.id === "one"),
+      );
       const reopened = yield* service.update({
         commandId: CommandId.make("saved:reopen"),
         projectId,
