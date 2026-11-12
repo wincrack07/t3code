@@ -152,7 +152,7 @@ it.effect("retains saved prompts after closing and reopening the database", () =
       const store = yield* ProjectStore.ProjectStoreV2;
       assert.deepStrictEqual(
         Option.getOrThrow(yield* store.get(projectId)).savedPrompts,
-        savedPrompts,
+        savedPrompts.map((item) => ({ ...item, title: null, status: "open" })),
       );
     }).pipe(Effect.provide(databaseLayer()));
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),

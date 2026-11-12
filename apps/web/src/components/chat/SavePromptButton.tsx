@@ -12,6 +12,9 @@ import { registerCommands } from "../../shortcuts/dispatcher";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
+import { findTaskGroupForProject, pickTaskHomeProject } from "../tasks/tasks.logic";
+import { useEnvironmentLabel, useTaskProjectGroups } from "../tasks/useTaskProjects";
+import { usePrimaryEnvironmentId } from "../../state/environments";
 
 export const SAVE_PROMPT_EVENT = "t3:save-prompt";
 
@@ -20,15 +23,26 @@ export function SavePromptButton({
   projectId,
   target,
   text,
+  automaticEnvironment = false,
   disabled,
 }: {
   environmentId: EnvironmentId;
   projectId: ProjectId;
   target: ScopedThreadRef | DraftId;
   text: string;
+  automaticEnvironment?: boolean;
   disabled: boolean;
 }) {
-  const { allowed, update } = useSavedPrompts(environmentId, projectId);
+  const groups = useTaskProjectGroups();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const labelOf = useEnvironmentLabel();
+  const group = automaticEnvironment
+    ? findTaskGroupForProject(groups, environmentId, projectId)
+    : null;
+  // Auto balance has not settled on a machine, so the task goes where Tasks stores new ones.
+  const home = group ? pickTaskHomeProject(group, primaryEnvironmentId, labelOf) : null;
+  const homeEnvironmentId = home?.environmentId ?? environmentId;
+  const { allowed, update } = useSavedPrompts(homeEnvironmentId, home?.id ?? projectId);
   const [busy, setBusy] = useState(false);
   const backgroundThread = use(BackgroundThreadContext);
   const save = useStableCallback(async () => {
@@ -51,7 +65,7 @@ export function SavePromptButton({
       toastManager.add({
         type: "success",
         title: "Prompt saved for later",
-        description: "Text only. Attachments stay in the composer.",
+        description: `Saved to Tasks on ${labelOf(homeEnvironmentId)}. Text only; attachments stay in the composer.`,
         actionProps: {
           children: "Undo",
           onClick: async () => {

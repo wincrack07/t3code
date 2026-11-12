@@ -153,6 +153,36 @@ export function parseNewThreadLink(search: string): PromptLinkResult<NewThreadLi
   };
 }
 
+const TASK_LINK_MAX_TITLE_LENGTH = 160;
+
+export interface NewTaskLink {
+  readonly prompt: LinkedPrompt;
+  readonly title: string | null;
+  readonly repository: PromptLinkRepository | null;
+}
+
+/** `/tasks/new`: the `/new` prompt and repository rules, plus an optional title. */
+export function parseNewTaskLink(search: string): PromptLinkResult<NewTaskLink> {
+  const params = new URLSearchParams(search);
+  const prompt = readPrompt(params);
+  if (!prompt.ok) return prompt;
+  if (prompt.value === null) return { ok: false, error: "This link has no prompt." };
+  const repo = params.get("repo");
+  const repository = repo === null ? null : parsePromptLinkRepository(repo);
+  if (repo !== null && repository === null) {
+    return { ok: false, error: "This link names a repository T3 Code cannot read." };
+  }
+  const rawTitle = params.get("title");
+  const title =
+    rawTitle === null
+      ? null
+      : Array.from(sanitizeLinkedPrompt(rawTitle).text.replace(/\s+/g, " "))
+          .slice(0, TASK_LINK_MAX_TITLE_LENGTH)
+          .join("")
+          .trim() || null;
+  return { ok: true, value: { prompt: prompt.value, title, repository } };
+}
+
 export function parseThreadLinkPrompt(search: string): PromptLinkResult<LinkedPrompt | null> {
   return readPrompt(new URLSearchParams(search));
 }
@@ -194,11 +224,13 @@ export function promptLinkAppPath(
     if (url.host === "new" && (url.pathname === "" || url.pathname === "/")) {
       return `/new${url.search}`;
     }
+    if (url.host === "tasks" && url.pathname === "/new") return `/tasks/new${url.search}`;
     const thread = url.host === "threads" ? THREAD_PATH.exec(url.pathname) : null;
     return thread ? `/${thread[1]}/${thread[2]}${url.search}` : null;
   }
   if (!URL.canParse(hostedAppUrl) || url.origin !== new URL(hostedAppUrl).origin) return null;
   if (url.pathname === "/new") return `/new${url.search}`;
+  if (url.pathname === "/tasks/new") return `/tasks/new${url.search}`;
   // The web app's own thread route is a link only with a prompt, so reloading a tab never asks.
   const thread = url.pathname.startsWith("/threads/")
     ? THREAD_PATH.exec(url.pathname.slice("/threads".length))
@@ -210,6 +242,11 @@ export function promptLinkAppPath(
 
 export function promptLinkDeepLink(appPath: string, scheme = "t3code"): string {
   const url = new URL(appPath, "https://app.invalid");
-  const host = url.pathname === "/new" ? "new" : `threads${url.pathname}`;
+  const host =
+    url.pathname === "/new"
+      ? "new"
+      : url.pathname === "/tasks/new"
+        ? "tasks/new"
+        : `threads${url.pathname}`;
   return `${scheme}://${host}${url.search}`;
 }
