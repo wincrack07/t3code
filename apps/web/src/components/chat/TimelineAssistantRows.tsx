@@ -355,6 +355,10 @@ function AssistantChangedFilesSectionInner({
       : null,
   );
   const onFileContextMenu = useFileContextMenuHandler(ctx.activeThreadEnvironmentId);
+  const owner = ctx.previousProjectCheckpoints.byRunId.get(turnSummary.runId);
+  const ownerProject = useProject(
+    owner === undefined ? null : { environmentId: ctx.activeThreadEnvironmentId, projectId: owner },
+  );
 
   return (
     <ChangedFilesCard
@@ -367,6 +371,11 @@ function AssistantChangedFilesSectionInner({
         setExpanded(routeThreadKey, turnSummary.runId, !allDirectoriesExpanded)
       }
       onOpenTurnDiff={onOpenTurnDiff}
+      unavailableReason={
+        owner === undefined
+          ? null
+          : `Belongs to ${ownerProject?.title ?? "the previous project"}. Move the thread back to use it.`
+      }
       onFileContextMenu={(filePath, event) =>
         onFileContextMenu(
           {

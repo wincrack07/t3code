@@ -10,7 +10,12 @@ import { memo, use, useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Collapsible, CollapsibleTrigger, CollapsiblePanel } from "../ui/collapsible";
-import { EnvironmentSubagentAvatar, SubagentElapsed, V2LifecycleRow } from "./V2LifecycleRow";
+import {
+  EnvironmentSubagentAvatar,
+  ProjectMoveRow,
+  SubagentElapsed,
+  V2LifecycleRow,
+} from "./V2LifecycleRow";
 import { LinkRequestCard } from "./LinkRequestCard";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { TimelineRowCtx, type TimelineRow } from "./timelineRowContext";
@@ -21,6 +26,15 @@ export function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   const { item, visibility } = row.projectedItem;
   if (item.type === "subagent" && (row.subagents?.length ?? 1) > 1) {
     return <V2SubagentGroup key={row.id} row={row} />;
+  }
+  if (item.type === "notification" && item.projectMove) {
+    return (
+      <ProjectMoveRow
+        summary={item.summary}
+        movedAt={item.projectMove.movedAt}
+        timestampFormat={ctx.timestampFormat}
+      />
+    );
   }
   if (item.type === "secret_request") {
     return (

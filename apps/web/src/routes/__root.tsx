@@ -18,6 +18,10 @@ import { APP_DISPLAY_NAME, APP_VERSION } from "../branding";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
+import {
+  MoveThreadToProjectDialogHost,
+  ThreadProjectMoveToasts,
+} from "../components/MoveThreadToProjectDialog";
 import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { UseInAnotherAppDialogHost } from "../components/mcp/UseInAnotherAppDialog";
 import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachineDialog";
@@ -191,6 +195,8 @@ function RootRouteBranch() {
       <ReopenClosedViewShortcut />
       <ConfirmDialogHost />
       <CustomSnoozeDialogHost />
+      <MoveThreadToProjectDialogHost />
+      <ThreadProjectMoveToasts />
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
       <AddProjectToMachineDialogHost />

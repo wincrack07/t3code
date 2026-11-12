@@ -36,3 +36,22 @@ export const SIDEBAR_TREE_DROP_CLASS_NAME = [
 export function sidebarTreeIndent(depth: number) {
   return depth > 0 ? { marginInlineStart: `${depth}rem` } : undefined;
 }
+
+/** The project whose header or thread rows sit under the point, as a logical project key. */
+export function sidebarProjectKeyAtPoint(
+  list: HTMLElement | null,
+  point: { readonly x: number; readonly y: number },
+): string | null {
+  const element = document.elementFromPoint(point.x, point.y);
+  if (!list || !element || !list.contains(element)) return null;
+  const header = parseSidebarTreeRow(
+    element.closest<HTMLElement>("[data-tree-row]")?.dataset.treeRow ?? "",
+  );
+  if (header?.kind === "project") return header.key;
+  // Thread rows name their project header, or its Settled shelf, as their navigation parent.
+  const parent = element.closest<HTMLElement>("[data-sidebar-parent]")?.dataset.sidebarParent;
+  for (const prefix of ["folder:", "project-settled:"]) {
+    if (parent?.startsWith(prefix)) return parent.slice(prefix.length);
+  }
+  return null;
+}

@@ -98,6 +98,29 @@ A pinned project stays pinned within its group. Groups, their order, and collaps
 preferences are saved on this client; they do not sync between devices. Mobile
 continues to show its usual project list.
 
+## Move a thread to another project
+
+Choose **Move to project…** from a thread's menu in the sidebar or the chat header, or run
+**Move thread to project…** from the command palette. Pick a project on the thread's machine;
+the conversation, its history, and its model come along. A project that exists only on another
+machine is listed but cannot be picked. With threads grouped by project, you can also drag a
+thread onto another project's folder.
+
+- **A working thread** moves when its current turn finishes. Until then the thread shows
+  **Moves to … when this turn finishes**; choose **Cancel** there, or **Cancel move** in the
+  thread's menu, to stay put.
+- **A thread in a worktree or on another branch** asks first. It leaves the worktree and
+  continues in the new project's folder; the worktree, its branch, and any uncommitted changes
+  stay on disk.
+- **Undo** in the confirmation moves the thread back to its previous project, but not back
+  into a worktree it left.
+
+After a move, restoring or diffing turns from before the move needs the old folder, so those
+controls are unavailable until you move the thread back. The next message continues the same
+agent session in the new folder for Codex, Claude, and Cursor; other agents start a new session
+that receives the conversation so far. Subagents, forks, and side chats stay with the thread they
+came from and cannot be moved on their own.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.
@@ -197,8 +220,8 @@ project's folder comes last and shows only while it has active threads. Click a 
 close it. A closed folder shows how many threads it holds, and a dot when one of them
 needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
 Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
-can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
-section is off. Each device keeps its own choice.
+can drag a thread onto the composer to mention it, or onto another project's folder to move it
+there. Threads cannot be reordered by drag in this mode, and the Working section is off. Each device keeps its own choice.
 
 ## Settle finished work
 

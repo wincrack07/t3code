@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   granted: new Set<string>(),
   effects: [] as string[],
   completed: deferred<void>(),
+  pendingMoveTitle: null as string | null,
   show: vi.fn<
     (
       items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>>,
@@ -35,6 +36,13 @@ function recordEffect(action: string) {
 }
 
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
+vi.mock("../components/MoveThreadToProjectDialog", () => ({
+  openMoveThreadToProject: () => recordEffect("move-to-project"),
+}));
+vi.mock("../threadProjectMove", () => ({
+  threadProjectMoveMenuState: () => ({ pendingTargetTitle: state.pendingMoveTitle }),
+  cancelThreadProjectMove: async () => recordEffect("cancel-project-move"),
+}));
 vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory(),
@@ -149,6 +157,7 @@ const target = {
   threadId: ThreadId.make("thread"),
 };
 const position = { x: 10, y: 20 };
+const MOVE_ITEM_IDS = new Set(["move-to-project", "cancel-project-move"]);
 const createMenu = (options: { readonly onFind?: (threadRef: typeof target) => void } = {}) =>
   useThreadActionMenu({
     threadRef: target,
@@ -162,23 +171,31 @@ beforeEach(() => {
   state.granted = new Set(["primary"]);
   state.effects = [];
   state.completed = deferred<void>();
+  state.pendingMoveTitle = null;
   state.show.mockReset().mockResolvedValue(null);
 });
 
 describe("thread menu permissions", () => {
-  it.each(["rename", "regenerate-title", "delete", "pin", "settle", "archive"] as const)(
-    "%s rechecks after the native menu closes",
-    async (action) => {
-      state.granted.add("secondary");
-      const choice = deferred<ThreadActionMenuId | null>();
-      state.show.mockReturnValue(choice.promise);
-      createMenu().openMenu(position);
-      state.granted.delete("secondary");
-      choice.resolve(action);
-      await state.completed.promise;
-      expect(state.effects).toEqual([]);
-    },
-  );
+  it.each([
+    "rename",
+    "regenerate-title",
+    "delete",
+    "pin",
+    "settle",
+    "archive",
+    "move-to-project",
+    "cancel-project-move",
+  ] as const)("%s rechecks after the native menu closes", async (action) => {
+    state.granted.add("secondary");
+    state.pendingMoveTitle = "docs";
+    const choice = deferred<ThreadActionMenuId | null>();
+    state.show.mockReturnValue(choice.promise);
+    createMenu().openMenu(position);
+    state.granted.delete("secondary");
+    choice.resolve(action);
+    await state.completed.promise;
+    expect(state.effects).toEqual([]);
+  });
 
   it("offers find only to a header that can open it, without task permission", async () => {
     createMenu().openMenu(position);
@@ -192,5 +209,23 @@ describe("thread menu permissions", () => {
     expect(items[0]?.disabled).not.toBe(true);
     expect(state.effects).toEqual(["find"]);
     expect(onFind).toHaveBeenCalledExactlyOnceWith(target);
+  });
+
+  it("offers moving and its cancel only as operate actions", async () => {
+    state.pendingMoveTitle = "docs";
+    createMenu().openMenu(position);
+    const withoutGrant = state.show.mock.calls[0]![0];
+    expect(withoutGrant.filter((item) => MOVE_ITEM_IDS.has(item.id))).toMatchObject([
+      { id: "move-to-project", label: "Move to project…", disabled: true },
+      { id: "cancel-project-move", label: "Cancel move to docs", disabled: true },
+    ]);
+    state.granted.add("secondary");
+    state.show.mockResolvedValue("move-to-project");
+    createMenu().openMenu(position);
+    await state.completed.promise;
+    expect(
+      state.show.mock.calls[1]![0].find((item) => item.id === "move-to-project")?.disabled,
+    ).not.toBe(true);
+    expect(state.effects).toEqual(["move-to-project"]);
   });
 });
