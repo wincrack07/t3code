@@ -3,6 +3,7 @@ import { assert, it } from "@effect/vitest";
 import {
   CheckpointScopeId,
   NodeId,
+  ProjectId,
   ProviderThreadId,
   RunId,
   ThreadId,
@@ -165,6 +166,7 @@ it.effect("keeps checkpoint scopes separate across projects and reuses the origi
       runId: RunId.make("move-scopes-run"),
       rootNodeId: NodeId.make("move-scopes-node"),
       providerThreadId: ProviderThreadId.make("move-scopes-provider"),
+      projectId: ProjectId.make("scope-source"),
       cwd: "/source",
       createdAt: DateTime.makeUnsafe("2026-11-12T00:00:00.000Z"),
     };
@@ -172,11 +174,21 @@ it.effect("keeps checkpoint scopes separate across projects and reuses the origi
     const target = yield* service.prepareRootRunScope({
       ...input,
       cwd: "/target",
+      projectId: ProjectId.make("scope-target"),
+      originalProjectId: input.projectId,
       originalCwd: "/source",
     });
     const undo = yield* service.prepareRootRunScope({ ...input, originalCwd: "/source" });
     assert.notEqual(original.id, target.id);
     assert.equal(original.id, undo.id);
+    assert.equal(original.projectId, input.projectId);
+    const sameFolder = yield* service.prepareRootRunScope({
+      ...input,
+      projectId: ProjectId.make("scope-target"),
+      originalProjectId: input.projectId,
+      originalCwd: input.cwd,
+    });
+    assert.notEqual(original.id, sameFolder.id);
   }).pipe(
     Effect.provide(
       CheckpointService.layer.pipe(

@@ -1033,6 +1033,7 @@ export function isOrchestrationV2WorkActive(
 export const OrchestrationV2CheckpointScope = Schema.Struct({
   id: CheckpointScopeId,
   threadId: ThreadId,
+  projectId: Schema.optional(Schema.NullOr(ProjectId)),
   runId: Schema.NullOr(RunId),
   nodeId: NodeId,
   parentScopeId: Schema.NullOr(CheckpointScopeId),

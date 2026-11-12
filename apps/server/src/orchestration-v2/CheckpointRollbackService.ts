@@ -168,7 +168,12 @@ export const layer: Layer.Layer<
       const currentCwd = context.thread.projectMoves?.length
         ? (context.thread.worktreePath ?? context.thread.projectMoves.at(-1)?.cwd)
         : undefined;
-      if (currentCwd !== undefined && scope.cwd !== currentCwd) {
+      if (
+        context.thread.projectMoves?.length &&
+        (scope.projectId != null
+          ? scope.projectId !== context.thread.projectId
+          : currentCwd !== undefined && scope.cwd !== currentCwd)
+      ) {
         return yield* new CheckpointRollbackExecutionError({
           reason: "previous-project",
           threadId: input.threadId,

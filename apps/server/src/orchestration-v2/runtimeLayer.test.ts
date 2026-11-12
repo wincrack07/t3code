@@ -10485,6 +10485,21 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
       });
       yield* send("before");
       yield* complete("before");
+      const sourceScope = (yield* orchestrator.getThreadProjection(threadId)).checkpointScopes[0]!;
+      const { projectId: _scopeProject, ...legacyScope } = sourceScope;
+      const ownershipAt = yield* DateTime.now;
+      yield* sink.write({
+        commandId: CommandId.make("idle-move-legacy-scope"),
+        events: [
+          {
+            id: EventId.make("idle-move-legacy-scope"),
+            type: "checkpoint-scope.created",
+            threadId,
+            occurredAt: ownershipAt,
+            payload: legacyScope,
+          },
+        ],
+      });
       yield* orchestrator.dispatch({
         type: "thread.project.move",
         commandId: CommandId.make("move-idle"),
@@ -10493,6 +10508,10 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
       });
       const projection = yield* orchestrator.getThreadProjection(threadId);
       assert.equal(projection.thread.projectId, target);
+      assert.equal(
+        projection.checkpointScopes.find((scope) => scope.id === sourceScope.id)?.projectId,
+        source,
+      );
       assert.equal(projection.thread.title, "Keep this title");
       assert.deepEqual(projection.thread.modelSelection, modelSelection);
       assert.equal(projection.thread.pendingProjectMove, null);
@@ -10695,9 +10714,27 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
             Effect.forkChild({ startImmediately: true }),
           );
         const now = yield* DateTime.now;
+        const pendingRequest = {
+          id: RuntimeRequestId.make("deferred-pending-request"),
+          nodeId: run.rootNodeId!,
+          providerTurnId: null,
+          nativeRequestRef: null,
+          kind: "user_input" as const,
+          status: "pending" as const,
+          responseCapability: { type: "message" as const },
+          createdAt: now,
+          resolvedAt: null,
+        };
         yield* eventSink.write({
           commandId: CommandId.make("deferred-completed"),
           events: [
+            {
+              id: EventId.make("deferred-request-pending"),
+              type: "runtime-request.updated",
+              threadId,
+              occurredAt: now,
+              payload: pendingRequest,
+            },
             {
               id: EventId.make("deferred-completed"),
               type: "run.updated",
@@ -10705,6 +10742,36 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
               runId: run.id,
               occurredAt: now,
               payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+            },
+          ],
+        });
+        assert.equal(yield* orchestrator.resumeQueuedRuns, 0);
+        let held = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(held.thread.projectId, source);
+        assert.equal(held.runs.at(-1)?.status, "queued");
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("deferred-after-turn"),
+          threadId,
+          createdBy: "user",
+          creationSource: "web",
+          messageId: MessageId.make("deferred-after-turn"),
+          text: "Wait for the move too",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        held = yield* orchestrator.getThreadProjection(threadId);
+        assert.isTrue(held.runs.slice(1).every((candidate) => candidate.status === "queued"));
+        yield* eventSink.write({
+          commandId: CommandId.make("deferred-request-resolved"),
+          events: [
+            {
+              id: EventId.make("deferred-request-resolved"),
+              type: "runtime-request.updated",
+              threadId,
+              occurredAt: now,
+              payload: { ...pendingRequest, status: "resolved", resolvedAt: now },
             },
           ],
         });

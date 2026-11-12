@@ -7,6 +7,7 @@ import {
   type OrchestrationGetTurnDiffInput,
   type OrchestrationGetTurnDiffResult as OrchestrationGetTurnDiffResultType,
   type ThreadId,
+  type OrchestrationV2CheckpointScope,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
@@ -166,7 +167,15 @@ export const make = Effect.gen(function* () {
       }
 
       const currentCwd = projection.currentWorkspace;
-      if (currentCwd !== undefined && currentCwd !== toScope.cwd) {
+      const belongsToPreviousProject = (
+        scope: Pick<OrchestrationV2CheckpointScope, "cwd" | "projectId">,
+      ) =>
+        currentCwd === undefined
+          ? false
+          : scope.projectId != null && projection.currentProjectId !== undefined
+            ? scope.projectId !== projection.currentProjectId
+            : scope.cwd !== currentCwd;
+      if (belongsToPreviousProject(toScope)) {
         return yield* new CheckpointPreviousProjectError({
           threadId: input.threadId,
           checkpointId:
@@ -193,7 +202,7 @@ export const make = Effect.gen(function* () {
           (checkpoint) =>
             (checkpoint.appRunOrdinal ?? 0) <= input.toTurnCount &&
             projection.checkpointScopes.some(
-              (scope) => scope.id === checkpoint.scopeId && scope.cwd !== currentCwd,
+              (scope) => scope.id === checkpoint.scopeId && belongsToPreviousProject(scope),
             ),
         )
       ) {
@@ -239,7 +248,7 @@ export const make = Effect.gen(function* () {
         input.fromTurnCount === 0
           ? firstScope
           : projection.checkpointScopes.find((scope) => scope.id === fromScopeId);
-      if (currentCwd !== undefined && fromScope !== undefined && fromScope.cwd !== currentCwd) {
+      if (fromScope !== undefined && belongsToPreviousProject(fromScope)) {
         return yield* new CheckpointPreviousProjectError({
           threadId: input.threadId,
           checkpointId:

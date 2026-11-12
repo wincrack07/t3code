@@ -1,7 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it, vi } from "@effect/vitest";
-import { CheckpointRef, CheckpointScopeId, RunId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, CheckpointRef, CheckpointScopeId, RunId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -345,7 +345,16 @@ it.effect("preserves an exact-fit filtered patch across batches without a marker
 });
 
 it.effect("refuses previous-project diffs and makes them accessible after moving back", () => {
-  const projection = { ...makeProjection(), currentWorkspace: "/destination" };
+  const original = makeProjection();
+  const projection = {
+    ...original,
+    currentWorkspace: "/destination",
+    currentProjectId: ProjectId.make("destination"),
+    checkpointScopes: original.checkpointScopes.map((scope) => ({
+      ...scope,
+      projectId: ProjectId.make("source"),
+    })),
+  };
   const diffCheckpoints = vi.fn(() => Effect.succeed("old diff"));
   return Effect.gen(function* () {
     const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
@@ -357,7 +366,8 @@ it.effect("refuses previous-project diffs and makes them accessible after moving
       .pipe(Effect.flip);
     assert.equal(fullError._tag, "CheckpointPreviousProjectError");
     assert.equal(diffCheckpoints.mock.calls.length, 0);
-    projection.currentWorkspace = "/repo";
+    projection.currentProjectId = ProjectId.make("source");
+    projection.currentWorkspace = "/source-root";
     assert.equal((yield* query.getTurnDiff(input)).diff, "old diff");
     assert.equal(diffCheckpoints.mock.calls.length, 1);
   }).pipe(Effect.provide(layerFor({ projection: Effect.succeed(projection), diffCheckpoints })));

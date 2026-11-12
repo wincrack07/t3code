@@ -233,11 +233,13 @@ export type ProjectionSettlementCandidate = Pick<
 
 const ProjectionCheckpointContext = Schema.Struct({
   currentWorkspace: Schema.optional(Schema.String),
+  currentProjectId: Schema.optional(ProjectId),
   runs: Schema.Array(
     OrchestrationV2RunJsonSchema.mapFields(({ id, ordinal, status }) => ({ id, ordinal, status })),
   ),
   checkpointScopes: Schema.Array(
-    OrchestrationV2CheckpointScopeJsonSchema.mapFields(({ id, runId, kind, cwd }) => ({
+    OrchestrationV2CheckpointScopeJsonSchema.mapFields(({ id, runId, kind, cwd, projectId }) => ({
+      projectId,
       id,
       runId,
       kind,
@@ -5508,9 +5510,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           Effect.gen(function* () {
             const threads = yield* sql<{
               readonly thread_id: string;
+              readonly project_id: ProjectId;
               readonly moved_cwd: string | null;
             }>`
-            SELECT thread_id, CASE WHEN json_type(payload_json, '$.projectMoves') = 'array' THEN COALESCE(json_extract(payload_json, '$.worktreePath'), json_extract(payload_json, '$.projectMoves[#-1].cwd')) END AS moved_cwd FROM orchestration_v2_projection_threads
+            SELECT thread_id, project_id, CASE WHEN json_type(payload_json, '$.projectMoves') = 'array' THEN COALESCE(json_extract(payload_json, '$.worktreePath'), json_extract(payload_json, '$.projectMoves[#-1].cwd')) END AS moved_cwd FROM orchestration_v2_projection_threads
             WHERE thread_id = ${threadId} LIMIT 1
           `;
             if (threads.length === 0) {
@@ -5526,7 +5529,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             `,
               sql`
               SELECT scope_id AS id, run_id AS "runId", kind,
-                json_extract(payload_json, '$.cwd') AS cwd
+                json_extract(payload_json, '$.cwd') AS cwd,
+                json_extract(payload_json, '$.projectId') AS projectId
               FROM orchestration_v2_projection_checkpoint_scopes
               WHERE thread_id = ${threadId}
               ORDER BY ordinal_within_parent ASC, scope_id ASC
@@ -5545,6 +5549,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               runs,
               checkpointScopes,
               checkpoints,
+              currentProjectId: threads[0]!.project_id,
               ...(threads[0]?.moved_cwd == null ? {} : { currentWorkspace: threads[0].moved_cwd }),
             });
           }),
