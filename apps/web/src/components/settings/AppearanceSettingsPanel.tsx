@@ -286,14 +286,14 @@ export function AppearanceSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("sidebar-project-tint")}
-          description="Colour the entire sidebar for the focused project. Turn off to keep only project and group row colours."
+          description="Color the entire sidebar for the focused project. Turn off to keep only project and group row colors."
           control={
             <Switch
               checked={settings.tintSidebarWithProjectColor}
               onCheckedChange={(checked) =>
                 updateSettings({ tintSidebarWithProjectColor: checked })
               }
-              aria-label="Tint sidebar with project colour"
+              aria-label="Tint sidebar with project color"
             />
           }
         />

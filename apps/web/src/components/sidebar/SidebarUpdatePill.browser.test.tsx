@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
-import { act, render } from "../../../test/render";
+import { act, render, stubGlobal } from "../../../test/render";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
 
 const mocks = vi.hoisted(() => {
@@ -113,6 +113,22 @@ describe("SidebarUpdatePill release notes", () => {
     );
     await expect.element(page.getByText("One-time tasks.", { exact: true })).toBeVisible();
     await expect.element(page.getByText("Plus 2 more bug fixes.")).toBeVisible();
+  });
+
+  it("checks for updates from the up-to-date release notes only when a check is allowed", async () => {
+    const upToDate = { ...nightlyUpdate(RELEASE_NOTES), status: "up-to-date" as const };
+    setup({ ...upToDate, enabled: false });
+    const checkForUpdate = vi.fn(async () => ({ checked: true, state: upToDate }));
+    using _bridge = stubGlobal("desktopBridge", { checkForUpdate });
+    await using _screen = await render(<SidebarUpdatePill />);
+    await userEvent.tab();
+    const check = page.getByRole("button", { name: "Check for Updates" });
+    await expect.element(check).toBeDisabled();
+
+    await publish(upToDate);
+    await expect.element(check).toBeEnabled();
+    await userEvent.click(check);
+    expect(checkForUpdate).toHaveBeenCalledOnce();
   });
 });
 

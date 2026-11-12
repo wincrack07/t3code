@@ -361,7 +361,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "sidebar-project-tint",
-    title: "Tint sidebar with project colour",
+    title: "Tint sidebar with project color",
     to: "/settings/appearance",
     searchTerms: ["sidebar project group colour color tint background"],
   },

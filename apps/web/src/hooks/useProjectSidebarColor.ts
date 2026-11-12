@@ -26,7 +26,7 @@ export function useProjectSidebarColor() {
       toastManager.add({
         type: "warning",
         title:
-          "Connect the project environments with settings permission to change its sidebar colour.",
+          "Connect the project environments with settings permission to change its sidebar color.",
       });
       return;
     }

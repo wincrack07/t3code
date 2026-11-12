@@ -1,6 +1,7 @@
 import "../../index.css";
 import { render } from "../../../test/render";
 import {
+  DEFAULT_CLIENT_SETTINGS,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   type MachineCleanupState,
@@ -27,6 +28,14 @@ vi.mock(import("../../state/server"), async () => {
     },
   } as never;
 });
+vi.mock(
+  import("../../hooks/useSettings"),
+  () =>
+    ({
+      useClientSettings: (select: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
+        select(DEFAULT_CLIENT_SETTINGS),
+    }) as never,
+);
 vi.mock(
   import("../../state/use-atom-command"),
   () =>
