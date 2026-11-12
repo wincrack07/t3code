@@ -4,9 +4,11 @@ import {
   ArrowRight,
   Camera,
   ExternalLink,
+  HatGlasses,
   MousePointerClick,
   PictureInPicture2,
   ServerIcon,
+  UserRoundIcon,
 } from "lucide-react";
 import {
   type FormEvent,
@@ -16,6 +18,7 @@ import {
   useState,
 } from "react";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
@@ -53,6 +56,22 @@ interface Props {
 }
 
 const NOOP = () => {};
+
+/** The tab's non-default profile; a cramped row keeps only its icon. */
+export function PreviewProfileChip(props: { name: string; incognito: boolean }) {
+  const Icon = props.incognito ? HatGlasses : UserRoundIcon;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Badge variant="outline" className="max-w-28 shrink-0" />}>
+        <Icon aria-hidden className="@min-[26rem]/address:hidden" />
+        <span className="sr-only @min-[26rem]/address:not-sr-only @min-[26rem]/address:truncate">
+          {props.name}
+        </span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">{props.name}</TooltipPopup>
+    </Tooltip>
+  );
+}
 
 export function PreviewChromeRow({
   url,
