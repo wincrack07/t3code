@@ -92,6 +92,11 @@ export function createProjectEnvironmentAtoms<R, E>(
       JSON.stringify([environmentId, input.projectId]),
   };
   return {
+    savedPromptUpdate: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:saved-prompts",
+      tag: WS_METHODS.projectsMutate,
+      scheduler: projectScheduler,
+    }),
     fileMetadata: fileMetadata.metadata,
     fileMetadataThread: fileMetadata.retainThread,
     invalidateFileMetadata: createEnvironmentCommand(runtime, {

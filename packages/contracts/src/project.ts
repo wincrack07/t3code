@@ -150,6 +150,35 @@ export const ReceivedProjectIcon = ForwardCompatibleUnion(projectIconMembers, "k
   ),
 );
 
+export const ProjectSavedPrompt = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  text: TrimmedNonEmptyString.check(Schema.isMaxLength(120000)),
+  createdAt: IsoDateTime,
+  completedAt: Schema.NullOr(IsoDateTime),
+});
+export type ProjectSavedPrompt = typeof ProjectSavedPrompt.Type;
+
+export const SavedPromptAction = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("add"),
+    id: TrimmedNonEmptyString,
+    text: ProjectSavedPrompt.fields.text,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("edit"),
+    id: TrimmedNonEmptyString,
+    text: ProjectSavedPrompt.fields.text,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("complete"),
+    id: TrimmedNonEmptyString,
+    done: Schema.Boolean,
+  }),
+  Schema.Struct({ kind: Schema.Literal("delete"), id: TrimmedNonEmptyString }),
+  Schema.Struct({ kind: Schema.Literal("clear-done") }),
+]);
+export type SavedPromptAction = typeof SavedPromptAction.Type;
+
 export const Project = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
@@ -162,6 +191,7 @@ export const Project = Schema.Struct({
   // Opt-in because background sync performs network I/O and may move the checkout.
   autoPull: Schema.optional(Schema.Boolean),
   scripts: Schema.Array(ProjectScript),
+  savedPrompts: Schema.optional(Schema.Array(ProjectSavedPrompt)),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   createdAt: IsoDateTime,
@@ -186,6 +216,7 @@ export const ProjectCreatePayload = Schema.Struct({
 export type ProjectCreatePayload = typeof ProjectCreatePayload.Type;
 
 export const ProjectUpdatePayload = Schema.Struct({
+  savedPrompt: Schema.optional(SavedPromptAction),
   title: Schema.optional(TrimmedNonEmptyString),
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),

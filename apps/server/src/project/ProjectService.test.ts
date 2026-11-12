@@ -227,6 +227,94 @@ const waitForProject = Effect.fn("ProjectServiceTest.waitForProject")(function* 
 });
 
 it.layer(layerTest)("ProjectService", (it) => {
+  it.effect("persists project prompt actions and isolates projects", () =>
+    Effect.gen(function* () {
+      const service = yield* ProjectService.ProjectService;
+      const projectId = ProjectId.make("saved-prompts");
+      const otherId = ProjectId.make("saved-prompts-other");
+      for (const id of [projectId, otherId]) {
+        yield* service.create({
+          commandId: CommandId.make(`create:${id}`),
+          projectId: id,
+          title: "Demo",
+          workspaceRoot: `/work/${id}`,
+        });
+      }
+      const add = {
+        commandId: CommandId.make("saved:add:1"),
+        projectId,
+        savedPrompt: { kind: "add", id: "one", text: "First prompt" },
+      } as const;
+      yield* service.update(add);
+      yield* service.update(add);
+      const second = yield* service.update({
+        commandId: CommandId.make("saved:add:2"),
+        projectId,
+        savedPrompt: { kind: "add", id: "two", text: "Second prompt" },
+      });
+      assert.deepStrictEqual(
+        second.savedPrompts?.map((item) => item.id),
+        ["two", "one"],
+      );
+      assert.deepStrictEqual(Option.getOrThrow(yield* service.getById(otherId)).savedPrompts, []);
+      yield* service.update({
+        commandId: CommandId.make("saved:edit"),
+        projectId,
+        savedPrompt: { kind: "edit", id: "one", text: "Edited prompt" },
+      });
+      const complete = yield* service.update({
+        commandId: CommandId.make("saved:complete"),
+        projectId,
+        savedPrompt: { kind: "complete", id: "one", done: true },
+      });
+      assert.isNotNull(complete.savedPrompts?.find((item) => item.id === "one")?.completedAt);
+      const reopened = yield* service.update({
+        commandId: CommandId.make("saved:reopen"),
+        projectId,
+        savedPrompt: { kind: "complete", id: "one", done: false },
+      });
+      assert.isNull(reopened.savedPrompts?.find((item) => item.id === "one")?.completedAt);
+      const restartedStore = yield* ProjectStore.make;
+      const stored = Option.getOrThrow(yield* restartedStore.get(projectId));
+      assert.deepStrictEqual(stored.savedPrompts, reopened.savedPrompts);
+      assert.strictEqual(
+        stored.savedPrompts?.find((item) => item.id === "one")?.text,
+        "Edited prompt",
+      );
+      assert.deepStrictEqual(
+        Option.getOrThrow(yield* restartedStore.getShell(projectId)).savedPrompts,
+        stored.savedPrompts,
+      );
+      yield* service.update({
+        commandId: CommandId.make("saved:delete"),
+        projectId,
+        savedPrompt: { kind: "delete", id: "two" },
+      });
+      const missing = yield* service
+        .update({
+          commandId: CommandId.make("saved:missing"),
+          projectId: otherId,
+          savedPrompt: { kind: "edit", id: "one", text: "Wrong project" },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(missing._tag, "ProjectInvalidError");
+      yield* service.update({
+        commandId: CommandId.make("saved:finish"),
+        projectId,
+        savedPrompt: { kind: "complete", id: "one", done: true },
+      });
+      const cleared = yield* service.update({
+        commandId: CommandId.make("saved:clear"),
+        projectId,
+        savedPrompt: { kind: "clear-done" },
+      });
+      assert.deepStrictEqual(cleared.savedPrompts, []);
+      for (const id of [projectId, otherId]) {
+        yield* service.delete({ commandId: CommandId.make(`cleanup:${id}`), projectId: id });
+      }
+    }),
+  );
+
   it.effect("creates, updates, resolves, snapshots, and soft-deletes projects", () =>
     Effect.gen(function* () {
       const service = yield* ProjectService.ProjectService;
@@ -543,6 +631,11 @@ it.layer(layerTest)("ProjectService", (it) => {
         title: "Delete retry",
         workspaceRoot: "/work/delete-retry",
       });
+      yield* waitForProject(
+        service,
+        projectId,
+        (project) => project.repositoryIdentity !== null && project.faviconPath !== null,
+      );
       const input = { commandId: CommandId.make("command:delete-retry:delete"), projectId };
       const deleted = yield* service.delete(input);
       assert.deepEqual(yield* service.delete(input), deleted);

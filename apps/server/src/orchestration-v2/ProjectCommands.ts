@@ -1,4 +1,5 @@
 import {
+  type SavedPromptAction,
   type CommandId,
   type EventId,
   MAX_SCRIPT_ID_LENGTH,
@@ -26,6 +27,7 @@ export interface ProjectCreateCommand {
 }
 
 export interface ProjectMetaUpdateCommand {
+  readonly savedPrompt?: SavedPromptAction;
   readonly type: "project.meta.update";
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
@@ -189,6 +191,45 @@ export function planProjectCommand(input: {
           }
         }
       }
+      let savedPrompts = project.savedPrompts ?? [];
+      const action = command.savedPrompt;
+      if (action !== undefined) {
+        const exists = savedPrompts.some(
+          (item) => item.id === ("id" in action ? action.id : undefined),
+        );
+        if (action.kind === "add") {
+          if (exists) return invariant("A saved prompt with this id already exists.");
+          if (savedPrompts.length >= 100)
+            return invariant("Clear saved prompts before adding more (100 maximum).");
+          savedPrompts = [
+            { id: action.id, text: action.text, createdAt: occurredAt, completedAt: null },
+            ...savedPrompts,
+          ];
+        } else if (action.kind === "clear-done") {
+          savedPrompts = savedPrompts.filter((item) => item.completedAt === null);
+        } else {
+          if (!exists) return invariant("The saved prompt no longer exists.");
+          savedPrompts =
+            action.kind === "delete"
+              ? savedPrompts.filter((item) => item.id !== action.id)
+              : savedPrompts.map((item) =>
+                  item.id !== action.id
+                    ? item
+                    : action.kind === "edit"
+                      ? { ...item, text: action.text }
+                      : {
+                          ...item,
+                          completedAt: action.done ? (item.completedAt ?? occurredAt) : null,
+                        },
+                );
+        }
+      }
+      if (
+        action !== undefined &&
+        savedPrompts.reduce((size, item) => size + item.text.length, 0) > 200000
+      ) {
+        return invariant("Saved prompts exceed the project text limit. Delete some prompts first.");
+      }
       if (command.workspaceRoot !== undefined) {
         const conflict = requireWorkspaceAvailable(command.workspaceRoot);
         if (conflict !== undefined) return Result.fail(conflict);
@@ -210,6 +251,7 @@ export function planProjectCommand(input: {
           ...(command.faviconPath === undefined ? {} : { faviconPath: command.faviconPath }),
           ...(command.projectIcon === undefined ? {} : { projectIcon: command.projectIcon }),
           ...(command.scripts === undefined ? {} : { scripts: command.scripts }),
+          ...(action === undefined ? {} : { savedPrompts }),
           // Repeating a pin or archive keeps the original time.
           ...(command.pinned === undefined
             ? {}
