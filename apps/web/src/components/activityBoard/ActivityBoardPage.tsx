@@ -181,7 +181,7 @@ function ActivityColumn({
               {group.cards.map((card) => (
                 <div
                   key={card.thread.id}
-                  className="relative flex flex-col gap-1.5 rounded-md border border-border bg-background p-2.5 hover:bg-accent/40 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring"
+                  className="relative flex flex-col gap-2 rounded-lg border border-border bg-background p-3 hover:bg-accent/40 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring"
                 >
                   <ThreadLink
                     entry={card}
