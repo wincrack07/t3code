@@ -59,7 +59,7 @@ export function ProjectGroupHeader({
       data-sidebar-group-header=""
       data-sidebar-row-colour={rowColor ?? undefined}
       style={{ ...sidebarTreeIndent(depth), ...sidebarRowColorStyle(rowColor) }}
-      className={`mt-2 flex list-none items-center gap-1 ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
+      className={`flex list-none items-center gap-1 ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
       onContextMenu={(event) => {
         event.preventDefault();
         setMenuOpen(true);

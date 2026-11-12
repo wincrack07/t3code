@@ -3,15 +3,19 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import { ConnectionCatalogDocument } from "@t3tools/client-runtime/platform";
 import { EnvironmentId, type PersistedSavedEnvironmentRecord } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Base64 from "effect/encoding/Base64";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import * as DesktopSavedEnvironments from "../settings/DesktopSavedEnvironments.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
@@ -50,11 +54,30 @@ function layerSafeStorageFor(available: boolean, failDecrypt: Ref.Ref<boolean> |
   } satisfies ElectronSafeStorage.ElectronSafeStorage["Service"]);
 }
 
+interface LockedScreen {
+  readonly checked: Deferred.Deferred<void>;
+  readonly locked: Ref.Ref<boolean>;
+}
+
+function layerPowerMonitorFor(screen: LockedScreen | null) {
+  return Layer.succeed(ElectronPowerMonitor.ElectronPowerMonitor, {
+    ...ElectronPowerMonitor.make,
+    getSystemIdleState: () =>
+      screen === null
+        ? Effect.succeed("active" as const)
+        : Deferred.succeed(screen.checked, undefined).pipe(
+            Effect.andThen(Ref.get(screen.locked)),
+            Effect.map((locked) => (locked ? ("locked" as const) : ("active" as const))),
+          ),
+  } satisfies ElectronPowerMonitor.ElectronPowerMonitor["Service"]);
+}
+
 function layerFor(
   baseDir: string,
   encryptionAvailable = true,
   failDecrypt: Ref.Ref<boolean> | null = null,
   fileSystemLayer: Layer.Layer<FileSystem.FileSystem> = NodeServices.layer,
+  lockedScreen: LockedScreen | null = null,
 ) {
   const layerEnvironment = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
@@ -75,6 +98,7 @@ function layerFor(
   const layerDependencies = Layer.mergeAll(
     layerEnvironment,
     layerSafeStorage,
+    layerPowerMonitorFor(lockedScreen),
     NodeServices.layer,
     NodeCrypto.layer,
     fileSystemLayer,
@@ -298,6 +322,59 @@ describe("DesktopConnectionCatalogStore", () => {
       assert.notEqual(error.message, decryptError.message);
       yield* Ref.set(failDecrypt, false);
       assert.deepStrictEqual(yield* store.get, Option.some('{"schemaVersion":1,"targets":[]}'));
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
+  it.effect("does not read a saved catalog as missing when secure storage is unavailable", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-connection-catalog-test-",
+      });
+      const getStore = DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+      const saved = yield* getStore.pipe(Effect.provide(layerFor(baseDir)));
+      assert.isTrue(yield* saved.set('{"schemaVersion":1,"targets":[]}'));
+
+      const unavailable = yield* getStore.pipe(Effect.provide(layerFor(baseDir, false)));
+      const error = yield* unavailable.get.pipe(Effect.flip);
+      assert.instanceOf(
+        error,
+        DesktopConnectionCatalogStore.DesktopConnectionCatalogStoreProtectionError,
+      );
+      assert.equal(error.operation, "check-encryption-availability");
+      assert.deepStrictEqual(yield* saved.get, Option.some('{"schemaVersion":1,"targets":[]}'));
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
+  it.effect("waits for the screen to unlock before asking secure storage for a saved catalog", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-connection-catalog-test-",
+      });
+      const getStore = DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+      const saved = yield* getStore.pipe(Effect.provide(layerFor(baseDir)));
+      assert.isTrue(yield* saved.set('{"schemaVersion":1,"targets":[]}'));
+
+      // Secure storage refuses behind the lock, so a read that does not wait fails.
+      const failDecrypt = yield* Ref.make(true);
+      const screen: LockedScreen = {
+        checked: yield* Deferred.make<void>(),
+        locked: yield* Ref.make(true),
+      };
+      const locked = yield* getStore.pipe(
+        Effect.provide(layerFor(baseDir, true, failDecrypt, NodeServices.layer, screen)),
+      );
+      const reading = yield* locked.get.pipe(Effect.forkChild);
+      // A read that does not wait fails here before the lock check arrives.
+      yield* Effect.raceFirst(Deferred.await(screen.checked), Fiber.join(reading));
+      yield* Ref.set(failDecrypt, false);
+      yield* Ref.set(screen.locked, false);
+      yield* TestClock.adjust("2 seconds");
+      assert.deepStrictEqual(
+        yield* Fiber.join(reading),
+        Option.some('{"schemaVersion":1,"targets":[]}'),
+      );
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 });
