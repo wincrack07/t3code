@@ -220,7 +220,7 @@ function Column({
           <Button
             data-close-column
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
             aria-label={`Close column: ${title}`}
             onClick={(event) => {
               event.stopPropagation();
