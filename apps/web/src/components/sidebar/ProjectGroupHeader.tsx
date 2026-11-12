@@ -1,34 +1,64 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { useDraggable } from "@dnd-kit/core";
 import { ChevronDownIcon, FolderIcon, MoreHorizontalIcon } from "lucide-react";
 import type { ProjectFolder } from "../../projectFolders";
 import { summarizeSidebarFolder } from "../Sidebar.logic";
 import { Button } from "../ui/button";
-import { Menu, MenuTrigger, MenuPopup, MenuItem } from "../ui/menu";
+import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "../ui/menu";
+import { ProjectFolderMenu } from "./ProjectFolderMenu";
+import {
+  SIDEBAR_TREE_DROP_CLASS_NAME,
+  sidebarTreeDragId,
+  sidebarTreeIndent,
+  sidebarTreeRow,
+} from "./sidebarTreeDrag";
 
 export function ProjectGroupHeader({
   folder,
+  folders,
+  depth = 0,
+  parentId = null,
+  excludedFolderIds,
   collapsed,
   threads,
   onToggle,
   onRename,
+  onCreateInside,
+  onMove,
   onDelete,
 }: {
   folder: ProjectFolder;
+  folders: readonly ProjectFolder[];
+  depth?: number;
+  parentId?: string | null;
+  /** This group and every group below it. */
+  excludedFolderIds: ReadonlySet<string>;
   collapsed: boolean;
   threads: readonly EnvironmentThreadShell[];
   onToggle: () => void;
   onRename: () => void;
+  onCreateInside: () => void;
+  onMove: (parentId: string | null) => void;
   onDelete: () => void;
 }) {
   const summary = summarizeSidebarFolder([{ hiddenThreads: threads }]);
   const dot = collapsed ? summary.activity : null;
+  const item = { kind: "folder", id: folder.id } as const;
+  const { setNodeRef, listeners } = useDraggable({ id: sidebarTreeDragId(item) });
   return (
-    <li className="mt-2 flex list-none items-center gap-1">
+    <li
+      ref={setNodeRef}
+      data-tree-row={sidebarTreeRow(item)}
+      data-tree-expanded={!collapsed}
+      style={sidebarTreeIndent(depth)}
+      className={`mt-2 flex list-none items-center gap-1 ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
+    >
       <button
         type="button"
         data-sidebar-row={`project-group:${folder.id}`}
         aria-expanded={!collapsed}
         onClick={onToggle}
+        {...listeners}
         className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-xs text-sidebar-muted-foreground hover:bg-sidebar-row-hover"
       >
         <ChevronDownIcon className={collapsed ? "size-3 -rotate-90" : "size-3"} />
@@ -70,6 +100,14 @@ export function ProjectGroupHeader({
         </MenuTrigger>
         <MenuPopup>
           <MenuItem onClick={onRename}>Rename group</MenuItem>
+          <MenuItem onClick={onCreateInside}>New group inside…</MenuItem>
+          <ProjectFolderMenu
+            folders={folders}
+            currentFolderId={parentId}
+            excludedFolderIds={excludedFolderIds}
+            onMove={onMove}
+          />
+          <MenuSeparator />
           <MenuItem onClick={onDelete}>Delete group</MenuItem>
         </MenuPopup>
       </Menu>
