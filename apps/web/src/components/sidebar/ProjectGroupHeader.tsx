@@ -6,6 +6,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { ChevronDownIcon, FolderIcon, MoreHorizontalIcon } from "lucide-react";
 import { projectFolderColor, type ProjectFolder } from "../../projectFolders";
 import { sidebarRowColorStyle } from "../../sidebarColors";
+import { cn } from "~/lib/utils";
 import { summarizeSidebarFolder } from "../Sidebar.logic";
 import { Button } from "../ui/button";
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "../ui/menu";
@@ -16,6 +17,13 @@ import {
   sidebarTreeIndent,
   sidebarTreeRow,
 } from "./sidebarTreeDrag";
+
+const GROUP_DOT_CLASS_NAME = {
+  attention: "bg-warning",
+  failed: "bg-error",
+  unread: "bg-success",
+  working: "bg-info",
+} as const;
 
 export function ProjectGroupHeader({
   folder,
@@ -59,7 +67,7 @@ export function ProjectGroupHeader({
       data-sidebar-group-header=""
       data-sidebar-row-colour={rowColor ?? undefined}
       style={{ ...sidebarTreeIndent(depth), ...sidebarRowColorStyle(rowColor) }}
-      className={`mt-2 flex list-none items-center gap-1 ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
+      className={cn("group/project-group list-none", SIDEBAR_TREE_DROP_CLASS_NAME)}
       onContextMenu={(event) => {
         event.preventDefault();
         setMenuOpen(true);
@@ -71,10 +79,11 @@ export function ProjectGroupHeader({
         aria-expanded={!collapsed}
         onClick={onToggle}
         {...listeners}
-        className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-xs text-sidebar-muted-foreground hover:bg-sidebar-row-hover"
+        className="flex h-7 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left text-xs text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <ChevronDownIcon className={collapsed ? "size-3 -rotate-90" : "size-3"} />
-        {folder.emoji ? <span>{folder.emoji}</span> : <FolderIcon className="size-4" />}
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {folder.emoji || <FolderIcon aria-hidden className="size-4" />}
+        </span>
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
         {collapsed ? (
           <>
@@ -84,32 +93,44 @@ export function ProjectGroupHeader({
             {dot ? (
               <span
                 aria-hidden
-                className={
-                  {
-                    attention: "size-1.5 rounded-full bg-warning",
-                    failed: "size-1.5 rounded-full bg-error",
-                    unread: "size-1.5 rounded-full bg-success",
-                    working: "size-1.5 rounded-full bg-info",
-                  }[dot]
-                }
+                className={cn("size-1.5 shrink-0 rounded-full", GROUP_DOT_CLASS_NAME[dot])}
               />
             ) : null}
-            <span className="tabular-nums">{summary.openThreadCount}</span>
+            <span
+              className={cn(
+                "shrink-0 tabular-nums group-hover/project-group:invisible pointer-coarse:invisible",
+                menuOpen && "invisible",
+              )}
+            >
+              {summary.openThreadCount}
+            </span>
           </>
         ) : null}
+        <ChevronDownIcon
+          aria-hidden
+          className={cn("size-3 shrink-0 transition-transform", collapsed && "-rotate-90")}
+        />
       </button>
       <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-        <MenuTrigger
-          render={
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label={`Group actions for ${folder.name}`}
-            />
-          }
+        {/* Sits over the count, which hides on hover, and left of the chevron. */}
+        <span
+          className={cn(
+            "absolute inset-y-0 right-6 flex items-center opacity-0 focus-within:opacity-100 group-hover/project-group:opacity-100 pointer-coarse:opacity-100",
+            menuOpen && "opacity-100",
+          )}
         >
-          <MoreHorizontalIcon />
-        </MenuTrigger>
+          <MenuTrigger
+            render={
+              <Button
+                size="icon-xs"
+                variant="ghost-muted"
+                aria-label={`Group actions for ${folder.name}`}
+              />
+            }
+          >
+            <MoreHorizontalIcon aria-hidden />
+          </MenuTrigger>
+        </span>
         <MenuPopup>
           <SidebarColorSubmenu
             value={folder.sidebarColor ?? null}

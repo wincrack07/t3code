@@ -81,7 +81,11 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         ...sidebarTreeIndent(props.depth ?? 0),
         ...sidebarRowColorStyle(props.sidebarColor),
       }}
-      className={cn("group/project-folder mt-2 list-none first:mt-0", SIDEBAR_TREE_DROP_CLASS_NAME)}
+      className={cn(
+        // A group's first project sits right under the group's own header.
+        "group/project-folder mt-2 list-none first:mt-0 [[data-sidebar-group-header]+&]:mt-0",
+        SIDEBAR_TREE_DROP_CLASS_NAME,
+      )}
     >
       <button
         type="button"
