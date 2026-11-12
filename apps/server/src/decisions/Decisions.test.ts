@@ -187,22 +187,30 @@ it.effect("keeps the decision API credential in the existing secret mapping", ()
     const client = mapSettingsSecrets(
       {
         ...DEFAULT_SERVER_SETTINGS,
-        decisions: { ...config, apiKey: "fake-decision-key", customApiKey: "fake-custom-key" },
+        decisions: {
+          ...config,
+          apiKey: "fake-decision-key",
+          customApiKey: "fake-custom-key",
+          jevApiKey: "fake-jev-key",
+        },
       },
       (secret) => {
         if (
           secret.secretName === "decisions-apiKey" ||
-          secret.secretName === "decisions-customApiKey"
+          secret.secretName === "decisions-customApiKey" ||
+          secret.secretName === "decisions-jevApiKey"
         )
           seen.push(secret.value);
         return { value: SECRET_REDACTED, redacted: true };
       },
     );
-    expect(seen).toEqual(["fake-custom-key", "fake-decision-key"]);
+    expect(seen).toEqual(["fake-jev-key", "fake-custom-key", "fake-decision-key"]);
     expect(JSON.stringify(client)).not.toContain("fake-custom-key");
     expect(client.decisions.customApiKey).toBe(SECRET_REDACTED);
     expect(JSON.stringify(client)).not.toContain("fake-decision-key");
     expect(client.decisions.apiKey).toBe(SECRET_REDACTED);
+    expect(JSON.stringify(client)).not.toContain("fake-jev-key");
+    expect(client.decisions.jevApiKey).toBe(SECRET_REDACTED);
   }),
 );
 
@@ -254,5 +262,46 @@ it.effect.each([
         ),
       );
       expect(result).toEqual({ success, message });
+    }),
+);
+
+it.effect.each([true, false])(
+  "routes Jev through normal Auto selection and fallback (usable: %s)",
+  (usable) =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request) => {
+        const answer = {
+          type: "choice",
+          choice: "0",
+          confidence: usable ? 0.9 : 0.2,
+          probabilities: { "0": 1 },
+        };
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({
+                model: "jev-1.14.0",
+                answers: { model: answer, effort: answer, node: answer },
+                usage: { input_tokens: 50, output_tokens: 10 },
+              }),
+            ),
+          ),
+        );
+      });
+      yield* Effect.gen(function* () {
+        const service = yield* Decisions.Decisions;
+        const result = yield* service.route(input, {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: AUTO_MODEL,
+        });
+        expect(result.routingDecision?.source).toBe(usable ? "model" : "fallback");
+        expect(result.routingDecision?.choice).toEqual(usable ? choice : null);
+        expect(result.modelSelection.model).not.toBe(AUTO_MODEL);
+        expect(result.modelSelection.routing).toBe("auto");
+        expect((yield* service.testConnection()).success).toBe(usable);
+      }).pipe(
+        Effect.provide(fixture({ ...config, source: "jev", jevApiKey: "fake-key" }, "", [], http)),
+      );
     }),
 );

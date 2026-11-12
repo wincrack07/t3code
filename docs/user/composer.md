@@ -482,13 +482,14 @@ Android opens a compatible installed file viewer.
 
 ## Automatic routing
 
-Enable Settings → Labs → Decisions, choose a configured provider model, OpenAI API, or **Custom (OpenAI-compatible)**,
+Enable Settings → Labs → Decisions, choose a configured provider model, **Jev (TypeSafe)**, OpenAI API, or **Custom (OpenAI-compatible)**,
 then add rules in priority order. For a custom service, enter its API base URL (including
 any `/v1` prefix), API key, and model name, then use **Test connection**. Keys stay in
 the environment’s secret store. HTTP is allowed only for loopback and tailnet endpoints;
 other endpoints require HTTPS. A restrict rule narrows the choices; a decide
 rule selects the first matching usable choice. Provider-instance allowlists can separate
-personal and work accounts.
+personal and work accounts. For Jev, enter a TypeSafe API key and model name
+(default `jev-latest`). Uncertain Jev answers use your normal defaults.
 
 On web and desktop, choose Auto in the model picker before sending a new thread or message.
 The server chooses a provider, model and effort from this environment's usable options. Each
