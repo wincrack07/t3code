@@ -6,6 +6,7 @@ import {
 
 import { ensureClientSettingsHydrated, getClientSettings } from "~/hooks/useSettings";
 import { readEnvironmentScope } from "~/state/session";
+import { isClaudeArtifactUrl } from "~/artifacts/claudeArtifactUrl";
 import { isPreviewAvailableFor } from "./previewRuntime";
 
 export interface ResolveLinkTargetInput {
@@ -21,6 +22,8 @@ export interface ResolveLinkTargetInput {
 
 export function resolveLinkTarget(input: ResolveLinkTargetInput): BrowserLinkTarget {
   if (input.event.metaKey || input.event.ctrlKey || input.event.button === 1) return "system";
+  // Artifacts open beside the chat whatever the link preference, where a browser panel exists.
+  if (input.canOpenInApp && isClaudeArtifactUrl(input.url)) return "app";
   if (input.preference !== "app") return "system";
   if (!input.canOpenInApp) return "system";
   if (!isWebUrl(input.url)) return "system";

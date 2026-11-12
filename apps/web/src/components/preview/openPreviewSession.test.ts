@@ -27,6 +27,8 @@ import {
   setActivePreviewTab,
 } from "~/previewStateStore";
 
+import { useArtifactRecentsStore } from "~/artifacts/artifactRecentsStore";
+
 import { openPreviewSession } from "./openPreviewSession";
 
 const threadRef = {
@@ -51,6 +53,7 @@ beforeEach(() => {
   resetPreviewStateForTests();
   useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
   __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+  useArtifactRecentsStore.setState({ recents: [] });
 });
 
 afterEach(() => {
@@ -174,5 +177,30 @@ describe("openUrlInPreview from a link", () => {
     });
 
     expect(readThreadPreviewState(threadRef).activeTabId).toBe("tab-other");
+  });
+
+  it("focuses the tab already showing an artifact, even after it redirected to sign-in", async () => {
+    const artifactUrl = "https://claude.ai/code/artifact/0f8b6c2e-1d2a-4c3b-9e4f-5a6b7c8d9e0f";
+    const artifactTab = { ...snapshot, tabId: "tab-artifact" };
+    const openPreview = vi.fn(async () => {
+      applyPreviewServerSnapshot(threadRef, artifactTab);
+      return AsyncResult.success(artifactTab);
+    });
+    await openUrlInPreview({ openPreview, threadRef, url: artifactUrl });
+    applyPreviewServerSnapshot(threadRef, { ...snapshot, tabId: "tab-other" });
+    // claude.ai sends a signed-out tab to its login page.
+    applyPreviewServerSnapshot(threadRef, {
+      ...artifactTab,
+      navStatus: { _tag: "Success", url: "https://claude.ai/login", title: "Sign in" },
+    });
+    setActivePreviewTab(threadRef, "tab-other");
+
+    await openUrlInPreview({ openPreview, threadRef, url: `${artifactUrl}?from=chat` });
+
+    expect(openPreview).toHaveBeenCalledTimes(1);
+    expect(readThreadPreviewState(threadRef).activeTabId).toBe("tab-artifact");
+    expect(useArtifactRecentsStore.getState().recents.map((entry) => entry.url)).toEqual([
+      `${artifactUrl}?from=chat`,
+    ]);
   });
 });

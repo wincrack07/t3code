@@ -130,20 +130,94 @@ export function pickAccountListing<A, E>(
   return last ?? { source: undefined, result: AsyncResult.initial() };
 }
 
-/** Joins listings from several accounts; an artifact shared with both appears once. */
+export interface ListedArtifact {
+  readonly artifact: ClaudeArtifact;
+  /** The account the artifact was listed through; its own account when shared with several. */
+  readonly accountKey: string;
+}
+
+/** Joins listings from several accounts; an artifact shared with both appears once, newest first. */
 export function mergeArtifacts(
-  lists: ReadonlyArray<ReadonlyArray<ClaudeArtifact>>,
-): ClaudeArtifact[] {
-  const byId = new Map<string, ClaudeArtifact>();
-  for (const artifact of lists.flat()) {
-    const existing = byId.get(artifact.id);
-    if (
-      existing === undefined ||
-      (existing.relation === "shared" && artifact.relation === "mine")
-    ) {
-      byId.set(artifact.id, artifact);
+  lists: ReadonlyArray<{
+    readonly accountKey: string;
+    readonly artifacts: ReadonlyArray<ClaudeArtifact>;
+  }>,
+): ListedArtifact[] {
+  const byId = new Map<string, ListedArtifact>();
+  for (const list of lists) {
+    for (const artifact of list.artifacts) {
+      const existing = byId.get(artifact.id);
+      if (
+        existing === undefined ||
+        (existing.artifact.relation === "shared" && artifact.relation === "mine")
+      ) {
+        byId.set(artifact.id, { artifact, accountKey: list.accountKey });
+      }
     }
   }
-  const time = (artifact: ClaudeArtifact) => Date.parse(artifact.updatedAt ?? "") || 0;
-  return [...byId.values()].toSorted((left, right) => time(right) - time(left));
+  return [...byId.values()].toSorted((left, right) => updatedTime(right) - updatedTime(left));
+}
+
+const updatedTime = (entry: ListedArtifact) => Date.parse(entry.artifact.updatedAt ?? "") || 0;
+
+export type ArtifactSort = "updated" | "title";
+export type ArtifactRelationFilter = "all" | "mine" | "shared";
+
+export function filterArtifacts(
+  entries: ReadonlyArray<ListedArtifact>,
+  options: {
+    readonly relation: ArtifactRelationFilter;
+    readonly query: string;
+    readonly sort: ArtifactSort;
+  },
+): ListedArtifact[] {
+  const needle = options.query.trim().toLowerCase();
+  const matching = entries.filter(
+    ({ artifact }) =>
+      (options.relation === "all" || artifact.relation === options.relation) &&
+      (needle.length === 0 ||
+        artifact.title.toLowerCase().includes(needle) ||
+        (artifact.description?.toLowerCase().includes(needle) ?? false)),
+  );
+  return options.sort === "title"
+    ? matching.toSorted(
+        (left, right) =>
+          left.artifact.title.localeCompare(right.artifact.title, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          }) || updatedTime(right) - updatedTime(left),
+      )
+    : matching;
+}
+
+/** Back and forward through artifacts viewed in the section, like a browser's history. */
+export interface ViewerHistory {
+  readonly urls: ReadonlyArray<string>;
+  readonly index: number;
+}
+
+export const EMPTY_VIEWER_HISTORY: ViewerHistory = { urls: [], index: -1 };
+const VIEWER_HISTORY_LIMIT = 50;
+
+export function visitInHistory(history: ViewerHistory, url: string): ViewerHistory {
+  if (history.urls[history.index] === url) return history;
+  const urls = [...history.urls.slice(0, history.index + 1), url].slice(-VIEWER_HISTORY_LIMIT);
+  return { urls, index: urls.length - 1 };
+}
+
+export function stepHistory(history: ViewerHistory, delta: -1 | 1): ViewerHistory {
+  const index = history.index + delta;
+  return index < 0 || index >= history.urls.length ? history : { ...history, index };
+}
+
+/**
+ * Each claude.ai account signs in once in its own persistent browser profile, so two accounts'
+ * private artifacts never share one login. One account keeps the default profile and its cookies.
+ */
+export function accountBrowserProfileId(accountKey: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < accountKey.length; index += 1) {
+    hash = Math.imul(hash ^ accountKey.charCodeAt(index), 0x01000193);
+  }
+  return `claude-account-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
