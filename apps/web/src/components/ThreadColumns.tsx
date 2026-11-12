@@ -1,6 +1,5 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
-import { XIcon } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
 import { isElectron } from "../env";
@@ -32,6 +31,11 @@ import {
   previewThreadColumnDrop,
   endThreadContextDrag,
 } from "./chat/threadContextDrag";
+import {
+  ThreadColumnCloseButton,
+  ThreadColumnHeaderContext,
+  threadColumnDragProps,
+} from "./threadColumnHeader";
 import { ThreadRouteView } from "./ThreadRouteView";
 import { Button } from "./ui/button";
 import { SidebarInset } from "./ui/sidebar";
@@ -44,7 +48,7 @@ function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadCol
   };
   const { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture } =
     useResizeDrag<HTMLDivElement>((event) => {
-      // The divider sits at the start of the right column, after its title strip, so its
+      // The divider sits at the start of the right column, after its header, so its
       // no-drag region comes after both columns' drag regions.
       const right = event.currentTarget.parentElement;
       const left = right?.previousElementSibling as HTMLElement | null;
@@ -184,15 +188,13 @@ function Column({
           activate();
       }}
     >
-      {multiple ? (
+      {multiple && !active ? (
         <div
           className={cn(
-            "flex shrink-0 items-center gap-2 border-b px-2",
-            // The desktop title bar holds the window buttons, so the strip fills it and clears them.
-            isElectron ? "drag-region h-(--workspace-topbar-height)" : "h-8",
+            "flex h-(--workspace-topbar-height) shrink-0 items-center gap-2 bg-muted/30 px-2",
+            isElectron && "drag-region",
             first && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
             !next && isElectron && "wco:pr-(--workspace-native-controls-inset)",
-            active ? "bg-accent" : "bg-muted/30",
           )}
         >
           <div className="min-w-0 flex-1">
@@ -200,44 +202,24 @@ function Column({
               variant="ghost"
               size="xs"
               className="max-w-full"
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData(THREAD_COLUMN_DRAG_TYPE, column.id);
-                const host = event.currentTarget.closest<HTMLElement>("[data-thread-columns]");
-                if (host) host.dataset.columnReordering = "true";
-              }}
-              onDragEnd={(event) => {
-                const host = event.currentTarget.closest<HTMLElement>("[data-thread-columns]");
-                if (host) delete host.dataset.columnReordering;
-                endThreadContextDrag();
-              }}
+              {...threadColumnDragProps(column.id)}
               onClick={activate}
             >
               <span className="truncate">{title}</span>
             </Button>
           </div>
-          <Button
-            data-close-column
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Close column: ${title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              useThreadColumnsStore.getState().close(column.id);
-            }}
-          >
-            <XIcon />
-          </Button>
+          <ThreadColumnCloseButton column={{ id: column.id, title }} />
         </div>
       ) : null}
       <ComposerHandleContext value={active ? composer : null}>
-        <ThreadRouteView
-          target={target ?? { kind: "server", threadRef: column.threadRef }}
-          column
-          inactive={!active}
-          background={background}
-        />
+        <ThreadColumnHeaderContext value={multiple ? { id: column.id, title, first } : null}>
+          <ThreadRouteView
+            target={target ?? { kind: "server", threadRef: column.threadRef }}
+            column
+            inactive={!active}
+            background={background}
+          />
+        </ThreadColumnHeaderContext>
       </ComposerHandleContext>
       <div
         aria-hidden

@@ -14,6 +14,7 @@ import {
 import { ChevronDownIcon } from "lucide-react";
 import {
   memo,
+  use,
   useEffect,
   useRef,
   useState,
@@ -43,6 +44,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { ThreadColumnHeaderContext, threadColumnDragProps } from "../threadColumnHeader";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -84,6 +86,8 @@ export const ChatHeader = memo(function ChatHeader({
   onFindInThread,
 }: ChatHeaderProps) {
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
+  const threadColumn = use(ThreadColumnHeaderContext);
+  const columnDragProps = threadColumn ? threadColumnDragProps(threadColumn.id) : {};
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
@@ -250,7 +254,7 @@ export const ChatHeader = memo(function ChatHeader({
       ref={breadcrumbContainerRef}
       className={cn(
         "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        rightPanelOpen ? "pr-10" : "pr-24",
+        rightPanelOpen ? "pr-10" : threadColumn ? "pr-34" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
@@ -355,6 +359,7 @@ export const ChatHeader = memo(function ChatHeader({
                     aria-haspopup="menu"
                     onClick={openMenuFromTitle}
                     onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
+                    {...columnDragProps}
                     className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   />
                 }
@@ -376,6 +381,7 @@ export const ChatHeader = memo(function ChatHeader({
                 render={
                   <h2
                     aria-label={activeThreadTitle}
+                    {...columnDragProps}
                     className="min-w-0 flex-1"
                     dir={textDirection(activeThreadTitle)}
                   />
