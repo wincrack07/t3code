@@ -93,6 +93,19 @@ vi.mock("./model.ts", () => ({
   effectiveSpeechLanguage: (model: { languages: string[] }, intent: string) =>
     intent !== "auto" && model.languages.includes(intent) ? intent : "en",
 }));
+const appleHelper = vi.hoisted(() => ({ path: undefined as string | undefined }));
+vi.mock("./apple.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./apple.ts")>()),
+  findAppleSpeechHelper: (candidates: readonly string[]) =>
+    candidates.length > 0 ? appleHelper.path : undefined,
+  readAppleSpeechCapabilities: async () => ({
+    os: "26.1.0",
+    engine: "SpeechAnalyzer",
+    available: true,
+    supported: ["en-US", "es-ES", "es-MX"],
+    installed: ["es-MX"],
+  }),
+}));
 const download = vi.fn<SpeechModelStore.SpeechModelStore["Service"]["download"]>(() =>
   Effect.succeed("test.gguf"),
 );
@@ -127,6 +140,7 @@ beforeEach(() => {
   readyModels.clear();
   readyModels.add("test-model");
   readyModels.add("fallback-model");
+  appleHelper.path = undefined;
 });
 
 it("decodes a pooled Node Buffer without reading adjacent bytes", () => {
@@ -919,4 +933,42 @@ it.effect("does not restart a stream cancelled while native finalization is pend
     expect(loadNative).toHaveBeenCalledOnce();
     expect(native.reset).toHaveBeenCalledOnce();
   }).pipe(Effect.provide(layer)),
+);
+
+it.effect.each([
+  { platform: "darwin", helper: "/Resources/apple-speech/t3-apple-speech", offered: true },
+  { platform: "darwin", helper: undefined, offered: false },
+  { platform: "linux", helper: "/Resources/apple-speech/t3-apple-speech", offered: false },
+] as const)(
+  "offers Apple speech only on macOS with its helper: $platform $helper",
+  ({ platform, helper, offered }) => {
+    appleHelper.path = helper;
+    return Effect.gen(function* () {
+      const speech = yield* SpeechService.SpeechService;
+      const apple = (yield* speech.models(false)).models.find(({ id }) => id === "apple/speech");
+      expect(apple).toEqual(
+        offered
+          ? expect.objectContaining({
+              name: "Apple (built in)",
+              size: 0,
+              languages: ["en", "es"],
+              supportsStreaming: true,
+              state: "installed",
+              active: false,
+            })
+          : undefined,
+      );
+      if (!offered) return;
+      yield* speech.selectModel("apple/speech");
+      expect(yield* speech.status).toMatchObject({ modelId: "apple/speech", state: "ready" });
+      // macOS owns the language assets; removing Apple only falls back to another model.
+      yield* speech.removeModel("apple/speech");
+      expect(yield* speech.status).toMatchObject({ modelId: "test-model" });
+    }).pipe(
+      Effect.provide(layer),
+      Effect.provideService(HostProcess.Platform, platform),
+      Effect.provideService(HostProcess.Architecture, "arm64"),
+      Effect.provideService(HostProcess.LinuxLibc, "gnu"),
+    );
+  },
 );

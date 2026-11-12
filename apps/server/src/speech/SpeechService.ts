@@ -32,6 +32,17 @@ import {
   type SpeechModel,
 } from "./model.ts";
 import { listNativeSpeechGpuDevices, loadNativeSpeechModel } from "./native.ts";
+import {
+  APPLE_SPEECH_MODEL_ID,
+  appleSpeechHelperCandidates,
+  appleSpeechLanguages,
+  findAppleSpeechHelper,
+  installAppleSpeechLanguage,
+  isAppleSpeechAvailable,
+  loadAppleSpeechModel,
+  readAppleSpeechCapabilities,
+  type AppleSpeechCapabilities,
+} from "./apple.ts";
 import { nativeSpeechLanguage } from "./nativeLanguage.ts";
 import { SILERO_VAD } from "./silero.ts";
 import { isSpeechPlatformSupported } from "./platform.ts";
@@ -173,6 +184,7 @@ const make = Effect.gen(function* () {
   const clock = yield* Clock.Clock;
   const now = () => clock.currentTimeMillisUnsafe();
   const libc = platform === "linux" ? yield* HostProcess.LinuxLibc : undefined;
+  const hostEnvironment = yield* HostProcess.Environment;
   const unsupportedReason = isSpeechPlatformSupported(platform, architecture, libc)
     ? null
     : `voice transcription is not available on ${platform}-${architecture}`;
@@ -202,6 +214,46 @@ const make = Effect.gen(function* () {
   // @effect-diagnostics-next-line abortControllerInEffect:off - Cached native workers must also stop on service shutdown.
   const lifetime = new AbortController();
   let unloadTimeout: SpeechModelUnloadTimeout = "min_15";
+
+  // macOS's own recognizer is one more catalog entry, offered only when its helper reports support.
+  const appleHelper = findAppleSpeechHelper(
+    appleSpeechHelperCandidates({
+      platform,
+      override: hostEnvironment.T3CODE_APPLE_SPEECH_PATH,
+      moduleDirectory: import.meta.dirname,
+    }),
+  );
+  let apple: { readonly capabilities: AppleSpeechCapabilities | undefined; readonly at: number } = {
+    capabilities: undefined,
+    at: Number.NEGATIVE_INFINITY,
+  };
+  let appleDefinition: SpeechModel | undefined;
+  const refreshApple = Effect.suspend(() =>
+    !appleHelper || now() - apple.at < 60_000
+      ? Effect.void
+      : Effect.tryPromise({
+          try: () => readAppleSpeechCapabilities(appleHelper, lifetime.signal),
+          catch: (cause) => new SpeechOperationError({ operation: "Apple speech probe", cause }),
+        }).pipe(
+          Effect.option,
+          Effect.map((capabilities) => {
+            apple = {
+              capabilities: capabilities._tag === "Some" ? capabilities.value : undefined,
+              at: now(),
+            };
+            appleDefinition = isAppleSpeechAvailable(apple.capabilities)
+              ? appleSpeechModel(apple.capabilities!)
+              : undefined;
+          }),
+        ),
+  );
+  const appleReady = () => (apple.capabilities?.installed.length ?? 0) > 0;
+  const modelById = (modelId: string) =>
+    modelId === APPLE_SPEECH_MODEL_ID ? appleDefinition : getSpeechModel(modelId);
+  const catalogModels = () =>
+    appleDefinition ? [...SPEECH_MODELS, appleDefinition] : SPEECH_MODELS;
+  const isReady = (definition: SpeechModel) =>
+    definition.id === APPLE_SPEECH_MODEL_ID ? Effect.sync(appleReady) : store.isReady(definition);
 
   // Deadlines are absolute: the consumer fiber registers its sleep a few scheduler
   // hops after the request, so a relative delay would drift.
@@ -238,7 +290,7 @@ const make = Effect.gen(function* () {
   // Auto placement may land on a GPU the native engine cannot actually run; one retry on
   // this host's CPU recovers it. A GPU the person chose, and CPU itself, report the error.
   const canRetryOnCpu = (acceleration: SpeechAcceleration, loaded: LoadedModel) =>
-    acceleration === "auto" && loaded.backend.toLowerCase() !== "cpu";
+    acceleration === "auto" && !["cpu", "apple"].includes(loaded.backend.toLowerCase());
 
   yield* Effect.addFinalizer(() =>
     Effect.promise(async () => {
@@ -276,7 +328,7 @@ const make = Effect.gen(function* () {
   >;
 
   const selectedModel = (settings: SettingsSnapshot): SpeechModel =>
-    getSpeechModel(settings.speechModelId) ?? getSpeechModel(DEFAULT_SPEECH_MODEL_ID)!;
+    modelById(settings.speechModelId) ?? getSpeechModel(DEFAULT_SPEECH_MODEL_ID)!;
 
   let silenceRetryAt = 0;
   const acquireSilenceModel = Effect.fn("SpeechService.acquireSilenceModel")(function* (
@@ -297,7 +349,8 @@ const make = Effect.gen(function* () {
 
   // Publish the reservation before forking: a cached transfer can finish before forkIn returns.
   const downloadFiber = Effect.fn("SpeechService.downloadFiber")(function* (modelId: string) {
-    const definition = getSpeechModel(modelId);
+    yield* refreshApple;
+    const definition = modelById(modelId);
     if (!definition) return yield* new SpeechModelNotFoundError({ modelId });
     if (closing || activeOperation || (downloading && downloading.modelId !== modelId))
       return yield* new SpeechBusyError({ operation: "model download" });
@@ -309,23 +362,30 @@ const make = Effect.gen(function* () {
       fiber: Deferred.makeUnsafe<Fiber.Fiber<string, SpeechError>>(),
     };
     downloading = transfer;
-    const fiber = yield* store
-      .download(definition, {
-        onProgress: (downloaded) => {
-          transfer.downloaded = downloaded;
-          transfer.verifying = false;
-        },
-        onVerificationStart: () => {
-          transfer.verifying = true;
-        },
-      })
-      .pipe(
-        (modelDownload) =>
-          Effect.all([modelDownload, acquireSilenceModel("installation")], { concurrency: 2 }),
-        Effect.map(([modelPath]) => modelPath),
-        Effect.mapError((cause) => speechError("model download", cause)),
-        Effect.forkIn(scope),
-      );
+    const transferEffect: Effect.Effect<string, SpeechError> =
+      definition.id === APPLE_SPEECH_MODEL_ID
+        ? installApple((fraction) => {
+            transfer.downloaded = Math.round(fraction * 100);
+          })
+        : store
+            .download(definition, {
+              onProgress: (downloaded) => {
+                transfer.downloaded = downloaded;
+                transfer.verifying = false;
+              },
+              onVerificationStart: () => {
+                transfer.verifying = true;
+              },
+            })
+            .pipe(
+              (modelDownload) =>
+                Effect.all([modelDownload, acquireSilenceModel("installation")], {
+                  concurrency: 2,
+                }),
+              Effect.map(([modelPath]) => modelPath),
+              Effect.mapError((cause) => speechError("model download", cause)),
+            );
+    const fiber = yield* transferEffect.pipe(Effect.forkIn(scope));
     fiber.addObserver(() => {
       if (downloading !== transfer) return;
       downloading = undefined;
@@ -334,6 +394,27 @@ const make = Effect.gen(function* () {
     yield* Deferred.succeed(transfer.fiber, fiber);
     return fiber;
   }, Effect.uninterruptible);
+
+  // Apple downloads the Mac's own language; others download on first use inside the helper.
+  const installApple = (onProgress: (fraction: number) => void) =>
+    Effect.tryPromise({
+      try: (signal) =>
+        installAppleSpeechLanguage(
+          appleHelper!,
+          "auto",
+          onProgress,
+          AbortSignal.any([signal, lifetime.signal]),
+        ),
+      catch: (cause) => new SpeechOperationError({ operation: "model download", cause }),
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          apple = { ...apple, at: Number.NEGATIVE_INFINITY };
+        }),
+      ),
+      Effect.andThen(refreshApple),
+      Effect.as(appleHelper!),
+    );
 
   const download = Effect.fn("SpeechService.download")(function* (modelId: string) {
     const exit = yield* Fiber.await(yield* downloadFiber(modelId));
@@ -344,7 +425,10 @@ const make = Effect.gen(function* () {
   });
 
   const installedModelPath = (definition: SpeechModel) =>
-    store.installedPath(definition).pipe(
+    (definition.id === APPLE_SPEECH_MODEL_ID
+      ? Effect.sync(() => (appleReady() ? appleHelper : undefined))
+      : store.installedPath(definition)
+    ).pipe(
       Effect.filterOrFail(
         (modelPath) => modelPath !== undefined,
         () => new SpeechModelNotFoundError({ modelId: definition.id }),
@@ -368,20 +452,22 @@ const make = Effect.gen(function* () {
     if (loading) return loading;
     await disposeModel();
     signal.throwIfAborted();
-    const pending = loadNativeSpeechModel(modelPath, signal, undefined, acceleration).then(
-      async (loaded) => {
-        if (closing || signal.aborted) {
-          await loaded.dispose();
-          signal.throwIfAborted();
-          throw new SpeechBusyError({ operation: "model preparation" });
-        }
-        model = loaded;
-        loadedModelId = definition.id;
-        loadedAcceleration = acceleration;
-        scheduleUnload();
-        return loaded;
-      },
-    );
+    const pending = (
+      definition.id === APPLE_SPEECH_MODEL_ID
+        ? Promise.resolve<LoadedModel>(loadAppleSpeechModel(modelPath, definition.languages))
+        : loadNativeSpeechModel(modelPath, signal, undefined, acceleration)
+    ).then(async (loaded) => {
+      if (closing || signal.aborted) {
+        await loaded.dispose();
+        signal.throwIfAborted();
+        throw new SpeechBusyError({ operation: "model preparation" });
+      }
+      model = loaded;
+      loadedModelId = definition.id;
+      loadedAcceleration = acceleration;
+      scheduleUnload();
+      return loaded;
+    });
     const release = () => {
       if (loading === pending) loading = undefined;
     };
@@ -424,7 +510,8 @@ const make = Effect.gen(function* () {
     );
 
   const readSettings = (operation: string) =>
-    serverSettings.getSettings.pipe(
+    refreshApple.pipe(
+      Effect.andThen(serverSettings.getSettings),
       Effect.tap((settings) =>
         Effect.sync(() => {
           if (settings.speechModelId !== autoCpuModel || settings.speechAcceleration !== "auto")
@@ -451,7 +538,7 @@ const make = Effect.gen(function* () {
   ): Effect.fn.Return<EnvironmentSpeechStatus> {
     if (unsupportedReason) return { supported: false, reason: unsupportedReason };
     const definition = selectedModel(settings);
-    const ready = yield* store.isReady(definition);
+    const ready = yield* isReady(definition);
     const gpuDevices = yield* discoverGpuDevices.pipe(Effect.orElseSucceed(() => []));
     const autoUsesCpu =
       gpuDevices.length === 0 ||
@@ -487,16 +574,17 @@ const make = Effect.gen(function* () {
   ): Effect.fn.Return<SpeechModels> {
     const selected = selectedModel(settings);
     const models = yield* Effect.forEach(
-      SPEECH_MODELS,
+      catalogModels(),
       (definition) =>
-        store.isReady(definition).pipe(
+        isReady(definition).pipe(
           Effect.map((ready): EnvironmentSpeechModel => {
             const operation = downloading?.modelId === definition.id ? downloading : undefined;
             return {
               id: definition.id,
               name: definition.name,
               description: definition.description,
-              size: definition.size,
+              // Apple reports install progress in percent against a catalog size of 0.
+              size: operation && definition.size === 0 ? 100 : definition.size,
               languages: definition.languages,
               accuracy: definition.accuracy,
               speed: definition.speed,
@@ -897,13 +985,16 @@ const make = Effect.gen(function* () {
       ),
     ),
     selectModel: Effect.fn("SpeechService.selectModel")((modelId) =>
-      exclusive(
-        "model selection",
-        attempt("model selection", async () => {
-          if (!getSpeechModel(modelId)) throw new SpeechModelNotFoundError({ modelId });
-          await disposeModel();
-        }),
-      ).pipe(
+      refreshApple.pipe(
+        Effect.andThen(
+          exclusive(
+            "model selection",
+            attempt("model selection", async () => {
+              if (!modelById(modelId)) throw new SpeechModelNotFoundError({ modelId });
+              await disposeModel();
+            }),
+          ),
+        ),
         Effect.andThen(writeSettings("model selection", { speechModelId: modelId })),
         Effect.andThen(modelsEffect),
       ),
@@ -921,20 +1012,22 @@ const make = Effect.gen(function* () {
           exclusive(
             "model removal",
             Effect.gen(function* () {
-              const definition = getSpeechModel(modelId);
+              const definition = modelById(modelId);
               if (!definition) return yield* new SpeechModelNotFoundError({ modelId });
               yield* attempt("model removal", async () => {
                 await loading?.catch(() => undefined);
                 if (loadedModelId === modelId) await disposeModel();
               });
-              yield* store
-                .remove(definition)
-                .pipe(Effect.mapError((cause) => speechError("model removal", cause)));
+              // macOS owns its speech assets; removing Apple only stops using it.
+              if (definition.id !== APPLE_SPEECH_MODEL_ID)
+                yield* store
+                  .remove(definition)
+                  .pipe(Effect.mapError((cause) => speechError("model removal", cause)));
               if (selectedModel(settings).id !== modelId) return undefined;
               const candidates = yield* Effect.forEach(
-                SPEECH_MODELS.filter((candidate) => candidate.id !== modelId),
+                catalogModels().filter((candidate) => candidate.id !== modelId),
                 (candidate) =>
-                  store.isReady(candidate).pipe(Effect.map((ready) => ({ candidate, ready }))),
+                  isReady(candidate).pipe(Effect.map((ready) => ({ candidate, ready }))),
                 { concurrency: "unbounded" },
               );
               return candidates.find(({ ready }) => ready)?.candidate.id;
@@ -965,3 +1058,28 @@ const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(SpeechService, make);
+
+function appleSpeechModel(capabilities: AppleSpeechCapabilities): SpeechModel {
+  const names = new Intl.DisplayNames(["en"], { type: "language" });
+  const ready = appleSpeechLanguages(capabilities.installed).map((code) => names.of(code) ?? code);
+  return {
+    id: APPLE_SPEECH_MODEL_ID,
+    revision: capabilities.os,
+    name: "Apple (built in)",
+    description:
+      ready.length > 0
+        ? `Built into macOS. Audio stays on this Mac. Ready: ${ready.join(", ")}. macOS downloads other languages from Apple the first time you use them.`
+        : "Built into macOS. Audio stays on this Mac. macOS must download your language from Apple first.",
+    filename: "",
+    size: 0,
+    sha256: "",
+    languages: appleSpeechLanguages(capabilities.supported),
+    accuracy: 0,
+    speed: 0,
+    benchmark: { accuracy: {}, secondsPer30s: { cpu: null, accelerated: null } },
+    recommended: false,
+    supportsStreaming: true,
+    supportsLanguageDetection: false,
+    supportsTranslation: false,
+  };
+}
