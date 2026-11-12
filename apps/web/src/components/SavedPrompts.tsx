@@ -182,7 +182,7 @@ function SavedPromptRow({
         <button
           type="button"
           aria-expanded={expanded}
-          className="min-w-0 flex-1 cursor-pointer truncate rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          className="min-w-0 flex-1 cursor-pointer truncate text-left"
           onClick={() => setExpanded(!expanded)}
         >
           {item.text.split("\n")[0]?.slice(0, 160)}
@@ -209,7 +209,7 @@ function SavedPromptRow({
           ) : (
             <p className="whitespace-pre-wrap break-words py-2">{item.text}</p>
           )}
-          <div className="flex flex-wrap items-center justify-end gap-1">
+          <div className="flex items-center justify-end gap-1">
             {editing ? (
               <>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
