@@ -3,6 +3,7 @@ import { assert, it } from "@effect/vitest";
 import {
   CheckpointScopeId,
   NodeId,
+  ProjectId,
   ProviderThreadId,
   RunId,
   ThreadId,
@@ -155,4 +156,50 @@ it.effect("records a repository probe failure as an error checkpoint, not a miss
 
     assert.deepEqual(statuses, { baseline: "error", turn: "error" });
   }),
+);
+
+it.effect("keeps checkpoint scopes separate across projects and reuses the original on undo", () =>
+  Effect.gen(function* () {
+    const service = yield* CheckpointService.CheckpointServiceV2;
+    const input = {
+      threadId: ThreadId.make("move-scopes"),
+      runId: RunId.make("move-scopes-run"),
+      rootNodeId: NodeId.make("move-scopes-node"),
+      providerThreadId: ProviderThreadId.make("move-scopes-provider"),
+      projectId: ProjectId.make("scope-source"),
+      cwd: "/source",
+      createdAt: DateTime.makeUnsafe("2026-11-12T00:00:00.000Z"),
+    };
+    const original = yield* service.prepareRootRunScope(input);
+    const target = yield* service.prepareRootRunScope({
+      ...input,
+      cwd: "/target",
+      projectId: ProjectId.make("scope-target"),
+      originalProjectId: input.projectId,
+      originalCwd: "/source",
+    });
+    const undo = yield* service.prepareRootRunScope({ ...input, originalCwd: "/source" });
+    assert.notEqual(original.id, target.id);
+    assert.equal(original.id, undo.id);
+    assert.equal(original.projectId, input.projectId);
+    const sameFolder = yield* service.prepareRootRunScope({
+      ...input,
+      projectId: ProjectId.make("scope-target"),
+      originalProjectId: input.projectId,
+      originalCwd: input.cwd,
+    });
+    assert.notEqual(original.id, sameFolder.id);
+  }).pipe(
+    Effect.provide(
+      CheckpointService.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            Layer.mock(CheckpointStore.CheckpointStore)({}),
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+    ),
+  ),
 );

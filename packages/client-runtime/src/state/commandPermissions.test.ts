@@ -72,6 +72,26 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect("requires the destination operate grant for a project move", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const move = createCommandPermissions(
+          runtime,
+          ORCHESTRATION_V2_WS_METHODS.moveThreadToProject,
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(false)));
+        expect(registry.get(move.permissionAtom(env))).toBe(false);
+        expect((yield* move.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(move.permissionAtom(env))).toBe(true);
+        expect(registry.get(move.permissionAtom(other))).toBe(false);
+      }),
+    ),
+  );
+
   it.effect("requires the destination read grant to refresh providers", () =>
     Effect.scoped(
       Effect.gen(function* () {

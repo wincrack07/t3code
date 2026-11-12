@@ -145,6 +145,8 @@ export interface EnvironmentThreadShell {
   readonly interactionMode: OrchestrationV2ThreadShell["interactionMode"];
   readonly branch: string | null;
   readonly worktreePath: string | null;
+  readonly pendingProjectMove?: OrchestrationV2ThreadShell["pendingProjectMove"];
+  readonly projectMoves?: OrchestrationV2ThreadShell["projectMoves"];
   readonly lineage: OrchestrationV2ThreadShell["lineage"];
   readonly forkedFrom: OrchestrationV2ThreadShell["forkedFrom"];
   readonly linkOrigin: OrchestrationV2ThreadShell["linkOrigin"] | null;
@@ -301,6 +303,8 @@ export function presentThreadShell(
     interactionMode: thread.interactionMode,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    pendingProjectMove: thread.pendingProjectMove,
+    projectMoves: thread.projectMoves,
     pullRequests: threadPullRequestsOf(thread),
     ...(thread.pinnedHtmlCards?.length ? { pinnedHtmlCards: thread.pinnedHtmlCards } : {}),
     ...(thread.statusText === undefined ? {} : { statusText: thread.statusText }),

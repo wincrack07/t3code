@@ -1154,3 +1154,14 @@ export const unlinkThreadPullRequest = Effect.fn("EnvironmentCommands.unlinkThre
     });
   },
 );
+
+export const moveThreadToProject = Effect.fn("commands.moveThreadToProject")(function* (
+  input: ThreadCommandInput & { readonly projectId: ProjectId; readonly detachWorktree?: boolean },
+) {
+  return yield* requestGuarded(ORCHESTRATION_V2_WS_METHODS.moveThreadToProject, {
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    projectId: input.projectId,
+    ...(input.detachWorktree === undefined ? {} : { detachWorktree: input.detachWorktree }),
+  });
+});

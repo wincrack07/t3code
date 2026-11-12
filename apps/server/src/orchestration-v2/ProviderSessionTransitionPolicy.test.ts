@@ -54,13 +54,21 @@ it("uses the adapter's selection transition classification", () => {
 });
 
 it("restarts compatible instances for workspace or runtime changes", () => {
-  assert.deepEqual(
-    decideProviderSessionTransition({
-      current: base,
-      target: { ...base, workspace: "/other", available: true },
-    }),
-    { type: "restart_and_resume" },
-  );
+  for (const name of ["codex", "claudeAgent", "cursor"]) {
+    const driver = ProviderDriverKind.make(name);
+    const current = {
+      ...base,
+      driver,
+      continuationIdentity: { driverKind: driver, continuationKey: name },
+    };
+    assert.deepEqual(
+      decideProviderSessionTransition({
+        current,
+        target: { ...current, workspace: "/other", available: true },
+      }),
+      { type: "restart_and_resume" },
+    );
+  }
 });
 
 it("preserves handoff and missing-classification outcomes across workspace changes", () => {
@@ -100,4 +108,22 @@ it("uses portable handoff for incompatible continuation identities", () => {
     }),
     { type: "create_with_handoff" },
   );
+});
+
+it("hands off directory-bound providers when moving to a new workspace", () => {
+  for (const name of ["grok", "opencode", "antigravity", "kiro"]) {
+    const driver = ProviderDriverKind.make(name);
+    const current = {
+      ...base,
+      driver,
+      continuationIdentity: { driverKind: driver, continuationKey: name },
+    };
+    assert.deepEqual(
+      decideProviderSessionTransition({
+        current,
+        target: { ...current, workspace: "/new-project", available: true },
+      }),
+      { type: "create_with_handoff" },
+    );
+  }
 });

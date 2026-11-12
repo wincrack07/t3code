@@ -431,11 +431,14 @@ runs, background wakes, and delegated completions keep it snoozed.
 
 ### `t3_thread_update`
 
-Updates metadata for the calling thread or any other thread in the environment.
-The typed actions are `rename`, which requires `title`, and `regenerate_title`,
-which rejects one. Pull request links go through the separate
-`link_pull_request` and `unlink_pull_request` tools. Branch and workspace
-changes are outside this tool.
+Updates the calling thread (omit `threadId`) or another thread in the environment.
+Use `rename` with `title`, `regenerate_title`, or `set_status` with one-line progress.
+Use `move` with `moveToProjectId` to keep the conversation in another local project.
+A busy thread moves when idle, before queued messages; the current turn keeps its cwd.
+Worktree or branch threads require `detachWorktree: true`; their files stay on disk.
+Moving to the current project cancels a pending move. Earlier checkpoints require
+moving back to their workspace. Pull request links use `link_pull_request` and
+`unlink_pull_request`.
 
 The result includes the command ID and durable event sequence together with the
 resultant title, title-regeneration marker, and linked pull request. Reusing a

@@ -635,6 +635,36 @@ const seedRollbackHistory = Effect.gen(function* () {
 it.layer(ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory)))(
   "rollback history reads",
   (it) => {
+    it.effect("refuses previous-project restores before touching the provider or Git", () =>
+      Effect.gen(function* () {
+        const history = yield* seedRollbackHistory;
+        const sql = yield* SqlClient.SqlClient;
+        const move = JSON.stringify([
+          {
+            previousProjectId: "rollback-history-project",
+            projectId: "destination",
+            previousCwd: process.cwd(),
+            cwd: "/destination",
+            movedAt: "2026-11-12T00:00:00.000Z",
+          },
+        ]);
+        yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json = json_set(payload_json,
+          '$.worktreePath', NULL, '$.projectMoves', json(${move})) WHERE thread_id = ${history.threadId}`;
+        const error = yield* history.rollback(2).pipe(Effect.flip);
+        assert.equal(error._tag, "CheckpointRollbackExecutionError");
+        if (error._tag === "CheckpointRollbackExecutionError")
+          assert.equal(error.reason, "previous-project");
+        if (error._tag === "CheckpointRollbackExecutionError")
+          assert.include(
+            CheckpointRollbackService.rollbackFailureClientMessage(error),
+            "previous project",
+          );
+        assert.deepEqual(history.rollbackCounts, []);
+        assert.deepEqual(history.restored, []);
+        assert.deepEqual(history.deletedRefs, []);
+      }),
+    );
+
     it.effect("rolls back later terminal runs despite obsolete unrelated SQLite payloads", () =>
       Effect.gen(function* () {
         const history = yield* seedRollbackHistory;

@@ -70,8 +70,18 @@ function metadataCommand(input: {
   readonly commandId: CommandId;
   readonly threadId: ThreadId;
   readonly update: ThreadMetadataMcpUpdateInput;
-}): Extract<OrchestrationV2Command, { readonly type: "thread.metadata.update" }> {
+}): OrchestrationV2Command {
   switch (input.update.action) {
+    case "move":
+      return {
+        type: "thread.project.move",
+        commandId: input.commandId,
+        threadId: input.threadId,
+        projectId: input.update.moveToProjectId!,
+        ...(input.update.detachWorktree === undefined
+          ? {}
+          : { detachWorktree: input.update.detachWorktree }),
+      };
     case "rename":
       return {
         type: "thread.metadata.update",
@@ -219,12 +229,26 @@ const make = Effect.gen(function* () {
         `Thread ${threadId} metadata update completed without a resultant state.`,
       );
     }
-    return resultFromThread({
-      action: input.action,
-      commandId: updateCommandId,
-      sequence: dispatched.sequence,
-      thread,
-    });
+    return {
+      ...resultFromThread({
+        action: input.action,
+        commandId: updateCommandId,
+        sequence: dispatched.sequence,
+        thread,
+      }),
+      ...(input.action === "move"
+        ? {
+            projectId: thread.projectId,
+            movesWhenIdle: thread.pendingProjectMove != null,
+            message:
+              thread.pendingProjectMove != null
+                ? "Move recorded. It applies when this thread becomes idle, after the current turn ends; your cwd has not changed yet."
+                : input.moveToProjectId === shell.projectId
+                  ? "Pending move cancelled. This thread stays in its current project."
+                  : "Thread moved. The next turn uses the target project workspace root.",
+          }
+        : {}),
+    };
   });
 
   const openQuestions = Effect.fn("ThreadMetadataMcpService.openQuestions")(function* (

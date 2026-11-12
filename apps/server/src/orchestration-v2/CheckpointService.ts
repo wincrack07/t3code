@@ -3,6 +3,7 @@ import {
   CheckpointRef,
   CheckpointScopeId,
   NodeId,
+  type ProjectId,
   OrchestrationV2Checkpoint,
   OrchestrationV2CheckpointScope,
   ProviderThreadId,
@@ -109,6 +110,9 @@ export interface CheckpointServiceV2Shape {
     readonly rootNodeId: NodeId;
     readonly providerThreadId: ProviderThreadId;
     readonly cwd: string;
+    readonly originalCwd?: string | undefined;
+    readonly originalProjectId?: ProjectId | undefined;
+    readonly projectId?: ProjectId | undefined;
     readonly createdAt: DateTime.Utc;
   }) => Effect.Effect<OrchestrationV2CheckpointScope, CheckpointServiceV2Error>;
   readonly captureBaseline: (input: {
@@ -181,14 +185,22 @@ const makeRootRunScope = Effect.fn("CheckpointService.makeRootRunScope")(functio
   readonly rootNodeId: NodeId;
   readonly providerThreadId: ProviderThreadId;
   readonly cwd: string;
+  readonly originalCwd?: string | undefined;
+  readonly originalProjectId?: ProjectId | undefined;
+  readonly projectId?: ProjectId | undefined;
   readonly createdAt: DateTime.Utc;
 }) {
   const scopeId = yield* input.idAllocator.allocate.checkpointScope({
     threadId: input.threadId,
-    name: ROOT_CHECKPOINT_SCOPE_NAME,
+    name:
+      (input.originalCwd !== undefined && input.originalCwd !== input.cwd) ||
+      (input.originalProjectId !== undefined && input.originalProjectId !== input.projectId)
+        ? `${ROOT_CHECKPOINT_SCOPE_NAME}:${input.projectId ?? ""}:${input.cwd}`
+        : ROOT_CHECKPOINT_SCOPE_NAME,
   });
   return {
     id: scopeId,
+    ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
     threadId: input.threadId,
     runId: input.runId,
     nodeId: input.rootNodeId,

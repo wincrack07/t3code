@@ -1,4 +1,9 @@
-import { NonNegativeInt, ThreadId, type VcsError } from "@t3tools/contracts";
+import {
+  type CheckpointPreviousProjectError,
+  NonNegativeInt,
+  ThreadId,
+  type VcsError,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
@@ -80,6 +85,7 @@ export class CheckpointRefUnavailableError extends Schema.TaggedError<Checkpoint
 export type CheckpointStoreError = VcsError;
 
 export type CheckpointServiceError =
+  | CheckpointPreviousProjectError
   | CheckpointStoreError
   | ProjectionRepositoryError
   | CheckpointDiffResultInvalidError

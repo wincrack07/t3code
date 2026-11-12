@@ -169,6 +169,7 @@ export const ProjectionStoreV2Error = Schema.Union([
 export type ProjectionStoreV2Error = typeof ProjectionStoreV2Error.Type;
 
 export type ProjectionRecoveryKind =
+  | "project-moves"
   | "queued-runs"
   | "runtime"
   | "restart-continuations"
@@ -231,11 +232,14 @@ export type ProjectionSettlementCandidate = Pick<
   };
 
 const ProjectionCheckpointContext = Schema.Struct({
+  currentWorkspace: Schema.optional(Schema.String),
+  currentProjectId: Schema.optional(ProjectId),
   runs: Schema.Array(
     OrchestrationV2RunJsonSchema.mapFields(({ id, ordinal, status }) => ({ id, ordinal, status })),
   ),
   checkpointScopes: Schema.Array(
-    OrchestrationV2CheckpointScopeJsonSchema.mapFields(({ id, runId, kind, cwd }) => ({
+    OrchestrationV2CheckpointScopeJsonSchema.mapFields(({ id, runId, kind, cwd, projectId }) => ({
+      projectId,
       id,
       runId,
       kind,
@@ -244,7 +248,8 @@ const ProjectionCheckpointContext = Schema.Struct({
   ),
   checkpoints: Schema.Array(
     OrchestrationV2CheckpointJsonSchema.mapFields(
-      ({ scopeId, runId, ordinalWithinScope, appRunOrdinal, status, ref }) => ({
+      ({ id, scopeId, runId, ordinalWithinScope, appRunOrdinal, status, ref }) => ({
+        id: Schema.optional(id),
         scopeId,
         runId,
         ordinalWithinScope,
@@ -1654,6 +1659,8 @@ export function threadShellFromProjection(
     interactionMode: projection.thread.interactionMode,
     branch: projection.thread.branch,
     worktreePath: projection.thread.worktreePath,
+    pendingProjectMove: projection.thread.pendingProjectMove,
+    projectMoves: projection.thread.projectMoves,
     pullRequests: threadPullRequestsOf(projection.thread),
     ...(projection.thread.pinnedHtmlCards?.length
       ? { pinnedHtmlCards: projection.thread.pinnedHtmlCards }
@@ -1966,6 +1973,8 @@ function shellFromState(input: {
     interactionMode: input.state.thread.interactionMode,
     branch: input.state.thread.branch,
     worktreePath: input.state.thread.worktreePath,
+    pendingProjectMove: input.state.thread.pendingProjectMove,
+    projectMoves: input.state.thread.projectMoves,
     pullRequests: threadPullRequestsOf(input.state.thread),
     ...(input.state.thread.pinnedHtmlCards?.length
       ? { pinnedHtmlCards: input.state.thread.pinnedHtmlCards }
@@ -4379,6 +4388,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       ) {
         const candidates = (() => {
           switch (kind) {
+            case "project-moves":
+              return sql`SELECT thread_id FROM orchestration_v2_projection_threads
+                WHERE json_type(payload_json, '$.pendingProjectMove') = 'object'`;
             case "queued-runs":
               return sql`
                 SELECT thread_id FROM orchestration_v2_projection_runs
@@ -5496,8 +5508,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       sql
         .withTransaction(
           Effect.gen(function* () {
-            const threads = yield* sql<{ readonly thread_id: string }>`
-            SELECT thread_id FROM orchestration_v2_projection_threads
+            const threads = yield* sql<{
+              readonly thread_id: string;
+              readonly project_id: ProjectId;
+              readonly moved_cwd: string | null;
+            }>`
+            SELECT thread_id, project_id, CASE WHEN json_type(payload_json, '$.projectMoves') = 'array' THEN COALESCE(json_extract(payload_json, '$.worktreePath'), json_extract(payload_json, '$.projectMoves[#-1].cwd')) END AS moved_cwd FROM orchestration_v2_projection_threads
             WHERE thread_id = ${threadId} LIMIT 1
           `;
             if (threads.length === 0) {
@@ -5513,13 +5529,14 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             `,
               sql`
               SELECT scope_id AS id, run_id AS "runId", kind,
-                json_extract(payload_json, '$.cwd') AS cwd
+                json_extract(payload_json, '$.cwd') AS cwd,
+                json_extract(payload_json, '$.projectId') AS projectId
               FROM orchestration_v2_projection_checkpoint_scopes
               WHERE thread_id = ${threadId}
               ORDER BY ordinal_within_parent ASC, scope_id ASC
             `,
               sql`
-              SELECT scope_id AS "scopeId", run_id AS "runId",
+              SELECT checkpoint_id AS id, scope_id AS "scopeId", run_id AS "runId",
                 ordinal_within_scope AS "ordinalWithinScope",
                 app_run_ordinal AS "appRunOrdinal", status,
                 json_extract(payload_json, '$.ref') AS ref
@@ -5528,7 +5545,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               ORDER BY scope_id ASC, ordinal_within_scope ASC
             `,
             ]);
-            return yield* decodeCheckpointContext({ runs, checkpointScopes, checkpoints });
+            return yield* decodeCheckpointContext({
+              runs,
+              checkpointScopes,
+              checkpoints,
+              currentProjectId: threads[0]!.project_id,
+              ...(threads[0]?.moved_cwd == null ? {} : { currentWorkspace: threads[0].moved_cwd }),
+            });
           }),
         )
         .pipe(

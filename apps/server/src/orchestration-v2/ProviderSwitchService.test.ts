@@ -66,7 +66,7 @@ function deadSessionRecord(
 }
 
 function layerTest(
-  metadata: Readonly<Record<string, { continuationKey: string }>>,
+  metadata: Readonly<Record<string, { continuationKey: string; driver?: ProviderDriverKind }>>,
   planSelectionTransition: ProviderAdapter.ProviderAdapterV2["Service"]["planSelectionTransition"] = () =>
     Effect.succeed({ type: "restart_session" }),
 ) {
@@ -74,7 +74,7 @@ function layerTest(
     instanceId: ProviderInstanceId,
   ): ProviderAdapter.ProviderAdapterV2["Service"] => ({
     instanceId,
-    driver,
+    driver: metadata[instanceId]?.driver ?? driver,
     getCapabilities: () => Effect.succeed(capabilitiesWithoutModelSwitch),
     planSelectionTransition,
     openSession: () => Effect.die("ProviderSwitchService tests do not open sessions."),
@@ -94,7 +94,7 @@ function layerTest(
             new ProviderAdapterRegistry.ProviderAdapterRegistryLookupError({ instanceId }),
           )
         : Effect.succeed({
-            driver,
+            driver: value.driver ?? driver,
             continuationKey: value.continuationKey,
             enabled: true,
             capabilities: capabilitiesWithoutModelSwitch,
@@ -295,4 +295,57 @@ it.effect("distinguishes compatible and incompatible instances of the same drive
       }),
     ),
   ),
+);
+
+it.effect.each([
+  { name: "codex", transition: "restart_and_resume", release: false },
+  { name: "claudeAgent", transition: "restart_and_resume", release: true },
+  { name: "grok", transition: "create_with_handoff", release: true },
+])(
+  "uses the new project workspace for $name without changing the model",
+  ({ name, transition, release }) =>
+    Effect.gen(function* () {
+      const service = yield* ProviderSwitch.ProviderSwitchServiceV2;
+      const original = projection();
+      const result = yield* service.plan({
+        projection: {
+          ...original,
+          providerSessions: original.providerSessions.map((session) => ({
+            ...session,
+            capabilities: {
+              ...session.capabilities,
+              sessions: {
+                ...session.capabilities.sessions,
+                supportsMultipleProviderThreadsPerSession: name === "codex",
+              },
+            },
+          })),
+          thread: {
+            ...original.thread,
+            worktreePath: null,
+            projectMoves: [
+              {
+                previousProjectId: original.thread.projectId,
+                projectId: original.thread.projectId,
+                previousCwd: "/repo",
+                cwd: "/destination",
+                movedAt: "2026-11-12T00:00:00.000Z",
+              },
+            ],
+          },
+        },
+        targetModelSelection: original.thread.modelSelection,
+      });
+      assert.equal(result.transition.type, transition);
+      assert.deepEqual(result.releaseProviderSessionIds, release ? [currentSessionId] : []);
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          [currentInstanceId]: {
+            continuationKey: "same-account",
+            driver: ProviderDriverKind.make(name),
+          },
+        }),
+      ),
+    ),
 );

@@ -1,4 +1,9 @@
-import { CommandId, type ModelSelection, type ThreadId } from "@t3tools/contracts";
+import {
+  ORCHESTRATION_V2_WS_METHODS,
+  CommandId,
+  type ModelSelection,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -24,6 +29,7 @@ import {
   type InterruptThreadTurnInput,
   type StartThreadTurnInput,
   type UpdateThreadMetadataInput,
+  moveThreadToProject,
   archiveThread,
   closeGuestShare,
   resolveGuestMessage,
@@ -125,6 +131,13 @@ export function createThreadEnvironmentAtoms<R, E>(
   });
 
   const commands = {
+    moveToProject: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:move-to-project",
+      tag: ORCHESTRATION_V2_WS_METHODS.moveThreadToProject,
+      execute: moveThreadToProject,
+      scheduler,
+      concurrency,
+    }),
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: createThread,
