@@ -23,6 +23,7 @@ import {
   SIDEBAR_TREE_DROP_CLASS_NAME,
   parseSidebarTreeDragId,
   parseSidebarTreeRow,
+  sidebarTreeIndent,
   sidebarTreeRow,
 } from "./sidebar/sidebarTreeDrag";
 import { SIDEBAR_COLORS, resolveSidebarColor } from "../sidebarColors";
@@ -1046,6 +1047,9 @@ function checkThreadOperations(
 }
 
 const SIDEBAR_DRAG_DISTANCE = 10;
+// A header row with no leading icon: its label starts on the thread title column.
+const SIDEBAR_SHELF_ROW_CLASS_NAME =
+  "flex h-7 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) ps-9 pe-(--sidebar-row-content-inset) text-left text-xs text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 // Hovering a dragged group or project over a collapsed group opens it after this long.
 const SIDEBAR_TREE_EXPAND_DELAY_MS = 500;
 
@@ -3795,6 +3799,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         // The tree row of the project folder this row sits in.
                         folderRow?: string,
                         depth = 0,
+                        // Nesting depth of that folder under sidebar groups.
+                        treeDepth = 0,
                       ): ReactNode => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -3828,6 +3834,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               }
                               thread={thread}
                               variant={rowVariant}
+                              treeDepth={treeDepth}
                               nestedExpanded={
                                 canExpand ? Boolean(expandedNested[threadKey]) : undefined
                               }
@@ -3843,11 +3850,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                       event.stopPropagation();
                                       toggleNested(threadKey);
                                     }}
-                                    className="shrink-0 text-sidebar-muted-foreground"
+                                    className={cn(
+                                      "shrink-0 rounded-sm text-sidebar-muted-foreground outline-none transition-opacity hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                                      // A row with no loaded sessions shows its toggle on demand.
+                                      children.length === 0 &&
+                                        !expandedNested[threadKey] &&
+                                        "opacity-0 group-hover/sidebar-row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+                                    )}
                                   >
                                     <ChevronDownIcon
                                       className={cn(
-                                        "size-3",
+                                        "size-3 transition-transform",
                                         !expandedNested[threadKey] && "-rotate-90",
                                       )}
                                     />
@@ -3945,7 +3958,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               onFileDropThreads={handleThreadFileDrop}
                             />
                             {canExpand && expandedNested[threadKey] ? (
-                              <li className="ms-5 list-none border-l border-border/60 ps-1">
+                              <li
+                                className="list-none border-l border-border/60 ps-1"
+                                style={{ marginInlineStart: `${1.25 + treeDepth}rem` }}
+                              >
                                 <ul className="sidebar-nested-sessions">
                                   {children
                                     .slice(0, showAllNested[threadKey] ? undefined : 3)
@@ -3958,7 +3974,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                         type="button"
                                         data-sidebar-row={`${threadKey}:more`}
                                         data-sidebar-parent={threadKey}
-                                        className="h-7 ps-3 text-xs text-sidebar-muted-foreground"
+                                        className="h-7 rounded-sm ps-3 pe-2 text-xs text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                                         onClick={() =>
                                           setShowAllNested((value) => ({
                                             ...value,
@@ -4072,21 +4088,24 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               if (row.depth === 0 && folder.other && !otherHeaderShown) {
                                 otherHeaderShown = true;
                                 append(
-                                  <li key="other-projects" className="list-none">
+                                  <li key="other-projects" className="mt-1 list-none">
                                     <button
                                       type="button"
                                       data-sidebar-row="other-projects"
                                       aria-expanded={otherProjectsExpanded}
                                       onClick={toggleOtherProjects}
-                                      className="flex h-8 w-full items-center gap-2 px-2 text-xs text-sidebar-muted-foreground"
+                                      className={SIDEBAR_SHELF_ROW_CLASS_NAME}
                                     >
+                                      <span className="min-w-0 flex-1 truncate">
+                                        Other projects
+                                      </span>
                                       <ChevronDownIcon
+                                        aria-hidden
                                         className={cn(
-                                          "size-3",
+                                          "size-3 shrink-0 transition-transform",
                                           !otherProjectsExpanded && "-rotate-90",
                                         )}
                                       />
-                                      Other projects
                                     </button>
                                   </li>,
                                 );
@@ -4122,6 +4141,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                     thread,
                                     sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
                                     sidebarFolderRowId(folder.group.projectKey),
+                                    0,
+                                    row.depth,
                                   ),
                                 );
                               }
@@ -4132,7 +4153,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               ) {
                                 const shelfKey = `project-settled:${folder.group.projectKey}`;
                                 append(
-                                  <li key={shelfKey} className="list-none">
+                                  <li
+                                    key={shelfKey}
+                                    className="list-none"
+                                    style={sidebarTreeIndent(row.depth)}
+                                  >
                                     <button
                                       type="button"
                                       data-sidebar-row={shelfKey}
@@ -4141,29 +4166,39 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                       )}
                                       aria-expanded={folder.settledExpanded}
                                       onClick={() => toggleProjectSettled(folder.group.projectKey)}
-                                      className="flex h-7 w-full items-center gap-2 ps-9 pe-2 text-xs text-sidebar-muted-foreground"
+                                      className={SIDEBAR_SHELF_ROW_CLASS_NAME}
                                     >
+                                      <span className="min-w-0 flex-1 truncate">Settled</span>
+                                      <span className="shrink-0 tabular-nums">
+                                        {folder.settledCount}
+                                      </span>
                                       <ChevronDownIcon
+                                        aria-hidden
                                         className={cn(
-                                          "size-3",
+                                          "size-3 shrink-0 transition-transform",
                                           !folder.settledExpanded && "-rotate-90",
                                         )}
                                       />
-                                      Settled · {folder.settledCount}
                                     </button>
                                   </li>,
                                 );
                                 for (const thread of folder.settledRows)
-                                  append(renderThreadRow(thread, "settled", shelfKey));
+                                  append(
+                                    renderThreadRow(thread, "settled", shelfKey, 0, row.depth),
+                                  );
                                 if (
                                   folder.settledExpanded &&
                                   folder.settledCount > folder.settledRows.length
                                 )
                                   append(
-                                    <li key={`${shelfKey}:more`} className="list-none ps-9">
+                                    <li
+                                      key={`${shelfKey}:more`}
+                                      className="list-none ps-7"
+                                      style={sidebarTreeIndent(row.depth)}
+                                    >
                                       <button
                                         type="button"
-                                        className="h-7 text-xs text-sidebar-muted-foreground"
+                                        className="h-7 rounded-sm px-2 text-xs text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                                         onClick={() =>
                                           projectShelf.failed
                                             ? projectShelf.retry()

@@ -3167,13 +3167,14 @@ html:not([data-motion="reduce"])
     var(--sidebar-neutral, var(--sidebar)) 88%,
     var(--sidebar-row-colour) 12%
   );
-  border-inline-start: 2px solid var(--sidebar-row-colour);
 }
 
+/* The bar hangs outside the row, so coloured and plain rows keep the same columns. */
 [data-sidebar-row-colour]:not([data-tree-drop]) {
   background-color: var(--sidebar-row-wash);
+  box-shadow: -2px 0 0 var(--sidebar-row-colour);
 }
 
 [data-sidebar-colour-block] > ul > [data-sidebar-group-header] {
-  border-inline-start: 0;
+  box-shadow: none;
 }

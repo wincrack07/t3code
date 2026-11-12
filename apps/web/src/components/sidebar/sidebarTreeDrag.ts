@@ -32,7 +32,7 @@ export const SIDEBAR_TREE_DROP_CLASS_NAME = [
   "data-[tree-drop=after]:after:pointer-events-none data-[tree-drop=after]:after:absolute data-[tree-drop=after]:after:inset-x-2 data-[tree-drop=after]:after:-bottom-px data-[tree-drop=after]:after:h-0.5 data-[tree-drop=after]:after:rounded-full data-[tree-drop=after]:after:bg-primary data-[tree-drop=after]:after:content-['']",
 ].join(" ");
 
-/** Indents a tree header by its nesting depth. */
+/** Indents a tree row by its nesting depth. */
 export function sidebarTreeIndent(depth: number) {
   return depth > 0 ? { marginInlineStart: `${depth}rem` } : undefined;
 }
