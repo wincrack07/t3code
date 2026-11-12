@@ -628,7 +628,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   const refuseless = resolvedEnvironment.ANTHROPIC_BASE_URL === "https://api.refuseless.com";
   const endpointModels = claudeSettings.customModels.map((entry) => ({
     slug: typeof entry === "string" ? entry : entry.slug,
-    name: typeof entry === "string" ? entry : (entry.name ?? entry.slug),
+    name: typeof entry === "string" ? toTitleCaseWords(entry) : (entry.name ?? entry.slug),
     isCustom: true,
     capabilities: createModelCapabilities({
       optionDescriptors: [

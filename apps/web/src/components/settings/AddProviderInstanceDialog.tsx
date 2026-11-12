@@ -83,6 +83,7 @@ const CUSTOM_ENDPOINT_PRESETS = [
       ["ANTHROPIC_DEFAULT_FABLE_MODEL", "glm-5.3-abliterated"],
       ["ANTHROPIC_DEFAULT_HAIKU_MODEL", "glm-5.3-flash-abliterated"],
       ["CLAUDE_CODE_SUBAGENT_MODEL", "glm-5.3-abliterated"],
+      ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1"],
     ],
     models: [
       "glm-5.3-abliterated",
