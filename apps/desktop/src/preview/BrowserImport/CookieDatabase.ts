@@ -22,6 +22,10 @@ export interface CookieReadResult {
   readonly cookies: ReadonlyArray<ImportedCookie>;
   readonly undecryptable: number;
   readonly undecryptableHosts: ReadonlyArray<string>;
+  /** The share of `undecryptable` that was skipped for being partitioned, not for failing to decrypt. */
+  readonly partitioned?: number;
+  readonly partitionedHosts?: ReadonlyArray<string>;
+  readonly decryptFailedHosts?: ReadonlyArray<string>;
 }
 
 export const cookieScope = (

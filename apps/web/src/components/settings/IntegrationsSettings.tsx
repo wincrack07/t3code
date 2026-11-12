@@ -279,6 +279,7 @@ async function importBrowserCookiesIntoTarget(
       imported: result.imported,
       skipped: result.skipped,
       skippedDomains: result.skippedDomains,
+      skippedReasons: result.skippedReasons,
       targetName,
     };
   } catch (cause) {

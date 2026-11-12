@@ -70,10 +70,26 @@ export const DesktopPreviewImportCookiesInputSchema = Schema.Struct({
   targetProfileId: BrowserProfileId,
 });
 
+export const BrowserImportSkipReason = Schema.Literals([
+  "partitioned",
+  "undecryptable",
+  "rejected",
+]);
+export type BrowserImportSkipReason = typeof BrowserImportSkipReason.Type;
+
+export const BrowserImportSkippedGroup = Schema.Struct({
+  reason: BrowserImportSkipReason,
+  count: Schema.Int,
+  domains: Schema.Array(Schema.String),
+});
+export type BrowserImportSkippedGroup = typeof BrowserImportSkippedGroup.Type;
+
 export const BrowserImportResult = Schema.Struct({
   imported: Schema.Int,
   skipped: Schema.Int,
   skippedDomains: Schema.Array(Schema.String),
+  /** Absent from desktop builds that predate skip reasons. */
+  skippedReasons: Schema.optional(Schema.Array(BrowserImportSkippedGroup)),
 });
 export type BrowserImportResult = typeof BrowserImportResult.Type;
 

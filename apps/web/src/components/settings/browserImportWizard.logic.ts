@@ -1,4 +1,8 @@
-import type { BrowserImportFailureReason, BrowserImportSource } from "@t3tools/contracts";
+import type {
+  BrowserImportFailureReason,
+  BrowserImportSkippedGroup,
+  BrowserImportSource,
+} from "@t3tools/contracts";
 
 export interface WizardTargetProfile {
   readonly id: string;
@@ -43,6 +47,7 @@ export type ImportOutcome =
       readonly imported: number;
       readonly skipped: number;
       readonly skippedDomains: ReadonlyArray<string>;
+      readonly skippedReasons?: ReadonlyArray<BrowserImportSkippedGroup> | undefined;
       readonly targetName: string;
     }
   | {
@@ -67,6 +72,7 @@ export type WizardStep =
       readonly imported: number;
       readonly skipped: number;
       readonly skippedDomains: ReadonlyArray<string>;
+      readonly skippedReasons?: ReadonlyArray<BrowserImportSkippedGroup> | undefined;
       readonly targetName: string;
     }
   | {
@@ -96,6 +102,7 @@ export function outcomeToStep(outcome: ImportOutcome): WizardStep {
       imported: outcome.imported,
       skipped: outcome.skipped,
       skippedDomains: outcome.skippedDomains,
+      skippedReasons: outcome.skippedReasons,
       targetName: outcome.targetName,
     };
   }
@@ -140,6 +147,17 @@ export function isRetryableReason(reason: BrowserImportFailureReason): boolean {
     default:
       return false;
   }
+}
+
+const SKIP_REASON_COPY: Readonly<Record<BrowserImportSkippedGroup["reason"], string>> = {
+  partitioned:
+    "Tied to the site it was embedded in. T3 Code's browser can't store that tie, and sites set these again on your next visit.",
+  undecryptable: "Could not be decrypted with the browser's key.",
+  rejected: "The built-in browser refused it, usually because it has expired or is malformed.",
+};
+
+export function skipReasonCopy(reason: BrowserImportSkippedGroup["reason"]): string {
+  return SKIP_REASON_COPY[reason];
 }
 
 export function formatSkippedDomains(domains: ReadonlyArray<string>): string {
