@@ -515,6 +515,18 @@ describe("requiredScopesForProjectMutation", () => {
         scripts: [],
       }),
     ).toEqual(["orchestration:operate", "settings:write"]);
+    expect(
+      requiredScopesForProjectMutation({
+        type: "project.update",
+        commandId,
+        projectId,
+        savedPrompt: {
+          kind: "attach",
+          id: "task",
+          attachments: [{ kind: "path", path: "/home/user/file" }],
+        },
+      }),
+    ).toEqual(["orchestration:operate", "filesystem:read"]);
   });
 });
 

@@ -1,3 +1,4 @@
+import { taskAttachmentOwner } from "../project/taskAttachmentFiles.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
@@ -6,7 +7,11 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as FileSystem from "effect/FileSystem";
 import * as ServerConfig from "../config.ts";
-import { createPendingAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
+import {
+  createPendingAttachmentId,
+  createTaskAttachmentId,
+  resolveAttachmentPath,
+} from "../attachmentStore.ts";
 import * as ThreadMessageIntake from "./ThreadMessageIntake.ts";
 import { assert, it, vi } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -183,9 +188,11 @@ function makeHarness(options: HarnessOptions = {}) {
   );
   const layerExternalServices = Layer.mergeAll(
     WorktreeSetupTracker.layer,
+    Layer.mock(DocumentText.DocumentText)({ ensure: () => Effect.undefined }),
     Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({ get: () => Effect.succeed(null) }),
     Layer.mock(TerminalManager.TerminalManager)({ close: closeTerminal }),
     Layer.succeed(ProjectService.ProjectService, {
+      taskAttachments: () => Effect.die("unused"),
       create: () => Effect.die("unused"),
       bootstrap: () => Effect.die("unused"),
       update: options.updateProject ?? (() => Effect.die("unused")),
@@ -242,7 +249,11 @@ function makeHarness(options: HarnessOptions = {}) {
         folderForThread: () => Effect.succeedNone,
       }),
   );
+  const layerFiles = ServerConfig.layerTest(process.cwd(), { prefix: "task-launch-files-" }).pipe(
+    Layer.provideMerge(NodeServices.layer),
+  );
   const layerLaunch = ThreadLaunch.layer.pipe(
+    Layer.provideMerge(layerFiles),
     Layer.provide(
       Layer.mergeAll(
         layerExternalServices,
@@ -347,8 +358,9 @@ it.effect(
       createdAt: project.createdAt,
       completedAt: null,
     };
+    const savedPrompts = [task];
     const harness = makeHarness({
-      savedPrompts: [task],
+      savedPrompts,
       updateProject: (input) => {
         updates.push(input);
         return Effect.succeed({ ...project, savedPrompts: [task] });
@@ -357,6 +369,29 @@ it.effect(
     return Effect.gen(function* () {
       const launches = yield* ThreadLaunch.ThreadLaunchService;
       const threads = yield* ThreadManagement.ThreadManagementService;
+      const fs = yield* FileSystem.FileSystem;
+      const config = yield* ServerConfig.ServerConfig;
+      const attachment: ChatAttachment = {
+        type: "file",
+        id: ChatAttachmentId.make(
+          createTaskAttachmentId(taskAttachmentOwner(projectId, task.id), "upload", ".bin")!,
+        ),
+        name: "evidence.bin",
+        mimeType: "application/octet-stream",
+        sizeBytes: 4,
+      };
+      const sourcePath = resolveAttachmentPath({
+        attachmentsDir: config.attachmentsDir,
+        attachment,
+      })!;
+      yield* fs.writeFileString(sourcePath, "data");
+      savedPrompts[0] = {
+        ...task,
+        attachments: [
+          { kind: "stored", attachment },
+          { kind: "reference", path: "/repo/docs", temporary: false, isDirectory: true },
+        ],
+      };
       const request = {
         ...launchInput({
           command: "task:send",
@@ -368,7 +403,18 @@ it.effect(
       };
       const launched = yield* launches.launch(request);
       const wire = yield* encodeThreadProjection(launched.projection);
-      assert.equal(wire.messages[0]?.text, task.text);
+      assert.equal(wire.messages[0]?.text, `${task.text}\n\n[docs](/repo/docs)`);
+      assert.strictEqual(wire.messages[0]?.attachments.length, 1);
+      const sent = wire.messages[0]!.attachments[0]!;
+      assert.notStrictEqual(sent.id, attachment.id);
+      yield* fs.remove(sourcePath);
+      assert.strictEqual(
+        yield* fs.readFileString(
+          resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment: sent })!,
+        ),
+        "data",
+      );
+      yield* fs.writeFileString(sourcePath, "data");
       assert.deepEqual(wire.thread.modelSelection, project.defaultModelSelection);
       assert.equal(wire.thread.title, "Login");
       assert.deepEqual(updates[0]?.savedPromptThread, { id: task.id, threadId: launched.threadId });

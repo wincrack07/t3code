@@ -509,7 +509,20 @@ function parseEnvironmentRpcKey<Input>(key: string): {
   };
 }
 
-function runInEnvironment<A, E, R>(
+export const withCommandPermissions =
+  <R, ER>(
+    runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, ER>,
+    registry: AtomRegistry.AtomRegistry,
+  ) =>
+  <A, E, R2>(effect: Effect.Effect<A, E, R2>) =>
+    effect.pipe(
+      Effect.provideService(RpcPermissionGuard, {
+        authorize: (id, method, payload) =>
+          createCommandPermissions(runtime, method).authorize(registry, id, payload),
+      }),
+    );
+
+export function runInEnvironment<A, E, R>(
   environmentId: EnvironmentIdType,
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<

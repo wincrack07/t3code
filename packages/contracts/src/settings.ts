@@ -4,6 +4,7 @@ import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPo
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
+  AuthFilesystemReadScope,
   AuthEnvironmentMaintainScope,
   AuthSettingsWriteScope,
   AuthProvidersManageScope,
@@ -2075,12 +2076,17 @@ export function requiredScopesForServerSettingsPatch(
 export function requiredScopesForProjectMutation(
   mutation: ProjectMutation,
 ): ReadonlyArray<AuthEnvironmentScope> {
-  if (mutation.type === "project.delete" || mutation.scripts === undefined) {
-    return [AuthOrchestrationOperateScope];
-  }
+  const action = mutation.type === "project.update" ? mutation.savedPrompt : undefined;
+  const readsPath =
+    action !== undefined &&
+    (action.kind === "attach" || action.kind === "add") &&
+    action.attachments?.some((item) => item.kind === "path");
   return [
     AuthOrchestrationOperateScope,
-    ...requiredScopesForServerSettingsPatch({ defaultProjectScripts: mutation.scripts }),
+    ...(readsPath ? [AuthFilesystemReadScope] : []),
+    ...(mutation.type !== "project.delete" && mutation.scripts !== undefined
+      ? requiredScopesForServerSettingsPatch({ defaultProjectScripts: mutation.scripts })
+      : []),
   ];
 }
 

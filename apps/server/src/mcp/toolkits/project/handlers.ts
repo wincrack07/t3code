@@ -37,6 +37,8 @@ const isAboveCeilingError = Schema.is(OrchestratorRuntimeModeAboveCeilingError);
 
 function projectFailure(error: Project.ProjectServiceError) {
   if (error._tag === "ProjectOperationError") return unavailable();
+  if (error._tag === "TaskAttachmentError")
+    return new OrchestratorMcpFailure({ code: "invalid_request", message: error.message });
   const message =
     error._tag === "ProjectInvalidError"
       ? error.detail
@@ -124,7 +126,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         const threadId = ThreadId.make(commandId);
         const messageId = MessageId.make(commandId);
         const attachments = input.attachments ?? [];
-        if (attachments.some((attachment) => !Claims.attachmentIsPendingUpload(attachment)))
+        if (attachments.some((attachment) => !Claims.attachmentNeedsClaim(attachment)))
           return yield* new OrchestratorMcpFailure({
             code: "invalid_request",
             message: "A new thread accepts only pending attachment uploads.",

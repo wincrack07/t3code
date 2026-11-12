@@ -375,6 +375,7 @@ it.live.each(["thread", "shell"] as const)(
           listShells: () => Effect.succeed([]),
         } as unknown as ProjectStore.ProjectStoreV2["Service"]),
         Effect.provideService(ProjectService.ProjectService, {
+          taskAttachments: () => Effect.die("unused"),
           getShell: () => Effect.succeedSome(project),
         } as unknown as ProjectService.ProjectService["Service"]),
         Effect.provideService(ProjectEnrichment.ProjectEnrichmentService, {
@@ -530,6 +531,7 @@ it.effect("shell groups read distinct threads once and keep each event's own seq
           listShells: () => Effect.succeed([]),
         } as unknown as ProjectStore.ProjectStoreV2["Service"]),
         Effect.provideService(ProjectService.ProjectService, {
+          taskAttachments: () => Effect.die("unused"),
           getShell: () => Effect.succeedSome(project),
         } as unknown as ProjectService.ProjectService["Service"]),
         Effect.provideServiceEffect(
@@ -750,6 +752,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
           listShells: () => Effect.succeed([]),
         } as unknown as ProjectStore.ProjectStoreV2["Service"]),
         Effect.provideService(ProjectService.ProjectService, {
+          taskAttachments: () => Effect.die("unused"),
           getShell: () => Effect.succeedNone,
         } as unknown as ProjectService.ProjectService["Service"]),
         Effect.provideServiceEffect(

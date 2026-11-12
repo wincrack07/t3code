@@ -3751,6 +3751,7 @@ export type OrchestrationV2ArchivedShellSnapshot = typeof OrchestrationV2Archive
 
 export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   savedPromptId: Schema.optional(TrimmedNonEmptyString),
+  useProjectDefaultModel: Schema.optional(Schema.Boolean),
   commandId: CommandId,
   creationSource: Schema.optional(OrchestrationV2CreationSource),
   threadId: Schema.optional(ThreadId),

@@ -1,5 +1,8 @@
 import {
   SavedPromptAction,
+  ProjectTaskAttachment,
+  getProviderAttachmentLimitError,
+  taskAttachmentKey,
   type ThreadId,
   type CommandId,
   type EventId,
@@ -29,6 +32,7 @@ export interface ProjectCreateCommand {
 
 export interface ProjectMetaUpdateCommand {
   readonly savedPrompt?: SavedPromptAction;
+  readonly savedPromptAttachments?: ReadonlyArray<ProjectTaskAttachment>;
   readonly savedPromptThread?: { readonly id: string; readonly threadId: ThreadId };
   readonly type: "project.meta.update";
   readonly commandId: CommandId;
@@ -110,6 +114,9 @@ export interface ProjectCommandState {
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 const isSavedPromptAction = Schema.is(SavedPromptAction);
+const isTaskAttachments = Schema.is(
+  Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8)),
+);
 
 /** Read state and commit the planned event under the project lock. */
 export function planProjectCommand(input: {
@@ -203,27 +210,109 @@ export function planProjectCommand(input: {
           (item) => item.id === ("id" in action ? action.id : undefined),
         );
         if (action.kind === "add") {
-          if (exists) return invariant("A saved prompt with this id already exists.");
-          if (savedPrompts.length >= 100)
+          const deleted = savedPrompts.find(
+            (item) => item.id === action.id && item.deletedAt !== undefined,
+          );
+          if (exists && deleted === undefined)
+            return invariant("A saved prompt with this id already exists.");
+          if (savedPrompts.filter((item) => item.deletedAt === undefined).length >= 100)
             return invariant("Clear saved prompts before adding more (100 maximum).");
-          savedPrompts = [
-            {
-              id: action.id,
-              text: action.text,
-              title: action.title ?? null,
-              status: action.status ?? "open",
-              createdAt: occurredAt,
-              completedAt: action.status === "done" ? occurredAt : null,
-            },
-            ...savedPrompts,
-          ];
+          if (deleted !== undefined) {
+            const { deletedAt: _deletedAt, ...restored } = deleted;
+            savedPrompts = savedPrompts.map((item) => (item.id === action.id ? restored : item));
+          } else
+            savedPrompts = [
+              {
+                id: action.id,
+                text: action.text,
+                title: action.title ?? null,
+                status: action.status ?? "open",
+                createdAt: occurredAt,
+                completedAt: action.status === "done" ? occurredAt : null,
+              },
+              ...savedPrompts,
+            ];
         } else if (action.kind === "clear-done") {
-          savedPrompts = savedPrompts.filter((item) => item.completedAt === null);
+          const completed = savedPrompts.filter(
+            (item) => item.deletedAt === undefined && item.completedAt !== null,
+          );
+          savedPrompts = [
+            ...completed.map((item) => ({ ...item, deletedAt: occurredAt })),
+            ...savedPrompts.filter((item) => !completed.includes(item)),
+          ];
+        } else if (action.kind === "attach") {
+          if (!exists || command.savedPromptAttachments === undefined)
+            return invariant("Prepare attachment copies before attaching them.");
+        } else if (action.kind === "remove-attachment") {
+          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
+            return invariant("The saved prompt no longer exists.");
+          savedPrompts = savedPrompts.map((item) =>
+            item.id !== action.id
+              ? item
+              : {
+                  ...item,
+                  attachments: (item.attachments ?? []).filter(
+                    (attachment) => taskAttachmentKey(attachment) !== action.key,
+                  ),
+                },
+          );
+        } else if (action.kind === "restore") {
+          if (!exists) return invariant("The saved prompt can no longer be restored.");
+          savedPrompts = savedPrompts.map((item) => {
+            if (item.id !== action.id) return item;
+            const { deletedAt: _deletedAt, ...restored } = item;
+            return restored;
+          });
+        } else if (action.kind === "link") {
+          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
+            return invariant("The saved prompt no longer exists.");
+          savedPrompts = savedPrompts.map((item) =>
+            item.id !== action.id
+              ? item
+              : {
+                  ...item,
+                  status: "in-progress" as const,
+                  completedAt: null,
+                  latestThreadId: action.threadId,
+                  latestThreadEnvironmentId: action.environmentId,
+                  threadLinks: [
+                    {
+                      threadId: action.threadId,
+                      ...(action.environmentId === undefined
+                        ? {}
+                        : { environmentId: action.environmentId }),
+                    },
+                    ...(
+                      item.threadLinks ??
+                      (item.latestThreadId === undefined
+                        ? []
+                        : [
+                            {
+                              threadId: item.latestThreadId,
+                              ...(item.latestThreadEnvironmentId === undefined
+                                ? {}
+                                : { environmentId: item.latestThreadEnvironmentId }),
+                            },
+                          ])
+                    ).filter(
+                      (link) =>
+                        link.threadId !== action.threadId ||
+                        link.environmentId !== action.environmentId,
+                    ),
+                  ].slice(0, 10),
+                },
+          );
         } else {
-          if (!exists) return invariant("The saved prompt no longer exists.");
+          if (!savedPrompts.some((item) => item.id === action.id && item.deletedAt === undefined))
+            return invariant("The saved prompt no longer exists.");
           savedPrompts =
             action.kind === "delete"
-              ? savedPrompts.filter((item) => item.id !== action.id)
+              ? [
+                  ...savedPrompts
+                    .filter((item) => item.id === action.id)
+                    .map((item) => ({ ...item, deletedAt: occurredAt })),
+                  ...savedPrompts.filter((item) => item.id !== action.id),
+                ]
               : savedPrompts.map((item) =>
                   item.id !== action.id
                     ? item
@@ -250,6 +339,30 @@ export function planProjectCommand(input: {
                 );
         }
       }
+      if (
+        command.savedPromptAttachments !== undefined &&
+        action !== undefined &&
+        (action.kind === "add" || action.kind === "attach")
+      ) {
+        const task = savedPrompts.find(
+          (item) => item.id === action.id && item.deletedAt === undefined,
+        );
+        if (!task) return invariant("The saved prompt no longer exists.");
+        const attachments = [...(task.attachments ?? []), ...command.savedPromptAttachments];
+        const unique = [
+          ...new Map(attachments.map((item) => [taskAttachmentKey(item), item])).values(),
+        ];
+        if (
+          !isTaskAttachments(unique) ||
+          getProviderAttachmentLimitError(
+            unique.flatMap((item) => (item.kind === "stored" ? [item.attachment] : [])),
+          )
+        )
+          return invariant("Task attachment limits exceeded (8 attachments maximum).");
+        savedPrompts = savedPrompts.map((item) =>
+          item.id !== action.id ? item : { ...item, attachments: unique },
+        );
+      }
       if (command.savedPromptThread !== undefined) {
         const link = command.savedPromptThread;
         if (!savedPrompts.some((item) => item.id === link.id))
@@ -261,13 +374,31 @@ export function planProjectCommand(input: {
                 status: "in-progress" as const,
                 completedAt: null,
                 latestThreadId: link.threadId,
+                latestThreadEnvironmentId: undefined,
+                threadLinks: [
+                  { threadId: link.threadId },
+                  ...(
+                    item.threadLinks ??
+                    (item.latestThreadId === undefined ? [] : [{ threadId: item.latestThreadId }])
+                  ).filter((previous) => previous.threadId !== link.threadId),
+                ].slice(0, 10),
               }
             : item,
         );
       }
+      const activePrompts = savedPrompts.filter((item) => item.deletedAt === undefined);
+      if (activePrompts.length > 100)
+        return invariant("Clear saved prompts before restoring more (100 maximum).");
+      let trashSize = 0;
+      let trashCount = 0;
+      savedPrompts = savedPrompts.filter((item) => {
+        if (item.deletedAt === undefined) return true;
+        trashSize += item.text.length;
+        return ++trashCount <= 100 && trashSize <= 200000;
+      });
       if (
         action !== undefined &&
-        savedPrompts.reduce((size, item) => size + item.text.length, 0) > 200000
+        activePrompts.reduce((size, item) => size + item.text.length, 0) > 200000
       ) {
         return invariant("Saved prompts exceed the project text limit. Delete some prompts first.");
       }

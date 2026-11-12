@@ -1,3 +1,8 @@
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import { resolveAttachmentPath } from "../attachmentStore.ts";
+import { scanTaskAttachmentCopies } from "./taskAttachmentCleanup.ts";
+import { DEFAULT_MACHINE_CLEANUP_SETTINGS } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Context from "effect/Context";
 import * as Queue from "effect/Queue";
@@ -7,6 +12,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,
+  EnvironmentId,
   type Project,
   ProjectId,
   ProviderInstanceId,
@@ -109,7 +115,7 @@ const layerTestFor = (
     Layer.provideMerge(projectMetadataLayer),
     Layer.provideMerge(SqlitePersistence.layerMemory),
     Layer.provideMerge(ServerSettings.layerTest()),
-    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "project-service-test-" })),
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "project-service-test-" })),
     Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     Layer.provideMerge(layerEnrichmentCompletions),
   );
@@ -290,6 +296,159 @@ it.layer(layerTest)("ProjectService", (it) => {
         linked.savedPrompts?.find((item) => item.id === "one")?.latestThreadId,
         "task-thread",
       );
+      const remote = yield* service.update({
+        commandId: CommandId.make("saved:remote"),
+        projectId,
+        savedPrompt: {
+          kind: "link",
+          id: "one",
+          threadId: ThreadId.make("remote-thread"),
+          environmentId: EnvironmentId.make("remote"),
+        },
+      });
+      assert.deepStrictEqual(remote.savedPrompts?.find((item) => item.id === "one")?.threadLinks, [
+        { threadId: ThreadId.make("remote-thread"), environmentId: EnvironmentId.make("remote") },
+        { threadId: ThreadId.make("task-thread") },
+      ]);
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      yield* fs.makeDirectory(path.join(process.cwd(), ".t3"), { recursive: true });
+      const fixture = yield* fs.makeTempDirectoryScoped({
+        directory: path.join(process.cwd(), ".t3"),
+        prefix: "task-reference-",
+      });
+      const reference = path.join(fixture, "reference.txt");
+      yield* fs.writeFileString(reference, "Reference");
+      const temporary = yield* fs.makeTempDirectoryScoped({ prefix: "task-temporary-" });
+      const temporaryFile = path.join(temporary, "body.txt");
+      yield* fs.writeFileString(temporaryFile, "Stored body");
+      const attach = {
+        commandId: CommandId.make("saved:attach"),
+        projectId,
+        savedPrompt: {
+          kind: "attach" as const,
+          id: "one",
+          attachments: [
+            { kind: "path" as const, path: reference },
+            { kind: "path" as const, path: temporaryFile },
+            { kind: "path" as const, path: temporary },
+            {
+              kind: "upload" as const,
+              attachment: {
+                type: "image" as const,
+                name: "screen.png",
+                mimeType: "image/png",
+                sizeBytes: 5,
+                dataUrl: "data:image/png;base64,aW1hZ2U=",
+              },
+            },
+          ],
+        },
+      };
+      const attached = yield* service.update(attach);
+      const details = (yield* service.taskAttachments({ projectId, taskId: "one" })).attachments;
+      assert.strictEqual(details.length, 4);
+      assert.deepStrictEqual(details[0]?.attachment, {
+        kind: "reference",
+        path: reference,
+        temporary: false,
+        sizeBytes: 9,
+        isDirectory: false,
+      });
+      assert.deepStrictEqual(details[2]?.attachment, {
+        kind: "reference",
+        path: temporary,
+        temporary: true,
+        sizeBytes: 0,
+        isDirectory: true,
+      });
+      const copied = details[1]?.attachment;
+      assert.isTrue(copied?.kind === "stored");
+      if (copied?.kind !== "stored") return assert.fail("expected a stored copy");
+      yield* fs.remove(temporaryFile);
+      assert.strictEqual(
+        yield* fs.readFileString(
+          resolveAttachmentPath({
+            attachmentsDir: config.attachmentsDir,
+            attachment: copied.attachment,
+          })!,
+        ),
+        "Stored body",
+      );
+      assert.deepStrictEqual((yield* service.update(attach)).savedPrompts, attached.savedPrompts);
+      const absent = yield* service
+        .update({
+          ...attach,
+          commandId: CommandId.make("saved:missing-file"),
+          savedPrompt: {
+            kind: "attach",
+            id: "one",
+            attachments: [{ kind: "path", path: temporaryFile }],
+          },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(absent._tag, "TaskAttachmentError");
+      if (absent._tag === "TaskAttachmentError")
+        assert.strictEqual(absent.reason, "source-missing");
+      assert.strictEqual(
+        (yield* service.taskAttachments({ projectId, taskId: "one" })).attachments.length,
+        4,
+      );
+      yield* fs.remove(reference);
+      assert.strictEqual(
+        (yield* service.taskAttachments({ projectId, taskId: "one" })).attachments[0]?.missing,
+        true,
+      );
+      const usage = yield* Effect.promise(() =>
+        scanTaskAttachmentCopies(
+          config,
+          [{ title: "Demo", deletedAt: null, savedPrompts: attached.savedPrompts }],
+          DEFAULT_MACHINE_CLEANUP_SETTINGS,
+        ),
+      );
+      assert.deepStrictEqual(usage.usage.open, { count: 2, bytes: 16 });
+      const oversized = path.join(temporary, "oversized.bin");
+      yield* fs.writeFileString(oversized, "x");
+      yield* fs.truncate(oversized, 50 * 1024 * 1024 + 1);
+      const tooBig = yield* service
+        .update({
+          ...attach,
+          commandId: CommandId.make("saved:too-big"),
+          savedPrompt: {
+            kind: "attach",
+            id: "one",
+            attachments: [{ kind: "path", path: oversized }],
+          },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(tooBig._tag, "TaskAttachmentError");
+      if (tooBig._tag === "TaskAttachmentError") assert.strictEqual(tooBig.reason, "limit");
+      const morePaths = Array.from({ length: 5 }, (_, index) =>
+        path.join(fixture, `folder-${index}`),
+      );
+      yield* Effect.forEach(morePaths, (path) => fs.makeDirectory(path));
+      const tooMany = yield* service
+        .update({
+          ...attach,
+          commandId: CommandId.make("saved:too-many"),
+          savedPrompt: {
+            kind: "attach",
+            id: "one",
+            attachments: morePaths.map((path) => ({ kind: "path" as const, path })),
+          },
+        })
+        .pipe(Effect.flip);
+      assert.strictEqual(tooMany._tag, "ProjectInvalidError");
+      yield* service.update({
+        ...attach,
+        commandId: CommandId.make("saved:remove-image"),
+        savedPrompt: { kind: "remove-attachment", id: "one", key: details[3]!.key },
+      });
+      assert.strictEqual(
+        (yield* service.taskAttachments({ projectId, taskId: "one" })).attachments.length,
+        3,
+      );
       const complete = yield* service.update({
         commandId: CommandId.make("saved:complete"),
         projectId,
@@ -297,6 +456,20 @@ it.layer(layerTest)("ProjectService", (it) => {
       });
       assert.isNotNull(complete.savedPrompts?.find((item) => item.id === "one")?.completedAt);
       assert.strictEqual(complete.savedPrompts?.find((item) => item.id === "one")?.status, "done");
+      yield* service.update({
+        commandId: CommandId.make("saved:soft-delete"),
+        projectId,
+        savedPrompt: { kind: "delete", id: "one" },
+      });
+      const restored = yield* service.update({
+        commandId: CommandId.make("saved:restore"),
+        projectId,
+        savedPrompt: { kind: "restore", id: "one" },
+      });
+      assert.deepStrictEqual(
+        restored.savedPrompts?.find((item) => item.id === "one"),
+        complete.savedPrompts?.find((item) => item.id === "one"),
+      );
       const reopened = yield* service.update({
         commandId: CommandId.make("saved:reopen"),
         projectId,
@@ -324,6 +497,24 @@ it.layer(layerTest)("ProjectService", (it) => {
         projectId,
         savedPrompt: { kind: "delete", id: "two" },
       });
+      const legacyUndo = yield* service.update({
+        commandId: CommandId.make("saved:legacy-undo"),
+        projectId,
+        savedPrompt: {
+          kind: "add",
+          id: "two",
+          text: "Caller timestamps and text are not authoritative",
+        },
+      });
+      assert.deepStrictEqual(
+        legacyUndo.savedPrompts?.find((item) => item.id === "two"),
+        second.savedPrompts?.find((item) => item.id === "two"),
+      );
+      yield* service.update({
+        commandId: CommandId.make("saved:delete-again"),
+        projectId,
+        savedPrompt: { kind: "delete", id: "two" },
+      });
       const missing = yield* service
         .update({
           commandId: CommandId.make("saved:missing"),
@@ -343,10 +534,19 @@ it.layer(layerTest)("ProjectService", (it) => {
         savedPrompt: { kind: "clear-done" },
       });
       assert.deepStrictEqual(cleared.savedPrompts, []);
+      const released = yield* Effect.promise(() =>
+        scanTaskAttachmentCopies(
+          config,
+          [{ title: "Demo", deletedAt: null, savedPrompts: cleared.savedPrompts }],
+          DEFAULT_MACHINE_CLEANUP_SETTINGS,
+        ),
+      );
+      assert.deepStrictEqual(released.usage.orphaned, { count: 2, bytes: 16 });
+
       for (const id of [projectId, otherId]) {
         yield* service.delete({ commandId: CommandId.make(`cleanup:${id}`), projectId: id });
       }
-    }),
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
   it.effect("creates, updates, resolves, snapshots, and soft-deletes projects", () =>

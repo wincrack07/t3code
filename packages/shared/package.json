@@ -554,6 +554,10 @@
     "./finderIntegration": {
       "types": "./src/finderIntegration.ts",
       "import": "./src/finderIntegration.ts"
+    },
+    "./savedTasks": {
+      "types": "./src/savedTasks.ts",
+      "default": "./src/savedTasks.ts"
     }
   },
   "scripts": {

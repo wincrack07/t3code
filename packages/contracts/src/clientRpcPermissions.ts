@@ -1,4 +1,9 @@
-import { ServerSettingsPatch, requiredScopesForServerSettingsPatch } from "./settings.ts";
+import {
+  ServerSettingsPatch,
+  requiredScopesForServerSettingsPatch,
+  requiredScopesForProjectMutation,
+} from "./settings.ts";
+import { ProjectMutation } from "./project.ts";
 import * as Schema from "effect/Schema";
 import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./git.ts";
 import {
@@ -19,6 +24,7 @@ import { WS_METHODS } from "./rpc.ts";
 /** Incremental client enforcement; the server still authorizes every request. */
 export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectsTaskAttachments]: AuthOrchestrationReadScope,
   [WS_METHODS.keepAwakeAuthorize]: AuthSettingsWriteScope,
   [WS_METHODS.keepAwakeChange]: AuthSettingsWriteScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
@@ -107,10 +113,16 @@ const decodeSettingsPatch = Schema.decodeUnknownSync(Schema.Struct({ patch: Serv
 const decodePrepareThread = Schema.decodeUnknownSync(GitPreparePullRequestThreadInput);
 const decodeStackedAction = Schema.decodeUnknownSync(GitRunStackedActionInput);
 
+const decodeProjectMutation = Schema.decodeUnknownOption(ProjectMutation);
+
 export function clientRpcRequiredScopes(
   method: string,
   input: unknown,
 ): readonly AuthEnvironmentScope[] {
+  if (method === WS_METHODS.projectsMutate && input !== undefined) {
+    const mutation = decodeProjectMutation(input);
+    if (mutation._tag === "Some") return requiredScopesForProjectMutation(mutation.value);
+  }
   if (method === WS_METHODS.serverUpdateSettings && input !== undefined) {
     const { patch } = decodeSettingsPatch(input);
     if (patch.machineCleanup !== undefined) return requiredScopesForServerSettingsPatch(patch);

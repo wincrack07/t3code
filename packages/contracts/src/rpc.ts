@@ -133,7 +133,7 @@ import {
   OrchestrationGetTurnDiffError,
 } from "./checkpointDiff.ts";
 import { PromptCompletionInput, PromptCompletionResult } from "./promptCompletion.ts";
-import { PromptPolishInput, PromptPolishResult } from "./promptPolish.ts";
+import { PromptPolishLimitError, PromptPolishInput, PromptPolishResult } from "./promptPolish.ts";
 import {
   ProjectGroupSuggestionInput,
   ProjectGroupSuggestionResult,
@@ -268,6 +268,9 @@ import {
   ProjectListIgnoredFilesInput,
   ProjectListIgnoredFilesResult,
   ProjectReadFileError,
+  TaskAttachmentsInput,
+  TaskAttachmentListResult,
+  TaskAttachmentError,
   ProjectReadFileInput,
   ProjectReadFileResult,
   ProjectSearchContentsError,
@@ -451,6 +454,7 @@ export const WS_METHODS = {
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
   projectsMutate: "projects.mutate",
+  projectsTaskAttachments: "projects.taskAttachments",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
@@ -1094,7 +1098,7 @@ const WsServerDecideRpc = Rpc.make(WS_METHODS.serverDecide, {
 const WsServerPolishPromptRpc = Rpc.make(WS_METHODS.serverPolishPrompt, {
   payload: PromptPolishInput,
   success: PromptPolishResult,
-  error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+  error: Schema.Union([TextGenerationError, PromptPolishLimitError, EnvironmentAuthorizationError]),
 });
 
 const WsServerSuggestProjectGroupsRpc = Rpc.make(WS_METHODS.serverSuggestProjectGroups, {
@@ -1520,10 +1524,16 @@ const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectsTaskAttachmentsRpc = Rpc.make(WS_METHODS.projectsTaskAttachments, {
+  payload: TaskAttachmentsInput,
+  success: TaskAttachmentListResult,
+  error: Schema.Union([TaskAttachmentError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsMutateRpc = Rpc.make(WS_METHODS.projectsMutate, {
   payload: ProjectMutation,
   success: Project,
-  error: Schema.Union([ProjectMutationError, EnvironmentAuthorizationError]),
+  error: Schema.Union([ProjectMutationError, TaskAttachmentError, EnvironmentAuthorizationError]),
 });
 
 const WsProjectsEnsureScratchRpc = Rpc.make(WS_METHODS.projectsEnsureScratch, {
@@ -2401,6 +2411,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateFromThreadRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
+  WsProjectsTaskAttachmentsRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsFilesystemGetMetadataRpc,

@@ -1,5 +1,7 @@
 import {
   DEFAULT_PROMPT_POLISH_SETTINGS,
+  PROMPT_POLISH_MAX_LENGTH,
+  PromptPolishLimitError,
   isProviderAvailable,
   isProviderTextGenerationCapable,
   resolveProjectProviderInstanceEnabled,
@@ -24,11 +26,12 @@ export class PromptPolish extends Context.Service<
   {
     readonly polish: (
       input: PromptPolishInput,
-    ) => Effect.Effect<PromptPolishResult, TextGenerationError>;
+    ) => Effect.Effect<PromptPolishResult, TextGenerationError | PromptPolishLimitError>;
   }
 >()("t3/promptPolish/PromptPolish") {}
 
 const isTextGenerationError = Schema.is(TextGenerationError);
+const isPromptPolishLimitError = Schema.is(PromptPolishLimitError);
 
 export function buildPromptPolishPrompt(
   draft: string,
@@ -54,6 +57,11 @@ const make = Effect.gen(function* () {
   return PromptPolish.of({
     polish: Effect.fn("PromptPolish.polish")(
       function* (input) {
+        if (input.prompt.length > PROMPT_POLISH_MAX_LENGTH)
+          return yield* new PromptPolishLimitError({
+            length: input.prompt.length,
+            maxLength: PROMPT_POLISH_MAX_LENGTH,
+          });
         if (input.prompt.trim().length === 0) return { prompt: input.prompt };
         const settings = resolveProjectSettings(
           yield* settingsService.getSettings,
@@ -95,7 +103,7 @@ const make = Effect.gen(function* () {
       },
       Effect.scoped,
       Effect.mapError((cause) =>
-        isTextGenerationError(cause)
+        isTextGenerationError(cause) || isPromptPolishLimitError(cause)
           ? cause
           : new TextGenerationError({
               operation: "polishPrompt",

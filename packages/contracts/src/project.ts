@@ -1,10 +1,11 @@
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
-import { ChatAttachment } from "./chatAttachment.ts";
+import { ChatAttachment, UploadChatAttachment } from "./chatAttachment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import {
   CommandId,
+  EnvironmentId,
   ForwardCompatibleUnion,
   isUnknownUnionMember,
   IsoDateTime,
@@ -160,10 +161,63 @@ export const ProjectTaskAttachment = Schema.Union([
     kind: Schema.Literal("reference"),
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
     temporary: Schema.Boolean,
+    sizeBytes: Schema.optional(NonNegativeInt),
+    isDirectory: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({ kind: Schema.Literal("stored"), attachment: ChatAttachment }),
 ]);
 export type ProjectTaskAttachment = typeof ProjectTaskAttachment.Type;
+export const taskAttachmentKey = (item: ProjectTaskAttachment) =>
+  item.kind === "reference" ? item.path : item.attachment.id;
+export const TaskAttachmentInput = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("path"),
+    path: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("upload"),
+    attachment: Schema.Union([UploadChatAttachment, ChatAttachment]),
+  }),
+]);
+export type TaskAttachmentInput = typeof TaskAttachmentInput.Type;
+export const TaskAttachmentsInput = Schema.Struct({
+  includePrompt: Schema.optional(Schema.Boolean),
+  projectId: ProjectId,
+  taskId: TrimmedNonEmptyString,
+});
+export type TaskAttachmentsInput = typeof TaskAttachmentsInput.Type;
+export const TaskAttachmentMetadata = Schema.Struct({
+  warning: Schema.NullOr(Schema.String),
+  key: Schema.String,
+  attachment: ProjectTaskAttachment,
+  missing: Schema.Boolean,
+  sizeBytes: NonNegativeInt,
+  isDirectory: Schema.Boolean,
+});
+export type TaskAttachmentMetadata = typeof TaskAttachmentMetadata.Type;
+export class TaskAttachmentError extends Schema.TaggedError<TaskAttachmentError>()(
+  "TaskAttachmentError",
+  {
+    reason: Schema.Literals([
+      "invalid-path",
+      "source-missing",
+      "invalid-size",
+      "limit",
+      "storage",
+      "task-missing",
+    ]),
+    message: Schema.String,
+  },
+) {}
+export class TaskAttachmentsHomeOnlyError extends Schema.TaggedError<TaskAttachmentsHomeOnlyError>()(
+  "TaskAttachmentsHomeOnlyError",
+  { homeEnvironmentId: EnvironmentId },
+) {
+  override get message() {
+    return `Attachments must be sent from ${this.homeEnvironmentId}.`;
+  }
+}
+const TaskAttachmentInputs = Schema.Array(TaskAttachmentInput).check(Schema.isMaxLength(8));
 
 export const ProjectSavedPrompt = Schema.Struct({
   id: TrimmedNonEmptyString,
@@ -172,16 +226,32 @@ export const ProjectSavedPrompt = Schema.Struct({
   completedAt: Schema.NullOr(IsoDateTime),
   title: Schema.optional(SavedPromptTitle),
   status: Schema.optional(SavedPromptStatus),
+  deletedAt: Schema.optional(IsoDateTime),
   latestThreadId: Schema.optional(ThreadId),
+  latestThreadEnvironmentId: Schema.optional(EnvironmentId),
+  threadLinks: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        threadId: ThreadId,
+        environmentId: Schema.optional(EnvironmentId),
+      }),
+    ).check(Schema.isMaxLength(10)),
+  ),
   attachments: Schema.optional(Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8))),
 });
 export type ProjectSavedPrompt = typeof ProjectSavedPrompt.Type;
+export const TaskAttachmentListResult = Schema.Struct({
+  task: Schema.optional(ProjectSavedPrompt),
+  attachments: Schema.Array(TaskAttachmentMetadata),
+});
+export type TaskAttachmentListResult = typeof TaskAttachmentListResult.Type;
 
 export const SavedPromptAction = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("add"),
     id: TrimmedNonEmptyString,
     text: ProjectSavedPrompt.fields.text,
+    attachments: Schema.optional(TaskAttachmentInputs),
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
   }),
@@ -198,6 +268,23 @@ export const SavedPromptAction = Schema.Union([
     done: Schema.Boolean,
   }),
   Schema.Struct({ kind: Schema.Literal("delete"), id: TrimmedNonEmptyString }),
+  Schema.Struct({ kind: Schema.Literal("restore"), id: TrimmedNonEmptyString }),
+  Schema.Struct({
+    kind: Schema.Literal("link"),
+    id: TrimmedNonEmptyString,
+    threadId: ThreadId,
+    environmentId: Schema.optional(EnvironmentId),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("attach"),
+    id: TrimmedNonEmptyString,
+    attachments: TaskAttachmentInputs,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("remove-attachment"),
+    id: TrimmedNonEmptyString,
+    key: TrimmedNonEmptyString,
+  }),
   Schema.Struct({ kind: Schema.Literal("clear-done") }),
 ]);
 export type SavedPromptAction = typeof SavedPromptAction.Type;

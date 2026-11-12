@@ -3,10 +3,17 @@ import * as Schema from "effect/Schema";
 import { ModelSelection } from "./modelSelection.ts";
 import { ProjectId } from "./baseSchemas.ts";
 
-const MAX_PROMPT_POLISH_LENGTH = 20_000;
+export const PROMPT_POLISH_MAX_LENGTH = 20_000;
+export class PromptPolishLimitError extends Schema.TaggedError<PromptPolishLimitError>()(
+  "PromptPolishLimitError",
+  {
+    length: Schema.Number,
+    maxLength: Schema.Number,
+  },
+) {}
 
 export const PromptPolishInput = Schema.Struct({
-  prompt: Schema.String.check(Schema.isMaxLength(MAX_PROMPT_POLISH_LENGTH)),
+  prompt: Schema.String.check(Schema.isMaxLength(120_000)),
   /** Selects the project's text generation model override, when it has one. */
   projectId: Schema.optional(ProjectId),
 });
