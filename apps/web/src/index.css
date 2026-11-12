@@ -3160,3 +3160,20 @@ html:not([data-motion="reduce"])
 [data-app-sidebar] [data-sidebar="titlebar"] {
   background-color: var(--sidebar);
 }
+
+[data-sidebar-row-colour] {
+  --sidebar-row-wash: color-mix(
+    in oklab,
+    var(--sidebar-neutral, var(--sidebar)) 88%,
+    var(--sidebar-row-colour) 12%
+  );
+  border-inline-start: 2px solid var(--sidebar-row-colour);
+}
+
+[data-sidebar-row-colour]:not([data-tree-drop]) {
+  background-color: var(--sidebar-row-wash);
+}
+
+[data-sidebar-colour-block] > ul > [data-sidebar-group-header] {
+  border-inline-start: 0;
+}

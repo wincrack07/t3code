@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { SidebarColorMarker, SidebarColorSubmenu } from "./SidebarColorPicker";
+import { SidebarColorSubmenu } from "./SidebarColorPicker";
 import { updateClientSettings, getClientSettings } from "../../hooks/useSettings";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useDraggable } from "@dnd-kit/core";
 import { ChevronDownIcon, FolderIcon, MoreHorizontalIcon } from "lucide-react";
-import type { ProjectFolder } from "../../projectFolders";
+import { projectFolderColor, type ProjectFolder } from "../../projectFolders";
+import { sidebarRowColorStyle } from "../../sidebarColors";
 import { summarizeSidebarFolder } from "../Sidebar.logic";
 import { Button } from "../ui/button";
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "../ui/menu";
@@ -44,6 +45,7 @@ export function ProjectGroupHeader({
   onMove: (parentId: string | null) => void;
   onDelete: () => void;
 }) {
+  const rowColor = projectFolderColor(folders, folder.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const summary = summarizeSidebarFolder([{ hiddenThreads: threads }]);
   const dot = collapsed ? summary.activity : null;
@@ -54,7 +56,9 @@ export function ProjectGroupHeader({
       ref={setNodeRef}
       data-tree-row={sidebarTreeRow(item)}
       data-tree-expanded={!collapsed}
-      style={sidebarTreeIndent(depth)}
+      data-sidebar-group-header=""
+      data-sidebar-row-colour={rowColor ?? undefined}
+      style={{ ...sidebarTreeIndent(depth), ...sidebarRowColorStyle(rowColor) }}
       className={`mt-2 flex list-none items-center gap-1 ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -71,7 +75,6 @@ export function ProjectGroupHeader({
       >
         <ChevronDownIcon className={collapsed ? "size-3 -rotate-90" : "size-3"} />
         {folder.emoji ? <span>{folder.emoji}</span> : <FolderIcon className="size-4" />}
-        <SidebarColorMarker color={folder.sidebarColor} />
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
         {collapsed ? (
           <>

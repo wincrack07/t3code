@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import "culori/css";
 import { converter } from "culori/fn";
 import { SidebarColor } from "@t3tools/contracts";
@@ -18,6 +19,10 @@ export const SIDEBAR_COLORS = [
   { name: "Violet", value: "#ad7dc5" },
   { name: "Pink", value: "#cc7ca5" },
 ] as const;
+
+export function sidebarRowColorStyle(color: string | null | undefined): CSSProperties | undefined {
+  return color ? ({ "--sidebar-row-colour": color } as CSSProperties) : undefined;
+}
 
 export function resolveSidebarColor(
   project: string | null | undefined,
