@@ -88,6 +88,24 @@ function claudeProviderModels(
   );
 }
 
+function refuselessModels(customModels: ClaudeSettings["customModels"]) {
+  return customModels.map((entry) => ({
+    slug: typeof entry === "string" ? entry : entry.slug,
+    name: typeof entry === "string" ? toTitleCaseWords(entry) : (entry.name ?? entry.slug),
+    isCustom: true,
+    capabilities: createModelCapabilities({
+      optionDescriptors: [
+        {
+          id: "effort",
+          label: "Reasoning",
+          type: "select",
+          options: ["low", "high", "max"].map((id) => ({ id, label: id })),
+        },
+      ],
+    }),
+  }));
+}
+
 const CLAUDE_PRESENTATION = {
   displayName: "Claude",
   showInteractionModeToggle: true,
@@ -626,21 +644,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   const resolvedEnvironment = environment ?? process.env;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
   const refuseless = resolvedEnvironment.ANTHROPIC_BASE_URL === "https://api.refuseless.com";
-  const endpointModels = claudeSettings.customModels.map((entry) => ({
-    slug: typeof entry === "string" ? entry : entry.slug,
-    name: typeof entry === "string" ? toTitleCaseWords(entry) : (entry.name ?? entry.slug),
-    isCustom: true,
-    capabilities: createModelCapabilities({
-      optionDescriptors: [
-        {
-          id: "effort",
-          label: "Reasoning",
-          type: "select",
-          options: ["low", "high", "max"].map((id) => ({ id, label: id })),
-        },
-      ],
-    }),
-  }));
+  const endpointModels = refuselessModels(claudeSettings.customModels);
   const allModels = refuseless
     ? endpointModels
     : claudeProviderModels(
@@ -886,12 +890,16 @@ export const makePendingClaudeProvider = Effect.fn("ClaudeProvider.makePendingCl
   function* (
     claudeSettings: ClaudeSettings,
     modelCatalog: ClaudeModelCatalog = BUNDLED_CLAUDE_MODEL_CATALOG,
+    environment?: NodeJS.ProcessEnv,
   ): Effect.fn.Return<ServerProviderDraft> {
     const checkedAt = yield* nowIso;
-    const models = claudeProviderModels(
-      modelCatalog.models.map((entry) => entry.model),
-      claudeSettings.customModels,
-    );
+    const models =
+      environment?.ANTHROPIC_BASE_URL === "https://api.refuseless.com"
+        ? refuselessModels(claudeSettings.customModels)
+        : claudeProviderModels(
+            modelCatalog.models.map((entry) => entry.model),
+            claudeSettings.customModels,
+          );
 
     if (!claudeSettings.enabled) {
       return buildServerProvider({
