@@ -536,7 +536,8 @@ export const make = Effect.gen(function* () {
     }
     let boundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let pendingBoundsPersistFiber: Fiber.Fiber<void, never> | undefined;
-    let boundsPersistenceEnabled = persistedBounds === null || restoredPersistedBounds;
+    let boundsPersistenceEnabled =
+      persistedBounds === null || restoredPersistedBounds || (!restored && windowSequence > 1);
     const readPersistableBounds = (): DesktopAppSettings.DesktopWindowBounds | null => {
       if (window.isDestroyed()) {
         return null;
@@ -627,7 +628,10 @@ export const make = Effect.gen(function* () {
         fiber === undefined ? Effect.void : Fiber.join(fiber).pipe(Effect.asVoid),
       ),
     );
-    boundsFlushers.set(windowId, flushBoundsPersist);
+    const captureCurrentBounds = Effect.sync(() => {
+      boundsPersistenceEnabled = true;
+    }).pipe(Effect.andThen(flushBoundsPersist));
+    boundsFlushers.set(windowId, captureCurrentBounds);
 
     yield* previewManager.setMainWindow(window);
     if (yield* Ref.get(desktopState.quitting)) {
@@ -1014,6 +1018,7 @@ export const make = Effect.gen(function* () {
       if (restored?.maximized ?? persistedSettings.mainWindowMaximized) window.maximize();
       if (restored?.fullscreen) window.setFullScreen(true);
       yield* electronWindow.reveal(window);
+      yield* captureCurrentBounds;
       yield* dismissConnectingSplash;
     });
     pendingMainReveals.set(window, revealWhenReady);
