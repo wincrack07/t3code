@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
+import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
 
 import type { ThreadPanelPresentation } from "../../rightPanelLayout";
@@ -186,6 +187,20 @@ export function ThreadPanelHeaderControl(props: PanelLayoutControlsProps) {
   );
 }
 
+/** Publishes the cluster's inset from its container's right edge, so the bar beneath keeps clear. */
+export function reserveTitlebarControls(node: HTMLElement | null) {
+  const container = node?.parentElement;
+  if (!node || !container) return;
+  const stopObserving = observeResize([node, container], () => {
+    const inset = container.getBoundingClientRect().right - node.getBoundingClientRect().left;
+    container.style.setProperty("--workspace-titlebar-controls-inset", `${Math.ceil(inset)}px`);
+  });
+  return () => {
+    stopObserving();
+    container.style.removeProperty("--workspace-titlebar-controls-inset");
+  };
+}
+
 /** The window's top-right panel controls, with the maximize toggle while the panel is open. */
 export function WorkspaceTitlebarControls(props: {
   readonly showMaximizeControl: boolean;
@@ -198,6 +213,7 @@ export function WorkspaceTitlebarControls(props: {
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
   return (
     <div
+      ref={reserveTitlebarControls}
       className={cn(
         "pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag] [[data-thread-column-id]_&]:absolute [[data-thread-column-id]_&]:top-0 [[data-thread-column-id]:not(:last-child)_&]:right-3",
         mobileSidebarSheetMounted && "hidden",

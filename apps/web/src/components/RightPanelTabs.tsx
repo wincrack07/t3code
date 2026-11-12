@@ -1367,10 +1367,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     >
       <div
         className={cn(
-          "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1 pl-2",
-          props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3",
+          "@container flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1 pl-2",
+          // Inline, the window's panel controls float over this bar's end; they publish the inset.
+          props.mode === "inline" && !props.layoutControls
+            ? "pr-(--workspace-titlebar-controls-inset)"
+            : "pr-3",
           ownsDesktopTitleBar && "drag-region",
-          ownsDesktopTitleBar && "wco:pr-(--workspace-native-controls-inset)",
           props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
         )}
         data-right-panel-tabbar
@@ -1380,7 +1382,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           ref={attachTabList}
           hideScrollbars
           scrollFade
-          className="min-w-0 flex-1"
+          className="w-auto min-w-0"
           data-right-panel-tab-list
         >
           <div className="flex h-full w-max min-w-full items-center gap-1">
@@ -1424,85 +1426,86 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                 );
               })}
             </SortableTabList>
-            {props.open !== false ? (
-              <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
-                <MenuTrigger
-                  ref={addSurfaceTriggerRef}
-                  render={
-                    <Button
-                      aria-label="Add panel surface"
-                      className="shrink-0"
-                      size="icon-sm"
-                      variant="ghost-muted"
-                    />
-                  }
-                >
-                  <Plus className="size-3.5" />
-                </MenuTrigger>
-                <MenuPopup
-                  align="start"
-                  side="bottom"
-                  sideOffset={6}
-                  onKeyDownCapture={handleAddSurfaceMenuKeyDown}
-                >
-                  {addSurfaceActions.map((action) => {
-                    const Icon = action.icon;
-                    if (action.label === "Browser" && action.available) {
-                      return (
-                        <MenuSub key={action.label}>
-                          <MenuSubTrigger
-                            className="[&>svg:last-child]:ms-0"
-                            aria-keyshortcuts={action.shortcut}
-                            onClick={(event) => {
-                              const pointerType =
-                                "pointerType" in event.nativeEvent &&
-                                typeof event.nativeEvent.pointerType === "string"
-                                  ? event.nativeEvent.pointerType
-                                  : undefined;
-                              if (!shouldOpenDefaultBrowserProfileFromMenuClick(pointerType))
-                                return;
-                              setAddSurfaceMenuOpen(false);
-                              action.onClick();
-                            }}
-                          >
-                            <Icon />
-                            {action.label}
-                            <MenuShortcut>{action.shortcut}</MenuShortcut>
-                          </MenuSubTrigger>
-                          <MenuSubPopup className="max-w-56">
-                            {browserProfiles.map((profile) => (
-                              <MenuItem
-                                key={profile.id}
-                                onClick={() => props.onAddBrowserInProfile(profile.id)}
-                              >
-                                <span className="min-w-0 truncate">{profile.name}</span>
-                              </MenuItem>
-                            ))}
-                          </MenuSubPopup>
-                        </MenuSub>
-                      );
-                    }
-                    return (
-                      <SurfaceMenuItem
-                        key={action.label}
-                        available={action.available}
-                        disabledReason={action.disabledReason}
-                        shortcut={action.shortcut}
-                        onClick={action.onClick}
+          </div>
+        </ScrollArea>
+        {props.open !== false ? (
+          <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
+            <MenuTrigger
+              ref={addSurfaceTriggerRef}
+              render={
+                <Button
+                  aria-label="Add panel surface"
+                  className="shrink-0"
+                  size="icon-sm"
+                  variant="ghost-muted"
+                />
+              }
+            >
+              <Plus className="size-3.5" />
+            </MenuTrigger>
+            <MenuPopup
+              align="start"
+              side="bottom"
+              sideOffset={6}
+              onKeyDownCapture={handleAddSurfaceMenuKeyDown}
+            >
+              {addSurfaceActions.map((action) => {
+                const Icon = action.icon;
+                if (action.label === "Browser" && action.available) {
+                  return (
+                    <MenuSub key={action.label}>
+                      <MenuSubTrigger
+                        className="[&>svg:last-child]:ms-0"
+                        aria-keyshortcuts={action.shortcut}
+                        onClick={(event) => {
+                          const pointerType =
+                            "pointerType" in event.nativeEvent &&
+                            typeof event.nativeEvent.pointerType === "string"
+                              ? event.nativeEvent.pointerType
+                              : undefined;
+                          if (!shouldOpenDefaultBrowserProfileFromMenuClick(pointerType)) return;
+                          setAddSurfaceMenuOpen(false);
+                          action.onClick();
+                        }}
                       >
                         <Icon />
                         {action.label}
-                      </SurfaceMenuItem>
-                    );
-                  })}
-                </MenuPopup>
-              </Menu>
-            ) : null}
-          </div>
-        </ScrollArea>
+                        <MenuShortcut>{action.shortcut}</MenuShortcut>
+                      </MenuSubTrigger>
+                      <MenuSubPopup className="max-w-56">
+                        {browserProfiles.map((profile) => (
+                          <MenuItem
+                            key={profile.id}
+                            onClick={() => props.onAddBrowserInProfile(profile.id)}
+                          >
+                            <span className="min-w-0 truncate">{profile.name}</span>
+                          </MenuItem>
+                        ))}
+                      </MenuSubPopup>
+                    </MenuSub>
+                  );
+                }
+                return (
+                  <SurfaceMenuItem
+                    key={action.label}
+                    available={action.available}
+                    disabledReason={action.disabledReason}
+                    shortcut={action.shortcut}
+                    onClick={action.onClick}
+                  >
+                    <Icon />
+                    {action.label}
+                  </SurfaceMenuItem>
+                );
+              })}
+            </MenuPopup>
+          </Menu>
+        ) : null}
+        <span aria-hidden className="flex-1" />
         {tabScrollState.hasOverflow ? (
           <div
-            className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]"
+            // A cramped bar gives this room to the tabs; wheel scrolling still works.
+            className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag] @max-[20rem]:hidden"
             role="group"
             aria-label="Scroll panel tabs"
           >
@@ -1570,12 +1573,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
               </TooltipPopup>
             </Tooltip>
             {props.layoutControls ? null : (
-              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
+              <span aria-hidden className="mr-2 ml-1 h-4 w-px shrink-0 bg-border" />
             )}
           </>
-        ) : null}
-        {ownsDesktopTitleBar && !props.layoutControls ? (
-          <span aria-hidden className="hidden w-24 shrink-0 wco:block" />
         ) : null}
       </div>
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
