@@ -3,6 +3,7 @@ import {
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ThreadShell,
   type ThreadId,
+  type ProjectId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
@@ -204,4 +205,20 @@ export function orderWebThreadLineageRows(input: {
     }
     return left.threadId < right.threadId ? -1 : left.threadId > right.threadId ? 1 : 0;
   });
+}
+
+/** Local requests are keyed by their expected history index and destination, including deferred moves. */
+export function newlyObservedProjectMove(
+  previous: Pick<OrchestrationV2ThreadShell, "id" | "projectMoves"> | null,
+  next: Pick<OrchestrationV2ThreadShell, "id" | "projectMoves">,
+  locallyInitiatedMoves?: ReadonlyMap<number, ProjectId>,
+) {
+  if (previous === null || previous.id !== next.id) return null;
+  const seen = previous.projectMoves?.length ?? 0;
+  const moves = next.projectMoves ?? [];
+  for (let index = moves.length - 1; index >= seen; index--) {
+    const move = moves[index];
+    if (move !== undefined && locallyInitiatedMoves?.get(index) !== move.projectId) return move;
+  }
+  return null;
 }

@@ -492,6 +492,7 @@ export class ThreadProjectMoveRejectedError extends Schema.TaggedError<ThreadPro
       "target_deleted",
       "same_project",
       "thread_deleted",
+      "child_thread",
       "detach_required",
     ]),
     dirty: Schema.optional(Schema.Boolean),
@@ -507,6 +508,8 @@ export class ThreadProjectMoveRejectedError extends Schema.TaggedError<ThreadPro
         return "The thread already belongs to that project.";
       case "thread_deleted":
         return "A deleted thread cannot be moved.";
+      case "child_thread":
+        return "Only top-level threads can be moved. Child threads stay with their parent lineage.";
       case "detach_required":
         return "Confirm detachWorktree to leave this thread's worktree or branch. Files and branches will remain on disk.";
     }
@@ -2581,6 +2584,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("notification"),
+    projectMove: Schema.optional(ThreadProjectMoveRecord),
     ...OrchestrationV2Notification.fields,
   }),
   Schema.Struct({

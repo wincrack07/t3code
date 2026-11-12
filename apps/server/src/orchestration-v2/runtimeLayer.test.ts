@@ -81,7 +81,12 @@ import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as RuntimeLayer from "./runtimeLayer.ts";
-import { shellStreamItemFromThreadShell } from "./ShellStream.ts";
+import {
+  shellStreamItemFromThreadShell,
+  shouldPublishShellApplicationEvent,
+  toShellApplicationEvent,
+  skipUnchangedThreadShells,
+} from "./ShellStream.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
@@ -10485,7 +10490,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
       });
       yield* send("before");
       yield* complete("before");
-      const sourceScope = (yield* orchestrator.getThreadProjection(threadId)).checkpointScopes[0]!;
+      const beforeMove = yield* orchestrator.getThreadProjection(threadId);
+      const sourceScope = beforeMove.checkpointScopes[0]!;
       const { projectId: _scopeProject, ...legacyScope } = sourceScope;
       const ownershipAt = yield* DateTime.now;
       yield* sink.write({
@@ -10508,6 +10514,11 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
       });
       const projection = yield* orchestrator.getThreadProjection(threadId);
       assert.equal(projection.thread.projectId, target);
+      const marker = projection.turnItems.find(
+        (item) => item.type === "notification" && item.id.startsWith("project-move:"),
+      )!;
+      assert.isAbove(marker.ordinal, Math.max(...beforeMove.turnItems.map((item) => item.ordinal)));
+      assert.isTrue(marker.type === "notification" && marker.projectMove?.projectId === target);
       assert.equal(
         projection.checkpointScopes.find((scope) => scope.id === sourceScope.id)?.projectId,
         source,
@@ -10531,6 +10542,11 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
       );
       yield* send("after");
       const continued = yield* orchestrator.getThreadProjection(threadId);
+      assert.isTrue(
+        continued.turnItems
+          .filter((item) => item.runId === continued.runs.at(-1)!.id)
+          .every((item) => item.ordinal > marker.ordinal),
+      );
       const latest = continued.runs.at(-1)!;
       const root = continued.nodes.find((node) => node.id === latest.rootNodeId)!;
       assert.equal(
@@ -10550,7 +10566,15 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
         threadId,
         projectId: source,
       });
-      assert.equal((yield* orchestrator.getThreadShell(threadId))?.projectId, source);
+      const undone = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(undone.thread.projectId, source);
+      const undoMarker = undone.turnItems.find(
+        (item) => item.type === "notification" && item.id.endsWith(`:${source}`),
+      )!;
+      assert.isAbove(
+        undoMarker.ordinal,
+        Math.max(...continued.turnItems.map((item) => item.ordinal)),
+      );
       const maintenance = yield* ProjectionReplay.ProjectionReplay;
       assert.isTrue((yield* maintenance.rebuild).valid);
       assert.equal((yield* orchestrator.getThreadShell(threadId))?.projectMoves?.length, 2);
@@ -10684,6 +10708,32 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
           modelSelection,
           dispatchMode: { type: "queue_after_active" },
         });
+        const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
+        const pendingShell = (yield* orchestrator.getThreadShell(threadId))!;
+        const afterSequence = yield* applicationEvents.latestApplicationSequence;
+        const sidebarUpdate = yield* applicationEvents
+          .streamProjectedApplicationEvents({
+            afterSequence,
+            project: toShellApplicationEvent,
+            filter: (stored) => shouldPublishShellApplicationEvent(stored, new Set()),
+          })
+          .pipe(
+            Stream.filter((stored) => "event" in stored && stored.event.threadId === threadId),
+            Stream.mapEffect((stored) =>
+              Effect.gen(function* () {
+                if (!("event" in stored)) return null;
+                return shellStreamItemFromThreadShell({
+                  stored,
+                  shell: yield* orchestrator.getThreadShell(threadId),
+                });
+              }),
+            ),
+            Stream.filter(
+              (item) => item?.kind === "thread.updated" && item.thread.projectId === target,
+            ),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
         const moved = yield* orchestrator
           .streamStoredEventsFrom({
             threadId,
@@ -10775,12 +10825,47 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
             },
           ],
         });
-        yield* Fiber.join(moved);
+        const openedUpdate = yield* Fiber.join(moved);
+        assert.isTrue(Option.isSome(openedUpdate));
+        if (
+          Option.isSome(openedUpdate) &&
+          openedUpdate.value.event.type === "thread.metadata-updated"
+        ) {
+          assert.isNull(openedUpdate.value.event.payload.pendingProjectMove);
+          assert.lengthOf(openedUpdate.value.event.payload.projectMoves ?? [], 1);
+        }
+        const sidebar = yield* Fiber.join(sidebarUpdate);
+        assert.isTrue(Option.isSome(sidebar));
+        if (Option.isSome(sidebar) && sidebar.value?.kind === "thread.updated") {
+          assert.isNull(sidebar.value.thread.pendingProjectMove);
+          assert.lengthOf(sidebar.value.thread.projectMoves ?? [], 1);
+          const retained = yield* Stream.fromIterable([
+            { ...sidebar.value, thread: pendingShell },
+            sidebar.value,
+          ]).pipe(skipUnchangedThreadShells, Stream.runCollect);
+          assert.lengthOf(retained, 2);
+        }
         yield* Fiber.join(queuedInTarget);
         const projection = yield* orchestrator.getThreadProjection(threadId);
         assert.equal(projection.thread.projectId, target);
         assert.isNull(projection.thread.pendingProjectMove);
         assert.equal(projection.messages[0]?.text, "Keep my history");
+        const marker = projection.turnItems.find(
+          (item) => item.type === "notification" && item.id.startsWith("project-move:"),
+        )!;
+        assert.isAbove(
+          marker.ordinal,
+          Math.max(
+            ...projection.turnItems
+              .filter((item) => item.runId === run.id)
+              .map((item) => item.ordinal),
+          ),
+        );
+        assert.isTrue(
+          projection.turnItems
+            .filter((item) => item.runId === projection.runs.at(-1)!.id)
+            .every((item) => item.ordinal > marker.ordinal),
+        );
       }),
   );
 
@@ -10834,6 +10919,51 @@ it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects"
           .pipe(Effect.flip);
         assert.equal(error._tag, "ThreadProjectMoveRejectedError");
         if (error._tag === "ThreadProjectMoveRejectedError") assert.equal(error.reason, reason);
+      }
+      const original = yield* orchestrator.getThreadProjection(threadId);
+      const sink = yield* EventSink.EventSinkV2;
+      for (const [relationshipToParent, sideChat] of [
+        ["subagent", false],
+        ["fork", false],
+        ["fork", true],
+      ] as const) {
+        const childId = ThreadId.make(`reject-child-${relationshipToParent}-${sideChat}`);
+        const now = yield* DateTime.now;
+        yield* sink.write({
+          commandId: CommandId.make(`create-${childId}`),
+          events: [
+            {
+              id: EventId.make(`create-${childId}`),
+              type: "thread.created",
+              threadId: childId,
+              occurredAt: now,
+              payload: {
+                ...original.thread,
+                id: childId,
+                branch: null,
+                worktreePath: null,
+                lineage: {
+                  parentThreadId: threadId,
+                  rootThreadId: threadId,
+                  relationshipToParent,
+                  sideChat,
+                },
+              },
+            },
+          ],
+        });
+        const rejection = yield* orchestrator
+          .dispatch({
+            type: "thread.project.move",
+            commandId: CommandId.make(`move-${childId}`),
+            threadId: childId,
+            projectId: target,
+          })
+          .pipe(Effect.flip);
+        assert.equal(rejection._tag, "ThreadProjectMoveRejectedError");
+        if (rejection._tag === "ThreadProjectMoveRejectedError")
+          assert.equal(rejection.reason, "child_thread");
+        assert.equal((yield* orchestrator.getThreadShell(childId))?.projectId, source);
       }
       yield* orchestrator.dispatch({
         type: "thread.project.move",

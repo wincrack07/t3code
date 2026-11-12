@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ThreadId } from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
 import {
   deriveThreadRelationshipGraph,
+  newlyObservedProjectMove,
   immediateThreadRelationships,
   orderWebThreadLineageRows,
   resolveMergeBackTargetThreadId,
@@ -438,4 +439,30 @@ describe("web thread lineage ordering", () => {
       }),
     ).toEqual([dated, missingTransfer, undated]);
   });
+});
+
+it("signals newly observed moves but ignores initial state and locally initiated moves", () => {
+  const id = ThreadId.make("moved-thread");
+  const first = {
+    previousProjectId: ProjectId.make("source"),
+    projectId: ProjectId.make("target"),
+    previousCwd: "/source",
+    cwd: "/target",
+    movedAt: "2026-11-12T00:00:00Z",
+  };
+  const second = {
+    ...first,
+    previousProjectId: first.projectId,
+    projectId: first.previousProjectId,
+    movedAt: "2026-11-12T00:01:00Z",
+  };
+  const previous = { id, projectMoves: [first] };
+  const next = { id, projectMoves: [first, second] };
+  expect(newlyObservedProjectMove(previous, next)).toEqual(second);
+  expect(newlyObservedProjectMove(null, next)).toBeNull();
+  expect(newlyObservedProjectMove(next, next)).toBeNull();
+  expect(newlyObservedProjectMove(previous, next, new Map([[1, second.projectId]]))).toBeNull();
+  expect(newlyObservedProjectMove(previous, next, new Map([[1, first.projectId]]))).toEqual(second);
+  expect(newlyObservedProjectMove(next, previous)).toBeNull();
+  expect(newlyObservedProjectMove(previous, { ...next, id: ThreadId.make("other") })).toBeNull();
 });

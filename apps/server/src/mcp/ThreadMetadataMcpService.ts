@@ -208,7 +208,9 @@ const make = Effect.gen(function* () {
       .pipe(
         Effect.mapError((error) =>
           failure(
-            "orchestration_error",
+            error._tag === "ThreadProjectMoveRejectedError"
+              ? "invalid_request"
+              : "orchestration_error",
             `Unable to ${input.action} for thread ${threadId}: ${errorMessage(error)}`,
           ),
         ),
