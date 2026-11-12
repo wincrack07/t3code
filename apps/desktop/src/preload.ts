@@ -86,6 +86,10 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  windowId:
+    process.argv
+      .find((argument) => argument.startsWith("--t3-window-id="))
+      ?.slice("--t3-window-id=".length) ?? "main",
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {
@@ -142,6 +146,14 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   setLocalEnvironmentEnabled: (enabled) =>
     ipcRenderer.invoke(IpcChannels.SET_LOCAL_ENVIRONMENT_ENABLED_CHANNEL, enabled),
   getHostEnvironmentId: () => ipcRenderer.invoke(IpcChannels.GET_HOST_ENVIRONMENT_ID_CHANNEL),
+  onClientSettingsChanged: (listener) => {
+    const receive = (_event: Electron.IpcRendererEvent, settings: Parameters<typeof listener>[0]) =>
+      listener(settings);
+    ipcRenderer.on(IpcChannels.CLIENT_SETTINGS_CHANGED_CHANNEL, receive);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.CLIENT_SETTINGS_CHANGED_CHANNEL, receive);
+    };
+  },
   getClientSettings: () => ipcRenderer.invoke(IpcChannels.GET_CLIENT_SETTINGS_CHANNEL),
   setClientSettings: (settings) =>
     ipcRenderer.invoke(IpcChannels.SET_CLIENT_SETTINGS_CHANNEL, settings),

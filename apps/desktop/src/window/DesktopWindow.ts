@@ -427,11 +427,13 @@ export const make = Effect.gen(function* () {
     yield* previewManager.reapplyZoom();
   });
 
+  let windowSequence = 0;
   const createWindow = Effect.fn("desktop.window.createWindow")(function* (): Effect.fn.Return<
     Option.Option<Electron.BrowserWindow>,
     DesktopWindowError
   > {
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
+    const windowId = windowSequence++ === 0 ? "main" : `window-${windowSequence}`;
     yield* previewManager.getBrowserSession();
     const applicationUrl = getDesktopUrl(environment.isDevelopment);
     const iconPaths = yield* assets.iconPaths;
@@ -476,6 +478,7 @@ export const make = Effect.gen(function* () {
       title: environment.displayName,
       ...getWindowTitleBarOptions(shouldUseDarkColors, environment.platform),
       webPreferences: {
+        additionalArguments: [`--t3-window-id=${windowId}`],
         preload: environment.preloadPath,
         // Hidden-renderer throttling stalls first paint; re-enable it after the first reveal.
         backgroundThrottling: false,

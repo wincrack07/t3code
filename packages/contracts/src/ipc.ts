@@ -1055,6 +1055,8 @@ export const DesktopFinderItemSchema = Schema.Struct({
 export type DesktopFinderItem = typeof DesktopFinderItemSchema.Type;
 
 export interface DesktopBridge {
+  readonly windowId?: string;
+  onClientSettingsChanged?: (listener: (settings: ClientSettings) => void) => () => void;
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;

@@ -1,3 +1,4 @@
+import { windowStorageKey } from "./windowPersistence";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   applyMotionPreference,
@@ -199,6 +200,14 @@ export function startAppServices(): AppRouter {
   const router = getRouter(isElectron ? createHashHistory() : createBrowserHistory());
 
   if (isElectron) {
+    const routeKey = windowStorageKey("t3code:window-route");
+    const savedRoute = localStorage.getItem(routeKey);
+    if (location.hash.length <= 2 && savedRoute?.startsWith("/") && !savedRoute.startsWith("//")) {
+      router.history.replace(savedRoute);
+    }
+    router.subscribe("onResolved", () => {
+      localStorage.setItem(routeKey, router.state.location.href);
+    });
     syncDocumentElectronPlatformClasses(navigator.platform);
     syncDocumentWindowControlsOverlayClass();
   }

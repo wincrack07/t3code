@@ -1,3 +1,4 @@
+import { windowStorage } from "../windowPersistence";
 import { Debouncer } from "@tanstack/react-pacer";
 
 export interface StateStorage<R = unknown> {
@@ -39,7 +40,7 @@ function isStateStorage(
 }
 
 export function resolveStorage(storage: Partial<StateStorage> | null | undefined): StateStorage {
-  return isStateStorage(storage) ? storage : createMemoryStorage();
+  return windowStorage(isStateStorage(storage) ? storage : createMemoryStorage());
 }
 
 export function createDeferredStorage<TValue>(

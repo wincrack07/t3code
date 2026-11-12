@@ -1,3 +1,4 @@
+import { windowStorageKey } from "../windowPersistence";
 import * as Schema from "effect/Schema";
 import * as Record from "effect/Record";
 import { useSyncExternalStore } from "react";
@@ -34,7 +35,7 @@ const getStorage = (): Storage =>
 
 const read = (key: string) => {
   try {
-    return getStorage().getItem(key);
+    return getStorage().getItem(windowStorageKey(key));
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "read", storageKey: key, cause });
   }
@@ -64,7 +65,7 @@ export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
   const valueToSet = encode(key, schema, value);
   try {
-    getStorage().setItem(key, valueToSet);
+    getStorage().setItem(windowStorageKey(key), valueToSet);
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "write", storageKey: key, cause });
   }
@@ -72,7 +73,7 @@ export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.
 
 export const removeLocalStorageItem = (key: string) => {
   try {
-    getStorage().removeItem(key);
+    getStorage().removeItem(windowStorageKey(key));
   } catch (cause) {
     throw new LocalStorageOperationError({ operation: "remove", storageKey: key, cause });
   }
@@ -134,7 +135,7 @@ export function readLocalStorageValue<T, E>(
 /** Fires on writes from this tab and from other tabs. */
 export function subscribeLocalStorageKey(key: string, onChange: () => void): () => void {
   const handleStorageChange = (event: StorageEvent) => {
-    if (event.key === key || event.key === null) {
+    if (event.key === windowStorageKey(key) || event.key === null) {
       onChange();
     }
   };

@@ -1,3 +1,4 @@
+import { windowStorageKey } from "./windowPersistence";
 import { Debouncer } from "@tanstack/react-pacer";
 import type { PullRequestMergeMethod } from "@t3tools/contracts";
 import { create } from "zustand";
@@ -176,7 +177,9 @@ function readPersistedState(): UiState {
       }
       return initialState;
     }
-    return parsePersistedState(JSON.parse(raw) as PersistedUiState);
+    const shared = JSON.parse(raw) as PersistedUiState;
+    const view = window.localStorage.getItem(windowStorageKey("t3code:ui-view-state"));
+    return parsePersistedState(view ? { ...shared, ...JSON.parse(view) } : shared);
   } catch {
     return initialState;
   }
@@ -219,6 +222,15 @@ export function persistState(state: UiState): void {
       Object.entries(state.projectExpandedById).filter(
         ([key]) => key !== LEGACY_PROJECT_EXPANSION_DEFAULT_KEY,
       ),
+    );
+    window.localStorage.setItem(
+      windowStorageKey("t3code:ui-view-state"),
+      JSON.stringify({
+        projectExpandedById,
+        sidebarProjectScopeKeys: state.sidebarProjectScopeKeys,
+        threadChangedFilesExpandedById: state.threadChangedFilesExpandedById,
+        threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
+      }),
     );
     window.localStorage.setItem(
       PERSISTED_STATE_KEY,
