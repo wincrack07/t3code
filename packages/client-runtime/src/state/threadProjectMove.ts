@@ -35,14 +35,16 @@ export function threadProjectMoveRejectionMessage(
       return `The thread is already in ${targetName}.`;
     case "thread_deleted":
       return "This thread was deleted.";
+    case "child_thread":
+      return "Subagents, forks, and side chats stay in the project of the thread they came from.";
     case "detach_required":
       return "The thread is in a worktree or on another branch.";
   }
 }
 
-/** Subagents follow their parent's work, so only threads a person drives can move. */
+/** Only top-level threads move; the server rejects subagents, forks, and side chats. */
 export function canMoveThreadToProject(thread: Pick<MoveThread, "lineage">): boolean {
-  return thread.lineage.relationshipToParent !== "subagent" && thread.lineage.sideChat !== true;
+  return thread.lineage.relationshipToParent === null && thread.lineage.sideChat !== true;
 }
 
 /** Undo moves the thread back to where its latest move started. */

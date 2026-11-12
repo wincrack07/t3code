@@ -118,8 +118,8 @@ thread onto another project's folder.
 After a move, restoring or diffing turns from before the move needs the old folder, so those
 controls are unavailable until you move the thread back. The next message continues the same
 agent session in the new folder for Codex, Claude, and Cursor; other agents start a new session
-that receives the conversation so far. Subagent threads stay with their parent and cannot be
-moved on their own.
+that receives the conversation so far. Subagents, forks, and side chats stay with the thread they
+came from and cannot be moved on their own.
 
 ## Pin and reorder threads
 

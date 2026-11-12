@@ -13,7 +13,7 @@ import { useProjects, useThreadShell, useVisibleThreadShells } from "../state/en
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { buildThreadMoveTargetSections } from "../threadProjectMove.logic";
-import { moveThreadToProject } from "../threadProjectMove";
+import { moveThreadToProject, watchThreadProjectMoves } from "../threadProjectMove";
 import {
   filterCommandPaletteGroups,
   ITEM_ICON_CLASS,
@@ -47,6 +47,13 @@ export function MoveThreadToProjectDialogHost() {
       {threadRef ? <MoveThreadToProjectPicker threadRef={threadRef} /> : null}
     </CommandDialog>
   );
+}
+
+/** Announces moves that apply later or come from another client. */
+export function ThreadProjectMoveToasts() {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the shell store to toast moves this client did not make
+  useEffect(() => watchThreadProjectMoves(), []);
+  return null;
 }
 
 function MoveThreadToProjectPicker({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
