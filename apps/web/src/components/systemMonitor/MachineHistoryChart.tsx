@@ -8,6 +8,8 @@ export type MachineHistoryMetric = "usage" | "network";
 interface Series {
   readonly label: string;
   readonly className: string;
+  /** Secondary series are dashed so the pair reads apart without relying on color. */
+  readonly dashed?: boolean;
   readonly value: (sample: MachineSample) => number | null;
 }
 
@@ -17,12 +19,18 @@ const SERIES: Record<MachineHistoryMetric, readonly Series[]> = {
     {
       label: "Memory",
       className: "text-muted-foreground",
+      dashed: true,
       value: (s) => (s.memoryTotal > 0 ? (100 * s.memoryUsed) / s.memoryTotal : null),
     },
   ],
   network: [
     { label: "Download", className: "text-primary", value: (s) => s.networkDown },
-    { label: "Upload", className: "text-muted-foreground", value: (s) => s.networkUp },
+    {
+      label: "Upload",
+      className: "text-muted-foreground",
+      dashed: true,
+      value: (s) => s.networkUp,
+    },
   ],
 };
 
@@ -96,7 +104,8 @@ export function MachineHistoryChart(props: {
               ).join(" ")}
               fill="none"
               stroke="currentColor"
-              strokeWidth={index === 0 ? 1.75 : 1.25}
+              strokeWidth={line.dashed ? 1.5 : 1.75}
+              strokeDasharray={line.dashed ? "5 4" : undefined}
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
             />
@@ -115,7 +124,17 @@ export function MachineHistoryChart(props: {
           const average = points.reduce((sum, p) => sum + p.value, 0) / points.length;
           return (
             <span key={line.label} className="flex items-center gap-2">
-              <span className={cn("h-0.5 w-3 rounded-full bg-current", line.className)} />
+              <svg aria-hidden viewBox="0 0 16 2" className={cn("h-0.5 w-4", line.className)}>
+                <line
+                  x1="0"
+                  y1="1"
+                  x2="16"
+                  y2="1"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeDasharray={line.dashed ? "4 3" : undefined}
+                />
+              </svg>
               <span className="text-foreground">{line.label}</span>
               <span className="text-muted-foreground tabular-nums">
                 peak {format(top)} · average {format(average)}
