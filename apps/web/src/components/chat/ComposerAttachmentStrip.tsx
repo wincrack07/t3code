@@ -25,6 +25,7 @@ import {
   setSnapShotAnimationDestination,
   shouldAnimateSnapShotArrival,
 } from "../../lib/snapShotAnimation";
+import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
 import { getRestingComposerImagePreviewCounts } from "../composerFooterLayout";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -174,12 +175,37 @@ export function ComposerAttachmentMediaRow({
   readonly onRemoveFile: (fileId: string) => void;
 }) {
   const uploadsByImageId = useAttachmentUploadStore((state) => state.uploadsByImageId);
+  // Claude tiles carry their remove badge on the corner, outside the thumbnail.
+  const cornerRemove = useTheme().theme === "claude";
+  const tileFrameClass = cornerRemove
+    ? "relative h-16 w-16 rounded-(--composer-tile-radius) shadow-xs after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-foreground/20 after:ring-inset"
+    : "relative h-16 w-16 overflow-hidden rounded-lg border border-border/80";
+  const removeBadge = (label: string, onRemove: () => void, revealOnHover: boolean) => (
+    <span
+      className={cn(
+        "absolute flex",
+        cornerRemove ? "-right-2 -top-2 z-10" : "right-1 top-1",
+        (cornerRemove || revealOnHover) &&
+          "opacity-0 transition-opacity pointer-coarse:opacity-100 group-hover/attachment:opacity-100 group-focus-within/attachment:opacity-100",
+      )}
+    >
+      <Button
+        variant={cornerRemove ? "tile-remove" : "media-close"}
+        size={cornerRemove ? "icon-micro" : "icon-xs"}
+        onClick={onRemove}
+        aria-label={label}
+      >
+        <XIcon />
+      </Button>
+    </span>
+  );
   const pendingSnapShotIdSet = new Set(pendingSnapShotIds);
   const nonPersistedImageIdSet = new Set(nonPersistedImageIds);
   return (
     <div
       className={cn(
         "mb-3 flex max-w-full gap-2",
+        cornerRemove && "pt-2 pe-2",
         pendingSnapShotIds.length > 0 ||
           expandedImages.some((image) => image.source?.kind === "snap-shot")
           ? "snap-x snap-proximity overflow-x-auto overscroll-x-contain pb-1 scrollbar-thumb-foreground/18 scrollbar-track-transparent [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-3 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/18 [&::-webkit-scrollbar-thumb]:bg-clip-content [&::-webkit-scrollbar-thumb:hover]:bg-foreground/28 [&::-webkit-scrollbar-track]:mx-1 [&::-webkit-scrollbar-track]:bg-transparent"
@@ -212,16 +238,17 @@ export function ComposerAttachmentMediaRow({
               animationSource={snapShotAnimationPending ? source : undefined}
               className={cn(
                 "group/attachment shrink-0 snap-start bg-background",
-                source?.kind === "snap-shot"
-                  ? SNAP_SHOT_ATTACHMENT_FRAME_CLASS
-                  : "relative h-16 w-16 overflow-hidden rounded-lg border border-border/80",
+                source?.kind === "snap-shot" ? SNAP_SHOT_ATTACHMENT_FRAME_CLASS : tileFrameClass,
                 snapShotAnimationPending && "invisible",
               )}
             >
               {!ready || ready.previewUrl ? (
                 <button
                   type="button"
-                  className={cn("h-full w-full", ready && "cursor-zoom-in")}
+                  className={cn(
+                    "h-full w-full overflow-hidden rounded-[inherit]",
+                    ready && "cursor-zoom-in",
+                  )}
                   aria-label={`Preview ${image.name}`}
                   disabled={!ready}
                   onClick={() => {
@@ -280,7 +307,7 @@ export function ComposerAttachmentMediaRow({
                 </Tooltip>
               )}
               {(!ready || upload?.status === "uploading") && (
-                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-3xs text-foreground">
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-(--composer-tile-radius) bg-background/85 px-1 text-center text-3xs text-foreground">
                   {upload?.status === "uploading" ? (
                     <ComposerAttachmentUploadProgress id={image.id} upload={upload} />
                   ) : (
@@ -313,22 +340,11 @@ export function ComposerAttachmentMediaRow({
                   <TooltipPopup side="top">{upload.reason}</TooltipPopup>
                 </Tooltip>
               )}
-              <span
-                className={cn(
-                  "absolute right-1 top-1 flex",
-                  source?.kind === "snap-shot" &&
-                    "opacity-0 transition-opacity pointer-coarse:opacity-100 group-hover/attachment:opacity-100 group-focus-within/attachment:opacity-100",
-                )}
-              >
-                <Button
-                  variant="media-close"
-                  size="icon-xs"
-                  onClick={() => onRemoveImage(image.id)}
-                  aria-label={`Remove ${image.name}`}
-                >
-                  <XIcon />
-                </Button>
-              </span>
+              {removeBadge(
+                `Remove ${image.name}`,
+                () => onRemoveImage(image.id),
+                source?.kind === "snap-shot",
+              )}
             </SnapShotAttachmentFrame>
           );
         })
@@ -357,11 +373,11 @@ export function ComposerAttachmentMediaRow({
         return (
           <div
             key={file.id}
-            className="relative h-16 w-16 shrink-0 snap-start overflow-hidden rounded-lg border border-border/80 bg-black"
+            className={cn(tileFrameClass, "group/attachment shrink-0 snap-start bg-black")}
           >
             <button
               type="button"
-              className="flex h-full w-full cursor-zoom-in flex-col items-center justify-center gap-1 px-1 text-white"
+              className="relative flex h-full w-full cursor-zoom-in flex-col items-center justify-center gap-1 overflow-hidden rounded-[inherit] px-1 text-white"
               aria-label={`Play ${file.name}`}
               onClick={() => {
                 if (file.file !== null) {
@@ -382,7 +398,7 @@ export function ComposerAttachmentMediaRow({
               <PlayIcon className="relative z-10 size-4 fill-current drop-shadow-md" />
             </button>
             {upload?.status === "uploading" && (
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-3xs text-foreground">
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-(--composer-tile-radius) bg-background/85 px-1 text-center text-3xs text-foreground">
                 <ComposerAttachmentUploadProgress id={file.id} upload={upload} />
               </span>
             )}
@@ -411,15 +427,7 @@ export function ComposerAttachmentMediaRow({
                 <TooltipPopup side="top">{upload.reason}</TooltipPopup>
               </Tooltip>
             )}
-            <Button
-              variant="media-close"
-              size="icon-xs"
-              className="absolute right-1 top-1"
-              onClick={() => onRemoveFile(file.id)}
-              aria-label={`Remove ${file.name}`}
-            >
-              <XIcon />
-            </Button>
+            {removeBadge(`Remove ${file.name}`, () => onRemoveFile(file.id), false)}
           </div>
         );
       })}

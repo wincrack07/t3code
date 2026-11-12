@@ -1,3 +1,5 @@
+import * as LidSleep from "./LidSleep.ts";
+import * as LidSleepHost from "./LidSleepHost.ts";
 import { traySamples } from "./traySamples.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as SystemMonitor from "../systemMonitor/SystemMonitor.ts";
@@ -44,6 +46,7 @@ const preferences = Layer.effect(
 
 export const layer = KeepAwake.layer.pipe(
   Layer.provide(SleepInhibitor.layer),
+  Layer.provide(LidSleep.layer.pipe(Layer.provide(LidSleepHost.layer))),
   Layer.provide(preferences),
 );
 

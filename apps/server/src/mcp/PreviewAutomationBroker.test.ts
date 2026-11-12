@@ -1086,3 +1086,114 @@ it.effect("keeps each thread's current tab when threads share a provider session
     }),
   ),
 );
+
+it.effect.each([
+  {
+    operation: "open" as const,
+    input: { url: "http://localhost:5733/pair#token=test" },
+    tabId: undefined,
+  },
+  {
+    operation: "navigate" as const,
+    input: { target: { kind: "environment-port", port: 5733 } },
+    tabId: undefined,
+  },
+  { operation: "navigate" as const, input: { url: "http://[::1]:5733/" }, tabId: undefined },
+  {
+    operation: "navigate" as const,
+    input: { url: "http://localhost:5733/" },
+    tabId: PreviewTabId.make("desktop-tab"),
+  },
+])(
+  "routes environment ports to the server despite an existing desktop assignment ($operation)",
+  ({ operation, input, tabId }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const broker = yield* makeBroker;
+        const routed: Array<{
+          clientId: string;
+          tabId: string | undefined;
+          operation: string;
+          input: unknown;
+        }> = [];
+        const attach = Effect.fn("test.attach")(function* (clientId: string) {
+          const connected = yield* Deferred.make<void>();
+          const events = yield* broker.connect(makeHost({ clientId }));
+          yield* Stream.runForEach(events, (event) => {
+            if (event.type === "connected") return Deferred.succeed(connected, undefined);
+            routed.push({
+              clientId,
+              tabId: event.request.tabId,
+              operation: event.request.operation,
+              input: event.request.input,
+            });
+            return broker.respond({
+              clientId,
+              connectionId: event.connectionId,
+              requestId: event.request.requestId,
+              ok: true,
+              result: { tabId: clientId === "client-1" ? "desktop-tab" : "server-tab" },
+            });
+          }).pipe(Effect.forkScoped);
+          yield* Deferred.await(connected);
+        });
+        yield* attach("client-1");
+        yield* broker.invoke({ scope, operation: "open", input: { url: "https://example.com" } });
+        yield* attach(SERVER_BROWSER_AUTOMATION_CLIENT_ID);
+        yield* broker.invoke({
+          scope,
+          operation,
+          input,
+          ...(tabId === undefined ? {} : { tabId }),
+        });
+        yield* broker.invoke({ scope, operation: "status", input: {} });
+        yield* broker.invoke({
+          scope,
+          operation: "navigate",
+          input: { url: "http://localhost:5733/next" },
+          tabId: PreviewTabId.make("server-tab"),
+        });
+        expect(routed).toEqual([
+          {
+            clientId: "client-1",
+            tabId: undefined,
+            operation: "open",
+            input: { url: "https://example.com" },
+          },
+          {
+            clientId: SERVER_BROWSER_AUTOMATION_CLIENT_ID,
+            tabId: undefined,
+            operation: "open",
+            input: operation === "open" ? input : { url: "http://localhost:5733/" },
+          },
+          {
+            clientId: SERVER_BROWSER_AUTOMATION_CLIENT_ID,
+            tabId: "server-tab",
+            operation: "status",
+            input: {},
+          },
+          {
+            clientId: SERVER_BROWSER_AUTOMATION_CLIENT_ID,
+            tabId: "server-tab",
+            operation: "navigate",
+            input: { url: "http://localhost:5733/next" },
+          },
+        ]);
+      }),
+    ),
+);
+
+it.effect(
+  "refuses to send an environment port to a desktop when no server browser is connected",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const broker = yield* makeBroker;
+        yield* broker.connect(makeHost()).pipe(Effect.asVoid);
+        const error = yield* broker
+          .invoke<void>({ scope, operation: "open", input: { url: "http://127.0.0.1:5733/" } })
+          .pipe(Effect.flip);
+        expect(error._tag).toBe("PreviewAutomationNoAvailableHostError");
+      }),
+    ),
+);

@@ -2644,6 +2644,7 @@ export const layerWsRpc = (
             maxFiles: config.traceMaxFiles,
           }),
         [WS_METHODS.serverGetProcessDiagnostics]: (_input) => processDiagnostics.read,
+        [WS_METHODS.keepAwakeAuthorize]: (input) => keepAwake.authorizeLid(input.action),
         [WS_METHODS.keepAwakeChange]: (input) => keepAwake.change(input),
         [WS_METHODS.keepAwakeSubscribe]: () => keepAwake.changes,
         [WS_METHODS.serverGetHostResources]: (_input) => hostResources.read,

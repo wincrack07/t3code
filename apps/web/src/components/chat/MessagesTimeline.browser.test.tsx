@@ -284,6 +284,59 @@ describe("MessagesTimeline work rows", () => {
     });
   });
 
+  it("folds a tool run into one summary line and opens it as a single card", async () => {
+    await using screen = await renderTimeline([
+      work("thought", {
+        label: "Thinking",
+        tone: "thinking",
+        itemType: "reasoning",
+        detail: "Check the manifest before editing.",
+      }),
+      work("command-a", {
+        label: "vp test",
+        tone: "tool",
+        itemType: "command_execution",
+        command: "vp test",
+        toolLifecycleStatus: "completed",
+      }),
+      work("plan", {
+        label: "Tasks 1/2",
+        tone: "info",
+        itemType: "todo_list",
+        projectedItem: v2Item("todo_list", {
+          id: "plan",
+          planId: "plan-1",
+          steps: [
+            { id: "a", text: "Read the manifest", status: "completed" },
+            { id: "b", text: "Run the tests", status: "running" },
+          ],
+        }),
+      }),
+      work("command-b", {
+        label: "vp lint",
+        tone: "tool",
+        itemType: "command_execution",
+        command: "vp lint",
+        toolLifecycleStatus: "completed",
+      }),
+    ]);
+
+    await expect.element(screen.getByRole("region", { name: "Plan" })).toBeVisible();
+    await expect.element(screen.getByText("Run the tests")).toBeVisible();
+    const toggle = screen.getByRole("button", { name: "Ran 2 commands" });
+    await expect.element(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.buttons("Thought")).toHaveLength(0);
+
+    await toggle.click();
+    await expect.element(toggle).toHaveAttribute("aria-expanded", "true");
+    const thought = screen.getByRole("button", { name: "Thought" });
+    await expect.element(thought).toBeVisible();
+    await expect.element(screen.getByText("vp lint")).toBeVisible();
+
+    await thought.click();
+    await expect.element(screen.getByText("Check the manifest before editing.")).toBeVisible();
+  });
+
   it("keeps the worked-for heading in place when expanded at the bottom", async () => {
     const props = baseProps();
     const runId = RunId.make("completed-run");

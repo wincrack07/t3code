@@ -182,7 +182,6 @@ function PreviewPanelShellFrame(
       data-preview-panel-mode={props.mode}
       data-preview-panel-maximized={maximized ? "true" : "false"}
     >
-      {isInline && !maximized ? <RightPanelResizeHandle handlers={handlers} /> : null}
       {/* Content stays pinned to the right edge, so closing uncovers the chat
           instead of sliding the tab bar under the title bar controls. */}
       <div
@@ -206,6 +205,8 @@ function PreviewPanelShellFrame(
           {props.children}
         </div>
       </div>
+      {/* After the content: the tab bar's drag region would otherwise cover the handle's top. */}
+      {isInline && !maximized ? <RightPanelResizeHandle handlers={handlers} /> : null}
     </div>
   );
 }

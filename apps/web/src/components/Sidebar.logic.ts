@@ -1000,14 +1000,23 @@ export function resolveSidebarFolderDot(
   ) {
     return "attention";
   }
+  if (statuses.has("working") || statuses.has("preparing")) return "working";
   if (statuses.has("failed")) return "failed";
   // Rows show Done only for ready threads, so the dot follows the same rule.
   const hasUnread = threads.some(
     (thread) => resolveSidebarThreadStatus(thread) === "ready" && hasUnseenCompletion(thread),
   );
   if (hasUnread) return "unread";
-  if (statuses.has("working") || statuses.has("preparing")) return "working";
   return null;
+}
+
+export function summarizeSidebarFolder(
+  projects: ReadonlyArray<{
+    readonly hiddenThreads: Parameters<typeof resolveSidebarFolderDot>[0];
+  }>,
+) {
+  const threads = projects.flatMap((project) => project.hiddenThreads);
+  return { openThreadCount: threads.length, activity: resolveSidebarFolderDot(threads) };
 }
 
 /**

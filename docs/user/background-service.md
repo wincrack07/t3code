@@ -227,9 +227,22 @@ an indefinite session, or Off. Closing a browser does not end a session.
 In **Settings → Background activity → Keep awake**, choose the session used when
 the environment starts, whether the display may sleep, and a battery cutoff
 (default 20%). A battery cutoff ends the session; start another session to resume.
-Defaults apply on the next server start; active sessions are not restored after a restart.
+The default session applies on the next server start; options changed in Settings apply now.
+Active sessions are not restored after a restart.
 
-On macOS, lid-closed use requires power and an external display in supported
-clamshell mode. T3 Code does not override lid-close sleep or change privileged
-power settings. Linux uses systemd sleep inhibitors when available. Unsupported
-hosts show their status instead of offering an ineffective switch.
+On macOS, **Keep awake with lid closed** works without an external display after
+administrator authorization. A closed laptop stays warm and drains battery;
+**Stop on low battery** still applies. On the local desktop app, choose **Authorize**
+and approve the native macOS prompt once. For a remote Mac, run the exact command
+shown in the popover on that Mac, then choose **Check authorization**.
+
+Authorization installs `/etc/sudoers.d/t3code-keep-awake`, owned by `root:wheel`
+with mode `0440`, allowing only your account to enable and disable sleep without
+another password prompt. Use **Remove authorization** to undo it, or end lid-closed
+sessions and run the displayed removal command on a remote Mac.
+
+T3 restores the previous sleep state at session end and shutdown. If the server
+crashes after disabling sleep, it restores sleep when it next starts. Recovery
+requires the authorization to remain installed; a failed restoration stays visible
+and is retried on restart. If sleep was already disabled, T3 leaves it disabled.
+Linux uses systemd sleep inhibitors when available; lid-closed control is macOS only.

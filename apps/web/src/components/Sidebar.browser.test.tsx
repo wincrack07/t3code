@@ -1,3 +1,6 @@
+import "../index.css";
+import { useUiStateStore } from "../uiStateStore";
+import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import type * as Context from "effect/Context";
 import { installFakeEnvironment, type FakeDriver } from "../../test/fakeEnvironment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -10,7 +13,7 @@ import {
 } from "@t3tools/contracts";
 import { isMacPlatform } from "@t3tools/shared/keybindings";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { act, fakeTimers, render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
@@ -201,4 +204,86 @@ describe("sidebar render isolation", () => {
     expect(rowRenders()).toBeGreaterThan(beforeRelease);
     expect(jumpLabelsSince(beforeRelease)).toEqual([]);
   });
+});
+
+it("hides grouped project children on collapse, expands all, and opens project actions", async () => {
+  using _environment = installFakeEnvironment([]);
+  using stack = new DisposableStack();
+  const previousSettings = getClientSettings();
+  const previousUi = useUiStateStore.getState();
+  stack.defer(() => {
+    __setClientSettingsForTests(previousSettings);
+    useUiStateStore.setState(previousUi);
+  });
+  const projects = [project("StaffPass: Backend"), project("StaffPass: Website")];
+  const groups = buildSidebarProjectSnapshots({
+    projects,
+    settings: { sidebarProjectGroupingMode: "separate", sidebarProjectGroupingOverrides: {} },
+    primaryEnvironmentId: projects[0]!.environmentId,
+    resolveEnvironmentLabel: () => null,
+  });
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    sidebarThreadGrouping: "project",
+    sidebarProjectGroupingMode: "separate",
+    sidebarProjectFolders: [
+      {
+        id: "staff",
+        name: "StaffPass",
+        emoji: "📁",
+        projectKeys: groups.map((group) => group.projectKey),
+      },
+    ],
+  });
+  useUiStateStore.setState({ projectExpandedById: {} });
+  vi.mocked(useProjects).mockReturnValue(projects);
+  vi.mocked(useHandleNewThread).mockReturnValue({
+    activeDraftThread: null,
+    activeThread: null,
+    defaultProjectRef: null,
+    defaultProjectFallbackReady: true,
+    handleNewThread: vi.fn().mockResolvedValue(null),
+    routeDraftId: null,
+    routeThreadRef: null,
+  });
+  await using screen = await render(
+    <SidebarProvider>
+      <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+    </SidebarProvider>,
+  );
+  const folders = () => screen.container.querySelectorAll('[data-testid="sidebar-project-folder"]');
+  await vi.waitFor(() => expect(folders()).toHaveLength(2));
+  await userEvent.click(screen.getByRole("button", { name: "Collapse all projects", exact: true }));
+  await vi.waitFor(() => expect(folders()).toHaveLength(0));
+  await userEvent.click(screen.getByRole("button", { name: "Expand all projects", exact: true }));
+  await vi.waitFor(() => expect(folders()).toHaveLength(2));
+  await act(() => {
+    folders()[0]!
+      .querySelector("button")!
+      .dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 20,
+          clientY: 200,
+        }),
+      );
+  });
+  await expect
+    .element(page.getByRole("menuitem", { name: "Move to group", exact: true }))
+    .toBeVisible();
+  await userEvent.hover(page.getByRole("menuitem", { name: "Move to group", exact: true }));
+  await expect
+    .element(page.getByRole("menuitem", { name: "New group…", exact: true }))
+    .toBeVisible();
+  await userEvent.click(page.getByRole("menuitem", { name: "New group…", exact: true }));
+  await userEvent.fill(page.getByRole("textbox", { name: "Group name", exact: true }), "Services");
+  await userEvent.click(page.getByRole("button", { name: "Save group", exact: true }));
+  await expect
+    .element(screen.getByRole("button", { name: "Group actions for Services", exact: true }))
+    .toBeVisible();
+  expect(
+    getClientSettings().sidebarProjectFolders.find((folder) => folder.name === "Services")
+      ?.projectKeys,
+  ).toEqual([groups[0]!.projectKey]);
 });

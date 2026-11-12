@@ -562,6 +562,9 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
   }
 }
 
+// A collapsed group names its most significant kinds of action; the rest is a count.
+const MAX_NAMED_SUMMARY_KINDS = 3;
+
 export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEntry>): {
   summary: string;
   hasFailure: boolean;
@@ -612,9 +615,10 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
           failedCount: group.entries.filter(workEntryDisplayIndicatesToolFailure).length,
         }),
   }));
+  const namedKindLimit = sources.size > 0 ? MAX_NAMED_SUMMARY_KINDS - 1 : MAX_NAMED_SUMMARY_KINDS;
   const selected = [...summaries]
     .sort((a, b) => a.priority - b.priority || a.index - b.index)
-    .slice(0, 2)
+    .slice(0, namedKindLimit)
     .sort((a, b) => a.index - b.index);
   const labels = selected.map(({ label }) => label);
   if (sources.size > 0) {
@@ -631,23 +635,11 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
       `Used ${formattedNames}${allIntegrations ? ` ${sourceNames.length === 1 ? "integration" : "integrations"}` : ""}`,
     );
   }
-  const sourcedCount = entries.filter(
-    (entry) =>
-      entry.toolSource !== undefined &&
-      resolveT3McpToolDefinition(workEntryToolName(entry)) === null,
-  ).length;
-  const remainingCount =
-    entries.length - sourcedCount - selected.reduce((count, group) => count + group.count, 0);
-  if (remainingCount > 0) {
-    labels.push(`Performed ${remainingCount} other ${remainingCount === 1 ? "action" : "actions"}`);
-  }
-  const sentenceLabels = labels.map((label, index) =>
-    index === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1),
-  );
+  const unnamedKinds = summaries.length - selected.length;
   const summary =
-    sentenceLabels.length < 3
-      ? sentenceLabels.join(" and ")
-      : `${sentenceLabels.slice(0, -1).join(", ")}, and ${sentenceLabels.at(-1)}`;
+    labels
+      .map((label, index) => (index === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1)))
+      .join(", ") + (unnamedKinds > 0 ? ` +${unnamedKinds}` : "");
   return { summary, hasFailure: summaries.some((group) => group.failedCount > 0) };
 }
 

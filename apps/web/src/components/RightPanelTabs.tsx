@@ -48,6 +48,7 @@ import {
   TerminalSquare,
   Volume2Icon,
   VolumeOffIcon,
+  XIcon,
 } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -64,7 +65,11 @@ import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
-import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
+import {
+  resolveShortcutCommand,
+  shortcutLabelForCommand,
+  type ShortcutMatchContext,
+} from "~/keybindings";
 import { readLocalApi } from "~/localApi";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { Button } from "~/components/ui/button";
@@ -116,6 +121,8 @@ export interface RightPanelTabsProps {
   defaultWidth?: number;
   inlineSize?: PreviewPanelInlineSize;
   layoutControls?: ReactNode;
+  /** Hides the whole panel, as its toggle does. */
+  onClosePanel?: (() => void) | undefined;
   surfaces: readonly RightPanelSurface[];
   environmentId: EnvironmentId | null;
   activeSurfaceId: string | null;
@@ -314,6 +321,7 @@ function SurfaceMenuItem(props: {
 }
 
 function RightPanelEmptyState(props: {
+  onClose?: (() => void) | undefined;
   onAddBrowser: () => void;
   onAddBrowserInProfile: (profileId: string) => void;
   browserProfiles: ReadonlyArray<{ readonly id: string; readonly name: string }>;
@@ -417,14 +425,24 @@ function RightPanelEmptyState(props: {
     availableActions.length === 0 ? -1 : Math.min(highlight, availableActions.length - 1);
 
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
-    const action = surfaceShortcutActionForKey(availableActions, event);
-    if (!action) return;
+    const closing =
+      event.key === "Escape" &&
+      props.onClose !== undefined &&
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey;
+    const action = closing ? null : surfaceShortcutActionForKey(availableActions, event);
+    if (!action && !closing) return;
     if (document.querySelector(LAUNCHER_SHORTCUT_BLOCKING_LAYERS)) return;
     const target = event.composedPath()[0] ?? event.target;
     if (target instanceof Element && surfaceShortcutTargetsTypingContext(target)) return;
     event.preventDefault();
     event.stopPropagation();
-    action.onClick();
+    if (action) action.onClick();
+    else props.onClose?.();
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a capture-phase window keydown listener for surface shortcuts while the menu is mounted
   useEffect(() => {
@@ -1034,6 +1052,7 @@ function RightPanelTab(
 export function RightPanelTabs(props: RightPanelTabsProps) {
   const focusedSurface = props.surfaces.find((surface) => surface.id === props.activeSurfaceId);
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
+  const closePanelShortcutLabel = shortcutLabelForCommand(props.keybindings, "rightPanel.toggle");
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -1408,7 +1427,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <Button
                       aria-label="Add panel surface"
                       className="shrink-0"
-                      size="icon-xs"
+                      size="icon-sm"
                       variant="ghost-muted"
                     />
                   }
@@ -1521,19 +1540,43 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           </div>
         ) : null}
         {props.layoutControls}
+        {props.onClosePanel && props.open !== false ? (
+          <>
+            {props.layoutControls ? (
+              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
+            ) : null}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-label="Close panel"
+                    data-right-panel-close
+                    className="shrink-0"
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={props.onClosePanel}
+                  />
+                }
+              >
+                <XIcon className="size-4" />
+              </TooltipTrigger>
+              <TooltipPopup side="bottom">
+                Close panel{closePanelShortcutLabel ? ` (${closePanelShortcutLabel})` : ""}
+              </TooltipPopup>
+            </Tooltip>
+            {props.layoutControls ? null : (
+              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
+            )}
+          </>
+        ) : null}
         {ownsDesktopTitleBar && !props.layoutControls ? (
           <span aria-hidden className="hidden w-24 shrink-0 wco:block" />
-        ) : null}
-        {ownsDesktopTitleBar ? (
-          <span
-            aria-hidden
-            className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
-          />
         ) : null}
       </div>
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
+            onClose={props.onClosePanel}
             onAddBrowser={props.onAddBrowser}
             onAddBrowserInProfile={props.onAddBrowserInProfile}
             browserProfiles={browserProfiles}

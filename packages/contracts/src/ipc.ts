@@ -9,6 +9,11 @@ import type {
   BrowserImportSource,
   BrowserImportSourceId,
 } from "./browserImport.ts";
+import type {
+  BrowserExtension,
+  BrowserExtensionInstallInput,
+  BrowserExtensionInstallResult,
+} from "./browserExtensions.ts";
 import { AuthAccessTokenResult, AuthSessionState } from "./auth.ts";
 import { AdvertisedEndpoint } from "./remoteAccess.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
@@ -1319,6 +1324,15 @@ export interface DesktopPreviewBridge {
     readonly sourceProfileDirectory: string;
     readonly targetProfileId: string;
   }) => Promise<BrowserImportResult>;
+  listBrowserExtensions: () => Promise<ReadonlyArray<BrowserExtension>>;
+  /** The desktop shows its own permission prompt; resolves "cancelled" when the user declines. */
+  installBrowserExtension: (
+    input: BrowserExtensionInstallInput,
+  ) => Promise<BrowserExtensionInstallResult>;
+  setBrowserExtensionEnabled: (id: string, enabled: boolean) => Promise<void>;
+  removeBrowserExtension: (id: string) => Promise<void>;
+  /** Opens the extension's toolbar popup against the tab's browser profile. */
+  openBrowserExtensionPopup: (tabId: string, id: string) => Promise<void>;
   setAnnotationTheme: (theme: DesktopPreviewAnnotationTheme) => Promise<void>;
   setAnnotationSendEnabled: (tabId: string, enabled: boolean) => Promise<void>;
   annotationVoice: {

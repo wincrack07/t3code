@@ -133,6 +133,14 @@ export const BROWSER_IMPORT_SOURCES: ReadonlyArray<BrowserImportSourceDefinition
     keychainAccount: "Arc",
     macSegments: ["Arc", "User Data"],
   }),
+  // Aside (at.studio.AsideBrowser) is a Chromium fork that keeps profiles at its folder's root.
+  chromiumSource({
+    id: "aside",
+    name: "Aside",
+    keychainService: "Aside Safe Storage",
+    keychainAccount: "Aside",
+    macSegments: ["Aside"],
+  }),
   chromiumSource({
     id: "helium",
     name: "Helium",

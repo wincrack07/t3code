@@ -38,6 +38,7 @@ describe("RPC authorization scopes", () => {
   });
 
   it("requires settings permission to change keep-awake sessions", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeAuthorize)).toBe(AuthSettingsWriteScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeChange)).toBe(AuthSettingsWriteScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeSubscribe)).toBe(
       AuthOrchestrationReadScope,
@@ -458,6 +459,7 @@ it.effect(
       for (const method of [
         WS_METHODS.serverRunStorageCleanup,
         WS_METHODS.keepAwakeChange,
+        WS_METHODS.keepAwakeAuthorize,
       ] as const) {
         const group = WsRpcGroup.omit(
           ...[...WsRpcGroup.requests.keys()].filter(
@@ -479,9 +481,11 @@ it.effect(
           ),
         );
         const failure =
-          method === WS_METHODS.keepAwakeChange
-            ? yield* client[WS_METHODS.keepAwakeChange]({}).pipe(Effect.flip)
-            : yield* client[WS_METHODS.serverRunStorageCleanup]({}).pipe(Effect.flip);
+          method === WS_METHODS.keepAwakeAuthorize
+            ? yield* client[WS_METHODS.keepAwakeAuthorize]({ action: "install" }).pipe(Effect.flip)
+            : method === WS_METHODS.keepAwakeChange
+              ? yield* client[WS_METHODS.keepAwakeChange]({}).pipe(Effect.flip)
+              : yield* client[WS_METHODS.serverRunStorageCleanup]({}).pipe(Effect.flip);
         expect(failure).toMatchObject({
           requiredPermission: AuthSettingsWriteScope,
         });

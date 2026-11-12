@@ -1,3 +1,4 @@
+import { setAllProjectsExpanded } from "./sidebar/projectExpansion";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { openThreadInSplit } from "../threadColumnsStore";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -45,7 +46,6 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { PR_REVIEW_EXECUTION_SHIPPED } from "@t3tools/contracts";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -860,6 +860,11 @@ function OpenCommandPaletteDialog(props: {
   // Pinning from a row keeps rows in place while the palette is open.
   const projectSearchItems = useOrderWhileOpen(
     buildProjectSearchItems({
+      folderNameByProjectKey: new Map(
+        clientSettings.sidebarProjectFolders.flatMap((folder) =>
+          folder.projectKeys.map((key) => [key, folder.name] as const),
+        ),
+      ),
       projects: pickerProjects,
       projectGroupByTargetKey,
       locationByEnvironmentId: projectEnvironmentLocationById,
@@ -1522,7 +1527,7 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
       },
     });
-    if (PR_REVIEW_EXECUTION_SHIPPED && canRequestPrReview) {
+    if (canRequestPrReview) {
       const environmentId = activeThread.environmentId;
       const threadId = activeThread.id;
       actionItems.push({
@@ -1793,6 +1798,30 @@ function OpenCommandPaletteDialog(props: {
       await navigate({ to: "/activity" });
     },
   });
+
+  for (const expanded of [false, true]) {
+    actionItems.push({
+      kind: "action",
+      value: expanded ? "action:expand-projects" : "action:collapse-projects",
+      searchTerms: ["sidebar", "projects", "collapse", "expand"],
+      title: expanded ? "Expand all projects" : "Collapse all projects",
+      icon: <SquareKanbanIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        setAllProjectsExpanded(
+          projectGroups,
+          expanded,
+          projectGroups.find((group) =>
+            group.memberProjectRefs.some(
+              (ref) =>
+                ref.environmentId === contextualProjectRef?.environmentId &&
+                ref.projectId === contextualProjectRef?.projectId,
+            ),
+          )?.projectKey ?? null,
+          clientSettings.sidebarProjectFolders,
+        );
+      },
+    });
+  }
 
   actionItems.push({
     kind: "action",

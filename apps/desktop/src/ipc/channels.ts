@@ -104,6 +104,11 @@ export const PREVIEW_CLEAR_CACHE_CHANNEL = "desktop:preview-clear-cache";
 export const PREVIEW_GET_CONFIG_CHANNEL = "desktop:preview-get-config";
 export const PREVIEW_IMPORT_SOURCES_CHANNEL = "desktop:preview-import-sources";
 export const PREVIEW_IMPORT_COOKIES_CHANNEL = "desktop:preview-import-cookies";
+export const BROWSER_EXTENSIONS_LIST_CHANNEL = "desktop:browser-extensions-list";
+export const BROWSER_EXTENSIONS_INSTALL_CHANNEL = "desktop:browser-extensions-install";
+export const BROWSER_EXTENSIONS_SET_ENABLED_CHANNEL = "desktop:browser-extensions-set-enabled";
+export const BROWSER_EXTENSIONS_REMOVE_CHANNEL = "desktop:browser-extensions-remove";
+export const BROWSER_EXTENSIONS_OPEN_POPUP_CHANNEL = "desktop:browser-extensions-open-popup";
 export const PREVIEW_SET_ANNOTATION_THEME_CHANNEL = "desktop:preview-set-annotation-theme";
 export const PREVIEW_SET_ANNOTATION_SEND_ENABLED_CHANNEL =
   "desktop:preview-set-annotation-send-enabled";

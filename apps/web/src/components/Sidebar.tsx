@@ -1,3 +1,7 @@
+import { updateClientSettings } from "../hooks/useSettings";
+import { arrangeProjectFolders, moveProjectsToFolder, type ProjectFolder } from "../projectFolders";
+import { ProjectFolderEditor, ProjectFolderSuggestions } from "./sidebar/ProjectFolderEditor";
+import { ProjectGroupHeader } from "./sidebar/ProjectGroupHeader";
 import { sidebarProjectIsOther, sidebarNestedThreads } from "./Sidebar.logic";
 import { SidebarDisplayMenu } from "./sidebar/SidebarDisplayMenu";
 import { useTheme } from "../hooks/useTheme";
@@ -382,6 +386,7 @@ function useSidebarThreads(input: {
   // Set in boring mode: the project groups to fold active threads into, in order.
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
   readonly projectSettledGrouping: boolean;
+  readonly namedProjectFolders: readonly ProjectFolder[];
   readonly expandedNested: Readonly<Record<string, boolean>>;
   readonly showAllNested: Readonly<Record<string, boolean>>;
   readonly compactRows: boolean;
@@ -399,6 +404,7 @@ function useSidebarThreads(input: {
     routeRowThreadKey,
     folderGroups,
     projectSettledGrouping,
+    namedProjectFolders,
     expandedNested,
     showAllNested,
     compactRows,
@@ -481,6 +487,8 @@ function useSidebarThreads(input: {
   );
   const projectLimit = (key: string) => projectSettledLimits[key] ?? SETTLED_TAIL_INITIAL_COUNT;
   const projectIsOther = (group: SidebarProjectSnapshot) => {
+    if (namedProjectFolders.some((folder) => folder.projectKeys.includes(group.projectKey)))
+      return false;
     const belongs = (thread: EnvironmentThreadShell) =>
       group.memberProjectRefs.some(
         (ref) => ref.environmentId === thread.environmentId && ref.projectId === thread.projectId,
@@ -499,6 +507,11 @@ function useSidebarThreads(input: {
   const expandedGroups = projectSettledGrouping
     ? (folderGroups ?? []).filter(
         (group) =>
+          !namedProjectFolders.some(
+            (folder) =>
+              folder.projectKeys.includes(group.projectKey) &&
+              projectExpandedById[`project-group:${folder.id}`] === false,
+          ) &&
           projectSettledExpanded[group.projectKey] &&
           (otherProjectsExpanded || !projectIsOther(group)) &&
           resolveProjectExpanded(projectExpandedById, sidebarFolderExpansionKeys(group)),
@@ -572,6 +585,12 @@ function useSidebarThreads(input: {
                   threads,
                 ) > 0)),
         ).map((folder) => {
+          const namedFolder = namedProjectFolders.find((entry) =>
+            entry.projectKeys.includes(folder.group.projectKey),
+          );
+          const parentCollapsed =
+            namedFolder !== undefined &&
+            projectExpandedById[`project-group:${namedFolder.id}`] === false;
           const collapsed = !resolveProjectExpanded(
             projectExpandedById,
             sidebarFolderExpansionKeys(folder.group),
@@ -598,13 +617,12 @@ function useSidebarThreads(input: {
           return {
             group: folder.group,
             collapsed,
-            threads: collapsed
-              ? routeThreadOnly(folder.threads, routeRowThreadKey)
-              : folder.threads,
-            hiddenThreads: collapsed
-              ? folder.threads.filter((thread) => threadShellKey(thread) !== routeRowThreadKey)
-              : EMPTY_THREADS,
-            settledRows: projectSettledGrouping ? settledRows : EMPTY_THREADS,
+            threads: collapsed || parentCollapsed ? EMPTY_THREADS : folder.threads,
+            hiddenThreads: folder.threads,
+            settledRows:
+              projectSettledGrouping && !collapsed && !parentCollapsed
+                ? settledRows
+                : EMPTY_THREADS,
             settledCount: count,
             settledExpanded: expanded,
             other: projectSettledGrouping && projectIsOther(folder.group),
@@ -1113,6 +1131,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   });
   const { theme } = useTheme();
+  const namedProjectFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const [folderEditor, setFolderEditor] = useState<{
+    folder?: ProjectFolder;
+    projectKeys?: readonly string[];
+  } | null>(null);
+  const [suggestFolders, setSuggestFolders] = useState(false);
+  const folderLastVisitedByThreadKey = useUiStateStore((state) => state.threadLastVisitedAtById);
+  const folderExpandedById = useUiStateStore((state) => state.projectExpandedById);
+  const setFolderExpanded = useUiStateStore((state) => state.setProjectExpanded);
   const sidebarDensity = useClientSettings((settings) => settings.sidebarDensity);
   const sidebarThreadGrouping = useClientSettings((settings) => settings.sidebarThreadGrouping);
   const compactRows =
@@ -1264,6 +1291,28 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
+  const activeFolderThread = threads.find((thread) => threadShellKey(thread) === routeRowThreadKey);
+  const activeFolderProjectKey =
+    projectGroups.find((group) =>
+      group.memberProjectRefs.some(
+        (ref) =>
+          ref.environmentId === routeThreadRef?.environmentId &&
+          ref.projectId === activeFolderThread?.projectId,
+      ),
+    )?.projectKey ?? null;
+  const activeNamedFolderId = namedProjectFolders.find((folder) =>
+    folder.projectKeys.includes(activeFolderProjectKey ?? ""),
+  )?.id;
+  const revealProject =
+    routeRowThreadKey !== null &&
+    (routeReveal.observedKey !== routeRowThreadKey || routeReveal.pendingKey === routeRowThreadKey);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- navigation reveals the destination project in persisted sidebar expansion state
+  useEffect(() => {
+    if (!revealProject || !activeFolderProjectKey) return;
+    useUiStateStore.getState().setProjectExpanded(activeFolderProjectKey, true);
+    if (activeNamedFolderId)
+      useUiStateStore.getState().setProjectExpanded(`project-group:${activeNamedFolderId}`, true);
+  }, [revealProject, activeFolderProjectKey, activeNamedFolderId]);
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
 
   // History, the palette and links can open a thread the scope hides or the list
@@ -1415,13 +1464,42 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       : { id: "pin", label: "Pin project", icon: "pin" },
                   ]
                 : []),
+              {
+                id: "move-group",
+                label: "Move to group",
+                children: [
+                  ...namedProjectFolders.map((folder) => ({
+                    id: `move-group:${folder.id}`,
+                    label: `${folder.emoji} ${folder.name}`.trim(),
+                  })),
+                  { id: "new-group", label: "New group…" },
+                ],
+              },
+              ...(namedProjectFolders.some((folder) =>
+                folder.projectKeys.includes(group.projectKey),
+              )
+                ? [{ id: "remove-group", label: "Remove from group" }]
+                : []),
               { id: "project-settings", label: "Project settings", icon: "settings" },
             ],
             position,
           ),
         );
         if (clicked._tag === "Failure") return;
+        if (clicked.value?.startsWith("move-group:") || clicked.value === "remove-group") {
+          updateClientSettings({
+            sidebarProjectFolders: moveProjectsToFolder(
+              namedProjectFolders,
+              [group.projectKey],
+              clicked.value === "remove-group" ? null : clicked.value.slice("move-group:".length),
+            ),
+          });
+          return;
+        }
         switch (clicked.value) {
+          case "new-group":
+            setFolderEditor({ projectKeys: [group.projectKey] });
+            return;
           case "new-thread":
             startThreadInProjectFolder(group);
             return;
@@ -1492,6 +1570,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     delegatedUnderParent,
     routeRowThreadKey,
     projectSettledGrouping,
+    namedProjectFolders,
     expandedNested,
     showAllNested,
     compactRows,
@@ -1502,7 +1581,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         : scopedProjectGroups
       : null,
     keepEmptyFolders: (group) =>
-      scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
+      scopedProjectGroups.length > 0 ||
+      namedProjectFolders.some((folder) => folder.projectKeys.includes(group.projectKey)) ||
+      (group.pinned && !group.archived),
   });
   const expandedFamilyKey = JSON.stringify(
     compactRows ? orderedThreadKeys.filter((key) => expandedNested[key]) : [],
@@ -3142,10 +3223,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   return (
     <>
+      {folderEditor ? (
+        <ProjectFolderEditor {...folderEditor} onClose={() => setFolderEditor(null)} />
+      ) : null}
+      {suggestFolders ? (
+        <ProjectFolderSuggestions
+          projects={projectGroups}
+          onClose={() => setSuggestFolders(false)}
+        />
+      ) : null}
       <SidebarChromeHeader isElectron={isElectron} />
       <SidebarContent
         ref={sidebarContentRef}
-        className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
@@ -3351,7 +3440,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       </ComboboxList>
                     </ComboboxPopup>
                   </Combobox>
-                  <SidebarDisplayMenu />
+                  <SidebarDisplayMenu
+                    projects={projectGroups}
+                    activeProjectKey={activeFolderProjectKey}
+                    onCreateGroup={() => setFolderEditor({})}
+                    onSuggestGroups={() => setSuggestFolders(true)}
+                  />
                 </>
               }
               onOpenActivity={handleOpenActivityClick}
@@ -3710,107 +3804,147 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         }
                         if (projectFolders !== null && item.marker === "active-placeholder") {
                           let otherHeaderShown = false;
-                          const folders = [
-                            ...projectFolders.filter((folder) => !folder.other),
-                            ...projectFolders.filter((folder) => folder.other),
-                          ];
-                          for (const folder of folders) {
-                            if (folder.other && !otherHeaderShown) {
-                              otherHeaderShown = true;
+                          const entries = arrangeProjectFolders(
+                            [
+                              ...projectFolders.filter((folder) => !folder.other),
+                              ...projectFolders.filter((folder) => folder.other),
+                            ],
+                            namedProjectFolders,
+                          );
+                          for (const entry of entries) {
+                            if (entry.kind === "folder") {
+                              const collapsed =
+                                folderExpandedById[`project-group:${entry.folder.id}`] === false;
                               items.push(
-                                <li key="other-projects" className="list-none">
-                                  <button
-                                    type="button"
-                                    data-sidebar-row="other-projects"
-                                    aria-expanded={otherProjectsExpanded}
-                                    onClick={toggleOtherProjects}
-                                    className="flex h-8 w-full items-center gap-2 px-2 text-xs text-sidebar-muted-foreground"
-                                  >
-                                    <ChevronDownIcon
-                                      className={cn(
-                                        "size-3",
-                                        !otherProjectsExpanded && "-rotate-90",
-                                      )}
-                                    />
-                                    Other projects
-                                  </button>
-                                </li>,
+                                <ProjectGroupHeader
+                                  key={`project-group:${entry.folder.id}`}
+                                  folder={entry.folder}
+                                  collapsed={collapsed}
+                                  threads={entry.projects.flatMap(
+                                    (project) => project.hiddenThreads,
+                                  )}
+                                  onToggle={() =>
+                                    setFolderExpanded(`project-group:${entry.folder.id}`, collapsed)
+                                  }
+                                  onRename={() => setFolderEditor({ folder: entry.folder })}
+                                  onDelete={() =>
+                                    updateClientSettings({
+                                      sidebarProjectFolders: namedProjectFolders.filter(
+                                        (folder) => folder.id !== entry.folder.id,
+                                      ),
+                                    })
+                                  }
+                                />,
                               );
+                              if (collapsed) continue;
                             }
-                            if (folder.other && !otherProjectsExpanded) continue;
-                            items.push(
-                              <SidebarProjectFolderHeader
-                                key={`project-folder:${folder.group.projectKey}`}
-                                group={folder.group}
-                                collapsed={folder.collapsed}
-                                hiddenThreads={folder.hiddenThreads}
-                                onToggle={toggleProjectFolder}
-                                onNewThread={startThreadInProjectFolder}
-                                onContextMenu={handleProjectFolderContextMenu}
-                              />,
-                            );
-                            for (const thread of folder.threads) {
-                              items.push(
-                                renderThreadRow(
-                                  thread,
-                                  sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
-                                  sidebarFolderRowId(folder.group.projectKey),
-                                ),
-                              );
-                            }
-                            if (
-                              projectSettledGrouping &&
-                              !folder.collapsed &&
-                              folder.settledCount > 0
-                            ) {
-                              const shelfKey = `project-settled:${folder.group.projectKey}`;
-                              items.push(
-                                <li key={shelfKey} className="list-none">
-                                  <button
-                                    type="button"
-                                    data-sidebar-row={shelfKey}
-                                    data-sidebar-parent={sidebarFolderRowId(
-                                      folder.group.projectKey,
-                                    )}
-                                    aria-expanded={folder.settledExpanded}
-                                    onClick={() => toggleProjectSettled(folder.group.projectKey)}
-                                    className="flex h-7 w-full items-center gap-2 ps-9 pe-2 text-xs text-sidebar-muted-foreground"
-                                  >
-                                    <ChevronDownIcon
-                                      className={cn(
-                                        "size-3",
-                                        !folder.settledExpanded && "-rotate-90",
-                                      )}
-                                    />
-                                    Settled · {folder.settledCount}
-                                  </button>
-                                </li>,
-                              );
-                              for (const thread of folder.settledRows)
-                                items.push(renderThreadRow(thread, "settled", shelfKey));
-                              if (
-                                folder.settledExpanded &&
-                                folder.settledCount > folder.settledRows.length
-                              )
+                            for (const folder of entry.kind === "folder"
+                              ? entry.projects
+                              : [entry.project]) {
+                              if (entry.kind === "project" && folder.other && !otherHeaderShown) {
+                                otherHeaderShown = true;
                                 items.push(
-                                  <li key={`${shelfKey}:more`} className="list-none ps-9">
+                                  <li key="other-projects" className="list-none">
                                     <button
                                       type="button"
-                                      className="h-7 text-xs text-sidebar-muted-foreground"
-                                      onClick={() =>
-                                        projectShelf.failed
-                                          ? projectShelf.retry()
-                                          : showMoreProjectSettled(folder.group.projectKey)
-                                      }
+                                      data-sidebar-row="other-projects"
+                                      aria-expanded={otherProjectsExpanded}
+                                      onClick={toggleOtherProjects}
+                                      className="flex h-8 w-full items-center gap-2 px-2 text-xs text-sidebar-muted-foreground"
                                     >
-                                      {projectShelf.failed
-                                        ? "Retry"
-                                        : projectShelf.loading
-                                          ? "Loading…"
-                                          : "Show more"}
+                                      <ChevronDownIcon
+                                        className={cn(
+                                          "size-3",
+                                          !otherProjectsExpanded && "-rotate-90",
+                                        )}
+                                      />
+                                      Other projects
                                     </button>
                                   </li>,
                                 );
+                              }
+                              if (
+                                entry.kind === "project" &&
+                                folder.other &&
+                                !otherProjectsExpanded
+                              )
+                                continue;
+                              items.push(
+                                <SidebarProjectFolderHeader
+                                  key={`project-folder:${folder.group.projectKey}`}
+                                  group={folder.group}
+                                  indented={entry.kind === "folder"}
+                                  collapsed={folder.collapsed}
+                                  localLastVisitedAtById={folderLastVisitedByThreadKey}
+                                  hiddenThreads={folder.hiddenThreads}
+                                  onToggle={toggleProjectFolder}
+                                  onNewThread={startThreadInProjectFolder}
+                                  onContextMenu={handleProjectFolderContextMenu}
+                                />,
+                              );
+                              for (const thread of folder.threads) {
+                                items.push(
+                                  renderThreadRow(
+                                    thread,
+                                    sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
+                                    sidebarFolderRowId(folder.group.projectKey),
+                                  ),
+                                );
+                              }
+                              if (
+                                projectSettledGrouping &&
+                                !folder.collapsed &&
+                                folder.settledCount > 0
+                              ) {
+                                const shelfKey = `project-settled:${folder.group.projectKey}`;
+                                items.push(
+                                  <li key={shelfKey} className="list-none">
+                                    <button
+                                      type="button"
+                                      data-sidebar-row={shelfKey}
+                                      data-sidebar-parent={sidebarFolderRowId(
+                                        folder.group.projectKey,
+                                      )}
+                                      aria-expanded={folder.settledExpanded}
+                                      onClick={() => toggleProjectSettled(folder.group.projectKey)}
+                                      className="flex h-7 w-full items-center gap-2 ps-9 pe-2 text-xs text-sidebar-muted-foreground"
+                                    >
+                                      <ChevronDownIcon
+                                        className={cn(
+                                          "size-3",
+                                          !folder.settledExpanded && "-rotate-90",
+                                        )}
+                                      />
+                                      Settled · {folder.settledCount}
+                                    </button>
+                                  </li>,
+                                );
+                                for (const thread of folder.settledRows)
+                                  items.push(renderThreadRow(thread, "settled", shelfKey));
+                                if (
+                                  folder.settledExpanded &&
+                                  folder.settledCount > folder.settledRows.length
+                                )
+                                  items.push(
+                                    <li key={`${shelfKey}:more`} className="list-none ps-9">
+                                      <button
+                                        type="button"
+                                        className="h-7 text-xs text-sidebar-muted-foreground"
+                                        onClick={() =>
+                                          projectShelf.failed
+                                            ? projectShelf.retry()
+                                            : showMoreProjectSettled(folder.group.projectKey)
+                                        }
+                                      >
+                                        {projectShelf.failed
+                                          ? "Retry"
+                                          : projectShelf.loading
+                                            ? "Loading…"
+                                            : "Show more"}
+                                      </button>
+                                    </li>,
+                                  );
+                              }
                             }
                           }
                           continue;

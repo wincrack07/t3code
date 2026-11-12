@@ -133,6 +133,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --workspace-titlebar-control-gap: 0.75rem;
   --workspace-titlebar-scroll-fade-height: 1.5rem;
   --chat-content-max-width: 46rem;
+  --chat-content-padding: 0.25rem;
+  --chat-lane-padding: 0.75rem;
+  --conversation-font-scale: 0.875;
+  --font-size-conversation: calc(1rem * var(--conversation-font-scale));
   --thread-details-panel-width: 17.5rem;
   --motion-ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
   --motion-ease-snap: cubic-bezier(0.32, 0.72, 0, 1);
@@ -143,6 +147,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --scroll-shadow-color: rgb(0 0 0 / 6%);
   --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
   --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
+  --composer-line-height: 1.625;
+  --composer-control-inset: calc(var(--spacing) * 1);
+  --composer-body-pad-y: calc(var(--spacing) * 2);
+  --composer-tile-radius: var(--radius);
+  --user-bubble-radius: calc(var(--radius) + 8px);
+  --user-bubble-measure: 72%;
   /* The prompt on phones: iOS zooms into any input under 16px on focus. */
   --font-size-prompt-touch: max(var(--font-size-prompt, 1rem), 16px);
   /* Horizontal gutter shared by the page header and the chat column, clear of
@@ -984,6 +994,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     width: 100%;
     min-width: 0;
     max-width: var(--chat-content-max-width);
+    padding-inline: var(--chat-content-padding);
   }
 
   .messages-timeline-row-frame {
@@ -1254,6 +1265,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --spacing: 0.21875rem;
   --radius: 0.375rem;
   --control-radius: 0.375rem;
+  --conversation-font-scale: 0.8125;
   --text-sm: 0.8125rem;
   --text-sm--line-height: calc(1.125 / 0.8125);
 }
@@ -1758,13 +1770,73 @@ html[data-theme-id="t3-chat"] [data-app-sidebar] {
    token is that wash over the canvas. */
 html[data-theme-id="claude"]:not([data-theme-id=""]),
 html[data-theme-id="claude"] [data-app-sidebar] {
-  --accent: color-mix(in srgb, var(--app-theme-text) 7%, transparent);
+  --accent: color-mix(in srgb, var(--app-theme-text) 5%, transparent);
+
+  @variant dark {
+    --accent: color-mix(in srgb, var(--app-theme-text) 7.5%, transparent);
+  }
+}
+
+/* Controls: outline buttons are the app's secondary button (a translucent fill
+   with a hairline in light, a brighter fill alone in dark), primary hovers one
+   step lighter, and on-states (switch, checkbox, radio) use the blue fill. */
+html[data-theme-id="claude"] [data-slot="button"][data-variant="outline"] {
+  border-color: color-mix(in srgb, var(--app-theme-text) 10%, transparent);
+  background: color-mix(in srgb, var(--app-theme-text) 5%, transparent);
+  box-shadow: none;
+
+  &::before {
+    box-shadow: none;
+  }
+
+  &:is(:hover, [data-pressed]) {
+    background: color-mix(in srgb, var(--app-theme-text) 7.5%, transparent);
+  }
+
+  @variant dark {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--app-theme-text) 15%, transparent);
+
+    &:is(:hover, [data-pressed]) {
+      background: color-mix(in srgb, var(--app-theme-text) 21.6%, transparent);
+    }
+  }
+}
+
+html[data-theme-id="claude"]
+  [data-slot="button"][data-variant="default"]:is(:hover, [data-pressed]) {
+  background: var(--app-theme-message-action-hover);
+}
+
+html[data-theme-id="claude"] [data-slot="switch"][data-checked],
+html[data-theme-id="claude"]
+  :is([data-slot="checkbox-indicator"], [data-slot="radio-indicator"])[data-checked] {
+  background: var(--app-theme-focus);
+  color: var(--color-white);
+}
+
+html[data-theme-id="claude"] [data-slot="switch-thumb"] {
+  background: var(--color-white);
+}
+
+html[data-theme-id="claude"] [data-slot="radio-indicator"][data-checked]::before {
+  background: var(--color-white);
+}
+
+html[data-theme-id="claude"] [data-slot="switch"][data-checked]:hover:not([data-disabled]) {
+  background: color-mix(in srgb, var(--app-theme-focus) 92%, black);
+}
+
+@media (min-width: 40rem) {
+  html[data-theme-id="claude"] [data-slot="switch"][data-size="default"] {
+    --thumb-size: 1.125rem;
+  }
 }
 
 /* Menus and popovers are solid raised panels with a 14px corner, a 6px gutter
    and 8px rows, not frosted glass; highlighted rows use the selected wash. */
 html[data-theme-id="claude"] :is([data-slot="menu-popup"], [data-slot="popover-popup"]) {
-  --accent: color-mix(in srgb, var(--app-theme-text) 14%, transparent);
+  --accent: color-mix(in srgb, var(--app-theme-text) 10%, transparent);
   background: var(--popover);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -1803,6 +1875,98 @@ html[data-theme-id="claude"]
     [data-slot="menu-sub-trigger"]
   ) {
   border-radius: 0.5rem;
+  padding-inline: 0.625rem;
+}
+
+html[data-theme-id="claude"] [data-slot="menu-popup"] {
+  @variant dark {
+    --accent: color-mix(in srgb, var(--app-theme-text) 15%, transparent);
+  }
+}
+
+/* Tooltips are small dark pills: 13/18 text, 8px by 3px, no border. */
+html[data-theme-id="claude"] [data-slot="tooltip-popup"][data-variant="default"] {
+  min-height: 1.5rem;
+  border-color: transparent;
+  background: var(--app-theme-message-action);
+  color: var(--app-theme-message-action-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+
+  &::before {
+    box-shadow: none;
+  }
+
+  & > [data-slot="tooltip-viewport"] {
+    padding: 0.1875rem 0.5rem;
+  }
+
+  @variant dark {
+    background: var(--app-theme-surface-raised);
+    color: var(--app-theme-text);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 4%),
+      0 1px 2px rgb(0 0 0 / 24%);
+  }
+}
+
+/* Dialogs and the command palette are solid popover panels with a hairline and
+   a soft two-layer shadow over a plain dimming backdrop. */
+html[data-theme-id="claude"] .dialog-glass {
+  background: var(--popover);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: color-mix(in srgb, var(--contrast-foreground) 10%, transparent);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 4px 8px rgb(0 0 0 / 8%),
+    0 12px 28px -2px rgb(0 0 0 / 8%);
+
+  @variant dark {
+    box-shadow:
+      0 4px 8px rgb(0 0 0 / 24%),
+      0 12px 28px -2px rgb(0 0 0 / 24%);
+  }
+}
+
+html[data-theme-id="claude"] .dialog-backdrop {
+  background: rgb(0 0 0 / 40%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+
+  @variant dark {
+    background: rgb(0 0 0 / 50%);
+  }
+}
+
+html[data-theme-id="claude"] [data-slot="command-dialog-popup"] {
+  overflow: hidden;
+  border-radius: 0.875rem;
+}
+
+html[data-theme-id="claude"] [data-slot="command-item"] {
+  border-radius: 0.5rem;
+
+  &[data-highlighted] {
+    background: color-mix(in srgb, var(--app-theme-text) 10%, transparent);
+  }
+}
+
+/* Sidebar rows (and the sliding selection pill, which copies them) use the
+   8px control corner; scrollbar thumbs are the app's 20% wash, 30% on hover. */
+html[data-theme-id="claude"] [data-app-sidebar] [data-sidebar-row] {
+  border-radius: 0.5rem;
+}
+
+html[data-theme-id="claude"] {
+  --app-scrollbar-thumb: rgb(0 0 0 / 20%);
+  --app-scrollbar-thumb-hover: rgb(0 0 0 / 30%);
+
+  @variant dark {
+    --app-scrollbar-thumb: rgb(255 255 255 / 20%);
+    --app-scrollbar-thumb-hover: rgb(255 255 255 / 30%);
+  }
 }
 
 html[data-theme-id="claude"] :is([data-sidebar-control], [data-sidebar-history]) svg {
@@ -1811,6 +1975,60 @@ html[data-theme-id="claude"] :is([data-sidebar-control], [data-sidebar-history])
 
 html[data-theme-id="claude"] [data-sidebar-history] button:disabled {
   opacity: 0.4;
+}
+
+/* Claude's composer is one 14px card: a single hairline, a soft lift that
+   deepens on focus, and 28px controls centred on the text row with an 8px inset. */
+html[data-theme-id="claude"] {
+  --composer-ring-color: rgb(0 0 0 / 12%);
+  --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
+  --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
+  --composer-line-height: round(calc(var(--font-size-prompt, var(--text-sm)) * 1.4), 1px);
+  --composer-control-inset: 0.5rem;
+  --composer-body-pad-y: calc(0.5rem + (1.75rem - var(--composer-line-height)) / 2);
+  --composer-tile-radius: 0.625rem;
+
+  @variant dark {
+    --composer-ring-color: rgb(255 255 255 / 8%);
+    --composer-lift-rest: 0 4px 20px rgb(0 0 0 / 3.5%);
+    --composer-lift-focus: 0 4px 20px rgb(0 0 0 / 7.5%);
+  }
+}
+
+/* Messages: 15/21 replies, a 12px user bubble up to 85% wide, 13/19 code in
+   12px blocks. A reply size chosen in Appearance still wins (inline style). */
+html[data-theme-id="claude"] {
+  --font-size-reply: 0.9375rem;
+  --user-bubble-radius: 0.75rem;
+  --user-bubble-measure: 85%;
+}
+
+html[data-theme-id="claude"] [data-assistant-reply] .chat-markdown {
+  line-height: 1.4;
+}
+
+html[data-theme-id="claude"] .chat-markdown pre {
+  line-height: 1.4615;
+}
+
+html[data-theme-id="claude"] :is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock {
+  border-radius: 0.75rem;
+}
+
+html[data-theme-id="claude"] [data-slot="composer-shell"] {
+  --chat-composer-glass-surface: var(--app-theme-surface);
+}
+
+html[data-theme-id="claude"]
+  [data-slot="composer-shell"]:not(:has([data-composer-banner-surface="attached"]))
+  [data-chat-composer-main-surface] {
+  padding: 0;
+  border-color: var(--composer-ring-color);
+  border-radius: 0.875rem;
+
+  & > [data-chat-composer-surface] {
+    border-radius: calc(0.875rem - 1px);
+  }
 }
 
 /* Recompute contrast wherever a subtree owns its own semantic color palette. */
@@ -2056,11 +2274,19 @@ code {
   }
 }
 
+/* Anything clickable inside a drag region must cut itself out of it, or the
+   window swallows the click to start a drag. */
 .drag-region button,
 .drag-region input,
 .drag-region textarea,
 .drag-region select,
-.drag-region a {
+.drag-region a,
+.drag-region label,
+.drag-region [role="button"],
+.drag-region [role="tab"],
+.drag-region [role="menuitem"],
+.drag-region [role="separator"],
+.drag-region [contenteditable]:not([contenteditable="false"]) {
   -webkit-app-region: no-drag;
 }
 
@@ -2786,18 +3012,19 @@ code {
 @layer components {
   .chat-composer-lane {
     padding-inline-start: calc(
-      env(safe-area-inset-left) + 0.75rem + var(--chat-lane-inset-start, 0px)
+      env(safe-area-inset-left) + var(--chat-lane-padding) + var(--chat-lane-inset-start, 0px)
     );
     padding-inline-end: calc(
-      env(safe-area-inset-right) + 0.75rem + var(--chat-lane-inset-end, 0px)
+      env(safe-area-inset-right) + var(--chat-lane-padding) + var(--chat-lane-inset-end, 0px)
     );
   }
   [data-chat-canvas] .messages-timeline-scroll {
     padding-inline-start: calc(
-      0.75rem + var(--chat-lane-inset-start, 0px) - var(--chat-timeline-gutter, 0px)
+      var(--chat-lane-padding) + var(--chat-lane-inset-start, 0px) -
+        var(--chat-timeline-gutter, 0px)
     );
     padding-inline-end: calc(
-      0.75rem + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
+      var(--chat-lane-padding) + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
     );
   }
   .chat-scroll-to-bottom,
@@ -2806,19 +3033,8 @@ code {
     inset-inline-end: var(--chat-lane-inset-end, 0px);
   }
   @media (min-width: 640px) {
-    .chat-composer-lane {
-      padding-inline-start: calc(
-        env(safe-area-inset-left) + 3rem + var(--chat-lane-inset-start, 0px)
-      );
-      padding-inline-end: calc(env(safe-area-inset-right) + 3rem + var(--chat-lane-inset-end, 0px));
-    }
-    [data-chat-canvas] .messages-timeline-scroll {
-      padding-inline-start: calc(
-        3rem + var(--chat-lane-inset-start, 0px) - var(--chat-timeline-gutter, 0px)
-      );
-      padding-inline-end: calc(
-        3rem + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
-      );
+    [data-chat-canvas] {
+      --chat-lane-padding: 3rem;
     }
   }
 }
@@ -2870,13 +3086,18 @@ code {
 
 :root {
   --font-reply: var(--font-sans);
-  --font-size-reply: var(--text-sm);
+  --font-size-reply: var(--font-size-conversation);
 }
 
-html[data-theme-id="claude"] {
+:root[data-theme-id="claude"] {
+  --conversation-font-scale: 0.9375;
   --font-sans:
     "Anthropic Sans", -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui,
     sans-serif;
+}
+
+[data-user-message-body] .chat-markdown {
+  font-size: var(--font-size-conversation);
 }
 
 [data-assistant-reply] .chat-markdown {

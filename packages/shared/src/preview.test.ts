@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   normalizePreviewUrl,
+  environmentPortTargetFromUrl,
   PreviewUrlNormalizationError,
   resolveAddressBarInput,
   previewPdfAssetUrl,
@@ -192,5 +193,34 @@ describe("normalizePreviewUrl", () => {
     }
     expect(normalizePreviewUrl("localhost:3000")).toBe("http://localhost:3000/");
     expect(normalizePreviewUrl("devbox:8080")).toBe("https://devbox:8080/");
+  });
+});
+
+describe("environmentPortTargetFromUrl", () => {
+  it.each([
+    ["localhost:5733/pair?mode=dev#token=test", 5733, "http", "/pair?mode=dev#token=test"],
+    ["http://127.0.0.1:1/", 1, "http", "/"],
+    ["http://[::1]:65535/path#test", 65535, "http", "/path#test"],
+    ["http://[0:0:0:0:0:0:0:1]:3000/", 3000, "http", "/"],
+    ["0.0.0.0:3000/", 3000, "http", "/"],
+    ["http://localhost/", 80, "http", "/"],
+    ["https://localhost/", 443, "https", "/"],
+    ["http://LOCALHOST:8080/", 8080, "http", "/"],
+  ])("classifies %s as a port in the environment", (url, port, protocol, path) => {
+    expect(environmentPortTargetFromUrl(url)).toEqual({
+      kind: "environment-port",
+      port,
+      protocol,
+      path,
+    });
+  });
+
+  it.each([
+    "https://example.com:3000/",
+    "http://localhost.example.com:3000/",
+    "http://192.168.1.1:3000/",
+    "http://[::2]:3000/",
+  ])("keeps a non-loopback website as a literal URL: %s", (url) => {
+    expect(environmentPortTargetFromUrl(url)).toBeNull();
   });
 });

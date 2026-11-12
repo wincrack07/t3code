@@ -1125,7 +1125,7 @@ function ComposerPromptEditorTiptapInner(
 
   const editorAttributes = {
     class: cn(
-      "composer-tiptap -m-1 block max-h-52 min-h-[calc(2lh+--spacing(2))] sm:min-h-[1lh] overflow-y-auto p-1 whitespace-pre-wrap wrap-break-word bg-transparent leading-relaxed text-foreground focus:outline-none",
+      "composer-tiptap -m-1 block max-h-52 min-h-[calc(2lh+--spacing(2))] sm:min-h-[1lh] overflow-y-auto p-1 whitespace-pre-wrap wrap-break-word bg-transparent leading-(--composer-line-height) text-foreground focus:outline-none",
       className,
     ),
     "data-testid": "composer-editor",
@@ -1917,7 +1917,7 @@ function ComposerPromptEditorTiptapInner(
               <div
                 className={cn(
                   // One line tall from `sm` up: a wrapped placeholder would paint outside the box.
-                  "pointer-events-none absolute inset-0 leading-relaxed text-placeholder sm:truncate",
+                  "pointer-events-none absolute inset-0 leading-(--composer-line-height) text-placeholder sm:truncate",
                   placeholderClassName,
                 )}
               >

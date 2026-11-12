@@ -47,7 +47,7 @@ import {
 } from "@t3tools/contracts";
 import { AgentScope, agentScopeLauncherScript } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import { normalizePreviewUrl } from "@t3tools/shared/preview";
+import { normalizePreviewUrl, environmentPortTargetFromUrl } from "@t3tools/shared/preview";
 import { resolvePreviewViewport } from "@t3tools/shared/previewViewport";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
@@ -2125,6 +2125,23 @@ const make = Effect.gen(function* () {
                   assertNavigationSucceeded(tab);
                 })
                 .catch(async (cause: unknown) => {
+                  if (
+                    url &&
+                    environmentPortTargetFromUrl(url) &&
+                    cause instanceof Error &&
+                    cause.message.includes("ERR_CONNECTION_REFUSED")
+                  ) {
+                    if ((open.open ?? open.show) !== false) {
+                      await runPromise(
+                        manager.requestReveal({
+                          threadId: tab.threadId,
+                          tabId: tab.tabId,
+                          force: (open.open ?? open.show) === true,
+                        }),
+                      );
+                    }
+                    throw cause;
+                  }
                   // Playwright rejects downloads too; their tab must survive to save the file.
                   if (cause instanceof Error && cause.message.includes("Download is starting")) {
                     throw cause;

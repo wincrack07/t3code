@@ -5,6 +5,7 @@ import * as DateTime from "effect/DateTime";
 
 import {
   resolveWorkEntryToolPresentation,
+  summarizeToolGroup,
   toolItemForDisplay,
   type WorkLogPresentationEntry,
   workEntryIndicatesToolFailure,
@@ -202,5 +203,43 @@ describe("resolveWorkEntryToolPresentation", () => {
         toolData: { server: "another-server", tool: "preview_click" },
       }),
     ).toBeNull();
+  });
+});
+
+describe("summarizeToolGroup", () => {
+  const entry = (
+    id: string,
+    fields: Partial<WorkLogPresentationEntry>,
+  ): WorkLogPresentationEntry => ({
+    id,
+    createdAt: "2026-09-08T00:00:00.000Z",
+    label: id,
+    tone: "tool",
+    toolLifecycleStatus: "completed",
+    ...fields,
+  });
+  const command = (id: string) => entry(id, { itemType: "command_execution", command: "vp test" });
+  const read = (id: string) => entry(id, { requestKind: "file-read" });
+  const edit = (id: string) => entry(id, { itemType: "file_change", changedFiles: [`${id}.ts`] });
+  const search = (id: string) => entry(id, { itemType: "web_search" });
+  const update = (id: string) =>
+    ({
+      id,
+      createdAt: "2026-09-08T00:00:00.000Z",
+      label: id,
+      tone: "info",
+    }) as WorkLogPresentationEntry;
+
+  it.each([
+    ["one kind", [command("a"), command("b")], "Ran 2 commands"],
+    ["kinds in order", [read("a"), command("b")], "Read 1 file, ran 1 command"],
+    [
+      "at most three kinds, then a count of the rest",
+      [read("a"), edit("b"), command("c"), search("d"), update("e")],
+      "Read 1 file, changed 1 file, ran 1 command +2",
+    ],
+    ["thoughts alone", [entry("t", { itemType: "reasoning", tone: "thinking" })], "Thought"],
+  ] as const)("names %s", (_, entries, summary) => {
+    expect(summarizeToolGroup(entries).summary).toBe(summary);
   });
 });

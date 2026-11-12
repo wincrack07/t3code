@@ -9,7 +9,13 @@ import { useComposerDraftStore } from "../composerDraftStore";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useResizeDrag } from "../hooks/useResizeDrag";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import { observeResize } from "../lib/observeResize";
+import {
+  CHAT_MIN_WIDTH,
+  PANEL_COLUMN_MIN_WIDTH,
+  RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY,
+} from "../rightPanelLayout";
+import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
 import { useQuietThreadShell } from "../state/entities";
 import {
   useThreadColumnsStore,
@@ -38,12 +44,16 @@ function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadCol
   };
   const { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture } =
     useResizeDrag<HTMLDivElement>((event) => {
-      const left = event.currentTarget.parentElement;
-      const right = left?.nextElementSibling as HTMLElement | null;
+      // The divider sits at the start of the right column, after its title strip, so its
+      // no-drag region comes after both columns' drag regions.
+      const right = event.currentTarget.parentElement;
+      const left = right?.previousElementSibling as HTMLElement | null;
       if (!left || !right) return null;
       const start = left.getBoundingClientRect().width;
       const total = start + right.getBoundingClientRect().width;
       const weight = column.width + next.width;
+      const leftMin = Math.min(parseFloat(getComputedStyle(left).minWidth) || 0, total / 2);
+      const rightMin = Math.min(parseFloat(getComputedStyle(right).minWidth) || 0, total / 2);
       const apply = (width: number) => {
         left.style.setProperty("--column-weight", String((width / total) * weight));
         right.style.setProperty("--column-weight", String(((total - width) / total) * weight));
@@ -51,7 +61,7 @@ function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadCol
       return {
         width: start,
         edge: "right",
-        bounds: { min: Math.min(280, total / 3), max: total - Math.min(280, total / 3) },
+        bounds: { min: leftMin, max: total - rightMin },
         resize(width) {
           apply(width);
           return width;
@@ -71,7 +81,7 @@ function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadCol
       aria-label="Resize thread columns"
       aria-orientation="vertical"
       tabIndex={0}
-      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none hover:bg-primary/20 focus-visible:bg-primary/20"
+      className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none hover:bg-primary/20 focus-visible:bg-primary/20 [-webkit-app-region:no-drag]"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -96,6 +106,7 @@ function Column({
   active,
   multiple,
   first,
+  previous,
   next,
   background,
   target,
@@ -109,10 +120,15 @@ function Column({
   active: boolean;
   multiple: boolean;
   first: boolean;
+  previous?: ThreadColumn | undefined;
   next?: ThreadColumn | undefined;
   background: boolean;
 }) {
   const title = useQuietThreadShell(column.threadRef)?.title ?? "Thread";
+  const inlinePanelOpen = useRightPanelStore((state) => {
+    const panel = selectThreadRightPanelState(state.byThreadKey, column.threadRef);
+    return panel.isOpen && panel.maximized !== true;
+  });
   const composer = useComposerHandleContext();
   const activate = () => useThreadColumnsStore.getState().activate(column.id);
   const dropRef = useRef<HTMLElement>(null);
@@ -145,7 +161,18 @@ function Column({
       data-active-thread-column={active || undefined}
       className="group/column relative flex min-h-0 min-w-0 flex-col border-r border-border last:border-r-0"
       style={
-        { flex: "var(--column-weight) 1 0%", "--column-weight": column.width } as CSSProperties
+        {
+          flex: "var(--column-weight) 1 0%",
+          "--column-weight": column.width,
+          // Split columns scroll sideways before one goes under a readable width. A column with
+          // its panel open keeps room for both (+1px border), or the whole strip when that is
+          // narrower, where the panel becomes a drawer over its own chat.
+          ...(multiple
+            ? {
+                minWidth: `min(${(inlinePanelOpen ? PANEL_COLUMN_MIN_WIDTH : CHAT_MIN_WIDTH) + 1}px, 100%)`,
+              }
+            : {}),
+        } as CSSProperties
       }
       data-workspace-unavailable={!active || undefined}
       onPointerDownCapture={(event) => {
@@ -193,7 +220,7 @@ function Column({
           <Button
             data-close-column
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             aria-label={`Close column: ${title}`}
             onClick={(event) => {
               event.stopPropagation();
@@ -222,7 +249,7 @@ function Column({
           </span>
         ) : null}
       </div>
-      {next ? <ColumnDivider column={column} next={next} /> : null}
+      {previous ? <ColumnDivider column={previous} next={column} /> : null}
     </section>
   );
 }
@@ -242,7 +269,11 @@ export function ThreadColumns({
     draftId ? (state.getDraftSession(draftId) ?? state.getPromotedDraftRedirect(draftId)) : null,
   );
   const routeRef = target.kind === "server" ? target.threadRef : draftRef;
-  const routeKey = target.kind === "server" ? scopedThreadKey(target.threadRef) : target.draftId;
+  // Automatic routing can move an unsent draft without changing its URL.
+  const routeKey =
+    target.kind === "server"
+      ? scopedThreadKey(target.threadRef)
+      : `${target.draftId}:${routeRef ? scopedThreadKey(routeRef) : ""}`;
   const lastRouteKey = useRef<string | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- synchronizes persisted column selection with external router navigation in both directions
   useLayoutEffect(() => {
@@ -272,9 +303,32 @@ export function ThreadColumns({
   const columns = narrow
     ? layout.columns.filter((column) => column.id === layout.activeId)
     : layout.columns;
+  const activeId = layout.activeId;
+  // Keeps the focused column in view when the strip scrolls, including after the window narrows.
+  const attachStrip = (strip: HTMLDivElement) => {
+    const reveal = () => {
+      const active = strip.querySelector<HTMLElement>(`[data-thread-column-id="${activeId}"]`);
+      if (!active || strip.scrollWidth <= strip.clientWidth) return;
+      const bounds = active.getBoundingClientRect();
+      const start = bounds.left - strip.getBoundingClientRect().left + strip.scrollLeft;
+      const end = start + bounds.width;
+      if (start < strip.scrollLeft) strip.scrollLeft = start;
+      else if (end > strip.scrollLeft + strip.clientWidth)
+        strip.scrollLeft = end - strip.clientWidth;
+    };
+    reveal();
+    return observeResize(strip, reveal);
+  };
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden md:h-dvh" inert={background}>
-      <div data-thread-columns className="group/columns flex min-h-0 flex-1">
+      <div
+        ref={attachStrip}
+        data-thread-columns
+        className={cn(
+          "group/columns flex min-h-0 flex-1",
+          columns.length > 1 && "overflow-x-auto overflow-y-hidden overscroll-x-contain",
+        )}
+      >
         {columns.map((column, index) => (
           <Column
             key={column.id}
@@ -291,6 +345,7 @@ export function ThreadColumns({
             active={column.id === layout.activeId}
             multiple={columns.length > 1}
             first={index === 0}
+            previous={columns[index - 1]}
             next={columns[index + 1]}
             background={background}
           />

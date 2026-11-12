@@ -11,7 +11,7 @@ import { memo, use, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { workEntryDisplayIndicatesToolFailure } from "../../session-logic";
 import ChatMarkdown from "../ChatMarkdown";
-import { Minimize2Icon, XIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, Minimize2Icon, XIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
@@ -51,7 +51,6 @@ import {
   THINKING_PREVIEW_PLUGINS,
   THOUGHT_PREVIEW_PLUGINS,
   THOUGHT_PREVIEW_SOURCE_MAX_LENGTH,
-  toolGroupSummaryIconName,
   workEntryIconName,
 } from "./TimelineWorkEntryRow.logic";
 import { formatWorkingTimerNow } from "./TimelineWorkGroupRows.logic";
@@ -127,7 +126,7 @@ function WorkingTimer({ createdAt }: { createdAt: string }) {
   );
 }
 
-const compactWorkEntryHeight = 24;
+const compactWorkEntryHeight = 32;
 
 function ExpandedWorkGroupEntries({
   anchorKey,
@@ -224,6 +223,9 @@ function ExpandedWorkGroupEntries({
     return observeResize(content ? [element, content] : element, updateScrollFades);
   }, [updateScrollFades]);
 
+  const thoughts = entries.filter((entry) => entry.itemType === "reasoning");
+  const actions =
+    thoughts.length > 0 ? entries.filter((entry) => entry.itemType !== "reasoning") : entries;
   const renderEntry = ({ item }: { item: TimelineWorkEntry }) => (
     <SimpleWorkEntryRow key={item.id} workEntry={item} workspaceRoot={workspaceRoot} />
   );
@@ -246,10 +248,11 @@ function ExpandedWorkGroupEntries({
 
   return (
     <WorkGroupViewCtx value={groupView}>
-      <WorkLogList>
+      <WorkLogList contained>
+        {thoughts.length > 0 ? <GroupThoughtItem entries={thoughts} /> : null}
         <LegendList
           ref={listRef}
-          data={entries}
+          data={actions}
           extraData={workspaceRoot}
           keyExtractor={workEntryKey}
           renderItem={renderEntry}
@@ -277,7 +280,7 @@ function ExpandedWorkGroupEntries({
           data-tool-group-scroll
           style={{ maxHeight: `calc(min(18rem, 50dvh) + ${expandedContentHeight}px)` }}
           className={cn(
-            "scrollbar-gutter-stable scroll-py-6 overflow-x-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
+            "scrollbar-gutter-stable scroll-py-6 overflow-x-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
             getVirtualizedScrollFadeClassName(fades),
           )}
         />
@@ -287,6 +290,37 @@ function ExpandedWorkGroupEntries({
 }
 
 const workEntryKey = (entry: TimelineWorkEntry) => entry.id;
+
+/** A group's thoughts fold into one item instead of interleaving with every action. */
+function GroupThoughtItem({ entries }: { entries: TimelineWorkEntry[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <WorkLogRow
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
+      onClick={() => setOpen((value) => !value)}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          setOpen((value) => !value);
+        }
+      }}
+      label={<span className="block truncate">Thought</span>}
+      trailing={
+        <ChevronRightIcon
+          aria-hidden
+          className={cn(
+            "size-3 shrink-0 text-icon-muted opacity-70 transition-transform duration-200",
+            open && "rotate-90",
+          )}
+        />
+      }
+    >
+      {open ? <ReasoningTraceContent entries={entries} /> : null}
+    </WorkLogRow>
+  );
+}
 
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
   const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup } =
@@ -408,7 +442,7 @@ function LiveActivityRow({
   shimmer = false,
 }: {
   label: ReactNode;
-  iconName?: WorkEntryIconName;
+  iconName?: WorkEntryIconName | undefined;
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
   active?: boolean;
@@ -592,10 +626,10 @@ export function LiveWorkEntryTimelineRow({
             label
           )
         }
-        iconName={workEntryIconName(row.entry)}
-        toolIcon={row.entry.toolIcon ?? row.entry.toolSource?.icon}
+        // Text only while it runs; the icon returns to mark a failure.
+        iconName={failed ? workEntryIconName(row.entry) : undefined}
+        toolIcon={failed ? (row.entry.toolIcon ?? row.entry.toolSource?.icon) : undefined}
         failed={failed}
-        active={row.active}
       />
     </button>
   );
@@ -610,8 +644,6 @@ export function WorkGroupToggleTimelineRow({
   return (
     <WorkGroupHeader
       label={row.summary}
-      iconName={row.toolSurface ?? toolGroupSummaryIconName(row.summaryKind)}
-      toolIcon={row.toolIcon}
       failed={row.hasFailure}
       expanded={row.expanded}
       createdAt={row.createdAt}
@@ -623,8 +655,6 @@ export function WorkGroupToggleTimelineRow({
 
 function WorkGroupHeader(props: {
   label: string;
-  iconName: WorkEntryIconName;
-  toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean | undefined;
   expanded: boolean;
   createdAt: string;
@@ -636,15 +666,21 @@ function WorkGroupHeader(props: {
       aria-label={props.failed ? `${props.label}, tool call failed` : props.label}
       aria-expanded={props.expanded}
       onClick={props.onToggle}
-      icon={
-        <ToolActivityIconView
-          icon={props.toolIcon}
-          fallbackName={props.iconName}
-          className="size-4 shrink-0 stroke-2 text-icon-muted"
-          muted
-        />
+      label={
+        <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
+          {props.failed ? (
+            <XIcon aria-hidden className={cn("size-3 shrink-0", failedToolIconClassName)} />
+          ) : null}
+          <span className="truncate">{props.label}</span>
+          <ChevronDownIcon
+            aria-hidden
+            className={cn(
+              "size-3.5 shrink-0 opacity-70 transition-transform duration-200",
+              props.expanded && "rotate-180",
+            )}
+          />
+        </span>
       }
-      label={<span className="block truncate">{props.label}</span>}
       trailing={
         <TimelineRowTimestamp createdAt={props.createdAt} timestampFormat={props.timestampFormat} />
       }

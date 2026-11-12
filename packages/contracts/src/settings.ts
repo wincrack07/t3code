@@ -411,6 +411,15 @@ export const VoiceTranscriptionDestination = Schema.Union([
 ]);
 export type VoiceTranscriptionDestination = typeof VoiceTranscriptionDestination.Type;
 
+const SidebarProjectFolders = Schema.Array(
+  Schema.Struct({
+    id: TrimmedNonEmptyString,
+    name: TrimmedNonEmptyString,
+    emoji: Schema.String,
+    projectKeys: Schema.Array(Schema.String),
+  }),
+);
+
 export const ClientSettingsSchema = Schema.Struct({
   showSystemMonitor: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   notificationMode: NotificationMode.pipe(
@@ -547,6 +556,7 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  sidebarProjectFolders: SidebarProjectFolders.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   sidebarDensity: Schema.Literals(["theme", "compact", "comfortable"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("theme" as const)),
   ),
@@ -2115,6 +2125,7 @@ export const ClientSettingsPatch = Schema.Struct({
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
+  sidebarProjectFolders: Schema.optionalKey(SidebarProjectFolders),
   sidebarDensity: Schema.optionalKey(Schema.Literals(["theme", "compact", "comfortable"])),
   sidebarThreadGrouping: Schema.optionalKey(Schema.Literals(["theme", "project", "global"])),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),

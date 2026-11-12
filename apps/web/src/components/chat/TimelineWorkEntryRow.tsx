@@ -1,5 +1,6 @@
+import type { OrchestrationV2PlanStep } from "@t3tools/contracts";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
-import { WorkLogDetails, WorkLogRow } from "./WorkLog";
+import { useWorkLogContained, WorkLogDetails, WorkLogRow } from "./WorkLog";
 import {
   getQuestionAnswerPreview,
   getQuestionAnswerText,
@@ -32,7 +33,15 @@ import {
 } from "../../session-logic";
 import ChatMarkdown from "../ChatMarkdown";
 import { ChatMarkdownAssetImage } from "./ChatMarkdownMedia";
-import { ChevronRightIcon, CircleAlertIcon, XIcon, RotateCcwIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
+  EllipsisIcon,
+  XIcon,
+  RotateCcwIcon,
+} from "lucide-react";
 import { Button, InlineButton } from "../ui/button";
 import { useAssetUrls } from "../../assets/assetUrls";
 import { useThreadShell } from "../../state/entities";
@@ -220,6 +229,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       ? notificationChildThreadId(workEntry.projectedItem.item.source)
       : undefined;
   const groupView = use(WorkGroupViewCtx);
+  const contained = useWorkLogContained();
   const [expanded, setExpanded] = useState(
     () => groupView?.state.expandedEntries.has(workEntry.id) ?? false,
   );
@@ -244,6 +254,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       ? ctx.pendingApprovals.get(failureItem.requestId)
       : undefined;
   if (pendingApproval) return <TimelinePendingApprovalRow approval={pendingApproval} />;
+  if (failureItem?.type === "todo_list") return <TodoPlanCard steps={failureItem.steps} />;
   if (failureItem?.type === "error" && failureItem.status === "failed") {
     const warning = failureItem.failure.class === "usage_limit";
     const resetAt = failureItem.failure.resetAt;
@@ -412,6 +423,9 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
         ? "text-secondary-label"
         : "text-foreground/80";
   const threadLabel = isReasoning ? null : threadReadLabel(previewText, threadTarget);
+  const rawCommand = workEntryRawCommand(workEntry) ?? workEntry.command;
+  const labelIsCommand =
+    contained && rawCommand !== undefined && previewText.trim() === rawCommand.trim();
   const accessiblePreview = [threadLabel?.text ?? previewText, answerPreview]
     .filter(Boolean)
     .join(": ");
@@ -458,7 +472,12 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
         <div className="min-w-0 flex-1 overflow-hidden">
           <p className="flex min-w-0 w-full items-baseline gap-1.5 text-sm leading-relaxed">
             <span
-              className={cn(answerPreview ? "min-w-0" : "min-w-0 flex-1", "truncate", headingClass)}
+              className={cn(
+                answerPreview ? "min-w-0" : "min-w-0 flex-1",
+                "truncate",
+                headingClass,
+                labelIsCommand && "font-mono text-xs",
+              )}
             >
               {isReasoning && !expanded ? (
                 <ChatMarkdown
@@ -536,6 +555,19 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
             <XIcon aria-hidden className={cn("size-3 shrink-0", failedToolIconClassName)} />
           ) : null}
           <TimelineRowTimestamp createdAt={workEntry.createdAt} timestampFormat={timestampFormat} />
+          {contained && viewedImage && threadRef ? (
+            <span className="h-6 w-9 shrink-0 overflow-hidden rounded-sm border border-border bg-muted">
+              <ChatMarkdownAssetImage
+                environmentId={threadRef.environmentId}
+                resource={viewedImage.resource}
+                alt=""
+                srcFragment={viewedImage.srcFragment}
+                workspaceRoot={workspaceRoot}
+                maxHeightRem={1.5}
+                className="block size-full object-cover"
+              />
+            </span>
+          ) : null}
           <span
             className={cn(
               "flex size-4 shrink-0 items-center justify-center",
@@ -670,5 +702,42 @@ function QuestionAnswerHistory({
         </div>
       ))}
     </div>
+  );
+}
+
+/** The agent's plan: one line per step with its status glyph, updated in place. */
+function TodoPlanCard({ steps }: { steps: ReadonlyArray<OrchestrationV2PlanStep> }) {
+  return (
+    <section aria-label="Plan" className="my-1 rounded-xl border border-border bg-card px-3 py-2.5">
+      <ul className="flex min-w-0 flex-col gap-1.5">
+        {steps.map((step) => (
+          <li
+            key={step.id}
+            className={cn(
+              "flex min-w-0 items-start gap-2 text-sm leading-5",
+              step.status === "completed" ? "text-muted-foreground" : "text-foreground",
+            )}
+          >
+            <span className="grid h-5 w-4 shrink-0 place-items-center" aria-hidden>
+              {step.status === "completed" ? (
+                <CircleCheckIcon className="size-4 fill-muted-foreground text-card" />
+              ) : step.status === "running" ? (
+                <EllipsisIcon className="size-4" />
+              ) : (
+                <CircleDashedIcon className="size-4 opacity-50" />
+              )}
+            </span>
+            <span className="sr-only">
+              {step.status === "completed"
+                ? "Done: "
+                : step.status === "running"
+                  ? "In progress: "
+                  : "Not done: "}
+            </span>
+            <span className="min-w-0 break-words">{step.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

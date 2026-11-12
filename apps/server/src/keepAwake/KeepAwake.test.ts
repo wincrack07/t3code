@@ -1,3 +1,5 @@
+import * as LidSleep from "./LidSleep.ts";
+import { fixture as lidFixture } from "./LidSleep.testkit.ts";
 import { updateRunActivity } from "./activity.ts";
 import { expect, it } from "@effect/vitest";
 import { DEFAULT_KEEP_AWAKE, DEFAULT_TRAY_STATS } from "@t3tools/contracts";
@@ -14,14 +16,20 @@ import * as TestClock from "effect/testing/TestClock";
 import * as KeepAwake from "./KeepAwake.ts";
 import * as SleepInhibitor from "./SleepInhibitor.ts";
 
-const fixture = Effect.fn("TestKeepAwake.fixture")(function* (supported = true) {
+const fixture = Effect.fn("TestKeepAwake.fixture")(function* (
+  supported = true,
+  recovery = false,
+  authorized = true,
+) {
   const held = yield* Ref.make(0);
   const level = yield* Ref.make<number | null>(null);
   const crashed = yield* Deferred.make<void>();
   const saved = yield* Ref.make(DEFAULT_KEEP_AWAKE);
   const testScope = yield* Scope.make();
   yield* Effect.addFinalizer(() => Scope.close(testScope, Exit.void));
+  const lid = yield* lidFixture(recovery, recovery, authorized);
   const deps = Layer.mergeAll(
+    LidSleep.layer.pipe(Layer.provide(Layer.succeed(LidSleep.LidSleepHost, lid.host))),
     Layer.succeed(KeepAwake.KeepAwakePreferences, {
       load: Ref.get(saved),
       save: (defaults) => Ref.set(saved, defaults),
@@ -48,6 +56,7 @@ const fixture = Effect.fn("TestKeepAwake.fixture")(function* (supported = true) 
     testScope,
     deps,
     saved,
+    lid,
   };
 });
 
@@ -209,5 +218,55 @@ it.effect("saves startup defaults without replacing the current session", () =>
       enabled: false,
       memory: true,
     });
+  }),
+);
+
+it.effect("restores lid sleep on session end, option off, and low battery", () =>
+  Effect.gen(function* () {
+    const { service, lid, level } = yield* fixture();
+    const options = { ...DEFAULT_KEEP_AWAKE.options, lidClosed: true };
+    yield* service.change({ session: { mode: "indefinite" }, options });
+    expect(yield* Ref.get(lid.value)).toBe(true);
+    yield* service.change({ options: { ...options, lidClosed: false } });
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    yield* service.change({ options });
+    yield* service.change({ session: { mode: "off" } });
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    yield* service.change({ session: { mode: "indefinite" } });
+    yield* Ref.set(level, 10);
+    yield* TestClock.adjust("1 minute");
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    expect(yield* Ref.get(lid.marker)).toBe(false);
+  }),
+);
+
+it.effect("removing authorization restores sleep and clears current and startup lid options", () =>
+  Effect.gen(function* () {
+    const { service, lid } = yield* fixture();
+    const options = { ...DEFAULT_KEEP_AWAKE.options, lidClosed: true };
+    yield* service.change({
+      session: { mode: "indefinite" },
+      options,
+      defaults: { ...DEFAULT_KEEP_AWAKE, options },
+    });
+    yield* service.authorizeLid("remove");
+    const status = yield* service.status;
+    expect(status.options.lidClosed).toBe(false);
+    expect(status.defaults.options.lidClosed).toBe(false);
+    expect(status.lid?.authorized).toBe(false);
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    expect(yield* Ref.get(lid.marker)).toBe(false);
+  }),
+);
+
+it.effect("authorization repairs pending crash recovery while waiting for agents", () =>
+  Effect.gen(function* () {
+    const { service, lid } = yield* fixture(true, true, false);
+    expect(yield* Ref.get(lid.marker)).toBe(true);
+    yield* service.authorizeLid("install");
+    expect(yield* Ref.get(lid.value)).toBe(false);
+    expect(yield* Ref.get(lid.marker)).toBe(false);
+    expect((yield* service.status).lid?.authorized).toBe(true);
+    expect((yield* service.status).active).toBe(false);
   }),
 );

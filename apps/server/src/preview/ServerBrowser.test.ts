@@ -526,40 +526,46 @@ it.live("tells the desktop once per thread when its agent turns start and end", 
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );
 
-it.live("preview_open reports its navigation timeout instead of the request budget", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const { broker, tabId } = yield* ready;
-      const manager = yield* Manager.PreviewManager;
-      initialNavigation = async () => {
-        throw Object.assign(new Error("page.goto: Timeout 15000ms exceeded."), {
-          name: "TimeoutError",
-        });
-      };
+it.live.each(["timeout", "refused"] as const)(
+  "preview_open handles an initial %s navigation failure",
+  (failure) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { broker, tabId } = yield* ready;
+        const manager = yield* Manager.PreviewManager;
+        initialNavigation = async () => {
+          throw failure === "timeout"
+            ? Object.assign(new Error("page.goto: Timeout 15000ms exceeded."), {
+                name: "TimeoutError",
+              })
+            : new Error("page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:1337/");
+        };
 
-      const error = yield* broker
-        .invoke<PreviewAutomationStatus>({
-          scope,
-          operation: "open",
-          input: {
-            url: "http://localhost:1337/",
-            reuseExistingTab: false,
-            show: false,
-          },
-        })
-        .pipe(Effect.flip);
+        const error = yield* broker
+          .invoke<PreviewAutomationStatus>({
+            scope,
+            operation: "open",
+            input: {
+              url: "http://localhost:1337/",
+              reuseExistingTab: false,
+              show: false,
+            },
+          })
+          .pipe(Effect.flip);
 
-      expect(error).toMatchObject({
-        _tag: "PreviewAutomationTimeoutError",
-        timeoutMs: 15_000,
-      });
-      expect(error.message).toBe("Preview automation open timed out after 15000ms.");
-      // The failed open returned no tabId, so its tab must not linger and block later opens.
-      const { sessions } = yield* manager.list({ threadId: scope.thread.threadId });
-      expect(sessions.map((session) => session.tabId)).toEqual([tabId]);
-      expect(contexts[1]!.page.close).toHaveBeenCalled();
-    }),
-  ).pipe(Effect.provide(layer)),
+        const { sessions } = yield* manager.list({ threadId: scope.thread.threadId });
+        if (failure === "timeout") {
+          expect(error).toMatchObject({ _tag: "PreviewAutomationTimeoutError", timeoutMs: 15_000 });
+          expect(error.message).toBe("Preview automation open timed out after 15000ms.");
+          expect(sessions.map((session) => session.tabId)).toEqual([tabId]);
+          expect(contexts[1]!.page.close).toHaveBeenCalled();
+        } else {
+          expect(error.message).toContain("ERR_CONNECTION_REFUSED");
+          expect(sessions).toHaveLength(2);
+          expect(contexts[1]!.page.close).not.toHaveBeenCalled();
+        }
+      }),
+    ).pipe(Effect.provide(layer)),
 );
 
 it.live("an initial download stays available after preview_open reports the navigation error", () =>
@@ -905,7 +911,13 @@ it.live("enforces provider ownership and explicit targets when a session has mul
 it.live("streams to a read-only viewer without allowing takeover, input, or viewport changes", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const { browser, tabId } = yield* ready;
+      const { browser, broker, tabId } = yield* ready;
+      yield* broker.invoke({
+        scope,
+        tabId,
+        operation: "open",
+        input: { url: "http://localhost:5733/pair#token=test", open: false },
+      });
       const viewer = yield* browser.attachViewer(viewerInput(tabId, false));
       const page = contexts[0]!.page;
       page.setViewportSize.mockClear();
@@ -937,6 +949,12 @@ it.live("streams to a read-only viewer without allowing takeover, input, or view
       });
       expect(page.setViewportSize).toHaveBeenCalledWith({ width: 390, height: 844 });
       yield* operator.input({ type: "releaseControl" });
+      expect(contexts).toHaveLength(1);
+      expect(page.goto).toHaveBeenCalledTimes(1);
+      expect(page.goto).toHaveBeenCalledWith(
+        "http://localhost:5733/pair#token=test",
+        expect.anything(),
+      );
     }),
   ).pipe(Effect.provide(layer)),
 );
