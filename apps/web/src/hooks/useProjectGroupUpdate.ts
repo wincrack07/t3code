@@ -1,11 +1,12 @@
-import { AuthOrchestrationOperateScope, type ProjectIconOverride } from "@t3tools/contracts";
+import { type EnvironmentId, type ProjectIconOverride } from "@t3tools/contracts";
 import {
   isAtomCommandInterrupted,
   mapAtomCommandResult,
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import { AsyncResult } from "effect/reactivity";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult, Atom } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
@@ -13,8 +14,28 @@ import type { SidebarProjectGroupMember } from "../sidebarProjectGrouping";
 import { useProjects, useServerConfigs } from "../state/entities";
 import { readEnvironment } from "../state/environments";
 import { projectEnvironment } from "../state/projects";
-import { readEnvironmentScope, useEnvironmentsWithScope } from "../state/session";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { environmentIdsKey } from "../state/environmentAtomList";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
+
+const editableProjects = Atom.family((ids: string) =>
+  Atom.make(
+    (get) =>
+      new Set(
+        (ids === "" ? [] : (ids.split("\n") as EnvironmentId[])).filter((id) =>
+          get(projectEnvironment.update.permissionAtom(id)),
+        ),
+      ),
+  ),
+);
+
+export function useProjectUpdateEnvironments(
+  members: ReadonlyArray<{ environmentId: EnvironmentId }>,
+) {
+  return useAtomValue(
+    editableProjects(environmentIdsKey(members.map((member) => member.environmentId))),
+  );
+}
 
 export type ProjectGroupUpdate = Partial<{
   title: string;
@@ -100,10 +121,7 @@ export function useProjectPin() {
   const environments = [...new Set(useProjects().map((project) => project.environmentId))].map(
     (environmentId) => ({ environmentId }),
   );
-  const operableEnvironmentIds = useEnvironmentsWithScope(
-    environments,
-    AuthOrchestrationOperateScope,
-  );
+  const operableEnvironmentIds = useProjectUpdateEnvironments(environments);
   type PinnableGroup = {
     readonly memberProjects: ReadonlyArray<ProjectGroupMember>;
     readonly pinned: boolean;
@@ -131,7 +149,8 @@ export function checkProjectAccess(
   failureTitle: string,
 ): AtomCommandResult<void, unknown> | null {
   const denied = members.find(
-    (member) => !readEnvironmentScope(member.environmentId, AuthOrchestrationOperateScope),
+    (member) =>
+      !appAtomRegistry.get(projectEnvironment.update.permissionAtom(member.environmentId)),
   );
   return denied
     ? failWith(

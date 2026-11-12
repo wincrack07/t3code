@@ -154,20 +154,23 @@ export function createProjectEnvironmentAtoms<R, E>(
     }),
     optimisticFile: (target: OptimisticProjectFileTarget) =>
       optimisticFileFamily(optimisticProjectFileKey(target)),
-    create: createEnvironmentCommand(runtime, {
+    create: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:project:create",
+      tag: WS_METHODS.projectsMutate,
       execute: createProject,
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
     }),
-    update: createEnvironmentCommand(runtime, {
+    update: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:project:update",
+      tag: WS_METHODS.projectsMutate,
       execute: updateProject,
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
     }),
-    delete: createEnvironmentCommand(runtime, {
+    delete: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:project:delete",
+      tag: WS_METHODS.projectsMutate,
       execute: deleteProject,
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
