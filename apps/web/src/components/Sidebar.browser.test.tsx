@@ -279,7 +279,7 @@ it("hides grouped project children on collapse, expands all, and opens project a
         }),
       );
   });
-  await userEvent.hover(page.getByRole("menuitem", { name: "Sidebar colour", exact: true }));
+  await userEvent.hover(page.getByRole("menuitem", { name: "Sidebar color", exact: true }));
   await expect.element(page.getByRole("menuitem", { name: "Blue", exact: true })).toBeVisible();
   await userEvent.click(page.getByRole("menuitem", { name: "Blue", exact: true }));
   expect(setColor).toHaveBeenCalledWith(groups[0]!.memberProjects, "#629bd7");
