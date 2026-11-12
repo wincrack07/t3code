@@ -35,15 +35,17 @@ function record(value: unknown): value is Record<string, unknown> {
 
 export function mergeStoredChanges(previous: unknown, next: unknown, current: unknown): unknown {
   if (JSON.stringify(previous) === JSON.stringify(next)) return current;
-  if (!record(next) || !record(current)) return next;
+  if (!record(next) || (!record(current) && !record(previous))) return next;
   const prior = record(previous) ? previous : {};
-  const result = { ...current };
+  // A deleted record still needs a field-level merge so stale fields cannot resurrect it.
+  const latest = record(current) ? current : {};
+  const result = { ...latest };
   for (const key of new Set([...Object.keys(prior), ...Object.keys(next)])) {
     if (!(key in next)) {
       delete result[key];
       continue;
     }
-    result[key] = mergeStoredChanges(prior[key], next[key], current[key]);
+    result[key] = mergeStoredChanges(prior[key], next[key], latest[key]);
   }
   return result;
 }
