@@ -25,4 +25,43 @@ describe("window persistence", () => {
       state: { drafts: { second: "elsewhere", third: "new" } },
     });
   });
+  it("does not restore sent content when a stale window changes draft settings", () => {
+    const draft = {
+      prompt: "Send this prompt",
+      attachments: [{ id: "image" }],
+      files: [{ id: "file" }],
+      threadContexts: [{ threadId: "mentioned" }],
+      activeProvider: "codex",
+    };
+    const before = { state: { draftsByThreadKey: { thread: draft } } };
+    const cleared = { state: { draftsByThreadKey: {} } };
+    expect(mergeStoredChanges(before, cleared, before)).toEqual(cleared);
+    const staleWindow = {
+      state: { draftsByThreadKey: { thread: { ...draft, activeProvider: "claude" } } },
+    };
+    expect(mergeStoredChanges(before, staleWindow, cleared)).toEqual({
+      state: { draftsByThreadKey: { thread: { activeProvider: "claude" } } },
+    });
+    const newText = {
+      state: { draftsByThreadKey: { thread: { ...draft, prompt: "Typed after send" } } },
+    };
+    expect(mergeStoredChanges(before, newText, cleared)).toEqual({
+      state: { draftsByThreadKey: { thread: { prompt: "Typed after send" } } },
+    });
+    expect(mergeStoredChanges(before, before, cleared)).toEqual(cleared);
+    const emptyDraft = {
+      ...draft,
+      prompt: "",
+      attachments: [],
+      files: [],
+      threadContexts: [],
+    };
+    const retained = { state: { draftsByThreadKey: { thread: emptyDraft } } };
+    expect(mergeStoredChanges(before, staleWindow, retained)).toEqual({
+      state: { draftsByThreadKey: { thread: { ...emptyDraft, activeProvider: "claude" } } },
+    });
+    expect(mergeStoredChanges(before, newText, retained)).toEqual({
+      state: { draftsByThreadKey: { thread: { ...emptyDraft, prompt: "Typed after send" } } },
+    });
+  });
 });
