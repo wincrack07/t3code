@@ -41,6 +41,8 @@ import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
+  DESKTOP_UPDATE_CHECK_LABEL,
+  DESKTOP_UPDATE_CHECKING_LABEL,
   getDesktopUpdateButtonTooltip,
   getDesktopUpdateDisabledReason,
   getDesktopUpdateInstallConfirmationMessage,
@@ -301,13 +303,13 @@ function AboutVersionSection() {
 
   const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
   const statusLabel: Record<string, string> = {
-    checking: "Checking…",
+    checking: DESKTOP_UPDATE_CHECKING_LABEL,
     downloading: "Downloading…",
     // Off its track, "up to date" only means no switch is pending; Review moves it.
     ...(appOffTrack ? {} : { "up-to-date": "Up to Date" }),
   };
   const buttonLabel =
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
+    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? DESKTOP_UPDATE_CHECK_LABEL;
   const description =
     action === "download" || action === "install"
       ? "Update available."

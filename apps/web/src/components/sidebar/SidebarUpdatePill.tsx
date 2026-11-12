@@ -334,6 +334,11 @@ function SidebarUpdateControl() {
       return;
     }
 
+    checkForUpdates(bridge);
+  };
+
+  const checkForUpdates = (bridge: DesktopBridge) => {
+    setIsActionPending(true);
     if (!prefersReducedMotion) {
       setIsCheckAnimationLatched(true);
       setCheckAnimationKey((key) => key + 1);
@@ -365,6 +370,12 @@ function SidebarUpdateControl() {
     setProviderCheck("button");
     const providersChecked = checkProviderUpdates().finally(() => setProviderCheck(null));
     void Promise.allSettled([appCheck, providersChecked]).then(() => setIsActionPending(false));
+  };
+
+  const checkFromReleaseNotes = () => {
+    const bridge = window.desktopBridge;
+    if (!bridge || isActionPending || !canCheckForUpdate(state)) return;
+    checkForUpdates(bridge);
   };
 
   const runEverything = async () => {
@@ -584,6 +595,15 @@ function SidebarUpdateControl() {
             <SidebarUpdateReleaseNotes
               shell={window.desktopBridge}
               state={state}
+              {...(window.desktopBridge && state.status === "up-to-date"
+                ? {
+                    check: {
+                      checking: isActionPending,
+                      disabled: isActionPending || !canCheckForUpdate(state),
+                      onCheck: checkFromReleaseNotes,
+                    },
+                  }
+                : {})}
               tooltip={
                 state.status === "up-to-date" ? `What’s new in ${state.currentVersion}` : tooltip
               }
