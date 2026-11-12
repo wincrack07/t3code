@@ -583,8 +583,7 @@ const make = Effect.gen(function* () {
               id: definition.id,
               name: definition.name,
               description: definition.description,
-              // Apple reports install progress in percent against a catalog size of 0.
-              size: operation && definition.size === 0 ? 100 : definition.size,
+              size: definition.size,
               languages: definition.languages,
               accuracy: definition.accuracy,
               speed: definition.speed,

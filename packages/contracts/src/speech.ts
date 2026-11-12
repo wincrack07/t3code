@@ -193,6 +193,7 @@ export const EnvironmentSpeechModel = Schema.Struct({
   supportsTranslation: Schema.Boolean,
   active: Schema.Boolean,
   state: EnvironmentSpeechModelState,
+  /** Bytes, or percent for a size-0 model whose operating system downloads its assets. */
   downloaded: Schema.optionalKey(Schema.Finite),
 });
 export type EnvironmentSpeechModel = typeof EnvironmentSpeechModel.Type;
