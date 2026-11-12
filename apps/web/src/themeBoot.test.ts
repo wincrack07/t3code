@@ -22,9 +22,12 @@ const THEME_STORAGE_KEY = "t3code:theme";
 const DEFAULT_DARK_CHROME = getDefaultThemeColors("dark").chrome;
 
 const bootScript = (() => {
-  const match = indexHtml.match(/<script>([\s\S]*?)<\/script>/);
-  if (!match?.[1]) throw new Error("Could not find the inline boot script in index.html");
-  return match[1];
+  const scripts = Array.from(
+    indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g),
+    (match) => match[1],
+  );
+  if (scripts.length === 0) throw new Error("Could not find inline boot scripts in index.html");
+  return scripts.join("\n");
 })();
 
 type BootResult = {
