@@ -4,8 +4,13 @@ import * as Cause from "effect/Cause";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  EMPTY_VIEWER_HISTORY,
+  accountBrowserProfileId,
+  filterArtifacts,
   groupClaudeAccounts,
   mergeArtifacts,
+  stepHistory,
+  visitInHistory,
   pickAccountListing,
   type ClaudeInstanceRow,
 } from "./artifacts.logic";
@@ -32,6 +37,15 @@ const row = (
     account === undefined
       ? undefined
       : { instanceId, listable: true, email: "me@example.com", ...account },
+});
+
+const artifact = (id: string, relation: "mine" | "shared", updatedAt: string): ClaudeArtifact => ({
+  id,
+  url: `https://claude.ai/code/artifact/${id}`,
+  title: id,
+  relation,
+  isPublic: false,
+  updatedAt,
 });
 
 describe("groupClaudeAccounts", () => {
@@ -150,30 +164,77 @@ describe("pickAccountListing", () => {
 });
 
 describe("mergeArtifacts", () => {
-  const artifact = (
-    id: string,
-    relation: "mine" | "shared",
-    updatedAt: string,
-  ): ClaudeArtifact => ({
-    id,
-    url: `https://claude.ai/code/artifact/${id}`,
-    title: id,
-    relation,
-    isPublic: false,
-    updatedAt,
-  });
-
-  it("lists an artifact once across accounts, newest first", () => {
+  it("lists an artifact once across accounts under the account that owns it, newest first", () => {
     const merged = mergeArtifacts([
-      [
-        artifact("a", "shared", "2026-11-01T00:00:00Z"),
-        artifact("b", "mine", "2026-11-03T00:00:00Z"),
+      {
+        accountKey: "personal",
+        artifacts: [
+          artifact("a", "shared", "2026-11-01T00:00:00Z"),
+          artifact("b", "mine", "2026-11-03T00:00:00Z"),
+        ],
+      },
+      { accountKey: "work", artifacts: [artifact("a", "mine", "2026-11-01T00:00:00Z")] },
+    ]);
+    expect(
+      merged.map((entry) => [entry.artifact.id, entry.artifact.relation, entry.accountKey]),
+    ).toEqual([
+      ["b", "mine", "personal"],
+      ["a", "mine", "work"],
+    ]);
+  });
+});
+
+describe("filterArtifacts", () => {
+  const entries = mergeArtifacts([
+    {
+      accountKey: "k",
+      artifacts: [
+        { ...artifact("1", "mine", "2026-11-03T00:00:00Z"), title: "zeta chart" },
+        {
+          ...artifact("2", "shared", "2026-11-02T00:00:00Z"),
+          title: "Alpha",
+          description: "Quarterly chart",
+        },
+        { ...artifact("3", "mine", "2026-11-01T00:00:00Z"), title: "beta 10" },
+        { ...artifact("4", "mine", "2026-10-01T00:00:00Z"), title: "Beta 9" },
       ],
-      [artifact("a", "mine", "2026-11-01T00:00:00Z")],
+    },
+  ]);
+  const ids = (list: ReadonlyArray<{ artifact: ClaudeArtifact }>) =>
+    list.map((entry) => entry.artifact.id);
+
+  it("searches titles and descriptions, filters by owner and sorts", () => {
+    expect(
+      ids(filterArtifacts(entries, { relation: "all", query: " CHART ", sort: "updated" })),
+    ).toEqual(["1", "2"]);
+    expect(
+      ids(filterArtifacts(entries, { relation: "shared", query: "", sort: "updated" })),
+    ).toEqual(["2"]);
+    expect(ids(filterArtifacts(entries, { relation: "mine", query: "", sort: "title" }))).toEqual([
+      "4",
+      "3",
+      "1",
     ]);
-    expect(merged.map((entry) => [entry.id, entry.relation])).toEqual([
-      ["b", "mine"],
-      ["a", "mine"],
-    ]);
+  });
+});
+
+describe("viewer history", () => {
+  it("moves back and forward, and a new visit drops the forward entries", () => {
+    let history = ["a", "b", "c"].reduce(visitInHistory, EMPTY_VIEWER_HISTORY);
+    history = stepHistory(stepHistory(history, -1), -1);
+    expect(history.urls[history.index]).toBe("a");
+    expect(stepHistory(history, -1)).toBe(history);
+    expect(visitInHistory(history, "a")).toBe(history);
+    history = visitInHistory(history, "d");
+    expect(history).toEqual({ urls: ["a", "d"], index: 1 });
+    expect(stepHistory(history, 1)).toBe(history);
+  });
+});
+
+describe("accountBrowserProfileId", () => {
+  it("is stable per account and a valid profile id", () => {
+    expect(accountBrowserProfileId("work-key")).toBe(accountBrowserProfileId("work-key"));
+    expect(accountBrowserProfileId("work-key")).not.toBe(accountBrowserProfileId("personal-key"));
+    expect(accountBrowserProfileId("name:x\0y")).toMatch(/^claude-account-[0-9a-f]{8}$/);
   });
 });

@@ -173,7 +173,43 @@ describe("BrowserImport.writeCookies", () => {
       );
 
       assert.deepEqual(events, ["set", "set", "flush"]);
-      assert.deepEqual(result, { imported: 2, skipped: 0, skippedDomains: [] });
+      assert.deepEqual(result, {
+        imported: 2,
+        skipped: 0,
+        skippedDomains: [],
+        skippedReasons: [],
+      });
+    }),
+  );
+
+  it.effect("reports why each cookie was skipped", () =>
+    Effect.gen(function* () {
+      const result = yield* BrowserImport.writeCookies(
+        {
+          cookies: {
+            set: (details) =>
+              details.name === "refused"
+                ? Promise.reject(new Error("fixture refusal"))
+                : Promise.resolve(),
+            flushStore: () => Promise.resolve(),
+          },
+        },
+        {
+          cookies: [cookie, { ...cookie, name: "refused", url: "https://refused.example/" }],
+          undecryptable: 3,
+          undecryptableHosts: ["embedded.example", "locked.example"],
+          partitioned: 2,
+          partitionedHosts: ["embedded.example"],
+          decryptFailedHosts: ["locked.example"],
+        },
+      );
+
+      assert.deepEqual(result.skippedReasons, [
+        { reason: "partitioned", count: 2, domains: ["embedded.example"] },
+        { reason: "undecryptable", count: 1, domains: ["locked.example"] },
+        { reason: "rejected", count: 1, domains: ["refused.example"] },
+      ]);
+      assert.equal(result.skipped, 4);
     }),
   );
 });

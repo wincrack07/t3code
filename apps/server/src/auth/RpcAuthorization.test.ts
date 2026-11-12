@@ -310,6 +310,13 @@ describe("settings mutation authorization", () => {
           patch: { secretProviders: { [SecretProviderId.make("personal")]: null } },
         }).pipe(Effect.flip),
       ).toMatchObject({ requiredPermission: AuthProvidersManageScope });
+      expect(
+        yield* client[WS_METHODS.serverUpdateSettings]({
+          patch: {
+            machineCleanup: { ...DEFAULT_SERVER_SETTINGS.machineCleanup, scheduleEnabled: true },
+          },
+        }).pipe(Effect.flip),
+      ).toMatchObject({ requiredPermission: AuthEnvironmentMaintainScope });
       expect(handled).toBe(false);
     }).pipe(Effect.scoped),
   );

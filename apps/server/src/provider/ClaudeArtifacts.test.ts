@@ -192,26 +192,29 @@ const LOGIN =
   '{"claudeAiOauth":{"accessToken":"work-token"},"mcpOAuth":{"x":{"accessToken":"other"}}}';
 
 it.layer(NodeServices.layer)("ClaudeArtifacts.list", (it) => {
-  it.effect("lists with the instance's own login, filters scope, pages, and caches", () =>
-    withService({ login: LOGIN }, (service, requests) =>
-      Effect.gen(function* () {
-        const mine = yield* service.list({ instanceId: WORK, scope: "mine" });
-        expect(mine.artifacts.map((artifact) => artifact.id)).toEqual([SLUG_A]);
-        const firstPage = yield* service.list({ instanceId: WORK, limit: 1 });
-        expect(firstPage.artifacts.map((artifact) => artifact.id)).toEqual([SLUG_B]);
-        expect(firstPage.nextCursor).toBe("1");
-        const secondPage = yield* service.list({ instanceId: WORK, limit: 1, cursor: "1" });
-        expect(secondPage.artifacts.map((artifact) => artifact.id)).toEqual([SLUG_A]);
-        expect(secondPage.nextCursor).toBeUndefined();
-        expect(secondPage.truncated).toBe(false);
-        expect(requests).toEqual([
-          {
+  it.effect(
+    "lists with the instance's own login, filters scope, pages, caches, and refreshes on request",
+    () =>
+      withService({ login: LOGIN }, (service, requests) =>
+        Effect.gen(function* () {
+          const mine = yield* service.list({ instanceId: WORK, scope: "mine" });
+          expect(mine.artifacts.map((artifact) => artifact.id)).toEqual([SLUG_A]);
+          const firstPage = yield* service.list({ instanceId: WORK, limit: 1 });
+          expect(firstPage.artifacts.map((artifact) => artifact.id)).toEqual([SLUG_B]);
+          expect(firstPage.nextCursor).toBe("1");
+          const secondPage = yield* service.list({ instanceId: WORK, limit: 1, cursor: "1" });
+          expect(secondPage.artifacts.map((artifact) => artifact.id)).toEqual([SLUG_A]);
+          expect(secondPage.nextCursor).toBeUndefined();
+          expect(secondPage.truncated).toBe(false);
+          const request = {
             url: "https://api.anthropic.com/api/frame/frames",
             authorization: "Bearer work-token",
-          },
-        ]);
-      }),
-    ),
+          };
+          expect(requests).toEqual([request]);
+          yield* service.list({ instanceId: WORK, refresh: true });
+          expect(requests).toEqual([request, request]);
+        }),
+      ),
   );
 
   it.effect("reports account states without sending a request it cannot authorize", () =>

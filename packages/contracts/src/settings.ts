@@ -1,8 +1,10 @@
+import { MachineCleanupSettings, MachineCleanupSettingsWithDefault } from "./machineCleanup.ts";
 import { DecisionSettings, DEFAULT_DECISION_SETTINGS } from "./decisions.ts";
 import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPolish.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
+  AuthEnvironmentMaintainScope,
   AuthSettingsWriteScope,
   AuthProvidersManageScope,
   type AuthEnvironmentScope,
@@ -562,6 +564,9 @@ export const ClientSettingsSchema = Schema.Struct({
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sidebarProjectFolders: SidebarProjectFolders.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  tintSidebarWithProjectColor: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   sidebarDensity: Schema.Literals(["theme", "compact", "comfortable"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("theme" as const)),
   ),
@@ -1400,6 +1405,7 @@ export const PromptCompletionDelayMs = Schema.Int.check(
 );
 
 export const ServerSettings = Schema.Struct({
+  machineCleanup: MachineCleanupSettingsWithDefault,
   autoUpdateServer: Schema.optionalKey(Schema.Boolean),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1879,6 +1885,7 @@ export const ServerSettingsPatch = Schema.Struct({
       ]),
     ),
   ),
+  machineCleanup: Schema.optionalKey(MachineCleanupSettings),
   storageCleanup: Schema.optionalKey(
     Schema.Struct({
       worktreeKeepWhen: Schema.optionalKey(WorktreeKeepWhen),
@@ -2059,6 +2066,7 @@ export function requiredScopesForServerSettingsPatch(
   return [
     ...(changesSettings || !changesProviders ? [AuthSettingsWriteScope] : []),
     ...(changesProviders ? [AuthProvidersManageScope] : []),
+    ...(patch.machineCleanup === undefined ? [] : [AuthEnvironmentMaintainScope]),
   ];
 }
 
@@ -2136,6 +2144,7 @@ export const ClientSettingsPatch = Schema.Struct({
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   sidebarProjectFolders: Schema.optionalKey(SidebarProjectFolders),
+  tintSidebarWithProjectColor: Schema.optionalKey(Schema.Boolean),
   sidebarDensity: Schema.optionalKey(Schema.Literals(["theme", "compact", "comfortable"])),
   sidebarThreadGrouping: Schema.optionalKey(Schema.Literals(["theme", "project", "global"])),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),

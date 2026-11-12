@@ -1,3 +1,4 @@
+import { ServerSettingsPatch, requiredScopesForServerSettingsPatch } from "./settings.ts";
 import * as Schema from "effect/Schema";
 import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./git.ts";
 import {
@@ -23,6 +24,13 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
   // Stopping a server signals its processes, as closing a terminal does.
   [WS_METHODS.previewStopLocalServer]: AuthTerminalOperateScope,
+  [WS_METHODS.machineCleanupHistory]: AuthEnvironmentMaintainScope,
+  [WS_METHODS.machineCleanupScan]: AuthEnvironmentMaintainScope,
+  [WS_METHODS.machineCleanupRunPhaseA]: AuthEnvironmentMaintainScope,
+  [WS_METHODS.machineCleanupDeleteApproved]: AuthEnvironmentMaintainScope,
+  [WS_METHODS.machineCleanupRunPhaseC]: AuthEnvironmentMaintainScope,
+  [WS_METHODS.machineCleanupCancel]: AuthEnvironmentMaintainScope,
+  [WS_METHODS.machineCleanupSubscribe]: AuthEnvironmentMaintainScope,
   [WS_METHODS.serverRunStorageCleanup]: AuthSettingsWriteScope,
   // Restarts the server, as an update does.
   [WS_METHODS.serverReclaimDatabaseSpace]: AuthEnvironmentMaintainScope,
@@ -93,6 +101,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 
+const decodeSettingsPatch = Schema.decodeUnknownSync(Schema.Struct({ patch: ServerSettingsPatch }));
 const decodePrepareThread = Schema.decodeUnknownSync(GitPreparePullRequestThreadInput);
 const decodeStackedAction = Schema.decodeUnknownSync(GitRunStackedActionInput);
 
@@ -100,6 +109,10 @@ export function clientRpcRequiredScopes(
   method: string,
   input: unknown,
 ): readonly AuthEnvironmentScope[] {
+  if (method === WS_METHODS.serverUpdateSettings && input !== undefined) {
+    const { patch } = decodeSettingsPatch(input);
+    if (patch.machineCleanup !== undefined) return requiredScopesForServerSettingsPatch(patch);
+  }
   if (method === WS_METHODS.gitPreparePullRequestThread && input !== undefined) {
     const payload = decodePrepareThread(input);
     if (payload.mode === "worktree" && payload.threadId !== undefined)

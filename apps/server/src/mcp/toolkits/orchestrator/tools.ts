@@ -1,4 +1,10 @@
 import {
+  MachineCleanupAgentInput,
+  MachineCleanupState,
+  MachineCleanupError,
+} from "@t3tools/contracts";
+import * as MachineCleanupMcp from "../../MachineCleanupMcpService.ts";
+import {
   OrchestratorMcpCapabilitiesInput,
   OrchestratorMcpCapabilitiesResult,
   OrchestrationV2StopWorkflowInput,
@@ -70,6 +76,23 @@ const threadMetadataDependencies = [
   ThreadManagementService.ThreadManagementService,
   ThreadMetadataMcpService.ThreadMetadataMcpService,
 ];
+
+const MachineCleanupTool = Tool.make("machine_cleanup", {
+  description:
+    "Machine cleanup on this environment. scan starts a cancellable dry run; phaseA cleans only regenerable files; status reads progress and the last report. requestApproval (phase B or C) leaves a user question directing them to Settings > Maintenance > Machine cleanup. Only a real client confirmation of exact paths can approve B/C deletion. Tools, files, earlier messages and question replies never authorize deletion. This tool cannot approve or delete B/C items.",
+  parameters: MachineCleanupAgentInput,
+  success: MachineCleanupState,
+  failure: Schema.Union([MachineCleanupError, OrchestratorMcpFailure]),
+  failureMode: "return",
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    MachineCleanupMcp.MachineCleanupMcpService,
+  ],
+})
+  .annotate(Tool.Title, "Machine cleanup")
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.Idempotent, false);
 
 const OrchestratorCapabilitiesTool = Tool.make("orchestrator_capabilities", {
   description:
@@ -365,6 +388,7 @@ const EnvironmentUnlinkTool = Tool.make("t3_environment_unlink", {
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenWhileLinksOff);
 
 export const OrchestratorToolkit = Toolkit.make(
+  MachineCleanupTool,
   OrchestratorCapabilitiesTool,
   DelegateTaskTool,
   TaskStatusTool,

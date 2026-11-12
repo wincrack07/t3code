@@ -181,16 +181,21 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
   function* (snapshotPath: string, keys: ChromiumKeyMaterial, platform: NodeJS.Platform) {
     const result = yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      // Chromium razes a damaged jar to a file with no tables and rebuilds it on its next write.
+      const tables =
+        yield* sql`select 1 from sqlite_master where type = 'table' and name = 'cookies'`;
+      if (tables.length === 0) return { rows: [], schemaVersion: 0 };
       const schemaVersion = yield* sql`select value from meta where key = 'version' limit 1`.pipe(
         Effect.flatMap(decodeSchemaVersion),
         Effect.map(([row]) => row.value),
       );
+      // BLOB affinity still stores TEXT rows; cast in SQL so ciphertext bytes skip a UTF-8 decode.
       const raw =
         schemaVersion >= 15
-          ? yield* sql`select host_key, name, value, encrypted_value, path,
+          ? yield* sql`select host_key, name, value, cast(encrypted_value as blob) as encrypted_value, path,
                 expires_utc / 1000000 as expires_seconds, is_secure, is_httponly,
                 samesite, top_frame_site_key from cookies`
-          : yield* sql`select host_key, name, value, encrypted_value, path,
+          : yield* sql`select host_key, name, value, cast(encrypted_value as blob) as encrypted_value, path,
                 expires_utc / 1000000 as expires_seconds, is_secure, is_httponly,
                 samesite, '' as top_frame_site_key from cookies`;
       return { rows: yield* decodeCookieRows(raw), schemaVersion };
@@ -199,10 +204,15 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
     const cookies: ImportedCookie[] = [];
     let undecryptable = 0;
     const undecryptableHosts = new Set<string>();
+    let partitioned = 0;
+    const partitionedHosts = new Set<string>();
+    const decryptFailedHosts = new Set<string>();
     for (const row of result.rows) {
       if (row.top_frame_site_key !== "") {
         undecryptable += 1;
         undecryptableHosts.add(bareHost(row.host_key));
+        partitioned += 1;
+        partitionedHosts.add(bareHost(row.host_key));
         continue;
       }
       const value =
@@ -218,6 +228,7 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
       if (value === null) {
         undecryptable += 1;
         undecryptableHosts.add(bareHost(row.host_key));
+        decryptFailedHosts.add(bareHost(row.host_key));
         continue;
       }
       const secure = row.is_secure === 1;
@@ -249,6 +260,13 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
       cookies,
       undecryptable,
       undecryptableHosts: [...undecryptableHosts],
+      ...(partitioned > 0
+        ? {
+            partitioned,
+            partitionedHosts: [...partitionedHosts],
+            decryptFailedHosts: [...decryptFailedHosts],
+          }
+        : {}),
     } satisfies CookieReadResult;
   },
 );

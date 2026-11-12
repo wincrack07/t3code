@@ -30,6 +30,10 @@ import {
   useRightPanelStore,
 } from "~/rightPanelStore";
 
+import { recordRecentArtifact } from "~/artifacts/artifactRecentsStore";
+import { findArtifactTab, rememberArtifactTab } from "~/artifacts/artifactTabs";
+import { parseClaudeArtifactUrl } from "~/artifacts/claudeArtifactUrl";
+
 import { resolveBrowserDefaults } from "./browserDefaults";
 
 export const isBrowserPreviewFile = (path: string): boolean =>
@@ -71,6 +75,23 @@ export async function openUrlInPreview<E>(input: {
   if (isBrowserSettingsReadError(defaults)) {
     return AsyncResult.failure(Cause.fail(defaults));
   }
+  const profileId = input.profileId ?? defaults.profileId;
+  const artifact = parseClaudeArtifactUrl(input.url);
+  const existingArtifactTab =
+    artifact === null || input.background
+      ? null
+      : findArtifactTab(
+          threadRef,
+          readThreadPreviewState(threadRef).sessions,
+          artifact.id,
+          profileId,
+        );
+  if (existingArtifactTab !== null) {
+    recordRecentArtifact(input.url);
+    setActivePreviewTab(threadRef, existingArtifactTab);
+    useRightPanelStore.getState().openBrowser(threadRef, existingArtifactTab);
+    return AsyncResult.success(undefined);
+  }
   const runtime = previewRuntimeFor(threadRef.environmentId, input.url);
   const previousActiveTabId = readThreadPreviewState(threadRef).activeTabId;
   // The server changes the active tab, not panel selection; selection changes come from the user.
@@ -84,12 +105,16 @@ export async function openUrlInPreview<E>(input: {
       threadId: threadRef.threadId,
       url: input.url,
       viewport: defaults.viewport,
-      profileId: input.profileId ?? defaults.profileId,
+      profileId,
       ...(runtime === undefined ? {} : { runtime }),
     },
   });
   return mapAtomCommandResult(result, (snapshot) => {
     rememberPreviewUrl(threadRef, input.url);
+    if (artifact !== null) {
+      rememberArtifactTab(threadRef, snapshot.tabId, artifact.id);
+      recordRecentArtifact(input.url);
+    }
     if (input.background) {
       updatePreviewServerSnapshot(threadRef, snapshot);
       // Restore focus unless the user picked a tab while opening this one.

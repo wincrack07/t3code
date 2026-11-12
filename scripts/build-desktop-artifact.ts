@@ -1115,6 +1115,9 @@ export const LINUX_CAPTURE_EXTRA_RESOURCES = [
     filter: gnomeCaptureBundle.files,
   },
 ] as const;
+export const MAC_APPLE_SPEECH_EXTRA_RESOURCES = [
+  { from: "apps/desktop/prod-resources/apple-speech", to: "apple-speech" },
+] as const;
 export const LINUX_BROWSER_SECRET_EXTRA_RESOURCES = [
   { from: "apps/desktop/prod-resources/browser-secret", to: "browser-secret" },
 ] as const;
@@ -2430,6 +2433,32 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
   }
 });
 
+/** Builds the Swift helper behind the macOS "Apple (built in)" speech engine. */
+export const stageAppleSpeech = Effect.fn("stageAppleSpeech")(function* (input: {
+  readonly repoRoot: string;
+  readonly stageResourcesDir: string;
+  readonly platform: typeof BuildPlatform.Type;
+  readonly verbose: boolean;
+}) {
+  if (input.platform !== "mac") return;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* runCommand(
+    ChildProcess.make("sh", [path.join(input.repoRoot, "native/apple-speech/build.sh")], {
+      cwd: input.repoRoot,
+    }),
+    { label: "build Apple speech helper", verbose: input.verbose },
+  );
+  const destination = path.join(input.stageResourcesDir, "apple-speech");
+  yield* fs.remove(destination, { recursive: true, force: true }).pipe(Effect.ignore);
+  yield* fs.makeDirectory(destination, { recursive: true });
+  yield* fs.copyFile(
+    path.join(input.repoRoot, "native/apple-speech/build/t3-apple-speech"),
+    path.join(destination, "t3-apple-speech"),
+  );
+  yield* fs.chmod(path.join(destination, "t3-apple-speech"), 0o755);
+});
+
 export const stageBrowserSecret = Effect.fn("stageBrowserSecret")(function* (input: {
   readonly repoRoot: string;
   readonly stageResourcesDir: string;
@@ -2803,6 +2832,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
+      ...(platform === "mac" ? MAC_APPLE_SPEECH_EXTRA_RESOURCES : []),
       ...(platform === "linux" ? LINUX_BROWSER_SECRET_EXTRA_RESOURCES : []),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
@@ -2863,6 +2893,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           "T3 Code lets commands run by terminals and coding agents use the camera.",
         NSMicrophoneUsageDescription:
           "T3 Code lets commands run by terminals and coding agents use the microphone.",
+        // Earlier macOS versions ask before the bundled helper transcribes dictation on this Mac.
+        NSSpeechRecognitionUsageDescription:
+          "T3 Code uses on-device speech recognition to turn your dictation into text. Audio stays on this Mac.",
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -3808,6 +3841,12 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     stageResourcesDir,
     platform: options.platform,
     arch: options.arch,
+    verbose: options.verbose,
+  });
+  yield* stageAppleSpeech({
+    repoRoot,
+    stageResourcesDir,
+    platform: options.platform,
     verbose: options.verbose,
   });
 

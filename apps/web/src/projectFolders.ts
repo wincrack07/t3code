@@ -73,6 +73,18 @@ export function projectFolderAncestors(
   return ancestors;
 }
 
+export function projectFolderColor(
+  folders: readonly ProjectFolder[],
+  folderId: string | undefined,
+): string | null {
+  if (folderId === undefined) return null;
+  for (const id of [folderId, ...projectFolderAncestors(folders, folderId)]) {
+    const color = folders.find((folder) => folder.id === id)?.sidebarColor;
+    if (color) return color;
+  }
+  return null;
+}
+
 export function projectFolderPath(folders: readonly ProjectFolder[], folderId: string): string {
   return [...projectFolderAncestors(folders, folderId).toReversed(), folderId]
     .map((id) => folders.find((folder) => folder.id === id)?.name ?? "")

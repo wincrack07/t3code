@@ -1,3 +1,4 @@
+import { MachineCleanupSettings } from "./MachineCleanupSettings";
 import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
 import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
 import { PromptPolishSettings } from "./PromptPolishSettings";
@@ -2127,6 +2128,7 @@ export function MaintenanceSettingsPanel() {
       </SettingsSection>
 
       <StorageCleanupSections />
+      <MachineCleanupSettings />
 
       <SettingsSection id="diagnostics-section" title="Diagnostics">
         <SettingsRow

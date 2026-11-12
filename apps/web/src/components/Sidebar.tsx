@@ -1,7 +1,9 @@
+import { createSidebarColorBlocks } from "./sidebar/sidebarColorBlocks";
 import {
   arrangeProjectFolderTree,
   planSidebarTreeDrop,
   projectFolderAncestors,
+  projectFolderColor,
   projectFolderExpansionKey,
   projectFolderOfProject,
   projectFolderPath,
@@ -3995,11 +3997,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               projectFolderAncestors(namedProjectFolders, folder.id)[0] ?? null,
                             ]),
                           );
+                          const colourBlocks = createSidebarColorBlocks(items);
+                          const append = colourBlocks.append;
                           for (const row of rows) {
+                            colourBlocks.next(row.depth);
                             if (row.kind === "folder") {
                               const { folder: group, collapsed } = row;
+                              colourBlocks.open(
+                                row.depth,
+                                group.id,
+                                projectFolderColor(namedProjectFolders, group.id),
+                              );
                               const expansionKey = projectFolderExpansionKey(group.id);
-                              items.push(
+                              append(
                                 <ProjectGroupHeader
                                   key={expansionKey}
                                   folder={group}
@@ -4034,7 +4044,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               const folder = row.project;
                               if (row.depth === 0 && folder.other && !otherHeaderShown) {
                                 otherHeaderShown = true;
-                                items.push(
+                                append(
                                   <li key="other-projects" className="list-none">
                                     <button
                                       type="button"
@@ -4056,17 +4066,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               }
                               if (row.depth === 0 && folder.other && !otherProjectsExpanded)
                                 continue;
-                              items.push(
+                              append(
                                 <SidebarProjectFolderHeader
                                   key={`project-folder:${folder.group.projectKey}`}
                                   group={folder.group}
                                   depth={row.depth}
                                   sidebarColor={resolveSidebarColor(
                                     projectSidebarColors.colorFor(folder.group),
-                                    projectFolderOfProject(
+                                    projectFolderColor(
                                       namedProjectFolders,
-                                      folder.group.projectKey,
-                                    )?.sidebarColor,
+                                      projectFolderOfProject(
+                                        namedProjectFolders,
+                                        folder.group.projectKey,
+                                      )?.id,
+                                    ),
                                   )}
                                   collapsed={folder.collapsed}
                                   localLastVisitedAtById={folderLastVisitedByThreadKey}
@@ -4077,7 +4090,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 />,
                               );
                               for (const thread of folder.threads) {
-                                items.push(
+                                append(
                                   renderThreadRow(
                                     thread,
                                     sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
@@ -4091,7 +4104,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 folder.settledCount > 0
                               ) {
                                 const shelfKey = `project-settled:${folder.group.projectKey}`;
-                                items.push(
+                                append(
                                   <li key={shelfKey} className="list-none">
                                     <button
                                       type="button"
@@ -4114,12 +4127,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   </li>,
                                 );
                                 for (const thread of folder.settledRows)
-                                  items.push(renderThreadRow(thread, "settled", shelfKey));
+                                  append(renderThreadRow(thread, "settled", shelfKey));
                                 if (
                                   folder.settledExpanded &&
                                   folder.settledCount > folder.settledRows.length
                                 )
-                                  items.push(
+                                  append(
                                     <li key={`${shelfKey}:more`} className="list-none ps-9">
                                       <button
                                         type="button"
@@ -4141,6 +4154,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               }
                             }
                           }
+                          colourBlocks.finish();
                           if (treeDragActive && namedProjectFolders.length > 0)
                             items.push(
                               <li

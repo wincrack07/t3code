@@ -1,3 +1,5 @@
+import { SidebarChromeHeader } from "../components/sidebar/SidebarChrome";
+import { SidebarProvider } from "../components/ui/sidebar";
 import "../index.css";
 import type * as Context from "effect/Context";
 import { ThreadId, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
@@ -57,12 +59,13 @@ vi.mock("../state/entities", async (importOriginal) => {
 function Harness() {
   const style = useSidebarTint();
   return (
-    <>
-      <aside data-app-sidebar style={style}>
+    <SidebarProvider>
+      <aside data-app-sidebar className="bg-sidebar" style={style}>
+        <SidebarChromeHeader isElectron />
         Sidebar
       </aside>
       <main>Conversation</main>
-    </>
+    </SidebarProvider>
   );
 }
 
@@ -94,10 +97,24 @@ it("changes only sidebar tokens when focus moves between split columns", async (
   });
   await using screen = await render(<Harness />);
   const sidebar = screen.container.querySelector("aside")!;
-  await vi.waitFor(() => expect(sidebar.style.getPropertyValue("--sidebar")).toMatch(/^#/));
+  await vi.waitFor(() =>
+    expect(sidebar.style.getPropertyValue("--sidebar")).toContain("color-mix(in oklab"),
+  );
+  const titlebar = sidebar.querySelector<HTMLElement>('[data-sidebar="titlebar"]')!;
+  expect(getComputedStyle(titlebar).backgroundColor).toBe(
+    getComputedStyle(sidebar).backgroundColor,
+  );
   const firstTint = sidebar.style.getPropertyValue("--sidebar");
   await act(() => useThreadColumnsStore.getState().activate("b"));
   await vi.waitFor(() => expect(sidebar.style.getPropertyValue("--sidebar")).not.toBe(firstTint));
+  await act(async () => {
+    await (
+      await import("./useSettings")
+    ).updateClientSettings({ tintSidebarWithProjectColor: false });
+  });
+  await vi.waitFor(() =>
+    expect(sidebar.style.getPropertyValue("--sidebar")).not.toContain("color-mix"),
+  );
   expect(screen.container.querySelector("main")!.style.getPropertyValue("--sidebar")).toBe("");
   expect(document.documentElement.style.getPropertyValue("--sidebar")).toBe("");
 });

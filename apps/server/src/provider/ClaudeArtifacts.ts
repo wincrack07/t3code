@@ -300,6 +300,7 @@ const make = Effect.gen(function* () {
 
   const list: ClaudeArtifacts["Service"]["list"] = Effect.fn("ClaudeArtifacts.list")(
     function* (input) {
+      if (input.refresh) yield* Cache.invalidate(listings, input.instanceId);
       const listing = yield* Cache.get(listings, input.instanceId);
       const scope = input.scope ?? "all";
       const matching =

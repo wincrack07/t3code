@@ -425,7 +425,7 @@
       (() => {
         try {
           const root = document.documentElement;
-          const cached = JSON.parse(localStorage.getItem("t3code:sidebar-tint:v1") ?? "null");
+          const cached = JSON.parse(localStorage.getItem("t3code:sidebar-tint:v2") ?? "null");
           const theme = JSON.stringify([
             root.dataset.themeId ?? "",
             root.classList.contains("dark"),
@@ -452,6 +452,16 @@
             return;
           for (const key of keys)
             root.style.setProperty(`--startup${key.slice(1)}`, cached.variables[key]);
+          for (const [key, value] of Object.entries(cached.variables)) {
+            if (
+              /^--(?:contrast-sidebar-(?:muted-)?foreground|sidebar-(?:muted-)?foreground|sidebar-neutral|sidebar-icon-color)$/.test(
+                key,
+              ) &&
+              typeof value === "string" &&
+              /^#[0-9a-f]{6}$/i.test(value)
+            )
+              root.style.setProperty(`--startup${key.slice(1)}`, value);
+          }
           root.dataset.sidebarTintStartup = "true";
         } catch {}
       })();

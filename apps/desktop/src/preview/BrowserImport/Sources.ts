@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import * as SqlClient from "effect/sql/SqlClient";
+import { snapshotCookieDatabase } from "./CookieDatabase.ts";
 
 export type BrowserImportEngine = "chromium" | "firefox" | "safari";
 
@@ -351,16 +352,25 @@ const countProfileCookies = Effect.fnUntraced(function* (
 ): Effect.fn.Return<number | undefined, never, FileSystem.FileSystem> {
   const database = yield* resolveCookieDatabase(definition, context, directory);
   if (database === undefined) return undefined;
+  // Count on a copy too: listing profiles must not lock a database its browser is writing.
   return yield* Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const rows =
-      definition.engine === "firefox"
-        ? yield* sql`select count(*) as count from moz_cookies where originAttributes = ''`
-        : yield* sql`select count(*) as count from cookies`;
-    const [row] = yield* decodeCookieCount(rows);
-    return row?.count;
+    const snapshot = yield* snapshotCookieDatabase(database, "t3code-cookie-count-");
+    return yield* Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const table = definition.engine === "firefox" ? "moz_cookies" : "cookies";
+      const tables =
+        yield* sql`select 1 from sqlite_master where type = 'table' and name = ${table}`;
+      if (tables.length === 0) return 0;
+      const rows =
+        definition.engine === "firefox"
+          ? yield* sql`select count(*) as count from moz_cookies where originAttributes = ''`
+          : yield* sql`select count(*) as count from cookies`;
+      const [row] = yield* decodeCookieCount(rows);
+      return row?.count;
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: snapshot, readonly: true })));
   }).pipe(
-    Effect.provide(NodeSqliteClient.layer({ filename: database, readonly: true })),
+    Effect.scoped,
+    Effect.provideService(Path.Path, context.path),
     Effect.orElseSucceed(() => undefined),
   );
 });

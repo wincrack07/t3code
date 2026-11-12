@@ -354,6 +354,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance",
   },
   {
+    id: "sidebar-project-tint",
+    title: "Tint sidebar with project colour",
+    to: "/settings/appearance",
+    searchTerms: ["sidebar project group colour color tint background"],
+  },
+  {
     // Prefixed because the slider control already owns the `appearance-contrast` id.
     id: "setting-appearance-contrast",
     title: "Contrast",

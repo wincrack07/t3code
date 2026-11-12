@@ -410,7 +410,7 @@ it.each(["match", "different route", "different theme", "invalid colour"])(
   "restores only valid matching sidebar startup colours: %s",
   (scenario) => {
     const script = [...indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].find((match) =>
-      match[1]?.includes("t3code:sidebar-tint:v1"),
+      match[1]?.includes("t3code:sidebar-tint:v2"),
     )![1]!;
     const variables: Record<string, string> = {};
     const dataset: Record<string, string> = { themeId: "claude" };
@@ -446,7 +446,7 @@ it.each(["match", "different route", "different theme", "invalid colour"])(
         },
       },
       {
-        getItem: (key: string) => (key === "t3code:sidebar-tint:v1" ? JSON.stringify(cache) : null),
+        getItem: (key: string) => (key === "t3code:sidebar-tint:v2" ? JSON.stringify(cache) : null),
       },
       { pathname: "/thread" },
     );

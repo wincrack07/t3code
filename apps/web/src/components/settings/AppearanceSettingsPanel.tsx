@@ -274,6 +274,19 @@ export function AppearanceSettingsPanel() {
           onImportOpenChange={setIsImportThemeOpen}
         />
         <SettingsRow
+          {...searchableSetting("sidebar-project-tint")}
+          description="Colour the entire sidebar for the focused project. Turn off to keep only project and group row colours."
+          control={
+            <Switch
+              checked={settings.tintSidebarWithProjectColor}
+              onCheckedChange={(checked) =>
+                updateSettings({ tintSidebarWithProjectColor: checked })
+              }
+              aria-label="Tint sidebar with project colour"
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}
           description="Adjust the contrast of colors and borders across the interface."
           resetAction={
