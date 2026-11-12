@@ -119,8 +119,11 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                   size="xs"
                   variant="ghost-muted"
                   aria-label="Open diff"
-                  disabled={unavailableReason !== null}
-                  onClick={() => onOpenTurnDiff(runId, files[0]?.path)}
+                  // Stays hoverable so the tooltip can say why.
+                  aria-disabled={unavailableReason !== null || undefined}
+                  onClick={() => {
+                    if (unavailableReason === null) onOpenTurnDiff(runId, files[0]?.path);
+                  }}
                 />
               }
             >

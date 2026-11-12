@@ -1040,8 +1040,12 @@ function RevertUserMessageButton({
             type="button"
             size="xs"
             variant="ghost"
-            disabled={unavailable !== null || activity.isRevertingCheckpoint || activity.isWorking}
-            onClick={() => ctx.onRevertToTurnCount(turnCount, messageId)}
+            disabled={activity.isRevertingCheckpoint || activity.isWorking}
+            // Stays hoverable so the tooltip can say why.
+            aria-disabled={unavailable !== null || undefined}
+            onClick={() => {
+              if (unavailable === null) ctx.onRevertToTurnCount(turnCount, messageId);
+            }}
             aria-label="Edit from here"
           />
         }
