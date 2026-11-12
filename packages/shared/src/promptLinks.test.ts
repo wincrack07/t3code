@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildNewThreadLink,
   parseNewThreadLink,
+  parseNewTaskLink,
   parseThreadLinkPrompt,
   promptLinkAppPath,
   promptLinkDeepLink,
@@ -73,6 +74,37 @@ describe("parseNewThreadLink", () => {
   });
 
   it("refuses links it cannot open safely", () => {
+    for (const query of [
+      "?prompt=123",
+      "?prompt=a%2Bb+c",
+      "?prompt=%E0%A4%A",
+      "?prompt=one&prompt=two",
+      "?prompt=%E2%80%8Bvisible",
+      "?prompt=line%0D%0Atwo",
+      "?repo=a/b",
+      "?prompt=%E2%80%8B",
+      `?prompt=${"x".repeat(8001)}`,
+      "?prompt=x&repo=../etc",
+    ]) {
+      const thread = parseNewThreadLink(query);
+      const task = parseNewTaskLink(query);
+      expect(task.ok).toBe(thread.ok);
+      if (thread.ok && thread.value.kind === "new" && task.ok)
+        expect(task.value.prompt).toEqual(thread.value.prompt);
+    }
+    expect(parseNewTaskLink("?prompt=123&title=42&repo=acme/app")).toEqual({
+      ok: true,
+      value: {
+        prompt: { text: "123", hiddenCharacters: 0 },
+        title: "42",
+        repository: { owner: "acme", name: "app" },
+      },
+    });
+    expect(parseNewTaskLink(`?prompt=x&title=${"x".repeat(161)}`).ok).toBe(false);
+    expect(parseNewTaskLink("?prompt=x&title=%E2%80%8BTitle")).toMatchObject({
+      ok: true,
+      value: { title: "Title", prompt: { hiddenCharacters: 1 } },
+    });
     expect(parseNewThreadLink("?repo=a/b").ok).toBe(false);
     expect(parseNewThreadLink("?prompt=%E2%80%8B").ok).toBe(false);
     expect(parseThreadLinkPrompt("?prompt=%E2%80%8B").ok).toBe(false);
@@ -122,6 +154,18 @@ describe("link round trips", () => {
 
   it("maps app scheme and hosted links to in-app paths, and nothing else", () => {
     expect(promptLinkAppPath("t3code://new?prompt=hi")).toBe("/new?prompt=hi");
+    for (const link of [
+      "t3code://tasks/new?prompt=123&title=42",
+      "t3code-dev://tasks/new?prompt=123&title=42",
+      "https://app.t3.codes/tasks/new?prompt=123&title=42",
+    ])
+      expect(promptLinkAppPath(link)).toBe("/tasks/new?prompt=123&title=42");
+    expect(promptLinkDeepLink("/tasks/new?prompt=123&title=42")).toBe(
+      "t3code://tasks/new?prompt=123&title=42",
+    );
+    expect(promptLinkAppPath("https://evil.test/tasks/new?prompt=x")).toBeNull();
+    expect(promptLinkAppPath("t3code://tasks/other?prompt=x")).toBeNull();
+
     expect(promptLinkAppPath("t3code-dev://threads/env-1/thread-1")).toBe("/env-1/thread-1");
     expect(promptLinkAppPath("https://app.t3.codes/env-1/thread-1?prompt=go")).toBe(
       "/env-1/thread-1?prompt=go",

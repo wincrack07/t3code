@@ -153,6 +153,33 @@ export function parseNewThreadLink(search: string): PromptLinkResult<NewThreadLi
   };
 }
 
+export interface NewTaskLink {
+  readonly prompt: LinkedPrompt;
+  readonly title: string | null;
+  readonly repository: PromptLinkRepository | null;
+}
+
+export function parseNewTaskLink(search: string): PromptLinkResult<NewTaskLink> {
+  const parsed = parseNewThreadLink(search);
+  if (!parsed.ok) return parsed;
+  if (parsed.value.kind !== "new") return { ok: false, error: "This task link needs a prompt." };
+  const rawTitle = new URLSearchParams(search).get("title");
+  if (rawTitle !== null && rawTitle.length > 160)
+    return { ok: false, error: "Task titles can contain at most 160 characters." };
+  const title = rawTitle === null ? null : sanitizeLinkedPrompt(rawTitle);
+  return {
+    ok: true,
+    value: {
+      prompt: {
+        ...parsed.value.prompt,
+        hiddenCharacters: parsed.value.prompt.hiddenCharacters + (title?.hiddenCharacters ?? 0),
+      },
+      title: title?.text.replace(/\n/g, " ") || null,
+      repository: parsed.value.repository,
+    },
+  };
+}
+
 export function parseThreadLinkPrompt(search: string): PromptLinkResult<LinkedPrompt | null> {
   return readPrompt(new URLSearchParams(search));
 }
@@ -194,11 +221,13 @@ export function promptLinkAppPath(
     if (url.host === "new" && (url.pathname === "" || url.pathname === "/")) {
       return `/new${url.search}`;
     }
+    if (url.host === "tasks" && url.pathname === "/new") return `/tasks/new${url.search}`;
     const thread = url.host === "threads" ? THREAD_PATH.exec(url.pathname) : null;
     return thread ? `/${thread[1]}/${thread[2]}${url.search}` : null;
   }
   if (!URL.canParse(hostedAppUrl) || url.origin !== new URL(hostedAppUrl).origin) return null;
-  if (url.pathname === "/new") return `/new${url.search}`;
+  if (url.pathname === "/new" || url.pathname === "/tasks/new")
+    return `${url.pathname}${url.search}`;
   // The web app's own thread route is a link only with a prompt, so reloading a tab never asks.
   const thread = url.pathname.startsWith("/threads/")
     ? THREAD_PATH.exec(url.pathname.slice("/threads".length))
@@ -210,6 +239,11 @@ export function promptLinkAppPath(
 
 export function promptLinkDeepLink(appPath: string, scheme = "t3code"): string {
   const url = new URL(appPath, "https://app.invalid");
-  const host = url.pathname === "/new" ? "new" : `threads${url.pathname}`;
+  const host =
+    url.pathname === "/new"
+      ? "new"
+      : url.pathname === "/tasks/new"
+        ? "tasks/new"
+        : `threads${url.pathname}`;
   return `${scheme}://${host}${url.search}`;
 }

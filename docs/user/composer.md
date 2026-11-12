@@ -31,6 +31,12 @@ sending** in the start menu, lets you choose a model or adjust the draft first. 
 tasks done yourself, reopen them, or clear completed tasks. Deleting a task offers Undo.
 Tasks belong to the project's server, so connected devices share the same list.
 
+You can open a task draft with `/tasks/new?prompt=…&title=…`. Like prompt links,
+`repo=owner/name` chooses a matching project; otherwise pick a project before saving.
+Opening the link never saves a task or starts a thread. Review it and press **Save**.
+A task's **Copy link** action shares its prompt as a `/new?prompt=…` thread draft link.
+Copying is unavailable when the encoded link would exceed 8,000 characters.
+
 ## Formatting
 
 The composer writes Markdown and shows it styled as you type. When your cursor

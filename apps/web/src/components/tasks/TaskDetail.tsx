@@ -3,8 +3,8 @@ import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environ
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { CommandId, type ProjectSavedPrompt } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDownIcon, Trash2Icon, WandIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDownIcon, MoreHorizontalIcon, WandIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
@@ -24,6 +24,11 @@ import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
+import {
+  copyPromptLink,
+  promptLinkFor,
+  promptLinkRepositoryOf,
+} from "../promptLinks/copyPromptLink";
 import { taskStatus, taskThreadRunning } from "./tasks.logic";
 
 const STATUS_LABELS = { open: "Open", "in-progress": "In progress", done: "Done" } as const;
@@ -32,10 +37,16 @@ export function TaskDetail({
   task,
   project,
   compact = false,
+  onCreate,
+  creationDisabled = false,
+  projectControl,
 }: {
   task: ProjectSavedPrompt;
   project: EnvironmentProject;
   compact?: boolean;
+  onCreate?: (draft: { text: string; title: string | null }) => Promise<boolean>;
+  creationDisabled?: boolean;
+  projectControl?: ReactNode;
 }) {
   const { environmentId, id: projectId } = project;
   const { allowed, update } = useSavedPrompts(environmentId, projectId);
@@ -61,9 +72,16 @@ export function TaskDetail({
     if (title === (source.title ?? "")) setTitle(task.title ?? "");
     setSource(task);
   }
+  const shareLink = promptLinkFor(text, {
+    repository: promptLinkRepositoryOf(project),
+    provider: null,
+    model: null,
+  });
+  const canShareLink = shareLink !== null && shareLink.length <= 8000;
   const dirty = text.trim() !== task.text || (title.trim() || null) !== (task.title ?? null);
   const valid = text.trim().length > 0 && text.length <= 120000 && title.length <= 160;
   const save = useStableCallback(async () => {
+    if (onCreate) return true;
     if (!allowed || !dirty || !valid) return !dirty;
     setSaving(true);
     const ok = await update({
@@ -81,12 +99,13 @@ export function TaskDetail({
     if (
       (text.trim() === task.text && (title.trim() || null) === (task.title ?? null)) ||
       !valid ||
+      onCreate ||
       failed
     )
       return;
     const timer = window.setTimeout(() => void save(), 600);
     return () => window.clearTimeout(timer);
-  }, [valid, failed, text, title, task.text, task.title, save]);
+  }, [valid, failed, text, title, task.text, task.title, save, onCreate]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- flushes pending edits when this task editor leaves the page or panel
   useEffect(
     () => () => {
@@ -182,25 +201,43 @@ export function TaskDetail({
             onBlur={() => void save()}
           />
         </div>
-        <Badge variant="secondary">{project.title}</Badge>
-        <TaskStatusMenu
-          status={taskStatus(task)}
-          disabled={!allowed}
-          onChange={(status) => void update({ kind: "edit", id: task.id, status })}
-        />
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Delete task"
-          disabled={!allowed || busy}
-          onClick={() => void remove()}
-        >
-          <Trash2Icon />
-        </Button>
+        {projectControl ?? <Badge variant="secondary">{project.title}</Badge>}
+        {onCreate ? (
+          <Badge variant="secondary">Draft</Badge>
+        ) : (
+          <>
+            <TaskStatusMenu
+              status={taskStatus(task)}
+              disabled={!allowed}
+              onChange={(status) => void update({ kind: "edit", id: task.id, status })}
+            />
+            <Menu>
+              <MenuTrigger
+                render={<Button size="icon-sm" variant="ghost" aria-label="Task actions" />}
+              >
+                <MoreHorizontalIcon />
+              </MenuTrigger>
+              <MenuPopup>
+                <MenuItem
+                  disabled={!canShareLink}
+                  onClick={() => {
+                    if (shareLink && canShareLink) void copyPromptLink(shareLink);
+                  }}
+                >
+                  Copy link{!canShareLink ? " (too long: 8,000 URL characters maximum)" : ""}
+                </MenuItem>
+                <MenuItem disabled={!allowed || busy} onClick={() => void remove()}>
+                  Delete task
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
+          </>
+        )}
       </div>
       <div className={compact ? "min-h-40" : "min-h-48 flex-1"}>
         <textarea
           aria-label="Task prompt"
+          autoFocus={onCreate !== undefined}
           className="h-full min-h-40 w-full resize-none rounded-lg bg-transparent p-2 text-sm leading-6 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           value={text}
           maxLength={120000}
@@ -211,13 +248,15 @@ export function TaskDetail({
       </div>
       <div className="flex justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
         <span>
-          {failed
-            ? "Could not save. "
-            : saving
-              ? "Saving…"
-              : dirty
-                ? "Unsaved changes"
-                : "Saved automatically"}
+          {onCreate
+            ? "Review this draft, then Save to add it to the project."
+            : failed
+              ? "Could not save. "
+              : saving
+                ? "Saving…"
+                : dirty
+                  ? "Unsaved changes"
+                  : "Saved automatically"}
           {failed ? (
             <Button
               size="micro"
@@ -281,7 +320,7 @@ export function TaskDetail({
           <Button
             size="compact"
             variant="ghost"
-            disabled={!allowed || !polish.available || polish.running || !valid}
+            disabled={!allowed || !polish.available || polish.running || !valid || creationDisabled}
             onClick={() => {
               promptRef.current = text;
               void polish.polish((expected, next) => {
@@ -307,37 +346,55 @@ export function TaskDetail({
             </Button>
           ) : null}
         </div>
-        <div className="flex gap-1">
+        {onCreate ? (
           <Button
             size="compact"
-            variant="ghost"
-            disabled={!allowed || !valid || busy}
-            onClick={() => void openComposer()}
+            disabled={!allowed || !valid || busy || creationDisabled}
+            onClick={async () => {
+              setBusy(true);
+              await onCreate({ text: text.trim(), title: title.trim() || null });
+              setBusy(false);
+            }}
           >
-            Open in composer
+            Save
           </Button>
-          <div className="flex gap-px">
+        ) : (
+          <div className="flex gap-1">
             <Button
               size="compact"
-              disabled={!allowed || !canLaunch || !valid || busy}
-              onClick={() => void start()}
+              variant="ghost"
+              disabled={!allowed || !valid || busy}
+              onClick={() => void openComposer()}
             >
-              {busy ? "Starting…" : "Start thread"}
+              Open in composer
             </Button>
-            <Menu>
-              <MenuTrigger
-                render={
-                  <Button size="icon-sm" aria-label="Thread options" disabled={!allowed || busy} />
-                }
+            <div className="flex gap-px">
+              <Button
+                size="compact"
+                disabled={!allowed || !canLaunch || !valid || busy}
+                onClick={() => void start()}
               >
-                <ChevronDownIcon />
-              </MenuTrigger>
-              <MenuPopup>
-                <MenuItem onClick={() => void openComposer()}>Open without sending</MenuItem>
-              </MenuPopup>
-            </Menu>
+                {busy ? "Starting…" : "Start thread"}
+              </Button>
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      size="icon-sm"
+                      aria-label="Thread options"
+                      disabled={!allowed || busy}
+                    />
+                  }
+                >
+                  <ChevronDownIcon />
+                </MenuTrigger>
+                <MenuPopup>
+                  <MenuItem onClick={() => void openComposer()}>Open without sending</MenuItem>
+                </MenuPopup>
+              </Menu>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );

@@ -1,6 +1,7 @@
 import {
   type LinkedPrompt,
   parseNewThreadLink,
+  parseNewTaskLink,
   parseThreadLinkPrompt,
   promptLinkAppPath,
   promptLinkDeepLink,
@@ -38,6 +39,24 @@ function summarize(
   appPath: string,
 ): { ok: true; value: LinkSummary } | { ok: false; error: string } {
   const url = new URL(appPath, window.location.origin);
+  if (url.pathname === "/tasks/new") {
+    const task = parseNewTaskLink(url.search);
+    if (!task.ok) return task;
+    return {
+      ok: true,
+      value: {
+        title: "Open this task",
+        description: "Review the task draft. Nothing is saved until you press Save.",
+        prompt: task.value.prompt,
+        details: [
+          ...(task.value.title ? [task.value.title] : []),
+          ...(task.value.repository
+            ? [`Repository ${task.value.repository.owner}/${task.value.repository.name}`]
+            : ["Choose a project before saving"]),
+        ],
+      },
+    };
+  }
   if (url.pathname !== "/new") {
     const prompt = parseThreadLinkPrompt(url.search);
     if (!prompt.ok) return prompt;

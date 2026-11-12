@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { TasksPage } from "../components/tasks/TasksPage";
 
 export const Route = createFileRoute("/_chat/tasks")({
@@ -8,5 +8,10 @@ export const Route = createFileRoute("/_chat/tasks")({
     ...(typeof search.environment === "string" ? { environment: search.environment } : {}),
     ...(typeof search.project === "string" ? { project: search.project } : {}),
   }),
-  component: TasksPage,
+  component: TasksRoute,
 });
+
+function TasksRoute() {
+  const child = useLocation({ select: (location) => location.pathname === "/tasks/new" });
+  return child ? <Outlet /> : <TasksPage />;
+}

@@ -1,3 +1,5 @@
+import { findPromptLinkProjects } from "@t3tools/client-runtime/prompt-links";
+import type { NewTaskLink } from "@t3tools/shared/promptLinks";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { EnvironmentId, type ProjectSavedPrompt } from "@t3tools/contracts";
@@ -14,19 +16,28 @@ import { Checkbox } from "../ui/checkbox";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SidebarInset } from "../ui/sidebar";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { NewTaskDraft } from "./NewTaskDraft";
 import { TaskDetail } from "./TaskDetail";
 import { taskStatus, taskThreadRunning, taskTitle } from "./tasks.logic";
 
-export function TasksPage() {
+export function TasksPage({ newTask }: { newTask?: NewTaskLink } = {}) {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const primary = usePrimaryEnvironmentId();
-  const environmentId = search.environment ? EnvironmentId.make(search.environment) : primary;
-  const projects = useProjects().filter(
+  const availableProjects = useProjects();
+  const matching = newTask?.repository
+    ? findPromptLinkProjects(availableProjects, newTask.repository)
+    : [];
+  const environmentId =
+    matching[0]?.environmentId ??
+    (search.environment ? EnvironmentId.make(search.environment) : primary);
+  const projects = availableProjects.filter(
     (project) =>
       project.environmentId === environmentId && (!search.project || project.id === search.project),
   );
-  const allProjects = useProjects().filter((project) => project.environmentId === environmentId);
+  const allProjects = availableProjects.filter(
+    (project) => project.environmentId === environmentId,
+  );
   const [selected, setSelected] = useState<{ projectId: string; id: string } | null>(null);
   const entries = projects.flatMap((project) =>
     (project.savedPrompts ?? []).map((task) => ({ project, task })),
@@ -44,11 +55,25 @@ export function TasksPage() {
       <WorkspacePageHeader electron={isElectron}>
         <h1 className="text-sm font-medium">Tasks</h1>
         <span className="text-xs text-muted-foreground">{open.length} open</span>
+        {newTask ? (
+          <Button
+            size="compact"
+            variant="ghost"
+            onClick={() =>
+              void navigate({
+                to: "/tasks",
+                search: environmentId ? { environment: environmentId } : {},
+              })
+            }
+          >
+            Cancel
+          </Button>
+        ) : null}
       </WorkspacePageHeader>
       <div className="flex min-h-0 flex-1 border-t border-border">
         <aside
           aria-label="Task list"
-          className={`${chosen ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-border md:w-72 lg:w-80`}
+          className={`${chosen || newTask ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-border md:w-72 lg:w-80`}
         >
           <div className="flex h-12 shrink-0 items-center gap-2 px-3">
             <div className="min-w-0 flex-1">
@@ -131,7 +156,13 @@ export function TasksPage() {
           </div>
         </aside>
         <main className="min-h-0 min-w-0 flex-1">
-          {chosen ? (
+          {newTask ? (
+            <NewTaskDraft
+              link={newTask}
+              projects={availableProjects}
+              initialProject={matching[0] ?? null}
+            />
+          ) : chosen ? (
             <>
               <div className="p-2 md:hidden">
                 <Button
