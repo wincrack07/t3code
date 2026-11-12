@@ -1,4 +1,11 @@
-import type { DesktopUpdateState } from "@t3tools/contracts";
+import {
+  type DesktopUpdateState,
+  EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
+import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
@@ -11,6 +18,14 @@ const mocks = vi.hoisted(() => {
   return {
     update: null as DesktopUpdateState | null,
     hasUpdates: false,
+    environments: [] as Array<{
+      environmentId: EnvironmentId;
+      label: string;
+      connection: { phase: "connected" | "disconnected" };
+    }>,
+    providers: new Map<EnvironmentId, ReadonlyArray<ServerProvider>>(),
+    updates: [] as Array<{ environmentId: EnvironmentId; input: unknown }>,
+    refresh: null as Promise<unknown> | null,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -32,6 +47,28 @@ vi.mock("../../state/desktopUpdate", async (importOriginal) => ({
 vi.mock("../../env", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../env")>()),
   isElectron: true,
+}));
+vi.mock("~/state/environments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/state/environments")>()),
+  useEnvironments: () => ({ environments: mocks.environments }),
+  useEnvironmentProviders: () => mocks.providers,
+}));
+vi.mock("~/state/session", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/state/session")>()),
+  useEnvironmentsWithScope: () => new Set(mocks.environments.map((e) => e.environmentId)),
+}));
+vi.mock("~/state/use-atom-command", () => ({
+  useAtomCommand:
+    (command: { label: string }) =>
+    async (request: { environmentId: EnvironmentId; input: unknown }) => {
+      if (command.label === "environment-data:server:update-provider") {
+        mocks.updates.push(request);
+      }
+      if (command.label === "environment-data:server:refresh-providers") {
+        await mocks.refresh;
+      }
+      return AsyncResult.success(undefined);
+    },
 }));
 vi.mock("./useUpdateEverything", () => ({
   useUpdateEverything: () => ({
@@ -69,9 +106,55 @@ const RELEASE_NOTES: DesktopUpdateState["releaseNotes"] = [
   { version: "0.0.50-nightly.2", items: ["Faster sidebar."], totalItems: 1 },
 ];
 
-function setup(update: DesktopUpdateState | null, { hasUpdates = false } = {}) {
+function setup(
+  update: DesktopUpdateState | null,
+  {
+    hasUpdates = false,
+    machines = [] as Array<{ label: string; connected?: boolean; providers: ServerProvider[] }>,
+  } = {},
+) {
   mocks.update = update;
   mocks.hasUpdates = hasUpdates;
+  mocks.environments = machines.map(({ label, connected = true }) => ({
+    environmentId: EnvironmentId.make(label),
+    label,
+    connection: { phase: connected ? "connected" : "disconnected" },
+  }));
+  mocks.providers = new Map(
+    machines.map(({ label, providers }) => [EnvironmentId.make(label), providers]),
+  );
+  mocks.updates = [];
+  mocks.refresh = null;
+}
+
+const CHECKED_AT = "2026-11-12T00:00:00.000Z";
+
+function provider(
+  driver: string,
+  { latest, canUpdate = true }: { latest?: string; canUpdate?: boolean } = {},
+): ServerProvider {
+  return {
+    instanceId: ProviderInstanceId.make(driver),
+    driver: ProviderDriverKind.make(driver),
+    enabled: true,
+    installed: true,
+    version: "1.0.0",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: CHECKED_AT,
+    models: [],
+    slashCommands: [],
+    skills: [],
+    versionAdvisory: {
+      status: latest ? "behind_latest" : "current",
+      currentVersion: "1.0.0",
+      latestVersion: latest ?? "1.0.0",
+      updateCommand: canUpdate ? `npm i -g ${driver}` : null,
+      canUpdate,
+      checkedAt: CHECKED_AT,
+      message: canUpdate ? null : "Update it with the app or tool that installed it.",
+    },
+  };
 }
 
 function publish(update: DesktopUpdateState | null) {
@@ -129,6 +212,64 @@ describe("SidebarUpdatePill release notes", () => {
     await expect.element(check).toBeEnabled();
     await userEvent.click(check);
     expect(checkForUpdate).toHaveBeenCalledOnce();
+  });
+});
+
+describe("SidebarUpdatePill provider updates", () => {
+  const upToDate = { ...nightlyUpdate(RELEASE_NOTES), status: "up-to-date" as const };
+
+  it("lists each machine's provider updates and updates one candidate at a time", async () => {
+    setup(upToDate, {
+      machines: [
+        {
+          label: "Laptop",
+          providers: [
+            provider("codex", { latest: "1.1.0" }),
+            provider("claudeAgent", { latest: "2.0.0", canUpdate: false }),
+          ],
+        },
+        { label: "Server", providers: [provider("codex", { latest: "1.2.0" })] },
+        { label: "Offline", connected: false, providers: [] },
+      ],
+    });
+    await using _screen = await render(<SidebarUpdatePill />);
+    await userEvent.tab();
+    const section = page.getByRole("region", { name: "Provider updates" });
+    await expect.element(section.getByText("v1.0.0 → v1.2.0")).toBeVisible();
+    await expect.element(section.getByText("Update manually")).toBeVisible();
+    await expect.element(section.getByText("1 machine not checked")).toBeVisible();
+    // An unreached machine may still need updates.
+    expect(section.element().textContent).not.toContain("up to date");
+
+    await userEvent.click(section.getByRole("button", { name: "Update Codex on Server" }));
+    expect(mocks.updates).toEqual([
+      {
+        environmentId: EnvironmentId.make("Server"),
+        input: { provider: "codex", instanceId: "codex" },
+      },
+    ]);
+  });
+
+  it("keeps the check running until the provider check settles", async () => {
+    setup(upToDate, { machines: [{ label: "Laptop", providers: [provider("codex")] }] });
+    let finishRefresh!: () => void;
+    const checkForUpdate = vi.fn(async () => ({ checked: true, state: upToDate }));
+    using _bridge = stubGlobal("desktopBridge", { checkForUpdate });
+    await using _screen = await render(<SidebarUpdatePill />);
+    await userEvent.tab();
+    await expect.element(page.getByText("Providers are up to date")).toBeVisible();
+
+    mocks.refresh = new Promise<void>((resolve) => {
+      finishRefresh = resolve;
+    });
+    await userEvent.click(page.getByRole("button", { name: "Check for Updates" }));
+    expect(checkForUpdate).toHaveBeenCalledOnce();
+    await expect.element(page.getByRole("button", { name: "Checking…" })).toBeDisabled();
+    await expect.element(page.getByText("Checking providers…")).toBeVisible();
+
+    await act(() => finishRefresh());
+    await expect.element(page.getByRole("button", { name: "Check for Updates" })).toBeEnabled();
+    await expect.element(page.getByText("Providers are up to date")).toBeVisible();
   });
 });
 

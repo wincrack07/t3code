@@ -1,5 +1,6 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 import { ExternalLinkIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import {
   DESKTOP_UPDATE_CHECK_LABEL,
@@ -63,6 +64,7 @@ export function SidebarUpdateReleaseNotes({
   state,
   tooltip,
   check,
+  providers,
 }: {
   readonly shell: DesktopUpdateShell | undefined;
   readonly state: DesktopUpdateState;
@@ -71,7 +73,9 @@ export function SidebarUpdateReleaseNotes({
     readonly checking: boolean;
     readonly disabled: boolean;
     readonly onCheck: () => void;
+    readonly checkedAt: string | null;
   };
+  readonly providers?: ReactNode;
 }) {
   if (state.releaseNotes.length === 0) {
     return <>{tooltip}</>;
@@ -167,6 +171,7 @@ export function SidebarUpdateReleaseNotes({
           </div>
         ) : null}
       </div>
+      {providers}
       {check ? (
         <div className="flex shrink-0 items-center justify-between gap-3 pt-2 pr-1">
           <Button
@@ -177,9 +182,9 @@ export function SidebarUpdateReleaseNotes({
           >
             {check.checking ? DESKTOP_UPDATE_CHECKING_LABEL : DESKTOP_UPDATE_CHECK_LABEL}
           </Button>
-          {state.checkedAt ? (
+          {check.checkedAt ? (
             <span className="text-xs leading-4 text-muted-foreground">
-              Checked {formatRelativeTimeLabel(state.checkedAt)}
+              Checked {formatRelativeTimeLabel(check.checkedAt)}
             </span>
           ) : null}
         </div>

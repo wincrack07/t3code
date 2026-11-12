@@ -1,4 +1,10 @@
-import { AuthProvidersManageScope, PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
+import {
+  AuthProvidersManageScope,
+  type EnvironmentId,
+  PROVIDER_DISPLAY_NAMES,
+  type ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -14,6 +20,7 @@ import {
   canOneClickUpdateProviderCandidate,
   collectProviderUpdateCandidates,
   getProviderUpdateRunToastView,
+  type ProviderUpdateCandidate,
   type ProviderUpdateRun,
 } from "./ProviderUpdateLaunchNotification.logic";
 import { Button } from "./ui/button";
@@ -67,6 +74,20 @@ export function useCheckProviderUpdates() {
   };
 }
 
+interface ProviderUpdateListing {
+  readonly candidate: ProviderUpdateCandidate;
+  readonly oneClick: boolean;
+}
+
+// The oldest latest-version check across installed providers; null until every one has checked.
+function oldestProviderCheck(providers: ReadonlyArray<ServerProvider>): string | null {
+  const checks = providers
+    .filter((provider) => provider.enabled && provider.installed)
+    .map((provider) => provider.versionAdvisory?.checkedAt ?? null);
+  if (checks.length === 0 || checks.includes(null)) return null;
+  return checks.reduce((oldest, checkedAt) => (checkedAt! < oldest! ? checkedAt : oldest));
+}
+
 export function useProviderUpdates() {
   const { environments } = useEnvironments();
   const manageableIds = useEnvironmentsWithScope(environments, AuthProvidersManageScope);
@@ -74,26 +95,54 @@ export function useProviderUpdates() {
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
     reportFailure: false,
   });
-  const machines = environments.flatMap((environment) => {
+  const reachable = environments.filter(
+    (environment) =>
+      environment.connection.phase === "connected" && manageableIds.has(environment.environmentId),
+  );
+  const uncheckedMachineCount = environments.length - reachable.length;
+  const checkedAt = oldestProviderCheck(
+    reachable.flatMap(({ environmentId }) => providersByEnvironment.get(environmentId) ?? []),
+  );
+  // Every candidate on a reachable, manageable machine, including ones only Settings can update.
+  const listed = reachable.flatMap((environment) => {
     const providers = providersByEnvironment.get(environment.environmentId) ?? [];
-    if (
-      environment.connection.phase !== "connected" ||
-      !manageableIds.has(environment.environmentId)
-    ) {
-      return [];
-    }
-    const candidates = collectProviderUpdateCandidates(providers).filter((candidate) =>
-      canOneClickUpdateProviderCandidate(candidate, providers),
+    const candidates = collectProviderUpdateCandidates(providers).map(
+      (candidate): ProviderUpdateListing => ({
+        candidate,
+        oneClick: canOneClickUpdateProviderCandidate(candidate, providers),
+      }),
     );
     return candidates.length > 0
       ? [{ environmentId: environment.environmentId, label: environment.label, candidates }]
       : [];
   });
+  const machines = listed.flatMap(({ candidates, ...machine }) => {
+    const updatable = candidates
+      .filter(({ oneClick }) => oneClick)
+      .map(({ candidate }) => candidate);
+    return updatable.length > 0 ? [{ ...machine, candidates: updatable }] : [];
+  });
 
-  const updateAll = async ({ quiet = false }: { readonly quiet?: boolean } = {}) => {
+  /** `only` limits the run to one machine's provider instance. */
+  const updateAll = async ({
+    quiet = false,
+    only,
+  }: {
+    readonly quiet?: boolean;
+    readonly only?: {
+      readonly environmentId: EnvironmentId;
+      readonly instanceId: ProviderInstanceId;
+    };
+  } = {}) => {
     const runs = await Promise.all(
       machines.flatMap(({ environmentId, label, candidates }) =>
-        candidates.map(async (candidate): Promise<ProviderUpdateRun> => ({
+        (only
+          ? candidates.filter(
+              (candidate) =>
+                environmentId === only.environmentId && candidate.instanceId === only.instanceId,
+            )
+          : candidates
+        ).map(async (candidate): Promise<ProviderUpdateRun> => ({
           environmentId,
           machineLabel: label,
           driver: candidate.driver,
@@ -117,7 +166,13 @@ export function useProviderUpdates() {
     return runs;
   };
 
-  return { machines, updateAll };
+  return {
+    machines,
+    listed,
+    uncheckedMachineCount,
+    checkedAt,
+    updateAll,
+  };
 }
 
 export function ProviderUpdatesAction() {
