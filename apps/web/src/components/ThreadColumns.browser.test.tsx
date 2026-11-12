@@ -14,7 +14,8 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
   useNavigate: () => state.navigate,
 }));
-vi.mock("../state/entities", () => ({
+vi.mock("../state/entities", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../state/entities")>()),
   useQuietThreadShell: (ref: ScopedThreadRef) => ({ title: ref.threadId }),
 }));
 vi.mock("../hooks/useMediaQuery", () => ({ useMediaQuery: () => false }));
