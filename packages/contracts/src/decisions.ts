@@ -93,7 +93,11 @@ const DecisionBaseUrl = Schema.String.check(
 
 export const DecisionSettings = Schema.Struct({
   enabled: Schema.Boolean,
-  source: Schema.Literals(["provider", "openai", "custom"]),
+  source: Schema.Literals(["provider", "openai", "custom", "jev"]),
+  jevModel: Schema.optional(Schema.String),
+  jevApiKey: Schema.optional(SettingsSecretValue).pipe(
+    Schema.annotateKey({ settingsSecret: true, settingsSecretReference: true }),
+  ),
   customBaseUrl: Schema.optional(DecisionBaseUrl),
   customModel: Schema.optional(Schema.String),
   customApiKey: Schema.optional(SettingsSecretValue).pipe(
@@ -110,6 +114,8 @@ export type DecisionSettings = typeof DecisionSettings.Type;
 export const DEFAULT_DECISION_SETTINGS: DecisionSettings = {
   enabled: false,
   source: "provider",
+  jevModel: "jev-latest",
+  jevApiKey: "",
   customBaseUrl: "",
   customModel: "",
   customApiKey: "",

@@ -1,6 +1,7 @@
 import {
   AUTO_MODEL,
   ProviderInstanceId,
+  ProjectId,
   type ModelSelection,
   type DecisionCandidate,
   type DecisionInput,
@@ -26,6 +27,7 @@ import * as SystemMonitor from "../systemMonitor/SystemMonitor.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import { decisionCandidates } from "./candidates.ts";
 import { decisionPrompt, parseDecisionAnswer } from "./prompt.ts";
+import { requestJevDecision } from "./jev.ts";
 import { requestOpenAiDecision } from "./openai.ts";
 
 export class Decisions extends Context.Service<
@@ -56,6 +58,7 @@ const make = Effect.gen(function* () {
   const http = yield* HttpClient.HttpClient;
   let previousApiKey: unknown;
   let previousCustomApiKey: unknown;
+  let previousJevApiKey: unknown;
   const cache = new Map<string, { at: number; result: DecisionResult }>();
   const decide = Effect.fn("Decisions.decide")(function* (
     input: DecisionInput,
@@ -76,8 +79,13 @@ const make = Effect.gen(function* () {
       } satisfies DecisionResult;
     const settings = yield* settingsService.getSettings;
     const config = settings.decisions;
-    if (previousApiKey !== config.apiKey || previousCustomApiKey !== config.customApiKey) {
+    if (
+      previousApiKey !== config.apiKey ||
+      previousCustomApiKey !== config.customApiKey ||
+      previousJevApiKey !== config.jevApiKey
+    ) {
       cache.clear();
+      previousJevApiKey = config.jevApiKey;
       previousApiKey = config.apiKey;
       previousCustomApiKey = config.customApiKey;
     }
@@ -132,6 +140,7 @@ const make = Effect.gen(function* () {
       config.source,
       config.modelSelection,
       config.openaiModel,
+      config.jevModel,
       config.customBaseUrl,
       config.customModel,
       config.rules,
@@ -139,6 +148,17 @@ const make = Effect.gen(function* () {
     const cached = cache.get(key);
     if (cached && now - cached.at < 15_000) return cached.result;
     const generate = Effect.gen(function* () {
+      if (config.source === "jev") {
+        if (typeof config.jevApiKey !== "string" || !config.jevApiKey)
+          return yield* Effect.fail("Decision API key is missing");
+        return yield* requestJevDecision(
+          config.jevApiKey,
+          config.jevModel ?? "jev-latest",
+          input,
+          modelCandidates,
+          load,
+        ).pipe(Effect.provideService(HttpClient.HttpClient, http));
+      }
       if (config.source !== "provider") {
         if (config.source === "custom" && (!config.customBaseUrl || !config.customModel))
           return yield* Effect.fail("Decision base URL or model is missing");
@@ -239,31 +259,42 @@ const make = Effect.gen(function* () {
       return { success: false, message: "Could not read decision settings." };
     const config = settings.value.decisions;
     const custom = config.source === "custom";
-    const apiKey = custom ? config.customApiKey : config.apiKey;
+    const apiKey =
+      config.source === "jev" ? config.jevApiKey : custom ? config.customApiKey : config.apiKey;
     if (config.source === "provider")
       return { success: false, message: "Select an API decision source first." };
     if (typeof apiKey !== "string" || !apiKey)
       return { success: false, message: "Decision API key is missing." };
     if (custom && (!config.customBaseUrl || !config.customModel))
       return { success: false, message: "Enter a base URL and model first." };
-    return yield* requestOpenAiDecision(
-      apiKey,
-      custom ? config.customModel! : config.openaiModel,
-      'Return {"candidate":0,"reason":"Connection successful"}.',
-      custom ? config.customBaseUrl : undefined,
-    ).pipe(
+    const candidate: DecisionCandidate = {
+      providerInstanceId: "test",
+      driver: "test",
+      model: "test",
+      effort: null,
+      effortOptionId: null,
+      environmentId: "test",
+      projectId: "test",
+    };
+    const request =
+      config.source === "jev"
+        ? requestJevDecision(
+            apiKey,
+            config.jevModel ?? "jev-latest",
+            { projectId: ProjectId.make("test"), prompt: "Test decision connection" },
+            [candidate],
+            {},
+          )
+        : requestOpenAiDecision(
+            apiKey,
+            custom ? config.customModel! : config.openaiModel,
+            'Return {"candidate":0,"reason":"Connection successful"}.',
+            custom ? config.customBaseUrl : undefined,
+          );
+    return yield* request.pipe(
       Effect.provideService(HttpClient.HttpClient, http),
       Effect.timeout("4 seconds"),
       Effect.map((answer) => {
-        const candidate: DecisionCandidate = {
-          providerInstanceId: "test",
-          driver: "test",
-          model: "test",
-          effort: null,
-          effortOptionId: null,
-          environmentId: "test",
-          projectId: "test",
-        };
         const valid = parseDecisionAnswer(answer, [candidate]) !== undefined;
         return {
           success: valid,
