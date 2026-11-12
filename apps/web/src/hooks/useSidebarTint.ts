@@ -1,3 +1,4 @@
+import { projectFolderColor } from "../projectFolders";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import { useLayoutEffect, useState, type CSSProperties } from "react";
@@ -18,7 +19,7 @@ const decodeCache = Schema.decodeUnknownOption(
     variables: Schema.Record(Schema.String, Schema.String),
   }),
 );
-const CACHE_KEY = "t3code:sidebar-tint:v1";
+const CACHE_KEY = "t3code:sidebar-tint:v2";
 const themeStamp = () =>
   JSON.stringify([
     document.documentElement.dataset.themeId ?? "",
@@ -42,7 +43,17 @@ function readStartupTint(): Record<string, string> {
       "--sidebar-border",
     ];
     if (!keys.every((key) => /^#[0-9a-f]{6}$/i.test(cached.variables[key] ?? ""))) return {};
-    return Object.fromEntries(keys.map((key) => [key, cached.variables[key]!]));
+    return {
+      ...Object.fromEntries(keys.map((key) => [key, cached.variables[key]!])),
+      ...Object.fromEntries(
+        Object.entries(cached.variables).filter(
+          ([key, value]) =>
+            /^--(?:contrast-sidebar-(?:muted-)?foreground|sidebar-(?:muted-)?foreground|sidebar-neutral|sidebar-icon-color)$/.test(
+              key,
+            ) && /^#[0-9a-f]{6}$/i.test(value),
+        ),
+      ),
+    };
   } catch {
     return {};
   }
@@ -62,6 +73,7 @@ function readPaintedSidebar() {
     return probe;
   };
   const roles = [
+    "canvas",
     "sidebar",
     "sidebarControlSurface",
     "sidebarRowHover",
@@ -76,11 +88,13 @@ function readPaintedSidebar() {
   ] as const;
   const probes = roles.map((role) => {
     const token =
-      role === "sidebarForeground"
-        ? "--contrast-sidebar-foreground"
-        : role === "sidebarMutedForeground"
-          ? "--contrast-sidebar-muted-foreground"
-          : `--${role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+      role === "canvas"
+        ? "--background"
+        : role === "sidebarForeground"
+          ? "--contrast-sidebar-foreground"
+          : role === "sidebarMutedForeground"
+            ? "--contrast-sidebar-muted-foreground"
+            : `--${role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
     return sample(token);
   });
   const protectedTokens = [
@@ -99,7 +113,13 @@ function readPaintedSidebar() {
     const protectedColors = protectedProbes.flatMap((probe, index) => {
       const color = themeColorToHex(getComputedStyle(probe).color);
       return color
-        ? [{ color, minimum: protectedTokens[index] === "--sidebar-icon-color" ? 3 : 4.5 }]
+        ? [
+            {
+              color,
+              token: protectedTokens[index]!,
+              minimum: protectedTokens[index] === "--sidebar-icon-color" ? 3 : 4.5,
+            },
+          ]
         : [];
     });
     return { colors, protectedColors };
@@ -122,6 +142,7 @@ export function useSidebarTint(): CSSProperties {
   const project = draft ?? thread;
   const configs = useServerConfigs();
   const groups = useSidebarProjectGroups();
+  const enabled = useClientSettings((settings) => settings.tintSidebarWithProjectColor);
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const hydrated = useClientSettingsHydrated();
   const [painted, setPainted] = useState<ReturnType<typeof readPaintedSidebar> | null>(null);
@@ -149,23 +170,28 @@ export function useSidebarTint(): CSSProperties {
     : null;
   const color = resolveSidebarColor(
     project ? config?.settings.projectSettingsOverrides[project.projectId]?.sidebarColor : null,
-    folders.find((folder) => folder.projectKeys.includes(group?.projectKey ?? ""))?.sidebarColor,
+    projectFolderColor(
+      folders,
+      folders.find((folder) => folder.projectKeys.includes(group?.projectKey ?? ""))?.id,
+    ),
   );
   const pending = painted === null || !hydrated || (target !== null && (!project || !config));
-  const variables = pending
-    ? startup
-    : color
-      ? computeSidebarTint(painted.colors, color, painted.protectedColors).variables
-      : {};
+  const tint = painted
+    ? computeSidebarTint(painted.colors, enabled ? color : null, painted.protectedColors)
+    : null;
+  const variables = pending ? startup : (tint?.variables ?? {});
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- caches the focused sidebar surface for the synchronous startup script and retires its temporary CSS scope before paint
   useLayoutEffect(() => {
     if (pending) return;
     delete document.documentElement.dataset.sidebarTintStartup;
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ path, theme: themeStamp(), variables }));
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({ path, theme: themeStamp(), variables: tint?.cache ?? {} }),
+      );
     } catch {
       /* Storage can be disabled. */
     }
-  }, [pending, path, variables]);
+  }, [pending, path, tint]);
   return variables as CSSProperties;
 }

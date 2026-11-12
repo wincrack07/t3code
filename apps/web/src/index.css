@@ -3130,6 +3130,15 @@ html[data-sidebar-tint-startup] [data-app-sidebar] {
   --sidebar-row-active: var(--startup-sidebar-row-active);
   --sidebar-row-selected: var(--startup-sidebar-row-selected);
   --sidebar-border: var(--startup-sidebar-border);
+  --sidebar-neutral: var(--startup-sidebar-neutral, var(--startup-sidebar));
+  --contrast-sidebar-foreground: var(
+    --startup-contrast-sidebar-foreground,
+    var(--sidebar-foreground)
+  );
+  --contrast-sidebar-muted-foreground: var(
+    --startup-contrast-sidebar-muted-foreground,
+    var(--sidebar-muted-foreground)
+  );
 }
 
 html:not([data-motion="reduce"])
@@ -3140,9 +3149,14 @@ html:not([data-motion="reduce"])
 }
 
 [data-app-sidebar] {
+  background-color: var(--sidebar);
   --contrast-sidebar-border: color-mix(
     in srgb,
     color-mix(in srgb, var(--sidebar-border) var(--appearance-contrast-base), transparent),
     var(--sidebar-foreground) var(--appearance-contrast-border-boost)
   );
+}
+
+[data-app-sidebar] [data-sidebar="titlebar"] {
+  background-color: var(--sidebar);
 }

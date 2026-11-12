@@ -1,3 +1,4 @@
+import { projectFolderColor } from "./projectFolders";
 import type {
   EnvironmentId,
   ScopedProjectRef,
@@ -258,7 +259,10 @@ export function withSidebarProjectColors(
     ...group,
     sidebarColor:
       configs.get(group.environmentId)?.settings.projectSettingsOverrides[group.id]?.sidebarColor ??
-      folders.find((folder) => folder.projectKeys.includes(group.projectKey))?.sidebarColor ??
+      projectFolderColor(
+        folders,
+        folders.find((folder) => folder.projectKeys.includes(group.projectKey))?.id,
+      ) ??
       null,
   }));
 }

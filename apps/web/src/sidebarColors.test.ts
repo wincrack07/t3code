@@ -7,20 +7,35 @@ import {
 } from "./sidebarColors";
 import {
   getStandardPaintedThemeColors,
-  themeColorToHex,
   getThemeDefinition,
   getThemeColorsForMode,
+  themeColorToHex,
 } from "./themePalette";
+import { projectFolderColor } from "./projectFolders";
 
-it("resolves project before group and default, including explicit resets", () => {
-  expect(resolveSidebarColor("#123456", "#654321")).toBe("#123456");
-  expect(resolveSidebarColor(null, "#654321")).toBe("#654321");
-  expect(resolveSidebarColor(undefined, null)).toBeNull();
+it("resolves the project before the nearest coloured ancestor and default", () => {
+  const folders = [
+    { id: "root", name: "Root", emoji: "", projectKeys: [], sidebarColor: "#629bd7" },
+    { id: "child", name: "Child", emoji: "", projectKeys: ["project"], parentId: "root" },
+    {
+      id: "nested",
+      name: "Nested",
+      emoji: "",
+      projectKeys: [],
+      parentId: "child",
+      sidebarColor: "#cc7ca5",
+    },
+  ];
+  expect(projectFolderColor(folders, "child")).toBe("#629bd7");
+  expect(projectFolderColor(folders, "nested")).toBe("#cc7ca5");
+  expect(resolveSidebarColor("#123456", projectFolderColor(folders, "child"))).toBe("#123456");
+  expect(projectFolderColor(folders, undefined)).toBeNull();
+  expect(resolveSidebarColor(null, null)).toBeNull();
 });
 
-describe("sidebar tint contrast", () => {
+describe("visible Oklab sidebar washes", () => {
   it.each(["light", "dark"] as const)(
-    "clamps every palette and extreme custom colour in %s themes",
+    "keeps body and muted text at AA across every picker colour in %s",
     (appearance) => {
       const themes = [
         getStandardPaintedThemeColors(appearance),
@@ -29,80 +44,62 @@ describe("sidebar tint contrast", () => {
           return theme ? [getThemeColorsForMode(theme, appearance) ?? theme.colors] : [];
         }),
       ];
-      let tinted = 0;
       for (const theme of themes) {
         for (const color of [
           ...SIDEBAR_COLORS.map((color) => color.value),
-          "#ffffff",
           "#000000",
+          "#ffffff",
           "#00ff00",
           "#ff00ff",
           "#0000ff",
         ]) {
-          const protectedColors = [
-            { color: appearance === "dark" ? "#60a5fa" : "#1d4ed8", minimum: 4.5 },
-            { color: appearance === "dark" ? "#aaaaaa" : "#777777", minimum: 3 },
-          ];
-          const result = computeSidebarTint(theme, color, protectedColors);
-          expect(result.strength).toBeGreaterThanOrEqual(0);
-          expect(result.strength).toBeLessThanOrEqual(0.08);
-          if (result.strength > 0) tinted++;
-          for (const role of [
-            "sidebarForeground",
-            "sidebarMutedForeground",
-            "errorForeground",
-            "warningForeground",
-            "updateForeground",
-          ] as const) {
-            const foreground = themeColorToHex(theme[role])!.slice(0, 7);
+          const result = computeSidebarTint(theme, color);
+          expect(result.strength).toBeGreaterThanOrEqual(0.18);
+          expect(result.strength).toBeLessThanOrEqual(0.24);
+          expect(result.variables["--sidebar"]).toContain("color-mix(in oklab");
+          for (const foreground of [
+            "--contrast-sidebar-foreground",
+            "--contrast-sidebar-muted-foreground",
+          ]) {
             for (const surface of [
               "sidebar",
               "sidebarControlSurface",
               "sidebarRowHover",
               "sidebarRowActive",
               "sidebarRowSelected",
-            ] as const) {
-              const variable = `--${surface.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
-              const baseline = sidebarContrast(
-                foreground,
-                themeColorToHex(theme[surface])!.slice(0, 7),
-              );
+            ]) {
               expect(
-                sidebarContrast(foreground, result.variables[variable]!) + 0.000001,
-              ).toBeGreaterThanOrEqual(Math.min(4.5, baseline));
+                sidebarContrast(result.variables[foreground]!, result.surfaces[surface]!),
+                JSON.stringify({
+                  base: theme.sidebar,
+                  selected: theme.sidebarRowSelected,
+                  color,
+                  foreground,
+                  surface,
+                  solved: result.variables[foreground],
+                  filled: result.surfaces[surface],
+                }),
+              ).toBeGreaterThanOrEqual(4.5);
             }
           }
-          for (const foreground of protectedColors) {
-            const baseline = sidebarContrast(
-              foreground.color,
-              themeColorToHex(theme.sidebar)!.slice(0, 7),
-            );
-            expect(
-              sidebarContrast(foreground.color, result.variables["--sidebar"]!) + 0.000001,
-            ).toBeGreaterThanOrEqual(Math.min(foreground.minimum, baseline));
-          }
+          expect(result.surfaces.sidebarRowSelected).not.toBe(result.surfaces.sidebar);
         }
       }
-      expect(tinted).toBeGreaterThan(0);
     },
   );
 
-  it("composites translucent row fills over the sidebar before tinting", () => {
+  it("keeps neutral backgrounds exact when tint is disabled and composites translucent row fills", () => {
     const theme = {
       ...getStandardPaintedThemeColors("dark"),
       sidebar: "#101010",
       sidebarRowHover: "#ffffff00",
     };
-    const result = computeSidebarTint(theme, "#629bd7");
-    expect(result.variables["--sidebar-row-hover"]).toBe(result.variables["--sidebar"]);
-  });
-
-  it("leaves the surface unchanged when the original text is already at its contrast limit", () => {
-    const theme = {
-      ...getStandardPaintedThemeColors("light"),
-      sidebar: "#ffffff",
-      sidebarMutedForeground: "#777777",
-    };
-    expect(computeSidebarTint(theme, "#000000").variables["--sidebar"]).toBe("#ffffff");
+    const result = computeSidebarTint(theme, null);
+    expect(result.strength).toBe(0);
+    expect(result.variables["--sidebar"]).toBe("#101010");
+    expect(result.surfaces.sidebarRowHover).toBe(result.surfaces.sidebar);
+    expect(computeSidebarTint(theme, "#629bd7").surfaces.sidebar).not.toBe(
+      themeColorToHex(theme.sidebar),
+    );
   });
 });

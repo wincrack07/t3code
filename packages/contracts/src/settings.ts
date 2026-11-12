@@ -558,6 +558,9 @@ export const ClientSettingsSchema = Schema.Struct({
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sidebarProjectFolders: SidebarProjectFolders.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  tintSidebarWithProjectColor: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   sidebarDensity: Schema.Literals(["theme", "compact", "comfortable"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("theme" as const)),
   ),
@@ -2129,6 +2132,7 @@ export const ClientSettingsPatch = Schema.Struct({
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   sidebarProjectFolders: Schema.optionalKey(SidebarProjectFolders),
+  tintSidebarWithProjectColor: Schema.optionalKey(Schema.Boolean),
   sidebarDensity: Schema.optionalKey(Schema.Literals(["theme", "compact", "comfortable"])),
   sidebarThreadGrouping: Schema.optionalKey(Schema.Literals(["theme", "project", "global"])),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),

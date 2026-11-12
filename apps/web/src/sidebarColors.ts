@@ -1,3 +1,5 @@
+import "culori/css";
+import { converter } from "culori/fn";
 import { SidebarColor } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type { ThemeColors } from "./themePalette";
@@ -27,8 +29,22 @@ export function resolveSidebarColor(
 type Rgb = readonly number[];
 const rgb = (hex: string): Rgb =>
   [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
-const mix = (base: Rgb, tint: Rgb, strength: number) =>
+const mixRgb = (base: Rgb, tint: Rgb, strength: number) =>
   base.map((value, index) => value + (tint[index]! - value) * strength);
+const toLab = converter("oklab");
+const toRgb = converter("rgb");
+const mix = (base: Rgb, tint: Rgb, amount: number) => {
+  const a = toLab({ mode: "rgb", r: base[0]!, g: base[1]!, b: base[2]! });
+  const b = toLab({ mode: "rgb", r: tint[0]!, g: tint[1]!, b: tint[2]! });
+  const result = toRgb({
+    mode: "oklab",
+    l: a.l + (b.l - a.l) * amount,
+    a: a.a + (b.a - a.a) * amount,
+    b: a.b + (b.b - a.b) * amount,
+  });
+  return [result.r, result.g, result.b].map((channel) => Math.min(1, Math.max(0, channel)));
+};
+
 const hex = (color: Rgb) =>
   `#${color
     .map((value) =>
@@ -47,7 +63,7 @@ const luminance = (color: Rgb) =>
   );
 function composite(value: string, background: Rgb) {
   const alpha = value.length === 9 ? Number.parseInt(value.slice(7, 9), 16) / 255 : 1;
-  return mix(background, rgb(value), alpha);
+  return mixRgb(background, rgb(value), alpha);
 }
 
 export function sidebarContrast(a: string, b: string) {
@@ -76,15 +92,17 @@ const FOREGROUNDS = [
 
 export function computeSidebarTint(
   colors: ThemeColors,
-  color: string,
-  protectedColors: readonly { color: string; minimum: number }[] = [],
+  color: string | null,
+  protectedColors: readonly { color: string; minimum: number; token?: string }[] = [],
 ) {
   const background = composite(
     themeColorToHex(colors.sidebar) ?? "#000000",
     rgb(themeColorToHex(colors.canvas) ?? "#000000"),
   );
-  const parsed = Object.fromEntries([
-    ...SURFACES.map((role) => [
+  let weight = color === null ? 0 : luminance(background) < 0.4 ? 240 : 180;
+  const tint = rgb(color ?? hex(background));
+  const bases = Object.fromEntries(
+    SURFACES.map((role) => [
       role,
       hex(
         role === "sidebar"
@@ -92,36 +110,68 @@ export function computeSidebarTint(
           : composite(themeColorToHex(colors[role]) ?? "#000000", background),
       ),
     ]),
-    ...FOREGROUNDS.map((role) => [role, themeColorToHex(colors[role]) ?? "#000000"]),
-  ]);
-  const tint = rgb(color);
-  const desired = luminance(background) < 0.4 ? 0.08 : 0.06;
-  // Existing themes can start below AA. Never reduce their contrast further.
-  const foregrounds = [
-    ...FOREGROUNDS.map((role) => ({ color: parsed[role]!, minimum: 4.5 })),
-    ...protectedColors,
-  ];
-  const floors = foregrounds.map((foreground) =>
-    SURFACES.slice(0, -1).map((surface) =>
-      Math.min(foreground.minimum, sidebarContrast(foreground.color, parsed[surface]!)),
-    ),
   );
-  const safe = (strength: number) =>
-    foregrounds.every((foreground, index) =>
-      SURFACES.slice(0, -1).every(
-        (surface, surfaceIndex) =>
-          sidebarContrast(foreground.color, hex(mix(rgb(parsed[surface]!), tint, strength))) +
-            0.000001 >=
-          floors[index]![surfaceIndex]!,
+  const paint = (strength: number) => {
+    const surfaces = Object.fromEntries(
+      SURFACES.map((role) => [role, hex(mix(rgb(bases[role]!), tint, strength))]),
+    );
+    const textSurfaces = [
+      ...SURFACES.slice(0, -1).map((role) => surfaces[role]!),
+      hex(mix(background, [0, 0, 0], 0.12)),
+      hex(mix(background, [1, 1, 1], 0.12)),
+    ];
+    return { surfaces, textSurfaces };
+  };
+  const bestContrast = (surfaces: string[]) =>
+    Math.max(
+      ...["#000000", "#ffffff"].map((text) =>
+        Math.min(...surfaces.map((surface) => sidebarContrast(text, surface))),
       ),
     );
-  let strength = desired;
-  while (strength > 0 && !safe(strength)) strength = Math.max(0, strength - 0.001);
-  const variables = Object.fromEntries(
+  let painted = paint(weight / 1000);
+  while (weight > 0 && bestContrast(painted.textSurfaces) < 4.5) painted = paint(--weight / 1000);
+  const strength = weight / 1000;
+  const { surfaces, textSurfaces } = painted;
+  const readable = (foreground: string, minimum: number) => {
+    const contrast = (candidate: string) =>
+      Math.min(...textSurfaces.map((surface) => sidebarContrast(candidate, surface)));
+    if (contrast(foreground) >= minimum) return foreground;
+    const target = contrast("#000000") > contrast("#ffffff") ? [0, 0, 0] : [1, 1, 1];
+    for (let step = 1; step <= 100; step++) {
+      const candidate = hex(mix(rgb(foreground), target, step / 100));
+      if (contrast(candidate) >= minimum) return candidate;
+    }
+    return hex(target);
+  };
+  const variables: Record<string, string> = Object.fromEntries(
     SURFACES.map((role) => [
       `--${role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`,
-      hex(mix(rgb(parsed[role]!), tint, strength)),
+      strength === 0
+        ? bases[role]!
+        : `color-mix(in oklab, ${bases[role]} ${(1 - strength) * 100}%, ${color} ${strength * 100}%)`,
     ]),
   );
-  return { strength, variables };
+  for (const role of FOREGROUNDS) {
+    const foreground = readable(themeColorToHex(colors[role])?.slice(0, 7) ?? "#000000", 4.5);
+    const key = `--${role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+    variables[key] = foreground;
+    if (role === "sidebarForeground" || role === "sidebarMutedForeground")
+      variables[`--contrast${key.slice(1)}`] = foreground;
+  }
+  for (const foreground of protectedColors) {
+    if (foreground.token)
+      variables[foreground.token] = readable(foreground.color.slice(0, 7), foreground.minimum);
+  }
+  variables["--sidebar-icon-color"] = readable(variables["--sidebar-muted-foreground"]!, 3);
+  variables["--sidebar-neutral"] = hex(background);
+  const cache = {
+    ...variables,
+    ...Object.fromEntries(
+      SURFACES.map((role) => [
+        `--${role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`,
+        surfaces[role]!,
+      ]),
+    ),
+  };
+  return { strength, variables, surfaces, cache };
 }
