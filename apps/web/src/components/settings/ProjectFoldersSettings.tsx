@@ -8,7 +8,8 @@ import {
   type ProjectFolder,
 } from "../../projectFolders";
 import { deleteSidebarFolder, moveSidebarProjectToFolder } from "../sidebar/projectFolderActions";
-import { ProjectFolderEditor, ProjectFolderSuggestions } from "../sidebar/ProjectFolderEditor";
+import { ProjectFolderEditor } from "../sidebar/ProjectFolderEditor";
+import { ProjectGroupSuggestions } from "../sidebar/ProjectGroupSuggestions";
 import { ProjectFolderMenu } from "../sidebar/ProjectFolderMenu";
 import { Button } from "../ui/button";
 import { Menu, MenuTrigger, MenuPopup } from "../ui/menu";
@@ -107,7 +108,7 @@ export function ProjectFoldersSettings() {
       ) : null}
       {editor ? <ProjectFolderEditor {...editor} onClose={() => setEditor(null)} /> : null}
       {suggest ? (
-        <ProjectFolderSuggestions projects={projects} onClose={() => setSuggest(false)} />
+        <ProjectGroupSuggestions projects={projects} onClose={() => setSuggest(false)} />
       ) : null}
     </section>
   );

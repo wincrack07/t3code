@@ -29,7 +29,8 @@ import {
 } from "./sidebar/sidebarTreeDrag";
 import { SIDEBAR_COLORS } from "../sidebarColors";
 import { useProjectSidebarColor } from "../hooks/useProjectSidebarColor";
-import { ProjectFolderEditor, ProjectFolderSuggestions } from "./sidebar/ProjectFolderEditor";
+import { ProjectFolderEditor } from "./sidebar/ProjectFolderEditor";
+import { ProjectGroupSuggestions } from "./sidebar/ProjectGroupSuggestions";
 import { ProjectGroupHeader } from "./sidebar/ProjectGroupHeader";
 import { sidebarProjectIsOther, sidebarNestedThreads } from "./Sidebar.logic";
 import { SidebarDisplayMenu } from "./sidebar/SidebarDisplayMenu";
@@ -3419,7 +3420,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         <ProjectFolderEditor {...folderEditor} onClose={() => setFolderEditor(null)} />
       ) : null}
       {suggestFolders ? (
-        <ProjectFolderSuggestions
+        <ProjectGroupSuggestions
           projects={projectGroups}
           onClose={() => setSuggestFolders(false)}
         />

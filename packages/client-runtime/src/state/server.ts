@@ -1796,6 +1796,12 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-command:server:polish-prompt",
       tag: WS_METHODS.serverPolishPrompt,
     }),
+    suggestProjectGroups: createEnvironmentRpcCommand(runtime, {
+      label: "environment-command:server:suggest-project-groups",
+      tag: WS_METHODS.serverSuggestProjectGroups,
+      // A dialog that mounts twice shares one model call instead of paying for two.
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
     completePrompt: createEnvironmentRpcCommand(runtime, {
       label: "environment-command:server:complete-prompt",
       tag: WS_METHODS.serverCompletePrompt,

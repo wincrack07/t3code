@@ -102,6 +102,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverDecide]: "server",
   [WS_METHODS.serverTestDecisionConnection]: "server",
   [WS_METHODS.serverPolishPrompt]: "server",
+  [WS_METHODS.serverSuggestProjectGroups]: "server",
   [WS_METHODS.serverCompletePrompt]: "server",
   [WS_METHODS.serverPrepareTriage]: "server",
   [WS_METHODS.prReviewsGetState]: "server",

@@ -86,6 +86,7 @@ import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
 import * as PromptCompletion from "./promptCompletion/PromptCompletion.ts";
 import * as PromptPolish from "./promptPolish/PromptPolish.ts";
+import * as ProjectGroupSuggestions from "./projectGroupSuggestions/ProjectGroupSuggestions.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as RpcAuthorization from "./auth/RpcAuthorization.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
@@ -827,6 +828,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(PeerLinks.PeerLinks)({}),
   Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
   Layer.mock(PromptPolish.PromptPolish)({}),
+  Layer.mock(ProjectGroupSuggestions.ProjectGroupSuggestions)({}),
   Layer.mock(PromptCompletion.PromptCompletion)({}),
   Layer.mock(PortScanner.PortDiscovery)({ trackAgent: () => () => undefined }),
   Layer.mock(PreviewManager.PreviewManager)({}),
