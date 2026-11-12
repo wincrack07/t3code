@@ -46,22 +46,22 @@ Settings that are environment-wide stay read-only while a project is selected. W
 targets disagree, a control shows **Mixed** until you choose one value. Appearance, keyboard,
 and other phone-only settings ignore the filter.
 
-## Sidebar colour
+## Sidebar color
 
-On web and desktop, choose **Sidebar colour** in a project's settings or its
-sidebar context menu. Pick a palette colour or enter a custom hex colour.
+On web and desktop, choose **Sidebar color** in a project's settings or its
+sidebar context menu. Pick a palette color or enter a custom hex color.
 The sidebar takes a subtle tint while that project's thread or draft is focused,
 including when you focus a different split column. Conversation panels stay unchanged.
 
-A project's own colour takes priority over its group's colour. **Default** follows
-the nearest ancestor group with a colour, or leaves the sidebar neutral.
-Edit a group or open its action menu to set its colour. Coloured rows have a
+A project's own color takes priority over its group's color. **Default** follows
+the nearest ancestor group with a color, or leaves the sidebar neutral.
+Edit a group or open its action menu to set its color. Colored rows have a
 background wash and leading bar; a group's wash includes its projects.
-Turn off **Tint sidebar with project colour** in **Settings → Appearance** to keep
-only these row colours.
+Turn off **Tint sidebar with project color** in **Settings → Appearance** to keep
+only these row colors.
 
-Project colours are saved on the selected project environments and shared with
-other clients connected to them. Group colours stay with this client's groups.
+Project colors are saved on the selected project environments and shared with
+other clients connected to them. Group colors stay with this client's groups.
 
 ## Pin and archive projects
 

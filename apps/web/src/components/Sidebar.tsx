@@ -1520,7 +1520,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               { id: "copy-path", label: "Copy path" },
               {
                 id: "sidebar-color",
-                label: "Sidebar colour",
+                label: "Sidebar color",
                 disabled: !projectSidebarColors.canSet(group.memberProjects),
                 children: [
                   { id: "sidebar-color:default", label: "Default" },
@@ -1528,7 +1528,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     id: `sidebar-color:${color.value}`,
                     label: color.name,
                   })),
-                  { id: "sidebar-color:custom", label: "Custom colour…" },
+                  { id: "sidebar-color:custom", label: "Custom color…" },
                 ],
               },
               ...(canPinProject(group)

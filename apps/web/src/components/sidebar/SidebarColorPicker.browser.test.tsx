@@ -22,18 +22,18 @@ vi.mock(
   },
 );
 
-it("opens the project colour picker, chooses a palette colour and applies a custom colour", async () => {
+it("opens the project color picker, chooses a palette color and applies a custom color", async () => {
   using _environment = installFakeEnvironment([]);
   const onChange = vi.fn();
   await using screen = await render(<SidebarColorPicker value={null} onChange={onChange} />);
-  await userEvent.click(screen.getByRole("button", { name: "Sidebar colour", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "Sidebar color", exact: true }));
   await expect
     .element(page.getByRole("menuitemradio", { name: "Default", exact: true }))
     .toBeVisible();
   await userEvent.click(page.getByRole("menuitemradio", { name: "Blue", exact: true }));
   expect(onChange).toHaveBeenCalledWith("#629bd7");
-  await userEvent.click(page.getByRole("textbox", { name: "Custom sidebar colour" }));
-  const custom = page.getByRole("textbox", { name: "Custom sidebar colour" });
+  await userEvent.click(page.getByRole("textbox", { name: "Custom sidebar color" }));
+  const custom = page.getByRole("textbox", { name: "Custom sidebar color" });
   await userEvent.fill(custom, "#oops");
   await expect.element(custom).toHaveAttribute("aria-invalid", "true");
   await expect.element(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
@@ -47,7 +47,7 @@ it("opens the project colour picker, chooses a palette colour and applies a cust
   expect(onChange).toHaveBeenLastCalledWith("#445566");
 });
 
-it("opens group colour actions and its edit-dialog colour menu", async () => {
+it("opens group color actions and its edit-dialog color menu", async () => {
   using _environment = installFakeEnvironment([]);
   using stack = new DisposableStack();
   const old = getClientSettings();
@@ -79,7 +79,7 @@ it("opens group colour actions and its edit-dialog colour menu", async () => {
       <ProjectFolderEditor folder={folder} onClose={vi.fn()} />
     </>,
   );
-  await userEvent.click(page.getByRole("button", { name: "Sidebar colour", exact: true }));
+  await userEvent.click(page.getByRole("button", { name: "Sidebar color", exact: true }));
   await expect
     .element(page.getByRole("menuitemradio", { name: "Blue", exact: true }))
     .toBeVisible();
@@ -106,7 +106,7 @@ it("opens group colour actions and its edit-dialog colour menu", async () => {
       .querySelector("[data-sidebar-row]")!
       .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   });
-  await userEvent.hover(page.getByRole("menuitem", { name: "Sidebar colour", exact: true }));
+  await userEvent.hover(page.getByRole("menuitem", { name: "Sidebar color", exact: true }));
   await expect
     .element(page.getByRole("menuitemradio", { name: "Default", exact: true }))
     .toBeVisible();
