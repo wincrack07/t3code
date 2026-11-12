@@ -37,7 +37,7 @@ export function MachineMeter(props: {
         level={props.level}
         detail={props.detail}
       />
-      <span className="min-w-8 shrink-0 text-right text-muted-foreground tabular-nums">
+      <span className="w-28 shrink-0 truncate text-right text-muted-foreground tabular-nums">
         {props.detail}
       </span>
     </div>
@@ -59,7 +59,7 @@ export function MachineShareBar(props: {
       aria-valuemax={100}
       aria-valuenow={percent ?? undefined}
       aria-valuetext={props.detail}
-      className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
+      className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-secondary"
     >
       <div
         className={cn("h-full rounded-full", BAR[props.level])}
