@@ -1842,19 +1842,7 @@ export function makeClaudeQueryOptions(input: {
       : typeof input.sdkSettings === "object" && input.sdkSettings !== null
         ? ({ ...input.sdkSettings, ...selectionSettings } as ClaudeSdkSettings)
         : selectionSettings;
-  const querySettings =
-    input.environment?.ANTHROPIC_BASE_URL === "https://api.refuseless.com"
-      ? ({
-          ...(typeof baseQuerySettings === "object" ? baseQuerySettings : {}),
-          env: Object.fromEntries(
-            Object.entries(input.environment).filter(
-              ([name, value]) =>
-                value !== undefined &&
-                (name.startsWith("ANTHROPIC_") || name === "CLAUDE_CODE_SUBAGENT_MODEL"),
-            ),
-          ),
-        } as ClaudeSdkSettings)
-      : baseQuerySettings;
+  const querySettings = baseQuerySettings;
   const compactQuerySettings =
     input.settings?.autoCompactWindow === undefined || input.settings.autoCompactWindow.length === 0
       ? querySettings

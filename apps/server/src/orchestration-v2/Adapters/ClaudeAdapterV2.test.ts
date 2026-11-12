@@ -6956,6 +6956,18 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   );
 
   it.effect.each([
+    ...[
+      ["invalid_key", "Check this instance's API key."],
+      ["model_busy", "Model busy. Retry after 15 seconds."],
+      ["model_warming", "Model warming. Retry after 30 seconds."],
+      ["insufficient_credits", "Out of credits. Top up your endpoint account."],
+      ["reasoning_effort", "Choose a supported reasoning level: off, low, high or max."],
+    ].map(([code, hint]) => ({
+      name: `Refuseless ${code}`,
+      isError: true,
+      result: `API Error: ${code}`,
+      expected: `API Error: ${code} ${hint}`,
+    })),
     {
       name: "an unflagged result with surrounding whitespace",
       isError: false,

@@ -285,6 +285,18 @@ export function AddProviderInstanceDialog({
     });
   };
   const selectDriver = (value: string) => {
+    if (endpointPreset !== null) {
+      setConfigByDriver((existing) => {
+        const next = { ...existing };
+        delete next[driver];
+        return next;
+      });
+      setIdentityByDriver((existing) => {
+        const next = { ...existing };
+        delete next[driver];
+        return next;
+      });
+    }
     setEndpointPreset(null);
     setLocalEnvironment([]);
     setDriver(ProviderDriverKind.make(value));

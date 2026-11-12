@@ -3150,6 +3150,30 @@ it.layer(
   });
 
   describe("checkClaudeProviderStatus", () => {
+    it.effect("keeps Refuseless catalog and account probes isolated", () =>
+      Effect.gen(function* () {
+        const status = yield* checkClaudeProviderStatus(
+          { ...defaultClaudeSettings, customModels: ["glm-5.3-abliterated"] },
+          () => Effect.die("Refuseless must not probe Anthropic accounts or quotas"),
+          { ANTHROPIC_BASE_URL: "https://api.refuseless.com", ANTHROPIC_AUTH_TOKEN: "stub-key" },
+        );
+        assert.deepStrictEqual(
+          status.models.map((model) => model.slug),
+          ["glm-5.3-abliterated"],
+        );
+        assert.strictEqual(status.auth.status, "unknown");
+        assert.isUndefined(status.auth.email);
+        assert.isUndefined(status.usageLimits);
+      }).pipe(
+        Effect.provide(
+          layerMockSpawner((args) => {
+            if (args.join(" ") === "--version") return { stdout: "2.1.322\n", stderr: "", code: 0 };
+            throw new Error("Unexpected Refuseless probe");
+          }),
+        ),
+      ),
+    );
+
     it.effect("adds models Claude Code reports that the catalog does not know", () =>
       Effect.gen(function* () {
         const status = yield* checkClaudeProviderStatus(
