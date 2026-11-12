@@ -36,7 +36,24 @@ export function compileClaudeModelSelection(
     descriptors.some((descriptor) => descriptor.type === "boolean" && descriptor.id === id);
   const rawEffort = getModelSelectionStringOptionValue(selection, "effort");
   const resolvedEffort = resolveClaudeCatalogEffort(catalog, selection.model, rawEffort);
-  const effort = normalizeClaudeCatalogEffort(catalog, resolvedEffort, selection.model);
+  const endpointModel = [
+    "glm-5.3-abliterated",
+    "glm-5.3-flash-abliterated",
+    "deepseek-v4.1-flash-abliterated",
+    "deepseek-v4.1-flash-abliterated-free",
+    "deepseek-v4.1-flash-fast",
+    "minimax-m3.1-flash",
+  ].includes(selection.model);
+  const normalizedEffort = normalizeClaudeCatalogEffort(catalog, resolvedEffort, selection.model);
+  const effort = endpointModel
+    ? normalizedEffort === "medium"
+      ? "high"
+      : normalizedEffort === "xhigh"
+        ? "max"
+        : ["low", "high", "max"].includes(normalizedEffort ?? "")
+          ? normalizedEffort
+          : undefined
+    : normalizedEffort;
   const fastMode = supportsBoolean("fastMode")
     ? (getModelSelectionBooleanOptionValue(selection, "fastMode") ?? false)
     : undefined;

@@ -6956,6 +6956,22 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   );
 
   it.effect.each([
+    ...[
+      ["invalid_key", "Check this instance's API key."],
+      ["model_busy", "Model busy. Retry after 15 seconds."],
+      ["model_warming", "Model warming. Retry after 30 seconds."],
+      ["insufficient_credits", "Out of credits. Top up your endpoint account."],
+      ["reasoning_effort", "Choose a supported reasoning level: off, low, high or max."],
+    ].map(([code, hint]) => ({
+      apiErrorStatus: undefined,
+      terminalReason: undefined,
+      errors: undefined,
+      environment: undefined,
+      name: `Refuseless ${code}`,
+      isError: true,
+      result: `API Error: ${code}`,
+      expected: `API Error: ${code} ${hint}`,
+    })),
     {
       name: "an unflagged result with surrounding whitespace",
       isError: false,
@@ -7037,7 +7053,9 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   ])("reports terminal API error text for $name", (input) =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarnessWithOptions(
-        "environment" in input ? { environment: input.environment } : undefined,
+        "environment" in input && input.environment !== undefined
+          ? { environment: input.environment }
+          : undefined,
       );
       const now = yield* DateTime.now;
       yield* harness.runtime.startTurn(

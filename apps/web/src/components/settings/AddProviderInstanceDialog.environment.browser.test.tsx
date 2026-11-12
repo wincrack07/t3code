@@ -305,4 +305,38 @@ describe("AddProviderInstanceDialog environment routing", () => {
     await screen.rerender(dialog());
     expect(button("Add instance").disabled).toBe(true);
   });
+  it("creates Refuseless with endpoint aliases, exact models and a sensitive token", async () => {
+    setup();
+    await using _screen = await render(dialog());
+    await click("Refuseless");
+    await click("Next");
+    await click("Add instance");
+    expect(settingsHooks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instance: expect.objectContaining({
+          driver: "claudeAgent",
+          displayName: "Refuseless",
+          config: {
+            customModels: [
+              "glm-5.3-abliterated",
+              "glm-5.3-flash-abliterated",
+              "deepseek-v4.1-flash-abliterated",
+              "deepseek-v4.1-flash-abliterated-free",
+              "deepseek-v4.1-flash-fast",
+              "minimax-m3.1-flash",
+            ],
+          },
+          environment: expect.arrayContaining([
+            { name: "ANTHROPIC_BASE_URL", value: "https://api.refuseless.com", sensitive: false },
+            { name: "ANTHROPIC_AUTH_TOKEN", value: "", sensitive: true },
+            {
+              name: "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+              value: "glm-5.3-flash-abliterated",
+              sensitive: false,
+            },
+          ]),
+        }),
+      }),
+    );
+  });
 });

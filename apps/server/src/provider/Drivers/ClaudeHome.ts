@@ -79,6 +79,16 @@ export const mergeClaudeProcessEnvironment = Effect.fn("mergeClaudeProcessEnviro
   // The desktop runs the server as Node through Electron. Commands Claude runs inherit its env, so
   // an Electron app they start (T3 Code itself, VS Code) would run as Node and exit.
   delete baseEnvironment.ELECTRON_RUN_AS_NODE;
+  if (instanceEnvironment?.some((variable) => variable.name === "ANTHROPIC_BASE_URL")) {
+    for (const name of Object.keys(baseEnvironment)) {
+      if (
+        name.startsWith("ANTHROPIC_") ||
+        name === "CLAUDE_CODE_OAUTH_TOKEN" ||
+        name.startsWith("CLAUDE_CODE_USE_")
+      )
+        delete baseEnvironment[name];
+    }
+  }
   const environment = yield* mergeProviderInstanceEnvironment(instanceEnvironment, baseEnvironment);
   const settingsEntrypoint = (yield* readClaudeSettingsEnv(config, undefined, environment))
     .CLAUDE_CODE_ENTRYPOINT;
@@ -106,7 +116,10 @@ export const makeClaudeContinuationGroupKey = Effect.fn("makeClaudeContinuationG
     environment?: NodeJS.ProcessEnv,
   ): Effect.fn.Return<string, never, Path.Path> {
     const resolvedHomePath = yield* resolveClaudeHomePath(config, environment);
-    return `claude:home:${resolvedHomePath}`;
+    const endpoint = environment?.ANTHROPIC_BASE_URL?.trim();
+    return endpoint
+      ? `claude:home:${resolvedHomePath}:endpoint:${endpoint}`
+      : `claude:home:${resolvedHomePath}`;
   },
 );
 

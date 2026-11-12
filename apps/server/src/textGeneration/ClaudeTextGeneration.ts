@@ -148,6 +148,13 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     TextGenerationError,
     S["DecodingServices"]
   > {
+    if (claudeEnvironment.ANTHROPIC_BASE_URL === "https://api.refuseless.com") {
+      return yield* new TextGenerationError({
+        operation,
+        detail:
+          "Refuseless does not support T3 title generation, prompt polish or prompt completion yet. Choose another provider for these features.",
+      });
+    }
     const catalog = yield* scopedModelCatalog;
     const resolvedModelSelection = {
       ...modelSelection,

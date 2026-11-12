@@ -275,7 +275,9 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       haveSettingsChanged: haveProviderSnapshotSettingsChanged,
       initialSnapshot: (settings) =>
         modelCatalog.pipe(
-          Effect.flatMap((catalog) => makePendingClaudeProvider(settings.provider, catalog)),
+          Effect.flatMap((catalog) =>
+            makePendingClaudeProvider(settings.provider, catalog, processEnv),
+          ),
           Effect.map(stampIdentity),
         ),
       checkProvider,
