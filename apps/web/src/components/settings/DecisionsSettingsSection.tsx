@@ -88,13 +88,13 @@ function Checklist({
 }) {
   const missing = value.filter((id) => !choices.some((choice) => choice.value === id));
   return (
-    <fieldset aria-label={label} className="max-h-56 min-w-0 space-y-2 overflow-y-auto sm:w-64">
+    <fieldset aria-label={label} className="max-h-56 min-w-0 overflow-y-auto sm:w-64">
       {choices.length === 0 ? (
         <p className="text-xs text-muted-foreground">No options available.</p>
       ) : null}
       {[...choices, ...missing.map((id) => ({ value: id, label: `Unavailable (${id})` }))].map(
         (choice) => (
-          <label key={choice.value} className="flex items-center gap-2 text-sm">
+          <label key={choice.value} className="flex min-h-8 items-center gap-2 py-1 text-sm">
             <Checkbox
               checked={value.includes(choice.value)}
               onCheckedChange={(checked) =>

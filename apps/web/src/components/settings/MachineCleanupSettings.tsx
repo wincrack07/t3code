@@ -107,8 +107,9 @@ function EnvironmentCleanup({
             : "Scan to measure this environment and review cleanup candidates."
         }
         control={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
+              size="sm"
               variant="outline"
               disabled={!allowed || busy}
               onClick={() => {
@@ -119,13 +120,18 @@ function EnvironmentCleanup({
               Scan
             </Button>
             <Button
+              size="sm"
               disabled={!allowed || busy}
               onClick={() => void phaseA({ environmentId, input: {} })}
             >
               Clean regenerable files now
             </Button>
             {busy && (
-              <Button variant="outline" onClick={() => void cancel({ environmentId, input: {} })}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void cancel({ environmentId, input: {} })}
+              >
                 Cancel
               </Button>
             )}
@@ -164,6 +170,7 @@ function EnvironmentCleanup({
         description="The latest 100 reports are retained on this environment. Full history is loaded only when requested."
         control={
           <Button
+            size="sm"
             variant="outline"
             disabled={!allowed || busy}
             onClick={async () => {
@@ -186,6 +193,7 @@ function EnvironmentCleanup({
         description="One absolute path or ~/path per line. Scanned to depth seven."
         control={
           <Textarea
+            className="w-full sm:w-64"
             aria-label="Cleanup project roots"
             disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.projectRoots.join("\n")}
@@ -206,6 +214,7 @@ function EnvironmentCleanup({
         description="These paths and everything inside them are always retained."
         control={
           <Textarea
+            className="w-full sm:w-64"
             aria-label="Cleanup protected paths"
             disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.protectedPaths.join("\n")}
@@ -226,6 +235,8 @@ function EnvironmentCleanup({
         description="Both source files and the last commit must be older than this."
         control={
           <Input
+            size="sm"
+            className="w-full sm:w-32"
             aria-label="Cleanup inactivity days"
             type="number"
             min={1}
@@ -258,6 +269,8 @@ function EnvironmentCleanup({
         description="Local time on this environment. A missed run starts when the server next becomes available."
         control={
           <Input
+            size="sm"
+            className="w-full sm:w-32"
             type="time"
             aria-label="Daily cleanup time"
             value={settings.scheduleTime}
@@ -274,6 +287,8 @@ function EnvironmentCleanup({
         description="Notify below this many GiB, even when no approval candidates exist. Notification delivery depends on the environment's native notification service."
         control={
           <Input
+            size="sm"
+            className="w-full sm:w-32"
             type="number"
             aria-label="Low-space threshold GiB"
             min={0}
@@ -328,6 +343,7 @@ function EnvironmentCleanup({
         description="Select exact paths to remove. Probably active worktrees are best kept. Every selection is checked again before deletion."
         control={
           <Button
+            size="sm"
             variant="outline"
             disabled={!allowed || busy || !candidates.some((item) => selected.includes(item.id))}
             onClick={() => {
@@ -372,6 +388,7 @@ function EnvironmentCleanup({
             description={`${item.path} · ${formatBytes(item.bytes)}. ${item.effect}`}
             control={
               <Button
+                size="sm"
                 variant="outline"
                 disabled={!allowed || busy}
                 onClick={() => {

@@ -21,7 +21,7 @@ export function ProjectFoldersSettings() {
   );
   const [suggest, setSuggest] = useState(false);
   return (
-    <section className="space-y-4 p-6">
+    <section className="space-y-4 px-4 py-3">
       <h2 className="text-sm font-medium">Project groups</h2>
       <p className="text-sm text-muted-foreground">
         Organize projects across environments. Deleting a group moves its projects and subgroups up
@@ -36,27 +36,27 @@ export function ProjectFoldersSettings() {
         </Button>
       </div>
       {projectFolderTree(folders).map(({ folder }) => (
-        <div key={folder.id} className="space-y-2 rounded-md border border-border p-3">
-          <div className="flex items-center gap-2">
-            <span className="flex-1 text-sm">
+        <div key={folder.id} className="space-y-2 rounded-lg border border-border p-3">
+          <div className="flex min-h-8 min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm">
               {folder.emoji} {projectFolderPath(folders, folder.id)}
             </span>
-            <Button size="xs" variant="ghost" onClick={() => setEditor({ folder })}>
+            <Button size="sm" variant="ghost" onClick={() => setEditor({ folder })}>
               Rename
             </Button>
-            <Button size="xs" variant="ghost" onClick={() => deleteSidebarFolder(folder.id)}>
+            <Button size="sm" variant="ghost" onClick={() => deleteSidebarFolder(folder.id)}>
               Delete
             </Button>
           </div>
           <ul className="space-y-1 text-sm text-muted-foreground">
             {folder.projectKeys.map((key) => (
-              <li key={key} className="flex items-center gap-2">
+              <li key={key} className="flex min-h-8 min-w-0 items-center gap-2">
                 <span className="min-w-0 flex-1 truncate">
                   {projects.find((project) => project.projectKey === key)?.displayName ??
                     "Unavailable project"}
                 </span>
                 <Button
-                  size="xs"
+                  size="sm"
                   variant="ghost"
                   onClick={() => moveSidebarProjectToFolder(key, null)}
                 >
@@ -68,11 +68,11 @@ export function ProjectFoldersSettings() {
         </div>
       ))}
       {projects.map((project) => (
-        <div key={project.projectKey} className="flex items-center gap-2 text-sm">
+        <div key={project.projectKey} className="flex min-h-8 min-w-0 items-center gap-2 text-sm">
           <span className="min-w-0 flex-1 truncate">{project.displayName}</span>
           <Menu>
-            <MenuTrigger render={<Button size="xs" variant="outline" />}>
-              Group {project.displayName}
+            <MenuTrigger render={<Button size="sm" variant="outline" />}>
+              <span className="max-w-48 truncate">Group {project.displayName}</span>
             </MenuTrigger>
             <MenuPopup>
               <ProjectFolderMenu
