@@ -14,7 +14,9 @@ to a named environment on that phone, open **Settings → Voice → Transcribe o
 
 On web and desktop, you choose where transcription runs.
 Nothing is sent until you choose one: open **Settings → Voice** and set
-**Transcribe with** to the environment that should transcribe for you.
+**Transcribe with** to the environment that should transcribe for you. Environments under
+**Local and private** transcribe with a model on that machine, so audio never reaches a
+cloud service.
 On a new device, the microphone or dictation shortcut opens that setting from the composer.
 Microphone audio recorded on this device is sent to that environment over your
 authenticated connection, transcribed there, and discarded. The choice is saved
@@ -53,6 +55,14 @@ In **Settings → Voice → Transcription**, download a model and choose **Use m
 isn’t already selected. **Test model** lets you try it without sending a message.
 If you use the composer microphone before a model is installed, it offers to download one.
 The recommendation uses your Voice language, or your system’s preferred languages with **Auto-detect**.
+
+On a Mac running macOS 26 or later, the list also offers **Apple (built in)**:
+the speech recognition built into macOS. It needs no download, shows text while
+you speak, and never sends audio off that Mac, including when another device
+dictates through it. macOS downloads a language from Apple the first time you
+dictate in it; if your Mac has no speech language yet, **Download** asks macOS to
+install yours. Removing it only switches you to another model, since macOS manages
+those languages.
 
 Select the languages you dictate in to compare models that support all of them.
 Accuracy shows how often the model got words or characters wrong in each

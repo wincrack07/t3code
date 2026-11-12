@@ -245,6 +245,18 @@ jobs:
       - name: Install dependencies
         run: vp install
 
+      # SpeechAnalyzer needs the macOS 26 SDK; older Xcode builds only the SFSpeechRecognizer path.
+      - name: Select Xcode 26 for the Apple speech helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$xcode" ]; then
+            echo "::warning::Xcode 26 not found; the Apple speech helper builds without SpeechAnalyzer."
+            exit 0
+          fi
+          echo "DEVELOPER_DIR=$xcode/Contents/Developer" >> "$GITHUB_ENV"
+
       - name: Build DMG
         env:
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}

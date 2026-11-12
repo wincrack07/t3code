@@ -134,7 +134,8 @@ function CloudSpeechLogo({ provider }: { provider: CloudSpeechProvider }) {
   );
 }
 const SYSTEM_DEFAULT = "system-default";
-const formatSize = (bytes: number) => `${Math.round(bytes / 1024 / 1024)} MB`;
+const formatSize = (bytes: number) =>
+  bytes === 0 ? "No download" : `${Math.round(bytes / 1024 / 1024)} MB`;
 const SHORTCUT_MODE_LABELS: Record<VoiceShortcutMode, string> = {
   auto: "Auto: press to toggle, hold to record",
   hold: "Hold: record while held",
@@ -186,7 +187,12 @@ function ModelBadge(props: { icon: ReactNode; label: string; tooltip: string }) 
 function ModelCard(props: ModelCardProps) {
   const { model } = props;
   const downloading = model.state === "downloading" || model.state === "verifying";
-  const progress = model.downloaded === undefined ? 0 : (model.downloaded / model.size) * 100;
+  const progress =
+    model.downloaded === undefined
+      ? 0
+      : model.size === 0
+        ? model.downloaded
+        : (model.downloaded / model.size) * 100;
   return (
     <div className="flex flex-wrap items-start gap-3 px-3 py-2.5 sm:px-4">
       <div className="min-w-0 flex-1">
@@ -278,7 +284,7 @@ function ModelCard(props: ModelCardProps) {
             Use model
           </Button>
         )}
-        {model.state === "installed" ? (
+        {model.state === "installed" && model.size > 0 ? (
           <Button
             size="icon-sm"
             variant="ghost"
@@ -1357,7 +1363,7 @@ export function VoiceSettingsPanel() {
                   </SelectItem>
                   {environmentChoices.length > 0 && (
                     <SelectGroup>
-                      <SelectGroupLabel>On an environment</SelectGroupLabel>
+                      <SelectGroupLabel>Local and private</SelectGroupLabel>
                       {environmentChoices.map(({ environment, value }) => (
                         <SelectItem key={value} value={value}>
                           <span className="flex items-center gap-2">
