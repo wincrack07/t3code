@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import { ClientSettingsSchema, ClientSettingsPatch } from "@t3tools/contracts/settings";
 import {
   arrangeProjectFolderTree,
+  UNGROUPED_PROJECT_FOLDER_ID,
   deleteProjectFolder,
   moveProjectFolder,
   moveProjectsToFolder,
@@ -34,7 +35,7 @@ function describeRow(
 ) {
   return row.kind === "folder"
     ? `folder ${row.folder.id} ${row.depth}`
-    : `project ${row.project.group.projectKey} ${row.depth}`;
+    : `${row.kind} ${row.project.group.projectKey} ${row.depth}`;
 }
 
 describe("project folders", () => {
@@ -83,7 +84,8 @@ describe("project folders", () => {
       "project server:web 1",
       "folder b 0",
       "project server:other 1",
-      "project loose-b 0",
+      "folder ungrouped 0",
+      "project loose-b 1",
     ]);
     expect(rows[0]).toMatchObject({ projects: [projects[3], projects[2], projects[4]] });
     expect(arrangeProjectFolderTree(projects, [], { isCollapsed: () => false })).toEqual(
@@ -117,13 +119,45 @@ describe("project folders", () => {
     const empty = [folder("a", "Empty", [])];
     expect(
       arrangeProjectFolderTree(projects, empty, { isCollapsed: () => false }).map(describeRow),
-    ).toEqual(["folder a 0", "project loose 0"]);
+    ).toEqual(["folder a 0", "folder ungrouped 0", "project loose 1"]);
     expect(
       arrangeProjectFolderTree(projects, empty, {
         isCollapsed: () => false,
         includeEmpty: false,
       }).map(describeRow),
-    ).toEqual(["project loose 0"]);
+    ).toEqual(["folder ungrouped 0", "project loose 1"]);
+  });
+
+  it("keeps no-project threads loose and last, and omits empty virtual groups", () => {
+    const projects = [
+      { group: { projectKey: "scratch", isScratch: true } },
+      { group: { projectKey: "assigned" } },
+      { group: { projectKey: "loose" } },
+    ];
+    const groups = [folder("a", "A", ["assigned", "scratch"])];
+    expect(
+      arrangeProjectFolderTree(projects, groups, { isCollapsed: () => false }).map(describeRow),
+    ).toEqual([
+      "folder a 0",
+      "project assigned 1",
+      "folder ungrouped 0",
+      "project loose 1",
+      "loose scratch 0",
+    ]);
+    expect(
+      arrangeProjectFolderTree(projects, groups, {
+        isCollapsed: (id) => id === UNGROUPED_PROJECT_FOLDER_ID,
+      }).map(describeRow),
+    ).toEqual(["folder a 0", "project assigned 1", "folder ungrouped 0", "loose scratch 0"]);
+    expect(
+      arrangeProjectFolderTree(projects.slice(0, 2), groups, { isCollapsed: () => false }).map(
+        describeRow,
+      ),
+    ).toEqual(["folder a 0", "project assigned 1", "loose scratch 0"]);
+    expect(arrangeProjectFolderTree([], [], { isCollapsed: () => false })).toEqual([]);
+    expect(
+      arrangeProjectFolderTree([], groups, { isCollapsed: () => false }).map(describeRow),
+    ).toEqual(["folder a 0"]);
   });
 
   it("reads missing parents and parent cycles as top level", () => {
@@ -245,6 +279,29 @@ describe("project folders", () => {
       folderId: null,
       anchor: { projectKey: "loose", position: "before" },
     });
+    expect(
+      plan(projectInB, { kind: "folder", id: UNGROUPED_PROJECT_FOLDER_ID, zone: "into" }),
+    ).toEqual({
+      kind: "move-project",
+      projectKey: "in-b",
+      folderId: null,
+    });
+    expect(
+      plan({ kind: "project", key: "loose" }, { kind: "folder", id: "a", zone: "into" }),
+    ).toEqual({
+      kind: "move-project",
+      projectKey: "loose",
+      folderId: "a",
+    });
+    expect(plan(groupA, { kind: "folder", id: UNGROUPED_PROJECT_FOLDER_ID, zone: "into" })).toEqual(
+      { kind: "none" },
+    );
+    expect(
+      plan(
+        { kind: "folder", id: UNGROUPED_PROJECT_FOLDER_ID },
+        { kind: "folder", id: "a", zone: "into" },
+      ),
+    ).toEqual({ kind: "none" });
     expect(plan(projectInB, { kind: "root" })).toEqual({
       kind: "move-project",
       projectKey: "in-b",
@@ -294,6 +351,12 @@ describe("project folders", () => {
 
   it("decodes old settings and round trips folder membership through settings and patches", () => {
     expect(decodeSettings({}).sidebarProjectFolders).toEqual([]);
+    expect(decodeSettings({}).hideSidebarProjectIcons).toBe(false);
+    expect(
+      decodeSettings(encodeSettings(decodeSettings({ hideSidebarProjectIcons: true })))
+        .hideSidebarProjectIcons,
+    ).toBe(true);
+    expect(decodePatch({ hideSidebarProjectIcons: true }).hideSidebarProjectIcons).toBe(true);
     const settings = decodeSettings({ sidebarProjectFolders: folders });
     expect(decodeSettings(encodeSettings(settings)).sidebarProjectFolders).toEqual(folders);
     expect(decodePatch({ sidebarProjectFolders: folders }).sidebarProjectFolders).toEqual(folders);

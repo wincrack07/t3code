@@ -1,6 +1,7 @@
 import { createSidebarColorBlocks } from "./sidebar/sidebarColorBlocks";
 import {
   arrangeProjectFolderTree,
+  UNGROUPED_PROJECT_FOLDER_ID,
   planSidebarTreeDrop,
   projectFolderAncestors,
   projectFolderColor,
@@ -26,7 +27,7 @@ import {
   sidebarTreeIndent,
   sidebarTreeRow,
 } from "./sidebar/sidebarTreeDrag";
-import { SIDEBAR_COLORS, resolveSidebarColor } from "../sidebarColors";
+import { SIDEBAR_COLORS } from "../sidebarColors";
 import { useProjectSidebarColor } from "../hooks/useProjectSidebarColor";
 import { ProjectFolderEditor, ProjectFolderSuggestions } from "./sidebar/ProjectFolderEditor";
 import { ProjectGroupHeader } from "./sidebar/ProjectGroupHeader";
@@ -515,8 +516,7 @@ function useSidebarThreads(input: {
   );
   const projectLimit = (key: string) => projectSettledLimits[key] ?? SETTLED_TAIL_INITIAL_COUNT;
   const projectIsOther = (group: SidebarProjectSnapshot) => {
-    if (namedProjectFolders.some((folder) => folder.projectKeys.includes(group.projectKey)))
-      return false;
+    if (group.isScratch || namedProjectFolders.length > 0) return false;
     const belongs = (thread: EnvironmentThreadShell) =>
       group.memberProjectRefs.some(
         (ref) => ref.environmentId === thread.environmentId && ref.projectId === thread.projectId,
@@ -535,6 +535,8 @@ function useSidebarThreads(input: {
   // A project's threads hide while any group above it is collapsed.
   const hiddenByGroup = (projectKey: string) => {
     const owner = projectFolderOfProject(namedProjectFolders, projectKey);
+    if (!owner && namedProjectFolders.length > 0)
+      return projectExpandedById[projectFolderExpansionKey(UNGROUPED_PROJECT_FOLDER_ID)] === false;
     return (
       owner !== undefined &&
       [owner.id, ...projectFolderAncestors(namedProjectFolders, owner.id)].some(
@@ -545,10 +547,11 @@ function useSidebarThreads(input: {
   const expandedGroups = projectSettledGrouping
     ? (folderGroups ?? []).filter(
         (group) =>
-          !hiddenByGroup(group.projectKey) &&
+          (group.isScratch || !hiddenByGroup(group.projectKey)) &&
           projectSettledExpanded[group.projectKey] &&
           (otherProjectsExpanded || !projectIsOther(group)) &&
-          resolveProjectExpanded(projectExpandedById, sidebarFolderExpansionKeys(group)),
+          (group.isScratch ||
+            resolveProjectExpanded(projectExpandedById, sidebarFolderExpansionKeys(group))),
       )
     : [];
   const expandedProjectKeys = new Set(
@@ -619,11 +622,10 @@ function useSidebarThreads(input: {
                   threads,
                 ) > 0)),
         ).map((folder) => {
-          const parentCollapsed = hiddenByGroup(folder.group.projectKey);
-          const collapsed = !resolveProjectExpanded(
-            projectExpandedById,
-            sidebarFolderExpansionKeys(folder.group),
-          );
+          const parentCollapsed = !folder.group.isScratch && hiddenByGroup(folder.group.projectKey);
+          const collapsed =
+            !folder.group.isScratch &&
+            !resolveProjectExpanded(projectExpandedById, sidebarFolderExpansionKeys(folder.group));
           const belongs = (thread: EnvironmentThreadShell) =>
             folder.group.memberProjectRefs.some(
               (ref) =>
@@ -659,8 +661,17 @@ function useSidebarThreads(input: {
         });
   const orderedThreads =
     projectSettledGrouping && projectFolders !== null
-      ? projectFolders.flatMap((folder) =>
-          folder.other && !otherProjectsExpanded ? [] : [...folder.threads, ...folder.settledRows],
+      ? arrangeProjectFolderTree(
+          [
+            ...projectFolders.filter((folder) => !folder.other),
+            ...projectFolders.filter((folder) => folder.other),
+          ],
+          namedProjectFolders,
+          { isCollapsed: (id) => projectExpandedById[projectFolderExpansionKey(id)] === false },
+        ).flatMap((row) =>
+          row.kind === "folder" || (row.project.other && !otherProjectsExpanded)
+            ? []
+            : [...row.project.threads, ...row.project.settledRows],
         )
       : [
           ...pinnedThreads,
@@ -1342,10 +1353,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ref.projectId === activeFolderThread?.projectId,
       ),
     )?.projectKey ?? null;
-  const activeNamedFolderId = projectFolderOfProject(
-    namedProjectFolders,
-    activeFolderProjectKey ?? "",
-  )?.id;
+  const activeNamedFolderId =
+    projectFolderOfProject(namedProjectFolders, activeFolderProjectKey ?? "")?.id ??
+    (namedProjectFolders.length > 0 ? UNGROUPED_PROJECT_FOLDER_ID : undefined);
   // Joined so the effect below reruns only when the chain of groups changes.
   const activeFolderChainKey = activeNamedFolderId
     ? [activeNamedFolderId, ...projectFolderAncestors(namedProjectFolders, activeNamedFolderId)]
@@ -1654,6 +1664,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : null,
     keepEmptyFolders: (group) =>
       scopedProjectGroups.length > 0 ||
+      (namedProjectFolders.length > 0 && !group.archived) ||
       namedProjectFolders.some((folder) => folder.projectKeys.includes(group.projectKey)) ||
       (group.pinned && !group.archived),
   });
@@ -4051,6 +4062,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                     ])
                                   }
                                   collapsed={collapsed}
+                                  virtual={group.id === UNGROUPED_PROJECT_FOLDER_ID}
+                                  projectCount={row.projects.length}
                                   threads={row.projects.flatMap((project) => project.hiddenThreads)}
                                   onToggle={() => setFolderExpanded(expansionKey, collapsed)}
                                   onRename={() => setFolderEditor({ folder: group })}
@@ -4090,35 +4103,41 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               }
                               if (row.depth === 0 && folder.other && !otherProjectsExpanded)
                                 continue;
-                              append(
-                                <SidebarProjectFolderHeader
-                                  key={`project-folder:${folder.group.projectKey}`}
-                                  group={folder.group}
-                                  depth={row.depth}
-                                  sidebarColor={resolveSidebarColor(
-                                    projectSidebarColors.colorFor(folder.group),
-                                    projectFolderColor(
-                                      namedProjectFolders,
-                                      projectFolderOfProject(
+                              if (row.kind !== "loose")
+                                append(
+                                  <SidebarProjectFolderHeader
+                                    key={`project-folder:${folder.group.projectKey}`}
+                                    group={folder.group}
+                                    depth={row.depth}
+                                    parentId={
+                                      row.folderId ??
+                                      (row.depth > 0 ? UNGROUPED_PROJECT_FOLDER_ID : null)
+                                    }
+                                    sidebarColor={
+                                      projectSidebarColors.colorFor(folder.group)?.toLowerCase() ===
+                                      projectFolderColor(
                                         namedProjectFolders,
-                                        folder.group.projectKey,
-                                      )?.id,
-                                    ),
-                                  )}
-                                  collapsed={folder.collapsed}
-                                  localLastVisitedAtById={folderLastVisitedByThreadKey}
-                                  hiddenThreads={folder.hiddenThreads}
-                                  onToggle={toggleProjectFolder}
-                                  onNewThread={startThreadInProjectFolder}
-                                  onContextMenu={handleProjectFolderContextMenu}
-                                />,
-                              );
+                                        row.folderId ?? undefined,
+                                      )?.toLowerCase()
+                                        ? null
+                                        : projectSidebarColors.colorFor(folder.group)
+                                    }
+                                    collapsed={folder.collapsed}
+                                    localLastVisitedAtById={folderLastVisitedByThreadKey}
+                                    hiddenThreads={folder.hiddenThreads}
+                                    onToggle={toggleProjectFolder}
+                                    onNewThread={startThreadInProjectFolder}
+                                    onContextMenu={handleProjectFolderContextMenu}
+                                  />,
+                                );
                               for (const thread of folder.threads) {
                                 append(
                                   renderThreadRow(
                                     thread,
                                     sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
-                                    sidebarFolderRowId(folder.group.projectKey),
+                                    row.kind === "loose"
+                                      ? undefined
+                                      : sidebarFolderRowId(folder.group.projectKey),
                                     0,
                                     row.depth,
                                   ),
@@ -4139,9 +4158,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                     <button
                                       type="button"
                                       data-sidebar-row={shelfKey}
-                                      data-sidebar-parent={sidebarFolderRowId(
-                                        folder.group.projectKey,
-                                      )}
+                                      data-sidebar-parent={
+                                        row.kind === "loose"
+                                          ? undefined
+                                          : sidebarFolderRowId(folder.group.projectKey)
+                                      }
                                       aria-expanded={folder.settledExpanded}
                                       onClick={() => toggleProjectSettled(folder.group.projectKey)}
                                       className={SIDEBAR_SHELF_ROW_CLASS_NAME}

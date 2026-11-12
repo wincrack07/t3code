@@ -274,6 +274,17 @@ export function AppearanceSettingsPanel() {
           onImportOpenChange={setIsImportThemeOpen}
         />
         <SettingsRow
+          {...searchableSetting("sidebar-project-icons")}
+          description="Hide project and group icons to leave more room for sidebar names."
+          control={
+            <Switch
+              checked={settings.hideSidebarProjectIcons}
+              onCheckedChange={(checked) => updateSettings({ hideSidebarProjectIcons: checked })}
+              aria-label="Hide project icons"
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("sidebar-project-tint")}
           description="Colour the entire sidebar for the focused project. Turn off to keep only project and group row colours."
           control={

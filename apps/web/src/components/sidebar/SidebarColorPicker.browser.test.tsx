@@ -33,9 +33,18 @@ it("opens the project colour picker, chooses a palette colour and applies a cust
   await userEvent.click(page.getByRole("menuitemradio", { name: "Blue", exact: true }));
   expect(onChange).toHaveBeenCalledWith("#629bd7");
   await userEvent.click(page.getByRole("textbox", { name: "Custom sidebar colour" }));
-  await userEvent.fill(page.getByRole("textbox", { name: "Custom sidebar colour" }), "#112233");
-  await userEvent.click(page.getByRole("button", { name: "Apply", exact: true }));
+  const custom = page.getByRole("textbox", { name: "Custom sidebar colour" });
+  await userEvent.fill(custom, "#oops");
+  await expect.element(custom).toHaveAttribute("aria-invalid", "true");
+  await expect.element(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+  await userEvent.keyboard("{Enter}");
+  expect(onChange).toHaveBeenLastCalledWith("#629bd7");
+  await userEvent.fill(custom, "#112233");
+  await userEvent.keyboard("{Enter}");
   expect(onChange).toHaveBeenLastCalledWith("#112233");
+  await userEvent.fill(custom, "#445566");
+  await userEvent.click(page.getByRole("button", { name: "Apply", exact: true }));
+  expect(onChange).toHaveBeenLastCalledWith("#445566");
 });
 
 it("opens group colour actions and its edit-dialog colour menu", async () => {

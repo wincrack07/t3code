@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import {
   Menu,
   MenuItem,
+  MenuCheckboxItem,
   MenuTrigger,
   MenuPopup,
   MenuGroupLabel,
@@ -37,6 +38,7 @@ export function SidebarDisplayMenu({
     setAllProjectsExpanded(projects, open, activeProjectKey, folders);
   };
   const label = allCollapsed ? "Expand all projects" : "Collapse all projects";
+  const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
   const density = useClientSettings((settings) => settings.sidebarDensity);
   const grouping = useClientSettings((settings) => settings.sidebarThreadGrouping);
   const update = useUpdatePrimarySettings();
@@ -79,6 +81,12 @@ export function SidebarDisplayMenu({
           {onCreateGroup ? <MenuItem onClick={onCreateGroup}>New project group…</MenuItem> : null}
           {onSuggestGroups ? <MenuItem onClick={onSuggestGroups}>Suggest groups</MenuItem> : null}
           <MenuSeparator />
+          <MenuCheckboxItem
+            checked={hideIcons}
+            onCheckedChange={(checked) => update({ hideSidebarProjectIcons: checked })}
+          >
+            Hide project icons
+          </MenuCheckboxItem>
           <MenuRadioGroup
             value={density}
             onValueChange={(value) => {

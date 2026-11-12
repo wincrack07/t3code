@@ -1,6 +1,7 @@
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import {
   projectFolderAncestors,
+  UNGROUPED_PROJECT_FOLDER_ID,
   projectFolderExpansionKey,
   projectFolderOfProject,
   type ProjectFolder,
@@ -18,6 +19,7 @@ export function setAllProjectsExpanded(
   store.setProjectExpanded(
     [
       ...projects.flatMap(sidebarFolderExpansionKeys),
+      projectFolderExpansionKey(UNGROUPED_PROJECT_FOLDER_ID),
       ...folders.map((folder) => projectFolderExpansionKey(folder.id)),
     ],
     expanded,
@@ -26,6 +28,8 @@ export function setAllProjectsExpanded(
     const active = projects.find((project) => project.projectKey === activeProjectKey);
     if (active) store.setProjectExpanded(sidebarFolderExpansionKeys(active), true);
     const parent = projectFolderOfProject(folders, activeProjectKey);
+    if (!parent && folders.length > 0)
+      store.setProjectExpanded(projectFolderExpansionKey(UNGROUPED_PROJECT_FOLDER_ID), true);
     if (parent)
       store.setProjectExpanded(
         [parent.id, ...projectFolderAncestors(folders, parent.id)].map(projectFolderExpansionKey),

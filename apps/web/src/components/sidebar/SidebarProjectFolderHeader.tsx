@@ -1,3 +1,4 @@
+import { useClientSettings } from "../../hooks/useSettings";
 import { sidebarRowColorStyle } from "../../sidebarColors";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -46,6 +47,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   group: SidebarProjectSnapshot;
   /** Nesting depth under sidebar groups. */
   depth?: number;
+  parentId?: string | null;
   sidebarColor?: string | null;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
@@ -54,6 +56,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   onNewThread: (group: SidebarProjectSnapshot) => void;
   onContextMenu: (group: SidebarProjectSnapshot, position: { x: number; y: number }) => void;
 }) {
+  const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
   const { group, collapsed, hiddenThreads, localLastVisitedAtById } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const dot = collapsed
@@ -90,6 +93,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
       <button
         type="button"
         data-sidebar-row={rowId}
+        data-sidebar-parent={props.parentId ? `project-group:${props.parentId}` : undefined}
         aria-expanded={!collapsed}
         {...listeners}
         onClick={() => props.onToggle(group)}
@@ -99,7 +103,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         }}
         className="flex h-7 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <ProjectFavicon project={group} className="size-4 shrink-0" />
+        {hideIcons ? null : <ProjectFavicon project={group} className="size-4 shrink-0" />}
         <span className="min-w-0 flex-1 truncate text-xs font-normal text-sidebar-muted-foreground">
           {group.displayName}
         </span>

@@ -354,6 +354,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance",
   },
   {
+    id: "sidebar-project-icons",
+    title: "Hide project icons",
+    to: "/settings/appearance",
+    searchTerms: ["sidebar avatar favicon group folder icon hide names width"],
+  },
+  {
     id: "sidebar-project-tint",
     title: "Tint sidebar with project colour",
     to: "/settings/appearance",

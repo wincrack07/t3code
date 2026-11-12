@@ -567,6 +567,7 @@ export const ClientSettingsSchema = Schema.Struct({
   tintSidebarWithProjectColor: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
+  hideSidebarProjectIcons: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarDensity: Schema.Literals(["theme", "compact", "comfortable"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("theme" as const)),
   ),
@@ -2145,6 +2146,7 @@ export const ClientSettingsPatch = Schema.Struct({
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   sidebarProjectFolders: Schema.optionalKey(SidebarProjectFolders),
   tintSidebarWithProjectColor: Schema.optionalKey(Schema.Boolean),
+  hideSidebarProjectIcons: Schema.optionalKey(Schema.Boolean),
   sidebarDensity: Schema.optionalKey(Schema.Literals(["theme", "compact", "comfortable"])),
   sidebarThreadGrouping: Schema.optionalKey(Schema.Literals(["theme", "project", "global"])),
   boringSidebarEnabled: Schema.optionalKey(Schema.Boolean),
