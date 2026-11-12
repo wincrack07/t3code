@@ -9,10 +9,14 @@ import type {
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { formatBytes } from "../../lib/formatBytes";
+import { useClientSettings } from "../../hooks/useSettings";
+import { useNowMinute } from "../../hooks/useNowMinute";
+import { formatChatTimestampTooltip, formatRelativeTimeLabel } from "../../timestampFormat";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Switch } from "../ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import {
@@ -94,6 +98,9 @@ function EnvironmentCleanup({
       ...settings.enabledRules.filter((rule) => rule !== "*").map((rule) => rule.replace(/^!/, "")),
     ]),
   ].filter((rule) => rule !== "project");
+  const timestampFormat = useClientSettings((value) => value.timestampFormat);
+  const nowMinute = useNowMinute();
+  const lastRunAt = report ? (report.finishedAt ?? report.startedAt) : null;
   const history = [...(state?.history ?? [])].reverse();
   const minimum = history.length ? Math.min(...history.map((entry) => entry.freeAfter)) : 0;
   const maximum = Math.max(...history.map((entry) => entry.freeAfter), 1);
@@ -108,9 +115,23 @@ function EnvironmentCleanup({
       <SettingsRow
         title="Free space"
         description={
-          report
-            ? `Last run: ${report.finishedAt ?? report.startedAt}. ${formatBytes(report.freeBefore)} → ${formatBytes(report.freeAfter)} on ${report.measurementPath}`
-            : "Scan to measure this environment and review cleanup candidates."
+          report && lastRunAt ? (
+            <>
+              Last run{" "}
+              <Tooltip>
+                <TooltipTrigger render={<time dateTime={lastRunAt} />}>
+                  {formatRelativeTimeLabel(lastRunAt, Date.parse(`${nowMinute}:00.000Z`))}
+                </TooltipTrigger>
+                <TooltipPopup>
+                  {formatChatTimestampTooltip(lastRunAt, timestampFormat)}
+                </TooltipPopup>
+              </Tooltip>
+              . {formatBytes(report.freeBefore)} → {formatBytes(report.freeAfter)} free on{" "}
+              {report.measurementPath}
+            </>
+          ) : (
+            "Scan to measure this environment and review cleanup candidates."
+          )
         }
         control={
           <div className="flex flex-wrap justify-end gap-2">
@@ -527,9 +548,9 @@ function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
       <TableHeader>
         <TableRow>
           <TableHead>Category</TableHead>
-          <TableHead className="text-right">GB freed in A</TableHead>
-          <TableHead className="text-right">GB pending in B</TableHead>
-          <TableHead className="text-right">GB in C</TableHead>
+          <TableHead className="text-right">Freed in A</TableHead>
+          <TableHead className="text-right">Pending in B</TableHead>
+          <TableHead className="text-right">In C</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -546,9 +567,9 @@ function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
           return (
             <TableRow key={category}>
               <TableCell>{category}</TableCell>
-              <TableCell className="text-right">{(freed / 1e9).toFixed(2)}</TableCell>
-              <TableCell className="text-right">{(bytes("B") / 1e9).toFixed(2)}</TableCell>
-              <TableCell className="text-right">{(bytes("C") / 1e9).toFixed(2)}</TableCell>
+              <TableCell className="text-right">{formatBytes(freed)}</TableCell>
+              <TableCell className="text-right">{formatBytes(bytes("B"))}</TableCell>
+              <TableCell className="text-right">{formatBytes(bytes("C"))}</TableCell>
             </TableRow>
           );
         })}
