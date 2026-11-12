@@ -63,7 +63,7 @@ function SidebarColorChoices({
             onChange(color === "default" ? null : color);
         }}
       >
-        <MenuGroupLabel>Sidebar colour</MenuGroupLabel>
+        <MenuGroupLabel>Sidebar color</MenuGroupLabel>
         {[{ name: "Default", value: "default" }, ...SIDEBAR_COLORS].map((color) => (
           <MenuRadioItem
             variant="rounded"
@@ -86,11 +86,11 @@ function SidebarColorChoices({
       <MenuGroup>
         <MenuGroupLabel>
           <span className="flex items-center gap-2">
-            <span className="flex-1">Custom colour</span>
+            <span className="flex-1">Custom color</span>
             {customSelected ? (
               <>
                 <CheckIcon aria-hidden className="size-3.5" />
-                <span className="sr-only">Current colour</span>
+                <span className="sr-only">Current color</span>
               </>
             ) : null}
           </span>
@@ -103,7 +103,7 @@ function SidebarColorChoices({
         >
           <SidebarColorMarker variant="swatch" color={valid ? custom : null} />
           <Input
-            aria-label="Custom sidebar colour"
+            aria-label="Custom sidebar color"
             value={custom}
             aria-invalid={!valid || undefined}
             spellCheck={false}
@@ -135,7 +135,7 @@ export function SidebarColorPicker(props: {
     <Menu>
       <MenuTrigger render={<Button variant="outline" size="sm" disabled={props.disabled} />}>
         <SidebarColorMarker variant="swatch" color={props.value} />
-        Sidebar colour
+        Sidebar color
       </MenuTrigger>
       <MenuPopup align="end">
         <SidebarColorChoices {...props} />
@@ -149,7 +149,7 @@ export function SidebarColorSubmenu(props: {
 }) {
   return (
     <MenuSub>
-      <MenuSubTrigger>Sidebar colour</MenuSubTrigger>
+      <MenuSubTrigger>Sidebar color</MenuSubTrigger>
       <MenuSubPopup>
         <SidebarColorChoices {...props} />
       </MenuSubPopup>

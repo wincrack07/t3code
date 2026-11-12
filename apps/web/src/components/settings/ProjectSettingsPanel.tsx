@@ -602,8 +602,8 @@ function ProjectDetail({
             }
           />
           <SettingsRow
-            title="Sidebar colour"
-            description="Tint the sidebar while this project is focused. Default follows its group colour."
+            title="Sidebar color"
+            description="Tint the sidebar while this project is focused. Default follows its group color."
             control={
               <SidebarColorPicker
                 value={sidebarColor.colorFor(group)}
