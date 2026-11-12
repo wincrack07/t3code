@@ -1,5 +1,6 @@
 import {
-  type SavedPromptAction,
+  SavedPromptAction,
+  type ThreadId,
   type CommandId,
   type EventId,
   MAX_SCRIPT_ID_LENGTH,
@@ -28,6 +29,7 @@ export interface ProjectCreateCommand {
 
 export interface ProjectMetaUpdateCommand {
   readonly savedPrompt?: SavedPromptAction;
+  readonly savedPromptThread?: { readonly id: string; readonly threadId: ThreadId };
   readonly type: "project.meta.update";
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
@@ -107,6 +109,7 @@ export interface ProjectCommandState {
 
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
+const isSavedPromptAction = Schema.is(SavedPromptAction);
 
 /** Read state and commit the planned event under the project lock. */
 export function planProjectCommand(input: {
@@ -194,6 +197,8 @@ export function planProjectCommand(input: {
       let savedPrompts = project.savedPrompts ?? [];
       const action = command.savedPrompt;
       if (action !== undefined) {
+        if (!isSavedPromptAction(action))
+          return invariant("Invalid saved prompt or size limit exceeded.");
         const exists = savedPrompts.some(
           (item) => item.id === ("id" in action ? action.id : undefined),
         );
@@ -202,7 +207,14 @@ export function planProjectCommand(input: {
           if (savedPrompts.length >= 100)
             return invariant("Clear saved prompts before adding more (100 maximum).");
           savedPrompts = [
-            { id: action.id, text: action.text, createdAt: occurredAt, completedAt: null },
+            {
+              id: action.id,
+              text: action.text,
+              title: action.title ?? null,
+              status: action.status ?? "open",
+              createdAt: occurredAt,
+              completedAt: action.status === "done" ? occurredAt : null,
+            },
             ...savedPrompts,
           ];
         } else if (action.kind === "clear-done") {
@@ -216,13 +228,42 @@ export function planProjectCommand(input: {
                   item.id !== action.id
                     ? item
                     : action.kind === "edit"
-                      ? { ...item, text: action.text }
+                      ? {
+                          ...item,
+                          ...(action.text === undefined ? {} : { text: action.text }),
+                          ...(action.title === undefined ? {} : { title: action.title }),
+                          ...(action.status === undefined
+                            ? {}
+                            : {
+                                status: action.status,
+                                completedAt:
+                                  action.status === "done"
+                                    ? (item.completedAt ?? occurredAt)
+                                    : null,
+                              }),
+                        }
                       : {
                           ...item,
+                          status: action.done ? ("done" as const) : ("open" as const),
                           completedAt: action.done ? (item.completedAt ?? occurredAt) : null,
                         },
                 );
         }
+      }
+      if (command.savedPromptThread !== undefined) {
+        const link = command.savedPromptThread;
+        if (!savedPrompts.some((item) => item.id === link.id))
+          return invariant("The saved prompt no longer exists.");
+        savedPrompts = savedPrompts.map((item) =>
+          item.id === link.id
+            ? {
+                ...item,
+                status: "in-progress" as const,
+                completedAt: null,
+                latestThreadId: link.threadId,
+              }
+            : item,
+        );
       }
       if (
         action !== undefined &&
@@ -251,7 +292,9 @@ export function planProjectCommand(input: {
           ...(command.faviconPath === undefined ? {} : { faviconPath: command.faviconPath }),
           ...(command.projectIcon === undefined ? {} : { projectIcon: command.projectIcon }),
           ...(command.scripts === undefined ? {} : { scripts: command.scripts }),
-          ...(action === undefined ? {} : { savedPrompts }),
+          ...(action === undefined && command.savedPromptThread === undefined
+            ? {}
+            : { savedPrompts }),
           // Repeating a pin or archive keeps the original time.
           ...(command.pinned === undefined
             ? {}

@@ -5,7 +5,13 @@ import * as Tracer from "effect/Tracer";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { CommandId, type Project, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  CommandId,
+  type Project,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -262,18 +268,46 @@ it.layer(layerTest)("ProjectService", (it) => {
         projectId,
         savedPrompt: { kind: "edit", id: "one", text: "Edited prompt" },
       });
+      const titled = yield* service.update({
+        commandId: CommandId.make("saved:title"),
+        projectId,
+        savedPrompt: { kind: "edit", id: "one", title: "Fix login", status: "in-progress" },
+      });
+      assert.strictEqual(
+        titled.savedPrompts?.find((item) => item.id === "one")?.status,
+        "in-progress",
+      );
+      assert.strictEqual(
+        titled.savedPrompts?.find((item) => item.id === "one")?.text,
+        "Edited prompt",
+      );
+      const linked = yield* service.update({
+        commandId: CommandId.make("saved:link"),
+        projectId,
+        savedPromptThread: { id: "one", threadId: ThreadId.make("task-thread") },
+      });
+      assert.strictEqual(
+        linked.savedPrompts?.find((item) => item.id === "one")?.latestThreadId,
+        "task-thread",
+      );
       const complete = yield* service.update({
         commandId: CommandId.make("saved:complete"),
         projectId,
         savedPrompt: { kind: "complete", id: "one", done: true },
       });
       assert.isNotNull(complete.savedPrompts?.find((item) => item.id === "one")?.completedAt);
+      assert.strictEqual(complete.savedPrompts?.find((item) => item.id === "one")?.status, "done");
       const reopened = yield* service.update({
         commandId: CommandId.make("saved:reopen"),
         projectId,
         savedPrompt: { kind: "complete", id: "one", done: false },
       });
       assert.isNull(reopened.savedPrompts?.find((item) => item.id === "one")?.completedAt);
+      assert.strictEqual(reopened.savedPrompts?.find((item) => item.id === "one")?.status, "open");
+      assert.strictEqual(
+        reopened.savedPrompts?.find((item) => item.id === "one")?.title,
+        "Fix login",
+      );
       const restartedStore = yield* ProjectStore.make;
       const stored = Option.getOrThrow(yield* restartedStore.get(projectId));
       assert.deepStrictEqual(stored.savedPrompts, reopened.savedPrompts);

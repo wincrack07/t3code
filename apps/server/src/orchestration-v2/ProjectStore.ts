@@ -148,7 +148,14 @@ export const make = Effect.gen(function* () {
   });
 
   const upsertRow = (row: ProjectRow) =>
-    encodeRow({ ...row, savedPrompts: row.savedPrompts ?? [] }).pipe(
+    encodeRow({
+      ...row,
+      savedPrompts: (row.savedPrompts ?? []).map((item) => ({
+        ...item,
+        title: item.title ?? null,
+        status: item.status ?? (item.completedAt === null ? ("open" as const) : ("done" as const)),
+      })),
+    }).pipe(
       Effect.flatMap(
         (encoded) => sql`
           INSERT INTO projection_projects (

@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
+import { ChatAttachment } from "./chatAttachment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import {
   CommandId,
@@ -150,11 +151,29 @@ export const ReceivedProjectIcon = ForwardCompatibleUnion(projectIconMembers, "k
   ),
 );
 
+export const SavedPromptStatus = Schema.Literals(["open", "in-progress", "done"]);
+export type SavedPromptStatus = typeof SavedPromptStatus.Type;
+const SavedPromptTitle = Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(160)));
+
+export const ProjectTaskAttachment = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("reference"),
+    path: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
+    temporary: Schema.Boolean,
+  }),
+  Schema.Struct({ kind: Schema.Literal("stored"), attachment: ChatAttachment }),
+]);
+export type ProjectTaskAttachment = typeof ProjectTaskAttachment.Type;
+
 export const ProjectSavedPrompt = Schema.Struct({
   id: TrimmedNonEmptyString,
   text: TrimmedNonEmptyString.check(Schema.isMaxLength(120000)),
   createdAt: IsoDateTime,
   completedAt: Schema.NullOr(IsoDateTime),
+  title: Schema.optional(SavedPromptTitle),
+  status: Schema.optional(SavedPromptStatus),
+  latestThreadId: Schema.optional(ThreadId),
+  attachments: Schema.optional(Schema.Array(ProjectTaskAttachment).check(Schema.isMaxLength(8))),
 });
 export type ProjectSavedPrompt = typeof ProjectSavedPrompt.Type;
 
@@ -163,11 +182,15 @@ export const SavedPromptAction = Schema.Union([
     kind: Schema.Literal("add"),
     id: TrimmedNonEmptyString,
     text: ProjectSavedPrompt.fields.text,
+    title: Schema.optional(SavedPromptTitle),
+    status: Schema.optional(SavedPromptStatus),
   }),
   Schema.Struct({
     kind: Schema.Literal("edit"),
     id: TrimmedNonEmptyString,
-    text: ProjectSavedPrompt.fields.text,
+    text: Schema.optional(ProjectSavedPrompt.fields.text),
+    title: Schema.optional(SavedPromptTitle),
+    status: Schema.optional(SavedPromptStatus),
   }),
   Schema.Struct({
     kind: Schema.Literal("complete"),

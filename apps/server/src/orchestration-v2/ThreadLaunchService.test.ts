@@ -14,6 +14,7 @@ import {
   ChatAttachmentId,
   ComposerContextId,
   type ChatAttachment,
+  type ProjectSavedPrompt,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
   GitCommandError,
@@ -118,6 +119,8 @@ const claudeAdapter = {
 } as ProviderAdapter.ProviderAdapterV2["Service"];
 
 interface HarnessOptions {
+  readonly savedPrompts?: ReadonlyArray<ProjectSavedPrompt>;
+  readonly updateProject?: ProjectService.ProjectService["Service"]["update"];
   readonly closeTerminal?: TerminalManager.TerminalManager["Service"]["close"];
   readonly adapters?: ReadonlyArray<ProviderAdapter.ProviderAdapterV2["Service"]>;
   readonly managedFolders?: Layer.Layer<ManagedProjectFolders.ManagedProjectFolders>;
@@ -185,13 +188,18 @@ function makeHarness(options: HarnessOptions = {}) {
     Layer.succeed(ProjectService.ProjectService, {
       create: () => Effect.die("unused"),
       bootstrap: () => Effect.die("unused"),
-      update: () => Effect.die("unused"),
+      update: options.updateProject ?? (() => Effect.die("unused")),
       delete: () => Effect.die("unused"),
       listPage: () => Effect.die("unused"),
       getById: (id) =>
         Effect.succeed(
           id === projectId
-            ? Option.some(project)
+            ? Option.some({
+                ...project,
+                ...(options.savedPrompts === undefined
+                  ? {}
+                  : { savedPrompts: options.savedPrompts }),
+              })
             : id === otherProjectId
               ? Option.some(otherProject)
               : Option.none(),
@@ -326,6 +334,74 @@ function launchInput(input: {
     creationSource: "web" as const,
   };
 }
+
+it.effect(
+  "starts a saved task with its body and project model, then links only accepted sends",
+  () => {
+    const updates: ProjectService.ProjectUpdateInput[] = [];
+    const task: ProjectSavedPrompt = {
+      id: "task",
+      text: "Fix the login\nKeep existing sessions",
+      title: "Login",
+      status: "open",
+      createdAt: project.createdAt,
+      completedAt: null,
+    };
+    const harness = makeHarness({
+      savedPrompts: [task],
+      updateProject: (input) => {
+        updates.push(input);
+        return Effect.succeed({ ...project, savedPrompts: [task] });
+      },
+    });
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const request = {
+        ...launchInput({
+          command: "task:send",
+          thread: "task:thread",
+          message: "Ignore this caller text",
+        }),
+        savedPromptId: task.id,
+        modelSelection: { ...modelSelection, model: "caller-model" },
+      };
+      const launched = yield* launches.launch(request);
+      const wire = yield* encodeThreadProjection(launched.projection);
+      assert.equal(wire.messages[0]?.text, task.text);
+      assert.deepEqual(wire.thread.modelSelection, project.defaultModelSelection);
+      assert.equal(wire.thread.title, "Login");
+      assert.deepEqual(updates[0]?.savedPromptThread, { id: task.id, threadId: launched.threadId });
+      assert.equal(updates[0]?.commandId, "task:send:saved-prompt");
+      yield* launches.launch(request);
+      const resent = yield* launches.launch({
+        ...request,
+        commandId: CommandId.make("task:resend"),
+        threadId: ThreadId.make("task:resend"),
+      });
+      assert.equal(updates.at(-1)?.savedPromptThread?.threadId, resent.threadId);
+      const before = updates.length;
+      for (const invalid of [
+        { ...request, projectId: otherProjectId },
+        { ...request, savedPromptId: "missing" },
+        { ...request, reuseExistingThread: true },
+      ]) {
+        const failed = yield* launches
+          .launch({
+            ...invalid,
+            commandId: CommandId.make(
+              `task:invalid:${before}:${invalid.savedPromptId}:${invalid.projectId}:${"reuseExistingThread" in invalid ? invalid.reuseExistingThread : false}`,
+            ),
+          })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(failed));
+      }
+      assert.equal(updates.length, before);
+      const state = yield* threads.getThreadProjection(launched.threadId);
+      assert.equal(state.runs.length, 1);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
 
 it.effect.each(
   (["new", "existing"] as const).flatMap((target) =>
