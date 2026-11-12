@@ -32,6 +32,8 @@ import {
   taskListOrder,
   taskPriority,
   taskReviewView,
+  taskSubtaskCounts,
+  taskSubtasks,
   taskTitle,
   type TaskEntry,
   type TaskListModel,
@@ -303,6 +305,7 @@ function TaskRow({
   });
   const toggleDone = () => void update({ kind: "complete", id: entry.task.id, done: !done });
   const tags = entry.task.tags ?? [];
+  const subtasks = taskSubtaskCounts(depth === 0 ? taskSubtasks(group, entry) : []);
   // A linked, unfinished task shows its thread's dot; the checkbox takes its place on hover or focus.
   const dot = !done && thread.state !== null;
   const running = !done && thread.state === "running";
@@ -401,6 +404,14 @@ function TaskRow({
       {tags.length > MAX_ROW_TAGS ? (
         <span className="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:inline">
           +{tags.length - MAX_ROW_TAGS}
+        </span>
+      ) : null}
+      {subtasks.total > 0 ? (
+        <span
+          aria-label={`${subtasks.done} of ${subtasks.total} subtasks done`}
+          className="shrink-0 text-xs text-muted-foreground tabular-nums"
+        >
+          {subtasks.done}/{subtasks.total}
         </span>
       ) : null}
       <TaskAttachmentCount count={entry.task.attachments?.length ?? 0} />

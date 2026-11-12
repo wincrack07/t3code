@@ -19,6 +19,11 @@ import {
   NO_TASK_FILTER,
   normalizeTaskTags,
   taskCaptureProjectKey,
+  taskRunProject,
+  editTaskCriteria,
+  taskAttempts,
+  taskSubtaskCounts,
+  taskSubtasks,
   taskReviewToReconcile,
   taskReviewView,
   reviewTaskCount,
@@ -567,5 +572,105 @@ describe("taskThreadRefs", () => {
     ).toBeNull();
     expect(pendingTaskLink(receipt, { latestThreadId: ThreadId.make("t9") }, mac)).toBe(receipt);
     expect(pendingTaskLink(undefined, {}, mac)).toBeNull();
+  });
+});
+
+describe("editTaskCriteria", () => {
+  const list = [
+    { text: "Tests pass", done: false },
+    { text: "Docs updated", done: true },
+  ];
+  it("adds, edits, toggles, moves and removes within the limits", () => {
+    expect(editTaskCriteria(list, { kind: "add", text: "  No  regressions " })?.at(-1)).toEqual({
+      text: "No regressions",
+      done: false,
+    });
+    expect(editTaskCriteria(list, { kind: "add", text: "   " })).toBeNull();
+    const full = Array.from({ length: 20 }, (_, i) => ({ text: `c${i}`, done: false }));
+    expect(editTaskCriteria(full, { kind: "add", text: "one more" })).toBeNull();
+    expect(
+      editTaskCriteria(list, { kind: "add", text: "x".repeat(600) })?.at(-1)?.text,
+    ).toHaveLength(500);
+    expect(editTaskCriteria(list, { kind: "edit", index: 0, text: "Tests pass" })).toBeNull();
+    expect(editTaskCriteria(list, { kind: "edit", index: 0, text: "" })).toEqual([list[1]]);
+    expect(editTaskCriteria(list, { kind: "toggle", index: 0 })?.[0]?.done).toBe(true);
+    expect(editTaskCriteria(list, { kind: "move", from: 1, to: 0 })?.map((c) => c.text)).toEqual([
+      "Docs updated",
+      "Tests pass",
+    ]);
+    expect(editTaskCriteria(list, { kind: "move", from: 0, to: -3 })).toBeNull();
+    expect(editTaskCriteria(list, { kind: "remove", index: 5 })).toBeNull();
+  });
+});
+
+describe("subtasks and attempts", () => {
+  const groups = buildTaskProjectGroups({
+    projects: [
+      project(mac, "orbit", [
+        task("p1", "2026-11-09T00:00:00Z"),
+        task("c1", "2026-11-08T00:00:00Z", {
+          parentTaskId: "p1",
+          status: "done",
+          completedAt: "2026-11-10T00:00:00Z",
+        }),
+        task("c2", "2026-11-07T00:00:00Z", { parentTaskId: "p1" }),
+      ]),
+      project(vpsA, "orbit", [task("c3", "2026-11-07T00:00:00Z", { parentTaskId: "p1" })]),
+    ],
+    settings,
+    primaryEnvironmentId: mac,
+    connected: new Set([mac, vpsA]),
+  });
+  const orbit = groups[0]!;
+
+  it("runs on the saved machine when it is connected, else the task's own", () => {
+    const parent = orbit.tasks.find((entry) => entry.task.id === "p1")!;
+    const on = (targetEnvironmentId: EnvironmentId) =>
+      taskRunProject(
+        { ...parent, task: { ...parent.task, runSettings: { targetEnvironmentId } } },
+        orbit,
+      ).environmentId;
+    expect(on(vpsA)).toBe(vpsA);
+    expect(on(vpsB)).toBe(mac);
+    expect(taskRunProject(parent, orbit).environmentId).toBe(mac);
+  });
+
+  it("counts only subtasks on the parent's own machine", () => {
+    const parent = orbit.tasks.find((entry) => entry.task.id === "p1")!;
+    const subtasks = taskSubtasks(orbit, parent);
+    expect(subtasks.map((entry) => entry.task.id)).toEqual(["c1", "c2"]);
+    expect(taskSubtaskCounts(subtasks)).toEqual({ total: 2, done: 1 });
+  });
+
+  it("lists attempts newest first with the machine and result of each", () => {
+    const attempts = taskAttempts(
+      {
+        threadLinks: [
+          { threadId: ThreadId.make("t1"), userMessageId: "m2" as never, environmentId: vpsA },
+          {
+            threadId: ThreadId.make("t1"),
+            userMessageId: "m1" as never,
+            environmentId: vpsA,
+            snapshot: {
+              runId: "r1",
+              userMessageId: "m1",
+              outcome: "failed",
+              finishedAt: "2026-11-10T00:00:00.000Z",
+              pullRequests: [],
+            } as never,
+          },
+          { threadId: ThreadId.make("t0") },
+        ],
+      },
+      mac,
+    );
+    expect(
+      attempts.map((a) => [a.thread.environmentId, a.remote, a.review?.outcome ?? null]),
+    ).toEqual([
+      [vpsA, true, null],
+      [vpsA, true, "Failed"],
+      [mac, false, null],
+    ]);
+    expect(new Set(attempts.map((a) => a.key)).size).toBe(3);
   });
 });

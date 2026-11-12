@@ -805,3 +805,115 @@ export function pendingTaskLink<R extends { readonly thread: ScopedThreadRef }>(
     ? null
     : receipt;
 }
+
+export const TASK_CRITERIA_MAX_COUNT = 20;
+export const TASK_CRITERION_MAX_LENGTH = 500;
+
+export type TaskCriterion = NonNullable<ProjectSavedPrompt["acceptanceCriteria"]>[number];
+
+export type TaskCriteriaEdit =
+  | { readonly kind: "add"; readonly text: string }
+  | { readonly kind: "edit"; readonly index: number; readonly text: string }
+  | { readonly kind: "toggle"; readonly index: number }
+  | { readonly kind: "move"; readonly from: number; readonly to: number }
+  | { readonly kind: "remove"; readonly index: number };
+
+/**
+ * The checklist after one edit, within the server's limits, or null when nothing changes.
+ * Clearing an item's text removes it, since the server keeps no empty criteria.
+ */
+export function editTaskCriteria(
+  criteria: ReadonlyArray<TaskCriterion>,
+  edit: TaskCriteriaEdit,
+): TaskCriterion[] | null {
+  const list = [...criteria];
+  const clean = (text: string) =>
+    text.replace(/\s+/g, " ").trim().slice(0, TASK_CRITERION_MAX_LENGTH).trim();
+  const inRange = (index: number) => index >= 0 && index < list.length;
+  switch (edit.kind) {
+    case "add": {
+      const text = clean(edit.text);
+      if (!text || list.length >= TASK_CRITERIA_MAX_COUNT) return null;
+      return [...list, { text, done: false }];
+    }
+    case "edit": {
+      if (!inRange(edit.index)) return null;
+      const text = clean(edit.text);
+      if (!text) return list.filter((_, index) => index !== edit.index);
+      if (text === list[edit.index]!.text) return null;
+      list[edit.index] = { ...list[edit.index]!, text };
+      return list;
+    }
+    case "toggle":
+      if (!inRange(edit.index)) return null;
+      list[edit.index] = { ...list[edit.index]!, done: !list[edit.index]!.done };
+      return list;
+    case "move": {
+      const to = Math.max(0, Math.min(list.length - 1, edit.to));
+      if (!inRange(edit.from) || to === edit.from) return null;
+      const [item] = list.splice(edit.from, 1);
+      list.splice(to, 0, item!);
+      return list;
+    }
+    case "remove":
+      return inRange(edit.index) ? list.filter((_, index) => index !== edit.index) : null;
+  }
+}
+
+/** A parent's subtasks on its own machine, in manual order. */
+export function taskSubtasks(
+  group: Pick<TaskProjectGroup, "tasks">,
+  parent: Pick<TaskEntry, "task" | "home">,
+): TaskEntry[] {
+  return group.tasks.filter(
+    (entry) =>
+      entry.task.parentTaskId === parent.task.id &&
+      entry.home.environmentId === parent.home.environmentId &&
+      entry.home.id === parent.home.id,
+  );
+}
+
+export function taskSubtaskCounts(subtasks: ReadonlyArray<Pick<TaskEntry, "status">>) {
+  return {
+    total: subtasks.length,
+    done: subtasks.filter((entry) => entry.status === "done").length,
+  };
+}
+
+export interface TaskAttempt {
+  readonly key: string;
+  readonly thread: ScopedThreadRef;
+  /** The attempt ran on another machine than the task's. */
+  readonly remote: boolean;
+  readonly review: TaskReviewView | null;
+  readonly finishedAt: string | null;
+}
+
+/** Every recorded attempt, newest first: each start and each requested change is one. */
+export function taskAttempts(
+  task: Pick<ProjectSavedPrompt, "threadLinks">,
+  homeEnvironmentId: EnvironmentId,
+): TaskAttempt[] {
+  return (task.threadLinks ?? []).map((link, index) => {
+    const environmentId = link.environmentId ?? homeEnvironmentId;
+    return {
+      key: `${environmentId}:${link.threadId}:${link.userMessageId ?? index}`,
+      thread: scopeThreadRef(environmentId, link.threadId),
+      remote: environmentId !== homeEnvironmentId,
+      review: link.snapshot ? taskReviewView(link.snapshot) : null,
+      finishedAt: link.snapshot?.finishedAt ?? null,
+    };
+  });
+}
+
+/** Where the task resolves a project's defaults: its preferred machine, else its own. */
+export function taskRunProject(
+  entry: Pick<TaskEntry, "task" | "home">,
+  group: Pick<TaskProjectGroup, "members">,
+): EnvironmentProject {
+  const preferred = entry.task.runSettings?.targetEnvironmentId;
+  return (
+    group.members.find((member) => member.reachable && member.project.environmentId === preferred)
+      ?.project ?? entry.home
+  );
+}
