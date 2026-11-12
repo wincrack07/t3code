@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import {
   EnvironmentId,
+  ProjectId,
   type OrchestrationV2ServerCommand,
   ProviderInstanceId,
   RunId,
@@ -119,6 +120,40 @@ it.effect("attaches declared questions to the running turn and resolves only kno
             dispatch: (command) => {
               dispatched.push(command);
               return Effect.succeed({ sequence: dispatched.length, storedEvents: [] });
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+});
+
+it.effect("records a self move and says the current cwd remains until the turn ends", () => {
+  const target = ProjectId.make("project:destination");
+  const shell = {
+    ...McpToolAccessTestkit.liveThreadShell(threadId),
+    pendingProjectMove: {
+      projectId: target,
+      detachWorktree: false,
+      requestedAt: "2026-11-12T00:00:00.000Z",
+    },
+  };
+  return Effect.gen(function* () {
+    const service = yield* ThreadMetadataMcpService.ThreadMetadataMcpService;
+    const result = yield* service.update(scope, { action: "move", moveToProjectId: target });
+    assert.isTrue(result.movesWhenIdle);
+    assert.include(result.message, "your cwd has not changed yet");
+  }).pipe(
+    Effect.provide(
+      ThreadMetadataMcpService.layer.pipe(
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadShell: () => Effect.succeed(shell),
+            dispatch: (command) => {
+              assert.equal(command.type, "thread.project.move");
+              if (command.type === "thread.project.move") assert.equal(command.threadId, threadId);
+              return Effect.succeed({ sequence: 1, storedEvents: [] });
             },
           }),
         ),

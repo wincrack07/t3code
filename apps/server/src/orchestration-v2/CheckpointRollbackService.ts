@@ -48,6 +48,7 @@ export class CheckpointRollbackExecutionError extends Schema.TaggedError<Checkpo
       "provider-turn-unavailable",
       "unexpected-failure",
       "shared-workspace",
+      "previous-project",
     ]),
     threadId: ThreadId,
     providerThreadId: ProviderThreadId,
@@ -63,6 +64,8 @@ export class CheckpointRollbackExecutionError extends Schema.TaggedError<Checkpo
         return `Active provider changed before rollback target ${this.checkpointId} could execute on thread ${this.threadId}.`;
       case "provider-turn-unavailable":
         return `Provider turn for rollback target ${this.checkpointId} is unavailable on provider thread ${this.providerThreadId}.`;
+      case "previous-project":
+        return "This checkpoint belongs to the previous project. Move the thread back to access it.";
       case "shared-workspace":
         return SHARED_WORKSPACE_RESTORE_MESSAGE;
       case "unexpected-failure":
@@ -77,11 +80,10 @@ const isCheckpointRestoreError = Schema.is(CheckpointRestoreError);
 const isRuntimePolicyAboveCeilingError = Schema.is(RuntimePolicyAboveCeilingError);
 
 /**
- * The message clients see when a rollback fails. Only a held Git index lock
- * gets its own explanation; other reasons carry internal ids or raw Git
- * output, so they fall back to the generic message.
+ * Exposes fixed safety messages and held-index-lock guidance; raw provider failures stay generic.
  */
 export function rollbackFailureClientMessage(error: CheckpointRollbackExecutionError): string {
+  if (error.reason === "previous-project") return error.message;
   if (isRuntimePolicyAboveCeilingError(error.cause)) return error.cause.message;
   const restoreCause = isCheckpointRestoreError(error.cause) ? error.cause.cause : undefined;
   return isVcsProcessExitError(restoreCause) && restoreCause.detail === GIT_INDEX_LOCKED_DETAIL
@@ -158,6 +160,17 @@ export const layer: Layer.Layer<
       ) {
         return yield* new CheckpointRollbackExecutionError({
           reason: "rollback-target-invalid",
+          threadId: input.threadId,
+          providerThreadId: input.providerThreadId,
+          checkpointId: input.checkpointId,
+        });
+      }
+      const currentCwd = context.thread.projectMoves?.length
+        ? (context.thread.worktreePath ?? context.thread.projectMoves.at(-1)?.cwd)
+        : undefined;
+      if (currentCwd !== undefined && scope.cwd !== currentCwd) {
+        return yield* new CheckpointRollbackExecutionError({
+          reason: "previous-project",
           threadId: input.threadId,
           providerThreadId: input.providerThreadId,
           checkpointId: input.checkpointId,

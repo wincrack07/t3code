@@ -1854,6 +1854,22 @@ export const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        [ORCHESTRATION_V2_WS_METHODS.moveThreadToProject]: (input) =>
+          threadManagement.dispatch({ type: "thread.project.move", ...input }).pipe(
+            Effect.map((result) => ({ sequence: result.sequence })),
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationV2DispatchCommandError({
+                  commandId: input.commandId,
+                  commandType: "thread.project.move",
+                  message: userFacingDispatchErrorMessage(cause) ?? "Failed to move thread",
+                  ...(cause._tag === "ThreadProjectMoveRejectedError"
+                    ? { moveRejection: cause }
+                    : {}),
+                  cause,
+                }),
+            ),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -1896,6 +1912,12 @@ export const layerWsRpc = (
                     return new OrchestrationV2DispatchCommandError({
                       commandId: command.commandId,
                       commandType: command.type,
+                      ...(cause._tag === "ThreadProjectMoveRejectedError"
+                        ? { moveRejection: cause }
+                        : {}),
+                      ...(cause._tag === "CheckpointPreviousProjectError"
+                        ? { previousProjectCheckpoint: cause }
+                        : {}),
                       message: detail ?? "Failed to dispatch orchestration V2 command",
                       ...(detail === undefined ? {} : { detail }),
                       cause,
@@ -1927,7 +1949,13 @@ export const layerWsRpc = (
             Effect.mapError(
               (cause) =>
                 new OrchestrationGetTurnDiffError({
-                  message: "Failed to load turn diff",
+                  message:
+                    cause._tag === "CheckpointPreviousProjectError"
+                      ? cause.message
+                      : "Failed to load turn diff",
+                  ...(cause._tag === "CheckpointPreviousProjectError"
+                    ? { reason: "previous_project" as const }
+                    : {}),
                   cause,
                 }),
             ),
@@ -1937,7 +1965,13 @@ export const layerWsRpc = (
             Effect.mapError(
               (cause) =>
                 new OrchestrationGetFullThreadDiffError({
-                  message: "Failed to load full thread diff",
+                  message:
+                    cause._tag === "CheckpointPreviousProjectError"
+                      ? cause.message
+                      : "Failed to load full thread diff",
+                  ...(cause._tag === "CheckpointPreviousProjectError"
+                    ? { reason: "previous_project" as const }
+                    : {}),
                   cause,
                 }),
             ),

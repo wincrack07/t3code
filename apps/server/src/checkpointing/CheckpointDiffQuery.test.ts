@@ -343,3 +343,22 @@ it.effect("preserves an exact-fit filtered patch across batches without a marker
     assert.strictEqual(patchReads, 2);
   }).pipe(Effect.provide(layer));
 });
+
+it.effect("refuses previous-project diffs and makes them accessible after moving back", () => {
+  const projection = { ...makeProjection(), currentWorkspace: "/destination" };
+  const diffCheckpoints = vi.fn(() => Effect.succeed("old diff"));
+  return Effect.gen(function* () {
+    const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+    const input = { threadId, fromTurnCount: 0, toTurnCount: 2 };
+    const error = yield* query.getTurnDiff(input).pipe(Effect.flip);
+    assert.equal(error._tag, "CheckpointPreviousProjectError");
+    const fullError = yield* query
+      .getFullThreadDiff({ threadId, toTurnCount: 2 })
+      .pipe(Effect.flip);
+    assert.equal(fullError._tag, "CheckpointPreviousProjectError");
+    assert.equal(diffCheckpoints.mock.calls.length, 0);
+    projection.currentWorkspace = "/repo";
+    assert.equal((yield* query.getTurnDiff(input)).diff, "old diff");
+    assert.equal(diffCheckpoints.mock.calls.length, 1);
+  }).pipe(Effect.provide(layerFor({ projection: Effect.succeed(projection), diffCheckpoints })));
+});

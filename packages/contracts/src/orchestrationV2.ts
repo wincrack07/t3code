@@ -468,6 +468,60 @@ const LenientThreadOpens = Schema.NullOr(OrchestrationV2ThreadOpens).pipe(
   Schema.catchDecoding(() => Effect.succeedSome(null)),
 );
 
+export const ThreadProjectMove = Schema.Struct({
+  projectId: ProjectId,
+  detachWorktree: Schema.Boolean,
+  requestedAt: IsoDateTime,
+});
+
+export const ThreadProjectMoveRecord = Schema.Struct({
+  previousProjectId: ProjectId,
+  projectId: ProjectId,
+  previousCwd: TrimmedNonEmptyString,
+  cwd: TrimmedNonEmptyString,
+  movedAt: IsoDateTime,
+});
+
+export class ThreadProjectMoveRejectedError extends Schema.TaggedError<ThreadProjectMoveRejectedError>()(
+  "ThreadProjectMoveRejectedError",
+  {
+    threadId: ThreadId,
+    projectId: ProjectId,
+    reason: Schema.Literals([
+      "target_not_local",
+      "target_deleted",
+      "same_project",
+      "thread_deleted",
+      "detach_required",
+    ]),
+    dirty: Schema.optional(Schema.Boolean),
+  },
+) {
+  override get message(): string {
+    switch (this.reason) {
+      case "target_not_local":
+        return "That project is on another machine or does not exist on this machine.";
+      case "target_deleted":
+        return "The target project has been deleted.";
+      case "same_project":
+        return "The thread already belongs to that project.";
+      case "thread_deleted":
+        return "A deleted thread cannot be moved.";
+      case "detach_required":
+        return "Confirm detachWorktree to leave this thread's worktree or branch. Files and branches will remain on disk.";
+    }
+  }
+}
+
+export class CheckpointPreviousProjectError extends Schema.TaggedError<CheckpointPreviousProjectError>()(
+  "CheckpointPreviousProjectError",
+  { threadId: ThreadId, checkpointId: CheckpointId },
+) {
+  override get message(): string {
+    return "This checkpoint belongs to the previous project. Move the thread back to access it.";
+  }
+}
+
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
   id: ThreadId,
@@ -479,6 +533,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  pendingProjectMove: Schema.optional(Schema.NullOr(ThreadProjectMove)),
+  projectMoves: Schema.optional(Schema.Array(ThreadProjectMoveRecord)),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
   statusText: Schema.optional(ThreadStatusText),
   /** Non-blocking questions the agent left for the user. Absent when there are none. */
@@ -1670,6 +1726,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("notification"),
+    projectMove: Schema.optional(ThreadProjectMoveRecord),
     ...OrchestrationV2Notification.fields,
   }),
   Schema.Struct({
@@ -2156,6 +2213,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  pendingProjectMove: Schema.optional(Schema.NullOr(ThreadProjectMove)),
+  projectMoves: Schema.optional(Schema.Array(ThreadProjectMoveRecord)),
   pinnedHtmlCards: Schema.optional(Schema.Array(PinnedHtmlCard)),
   statusText: Schema.optional(ThreadStatusText),
   /** Non-blocking questions the agent left for the user. Absent when there are none. */
@@ -2983,7 +3042,18 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
 ]);
 export type OrchestrationV2DomainEventJson = typeof OrchestrationV2DomainEventJson.Type;
 
+const ThreadProjectMoveFields = {
+  commandId: CommandId,
+  threadId: ThreadId,
+  projectId: ProjectId,
+  detachWorktree: Schema.optional(Schema.Boolean),
+};
+
 export const OrchestrationV2Command = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("thread.project.move"),
+    ...ThreadProjectMoveFields,
+  }),
   Schema.Struct({
     type: Schema.Literal("thread.stop"),
     commandId: CommandId,
@@ -3680,6 +3750,7 @@ export type OrchestrationV2ServerCommand = OrchestrationV2Command | Orchestratio
 
 export const ORCHESTRATION_V2_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
+  moveThreadToProject: "orchestration.moveThreadToProject",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   searchThreads: "orchestration.searchThreads",
@@ -4052,6 +4123,8 @@ export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<Orch
   {
     commandId: CommandId,
     commandType: Schema.String,
+    moveRejection: Schema.optional(ThreadProjectMoveRejectedError),
+    previousProjectCheckpoint: Schema.optional(CheckpointPreviousProjectError),
     message: Schema.String,
     detail: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
@@ -4345,6 +4418,10 @@ export const OrchestrationV2RpcSchemas = {
   searchThread: {
     input: OrchestrationV2SearchThreadInput,
     output: OrchestrationV2SearchThreadResult,
+  },
+  moveThreadToProject: {
+    input: Schema.Struct(ThreadProjectMoveFields),
+    output: Schema.Struct({ sequence: NonNegativeInt }),
   },
   dispatchCommand: {
     input: OrchestrationV2Command,

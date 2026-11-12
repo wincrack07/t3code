@@ -10421,3 +10421,380 @@ it.layer(layerQueueResumeDisabledInstanceTest)(
     );
   },
 );
+
+it.layer(layerSharedApplicationDataPlaneTest)("moving a thread between projects", (it) => {
+  it.effect("moves an idle thread without changing its history or settings", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectService.ProjectService;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const source = ProjectId.make("move-source");
+      const target = ProjectId.make("move-target");
+      const threadId = ThreadId.make("move-thread");
+      for (const projectId of [source, target]) {
+        yield* projects.create({
+          commandId: CommandId.make(`create-${projectId}`),
+          projectId,
+          title: projectId,
+          workspaceRoot: `/tmp/${projectId}`,
+        });
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("move-create"),
+        threadId,
+        projectId: source,
+        title: "Keep this title",
+        modelSelection,
+        createdBy: "user",
+        creationSource: "web",
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      const sink = yield* EventSink.EventSinkV2;
+      const send = (suffix: string) =>
+        orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`idle-move-message-${suffix}`),
+          threadId,
+          messageId: MessageId.make(`idle-move-message-${suffix}`),
+          text: suffix,
+          attachments: [],
+          modelSelection,
+          createdBy: "user",
+          creationSource: "web",
+          dispatchMode: { type: "start_immediately" },
+        });
+      const complete = Effect.fn(function* (suffix: string) {
+        const run = (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)!;
+        const now = yield* DateTime.now;
+        yield* sink.write({
+          commandId: CommandId.make(`idle-move-complete-${suffix}`),
+          events: [
+            {
+              id: EventId.make(`idle-move-complete-${suffix}`),
+              type: "run.updated",
+              threadId,
+              runId: run.id,
+              occurredAt: now,
+              payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+            },
+          ],
+        });
+      });
+      yield* send("before");
+      yield* complete("before");
+      yield* orchestrator.dispatch({
+        type: "thread.project.move",
+        commandId: CommandId.make("move-idle"),
+        threadId,
+        projectId: target,
+      });
+      const projection = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(projection.thread.projectId, target);
+      assert.equal(projection.thread.title, "Keep this title");
+      assert.deepEqual(projection.thread.modelSelection, modelSelection);
+      assert.equal(projection.thread.pendingProjectMove, null);
+      assert.equal(projection.thread.projectMoves?.[0]?.previousProjectId, source);
+      assert.equal(projection.thread.projectMoves?.[0]?.previousCwd, "/tmp/move-source");
+      assert.isTrue(
+        projection.turnItems.some(
+          (item) =>
+            item.type === "notification" &&
+            item.summary === "Moved from move-source to move-target",
+        ),
+      );
+      assert.equal((yield* orchestrator.getShellSnapshot({ projectId: source })).threads.length, 0);
+      assert.equal(
+        (yield* orchestrator.getShellSnapshot({ projectId: target })).threads[0]?.id,
+        threadId,
+      );
+      yield* send("after");
+      const continued = yield* orchestrator.getThreadProjection(threadId);
+      const latest = continued.runs.at(-1)!;
+      const root = continued.nodes.find((node) => node.id === latest.rootNodeId)!;
+      assert.equal(
+        continued.checkpointScopes.find((scope) => scope.id === root.checkpointScopeId)?.cwd,
+        "/tmp/move-target",
+      );
+      assert.deepEqual(
+        continued.messages
+          .filter((message) => message.role === "user")
+          .map((message) => message.text),
+        ["before", "after"],
+      );
+      yield* complete("after");
+      yield* orchestrator.dispatch({
+        type: "thread.project.move",
+        commandId: CommandId.make("move-undo"),
+        threadId,
+        projectId: source,
+      });
+      assert.equal((yield* orchestrator.getThreadShell(threadId))?.projectId, source);
+      const maintenance = yield* ProjectionReplay.ProjectionReplay;
+      assert.isTrue((yield* maintenance.rebuild).valid);
+      assert.equal((yield* orchestrator.getThreadShell(threadId))?.projectMoves?.length, 2);
+    }),
+  );
+  it.effect("moves a scratch thread out of No project while keeping its folder as history", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectService.ProjectService;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const target = ProjectId.make("scratch-move-target");
+      const threadId = ThreadId.make("scratch-move-thread");
+      for (const [projectId, workspaceRoot] of [
+        [SCRATCH_PROJECT_ID, SCRATCH_ROOT],
+        [target, "/tmp/scratch-move-target"],
+      ] as const) {
+        if (Option.isNone(yield* projects.getById(projectId)))
+          yield* projects.create({
+            commandId: CommandId.make(`scratch-move-${projectId}`),
+            projectId,
+            title: projectId,
+            workspaceRoot,
+          });
+      }
+      const folder = `${SCRATCH_ROOT}/scratch-move-folder`;
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("scratch-move-create"),
+        threadId,
+        projectId: SCRATCH_PROJECT_ID,
+        title: "Keep scratch history",
+        modelSelection,
+        createdBy: "user",
+        creationSource: "web",
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: folder,
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.project.move",
+        commandId: CommandId.make("scratch-move"),
+        threadId,
+        projectId: target,
+        detachWorktree: true,
+      });
+      const shell = yield* orchestrator.getThreadShell(threadId);
+      assert.equal(shell?.projectId, target);
+      assert.isNull(shell?.worktreePath);
+      assert.equal(shell?.projectMoves?.[0]?.previousCwd, folder);
+      assert.isFalse(
+        (yield* orchestrator.getShellSnapshot({ projectId: SCRATCH_PROJECT_ID })).threads.some(
+          (thread) => thread.id === threadId,
+        ),
+      );
+    }),
+  );
+  it.effect(
+    "replaces and cancels a pending move, then moves before delivering queued messages",
+    () =>
+      Effect.gen(function* () {
+        const projects = yield* ProjectService.ProjectService;
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const eventSink = yield* EventSink.EventSinkV2;
+        const source = ProjectId.make("deferred-source");
+        const target = ProjectId.make("deferred-target");
+        const replacement = ProjectId.make("deferred-replacement");
+        const threadId = ThreadId.make("deferred-thread");
+        for (const projectId of [source, target, replacement])
+          yield* projects.create({
+            commandId: CommandId.make(`create-${projectId}`),
+            projectId,
+            title: projectId,
+            workspaceRoot: `/tmp/${projectId}`,
+          });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("deferred-create"),
+          threadId,
+          projectId: source,
+          title: "Continuity",
+          modelSelection,
+          createdBy: "user",
+          creationSource: "web",
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("deferred-message"),
+          threadId,
+          createdBy: "user",
+          creationSource: "web",
+          messageId: MessageId.make("deferred-message"),
+          text: "Keep my history",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+        });
+        const run = (yield* orchestrator.getThreadProjection(threadId)).runs[0]!;
+        for (const [index, projectId] of [target, replacement, source, target].entries()) {
+          yield* orchestrator.dispatch({
+            type: "thread.project.move",
+            commandId: CommandId.make(`deferred-${index}`),
+            threadId,
+            projectId,
+          });
+          const shell = yield* orchestrator.getThreadShell(threadId);
+          assert.equal(shell?.projectId, source);
+          assert.equal(
+            shell?.pendingProjectMove?.projectId ?? null,
+            projectId === source ? null : projectId,
+          );
+        }
+        const maintenance = yield* ProjectionReplay.ProjectionReplay;
+        assert.isTrue((yield* maintenance.rebuild).valid);
+        assert.equal(
+          (yield* orchestrator.getThreadShell(threadId))?.pendingProjectMove?.projectId,
+          target,
+        );
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("deferred-queued"),
+          threadId,
+          createdBy: "user",
+          creationSource: "web",
+          messageId: MessageId.make("deferred-queued"),
+          text: "Run in the destination",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "queue_after_active" },
+        });
+        const moved = yield* orchestrator
+          .streamStoredEventsFrom({
+            threadId,
+            afterSequence: 0,
+            eventType: "thread.metadata-updated",
+          })
+          .pipe(
+            Stream.filter(
+              ({ event }) =>
+                event.type === "thread.metadata-updated" && event.payload.projectId === target,
+            ),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
+        const queuedInTarget = yield* orchestrator
+          .streamStoredEventsFrom({
+            threadId,
+            afterSequence: 0,
+            eventType: "checkpoint-scope.created",
+          })
+          .pipe(
+            Stream.filter(
+              ({ event }) =>
+                event.type === "checkpoint-scope.created" &&
+                event.payload.cwd === "/tmp/deferred-target",
+            ),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
+        const now = yield* DateTime.now;
+        yield* eventSink.write({
+          commandId: CommandId.make("deferred-completed"),
+          events: [
+            {
+              id: EventId.make("deferred-completed"),
+              type: "run.updated",
+              threadId,
+              runId: run.id,
+              occurredAt: now,
+              payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+            },
+          ],
+        });
+        yield* Fiber.join(moved);
+        yield* Fiber.join(queuedInTarget);
+        const projection = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(projection.thread.projectId, target);
+        assert.isNull(projection.thread.pendingProjectMove);
+        assert.equal(projection.messages[0]?.text, "Keep my history");
+      }),
+  );
+
+  it.effect("rejects invalid destinations and requires explicit worktree detachment", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectService.ProjectService;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const source = ProjectId.make("reject-source");
+      const target = ProjectId.make("reject-target");
+      const deleted = ProjectId.make("reject-deleted");
+      const threadId = ThreadId.make("reject-thread");
+      for (const projectId of [source, target, deleted])
+        yield* projects.create({
+          commandId: CommandId.make(`create-${projectId}`),
+          projectId,
+          title: projectId,
+          workspaceRoot: `/tmp/${projectId}`,
+        });
+      yield* projects.delete({
+        commandId: CommandId.make("delete-reject-project"),
+        projectId: deleted,
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("reject-create"),
+        threadId,
+        projectId: source,
+        title: "Worktree",
+        modelSelection,
+        createdBy: "user",
+        creationSource: "web",
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "feature",
+        worktreePath: "/tmp/keep-worktree",
+      });
+      const cases = [
+        [source, "same_project"],
+        [ProjectId.make("remote-project"), "target_not_local"],
+        [deleted, "target_deleted"],
+        [target, "detach_required"],
+      ] as const;
+      for (const [projectId, reason] of cases) {
+        const error = yield* orchestrator
+          .dispatch({
+            type: "thread.project.move",
+            commandId: CommandId.make(`reject-${reason}`),
+            threadId,
+            projectId,
+          })
+          .pipe(Effect.flip);
+        assert.equal(error._tag, "ThreadProjectMoveRejectedError");
+        if (error._tag === "ThreadProjectMoveRejectedError") assert.equal(error.reason, reason);
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.project.move",
+        commandId: CommandId.make("reject-detach-confirmed"),
+        threadId,
+        projectId: target,
+        detachWorktree: true,
+      });
+      const shell = yield* orchestrator.getThreadShell(threadId);
+      assert.equal(shell?.projectId, target);
+      assert.isNull(shell?.worktreePath);
+      assert.isNull(shell?.branch);
+      yield* orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make("reject-delete-thread"),
+        threadId,
+      });
+      const error = yield* orchestrator
+        .dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("reject-thread-deleted"),
+          threadId,
+          projectId: source,
+        })
+        .pipe(Effect.flip);
+      if (error._tag === "ThreadProjectMoveRejectedError")
+        assert.equal(error.reason, "thread_deleted");
+      else assert.fail(`Unexpected ${error._tag}`);
+    }),
+  );
+});

@@ -218,6 +218,7 @@ const layerOrchestratorProvided = Orchestrator.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       layerCheckpointServiceProvided,
+      GitVcsDriver.layer,
       CommandPolicy.layer,
       layerStores,
       layerEventSink,

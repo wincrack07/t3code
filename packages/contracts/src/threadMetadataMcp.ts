@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import {
   CommandId,
+  ProjectId,
   IsoDateTime,
   NonNegativeInt,
   ThreadId,
@@ -56,22 +57,29 @@ export const ThreadMetadataMcpAction = Schema.Literals([
   "rename",
   "regenerate_title",
   "set_status",
+  "move",
 ]);
 export type ThreadMetadataMcpAction = typeof ThreadMetadataMcpAction.Type;
 
 export const ThreadMetadataMcpUpdateInput = Schema.Struct({
   threadId: Schema.optional(ThreadId),
   action: ThreadMetadataMcpAction,
+  moveToProjectId: Schema.optional(ProjectId),
+  detachWorktree: Schema.optional(Schema.Boolean),
   title: Schema.optional(ThreadMetadataTitle),
   status: Schema.optional(ThreadMetadataStatus),
   clientRequestId: Schema.optional(ThreadMetadataClientRequestId),
 }).check(
   Schema.makeFilter((input) =>
-    (input.action === "rename") !== (input.title !== undefined)
-      ? "Only rename takes title, and rename requires it."
-      : (input.action === "set_status") !== (input.status !== undefined)
-        ? "Only set_status takes status, and set_status requires it."
-        : true,
+    (input.action === "move") !== (input.moveToProjectId !== undefined)
+      ? "Only move takes moveToProjectId, and move requires it."
+      : input.detachWorktree !== undefined && input.action !== "move"
+        ? "Only move takes detachWorktree."
+        : (input.action === "rename") !== (input.title !== undefined)
+          ? "Only rename takes title, and rename requires it."
+          : (input.action === "set_status") !== (input.status !== undefined)
+            ? "Only set_status takes status, and set_status requires it."
+            : true,
   ),
 );
 export type ThreadMetadataMcpUpdateInput = typeof ThreadMetadataMcpUpdateInput.Type;
@@ -81,6 +89,9 @@ export const ThreadMetadataMcpUpdateResult = Schema.Struct({
   action: ThreadMetadataMcpAction,
   commandId: CommandId,
   sequence: NonNegativeInt,
+  projectId: Schema.optional(ProjectId),
+  movesWhenIdle: Schema.optional(Schema.Boolean),
+  message: Schema.optional(Schema.String),
   title: Schema.String,
   statusText: Schema.NullOr(Schema.String),
   titleRegeneration: Schema.NullOr(ThreadTitleRegeneration),

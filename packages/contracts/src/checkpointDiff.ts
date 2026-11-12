@@ -51,6 +51,7 @@ export type OrchestrationGetFullThreadDiffResult = typeof OrchestrationGetFullTh
 export class OrchestrationGetTurnDiffError extends Schema.TaggedError<OrchestrationGetTurnDiffError>()(
   "OrchestrationGetTurnDiffError",
   {
+    reason: Schema.optional(Schema.Literal("previous_project")),
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
   },
@@ -59,6 +60,7 @@ export class OrchestrationGetTurnDiffError extends Schema.TaggedError<Orchestrat
 export class OrchestrationGetFullThreadDiffError extends Schema.TaggedError<OrchestrationGetFullThreadDiffError>()(
   "OrchestrationGetFullThreadDiffError",
   {
+    reason: Schema.optional(Schema.Literal("previous_project")),
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
   },

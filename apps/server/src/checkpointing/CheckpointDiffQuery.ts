@@ -1,4 +1,6 @@
 import {
+  CheckpointPreviousProjectError,
+  CheckpointId,
   OrchestrationGetTurnDiffResult,
   type OrchestrationGetFullThreadDiffInput,
   type OrchestrationGetFullThreadDiffResult,
@@ -163,6 +165,15 @@ export const make = Effect.gen(function* () {
         });
       }
 
+      const currentCwd = projection.currentWorkspace;
+      if (currentCwd !== undefined && currentCwd !== toScope.cwd) {
+        return yield* new CheckpointPreviousProjectError({
+          threadId: input.threadId,
+          checkpointId:
+            toCheckpoint.id ?? CheckpointId.make(toCheckpoint.ref ?? toCheckpoint.scopeId),
+        });
+      }
+
       // Capture compares against the preceding scope ordinal, even when that
       // checkpoint belongs to a stopped run or has no run.
       const parentCheckpoint =
@@ -174,6 +185,24 @@ export const make = Effect.gen(function* () {
                 checkpoint.ordinalWithinScope === toCheckpoint.ordinalWithinScope - 1,
             )
           : undefined;
+
+      if (
+        currentCwd !== undefined &&
+        input.fromTurnCount === 0 &&
+        readyCheckpoints.some(
+          (checkpoint) =>
+            (checkpoint.appRunOrdinal ?? 0) <= input.toTurnCount &&
+            projection.checkpointScopes.some(
+              (scope) => scope.id === checkpoint.scopeId && scope.cwd !== currentCwd,
+            ),
+        )
+      ) {
+        return yield* new CheckpointPreviousProjectError({
+          threadId: input.threadId,
+          checkpointId:
+            toCheckpoint.id ?? CheckpointId.make(toCheckpoint.ref ?? toCheckpoint.scopeId),
+        });
+      }
 
       const firstScope =
         input.fromTurnCount === 0
@@ -199,6 +228,22 @@ export const make = Effect.gen(function* () {
           threadId: input.threadId,
           turnCount: input.fromTurnCount,
           checkpoint: "from",
+        });
+      }
+
+      const fromScopeId = (
+        parentCheckpoint ??
+        readyCheckpoints.find((checkpoint) => checkpoint.appRunOrdinal === input.fromTurnCount)
+      )?.scopeId;
+      const fromScope =
+        input.fromTurnCount === 0
+          ? firstScope
+          : projection.checkpointScopes.find((scope) => scope.id === fromScopeId);
+      if (currentCwd !== undefined && fromScope !== undefined && fromScope.cwd !== currentCwd) {
+        return yield* new CheckpointPreviousProjectError({
+          threadId: input.threadId,
+          checkpointId:
+            toCheckpoint.id ?? CheckpointId.make(toCheckpoint.ref ?? toCheckpoint.scopeId),
         });
       }
 

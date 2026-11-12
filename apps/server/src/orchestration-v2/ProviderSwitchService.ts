@@ -33,12 +33,27 @@ export class ProviderSwitchPlanError extends Schema.TaggedError<ProviderSwitchPl
   },
 ) {}
 
+type ProviderSwitchProjection = Pick<
+  OrchestrationV2ThreadProjection,
+  "thread" | "providerSessions" | "providerThreads"
+> &
+  Partial<Pick<OrchestrationV2ThreadProjection, "runs" | "nodes" | "checkpointScopes">>;
+
+export function providerWorkspaceForProjection(
+  projection: ProviderSwitchProjection,
+): string | undefined {
+  if (!projection.thread.projectMoves?.length) return undefined;
+  const activeId = projection.thread.activeProviderThreadId;
+  const run = projection.runs?.findLast(
+    (candidate) => candidate.providerThreadId === activeId && candidate.status !== "queued",
+  );
+  const node = projection.nodes?.find((candidate) => candidate.id === run?.rootNodeId);
+  return projection.checkpointScopes?.find((scope) => scope.id === node?.checkpointScopeId)?.cwd;
+}
+
 export interface ProviderSwitchServiceV2Shape {
   readonly plan: (input: {
-    readonly projection: Pick<
-      OrchestrationV2ThreadProjection,
-      "thread" | "providerSessions" | "providerThreads"
-    >;
+    readonly projection: ProviderSwitchProjection;
     readonly targetModelSelection: ModelSelection;
   }) => Effect.Effect<ProviderSwitchPlanV2, ProviderSwitchPlanError>;
 }
@@ -131,7 +146,8 @@ export const layer: Layer.Layer<
                           runtimeMode: projection.thread.runtimeMode,
                           interactionMode: projection.thread.interactionMode,
                           workspace:
-                            currentSession?.cwd ??
+                            providerWorkspaceForProjection(projection) ??
+                            (currentSession ?? currentSessions[0])?.cwd ??
                             projection.thread.worktreePath ??
                             "<unresolved-workspace>",
                         },
@@ -146,6 +162,7 @@ export const layer: Layer.Layer<
                     interactionMode: projection.thread.interactionMode,
                     workspace:
                       projection.thread.worktreePath ??
+                      projection.thread.projectMoves?.at(-1)?.cwd ??
                       currentSession?.cwd ??
                       "<unresolved-workspace>",
                     available: targetInstance.value.enabled,
@@ -164,10 +181,23 @@ export const layer: Layer.Layer<
               if (!isLiveProviderSession(session)) return false;
               if (transition.type === "restart_and_resume") {
                 // Release only the replaced session; peers can serve pooled or delegated bindings.
+                const movedCwd = projection.thread.projectMoves?.at(-1)?.cwd;
+                // A pooled host resumes just this native thread with its new cwd; closing it would stop its peers.
+                if (
+                  !instanceChanged &&
+                  movedCwd !== undefined &&
+                  providerWorkspaceForProjection(projection) !== movedCwd &&
+                  session.capabilities.sessions.supportsMultipleProviderThreadsPerSession
+                )
+                  return false;
                 return session.id === currentSession?.id;
               }
               if (transition.type === "create_with_handoff") {
-                return session.providerInstanceId !== targetModelSelection.instanceId;
+                return (
+                  session.providerInstanceId !== targetModelSelection.instanceId ||
+                  (projection.thread.projectMoves?.at(-1)?.cwd !== undefined &&
+                    session.cwd !== projection.thread.projectMoves.at(-1)?.cwd)
+                );
               }
               return false;
             })

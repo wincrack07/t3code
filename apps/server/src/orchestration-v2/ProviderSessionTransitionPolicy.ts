@@ -70,6 +70,15 @@ export function decideProviderSessionTransition(input: {
         break;
     }
   }
+  // Codex, Cursor and current Claude accept the destination cwd when resuming a native thread.
+  if (
+    workspaceChanged &&
+    target.driver !== "codex" &&
+    target.driver !== "cursor" &&
+    target.driver !== "claudeAgent"
+  ) {
+    return { type: "create_with_handoff" };
+  }
   if (instanceChanged || runtimeChanged || workspaceChanged) {
     return { type: "restart_and_resume" };
   }
