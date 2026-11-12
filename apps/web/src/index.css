@@ -2938,7 +2938,6 @@ code {
   display: inline-block;
   width: 0;
   overflow: visible;
-  white-space: pre;
   pointer-events: none;
   user-select: none;
 }

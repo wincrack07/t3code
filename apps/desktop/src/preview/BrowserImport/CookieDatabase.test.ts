@@ -41,6 +41,31 @@ describe("snapshotCookieDatabase", () => {
     ),
   );
 
+  it.effect("snapshots a database its browser holds an exclusive lock on", () =>
+    runNode(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const sourceDirectory = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3code-cookie-locked-source-",
+        });
+        const source = path.join(sourceDirectory, "Cookies");
+        const snapshot = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`PRAGMA locking_mode = EXCLUSIVE`;
+          yield* sql`CREATE TABLE cookies(name TEXT NOT NULL)`;
+          yield* sql`INSERT INTO cookies(name) VALUES (${"held-by-browser"})`;
+          return yield* snapshotCookieDatabase(source);
+        }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: source })));
+        const rows = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          return yield* sql<{ readonly name: string }>`SELECT name FROM cookies`;
+        }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: snapshot, readonly: true })));
+        expect(rows).toEqual([{ name: "held-by-browser" }]);
+      }),
+    ),
+  );
+
   it.effect("propagates snapshot failures and removes its temporary directory", () =>
     runNode(
       Effect.gen(function* () {
