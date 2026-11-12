@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  OrchestratorMcpFailure,
   EnvironmentId,
   EventId,
   ProjectId,
@@ -15,6 +16,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -31,6 +33,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as TaskReviewService from "./TaskReviewService.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as TaskBatchService from "./TaskBatchService.ts";
 
 const home = EnvironmentId.make("home");
@@ -72,6 +75,9 @@ const persistence = Layer.mergeAll(
 function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {}) {
   const accepted = new Set<CommandId>();
   const attempts: CommandId[] = [];
+  const launchInputs: Parameters<
+    ThreadLaunchService.ThreadLaunchService["Service"]["launch"]
+  >[0][] = [];
   let crashed = false;
   const launches = Layer.effect(
     ThreadLaunchService.ThreadLaunchService,
@@ -84,6 +90,7 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
         retryPreparation: () => Effect.die("Unused fixture preparation"),
         launch: Effect.fn("TaskBatchTest.launch")(function* (input) {
           attempts.push(input.commandId);
+          launchInputs.push(input);
           const threadId = input.threadId;
           const messageId = input.initialMessage?.messageId;
           if (!threadId || !messageId) return yield* Effect.die("Batch launch ids are required");
@@ -172,6 +179,32 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
   ).pipe(Layer.provideMerge(persistence));
   const services = Layer.mergeAll(TaskBatchService.layer, TaskReviewService.layer).pipe(
     Layer.provideMerge(launches),
+    Layer.provide(
+      Layer.effect(
+        PeerMcpClient.PeerMcpClient,
+        Effect.gen(function* () {
+          const store = yield* ProjectStore.ProjectStoreV2;
+          return PeerMcpClient.PeerMcpClient.of({
+            call: (input) =>
+              Effect.gen(function* () {
+                if (input.environmentId === EnvironmentId.make("unavailable"))
+                  return yield* new OrchestratorMcpFailure({
+                    code: "orchestration_error",
+                    message: "Unavailable fixture",
+                  });
+                const project = Option.getOrThrow(
+                  yield* store.get(ProjectId.make(String(input.arguments.projectId))),
+                );
+                // oxlint-disable-next-line t3code/no-inline-schema-compile -- The fixture decodes the generic success schema supplied by its caller.
+                return yield* Schema.decodeUnknownEffect(input.success)({
+                  ...project,
+                  id: project.projectId,
+                }).pipe(Effect.orDie);
+              }),
+          });
+        }),
+      ).pipe(Layer.provide(persistence)),
+    ),
     Layer.provideMerge(
       Layer.merge(
         NodeCrypto.layer,
@@ -209,7 +242,12 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
       };
     }),
   ).pipe(Layer.provideMerge(services));
-  return { layer: EffectWorker.layer.pipe(Layer.provideMerge(executor)), accepted, attempts };
+  return {
+    layer: EffectWorker.layer.pipe(Layer.provideMerge(executor)),
+    accepted,
+    attempts,
+    launchInputs,
+  };
 }
 const seed = Effect.fn("TaskBatchTest.seed")(function* (
   name: string,
@@ -404,11 +442,79 @@ it.effect(
       );
       yield* batches.start(second);
       yield* worker.drain();
-      assert.strictEqual(fixture.accepted.size, 2);
+      assert.strictEqual(fixture.accepted.size, 4);
       assert.strictEqual(
         (yield* read(second)).entries.filter((entry) => entry.state === "queued").length,
-        3,
+        1,
       );
     }).pipe(Effect.provide(fixture.layer));
   },
 );
+
+it.effect("refuses changed task settings and changed briefs at enqueue", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const projects = yield* ProjectService.ProjectService;
+    const input = yield* seed("stale", 2);
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("change-default"),
+      defaultModelSelection: { ...modelSelection, model: "unexpected-paid" },
+    });
+    const result = yield* batches.start(input);
+    assert.strictEqual(result.entries[0]?.state, "cancelled");
+    assert.strictEqual(result.entries[0]?.failureReason, "settings-changed");
+    assert.strictEqual(fixture.accepted.size, 0);
+  }).pipe(Effect.provide(fixture.layer));
+});
+it.effect("freezes enqueued briefs and cancels deleted queued tasks", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const projects = yield* ProjectService.ProjectService;
+    const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+    const input = yield* seed("frozen", 3, 1);
+    yield* batches.start(input);
+    yield* worker.drain();
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("edit-queued"),
+      savedPrompt: { kind: "edit", id: "frozen-1", text: "Changed later" },
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("delete-queued"),
+      savedPrompt: { kind: "delete", id: "frozen-2" },
+    });
+    yield* worker.drain();
+    const state = yield* read(input);
+    assert.strictEqual(state.entries[1]?.brief?.text, "frozen-1");
+    assert.strictEqual(state.entries[2]?.state, "cancelled");
+    assert.strictEqual(state.entries[2]?.failureReason, "source-deleted");
+  }).pipe(Effect.provide(fixture.layer));
+});
+
+it.effect("validates linked sources and refuses unavailable peers", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const input = yield* seed("linked", 2, 1);
+    const remote = {
+      ...input,
+      entries: input.entries.map((entry, index) => ({
+        ...entry,
+        source: {
+          ...entry.source,
+          environmentId: EnvironmentId.make(index === 0 ? "linked-peer" : "unavailable"),
+        },
+      })),
+    };
+    const result = yield* batches.start(remote);
+    assert.strictEqual(result.entries[0]?.state, "queued");
+    assert.strictEqual(result.entries[1]?.failureReason, "source-unverifiable");
+    yield* batches.pump();
+    assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "test");
+    assert.strictEqual(fixture.accepted.size, 1);
+  }).pipe(Effect.provide(fixture.layer));
+});

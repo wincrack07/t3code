@@ -166,10 +166,16 @@ it.effect("retries the link without sending a second turn after the home environ
         repositoryIdentity: { canonicalKey: "github.com/acme/app" },
         savedPrompts: [{ id: "task", text: "Stale cached prompt", attachments: taskAttachments }],
       } as unknown as EnvironmentProject);
+    const otherHome = { ...home, projectId: ProjectId.make("other-home") };
+    const otherHomeAtom = makeProjectAtom(otherHome);
     const homeAtom = makeProjectAtom(home);
     const targetAtom = makeProjectAtom(target);
     const projectAtom = (ref: typeof home) =>
-      ref.environmentId === home.environmentId ? homeAtom : targetAtom;
+      ref.projectId === otherHome.projectId
+        ? otherHomeAtom
+        : ref.environmentId === home.environmentId
+          ? homeAtom
+          : targetAtom;
     const commands = createSavedTaskCommands(runtime, projectAtom);
     const registry = AtomRegistry.make();
     try {
@@ -269,7 +275,7 @@ it.effect("retries the link without sending a second turn after the home environ
         commandId: CommandId.make("batch"),
         sources: [
           { home, taskId: "task" },
-          { home, taskId: "task2" },
+          { home: otherHome, taskId: "task2" },
         ],
         targets: [home, target],
         distribute: true,
@@ -282,6 +288,23 @@ it.effect("retries the link without sending a second turn after the home environ
           interactionMode: "default" as const,
         },
       };
+      taskSettings = undefined;
+      registry.set(homeAtom, {
+        ...registry.get(homeAtom),
+        defaultModelSelection: {
+          instanceId: batchInput.launch.modelSelection.instanceId,
+          model: "home-free",
+        },
+        defaultThreadEnvMode: "worktree",
+      });
+      registry.set(otherHomeAtom, {
+        ...registry.get(otherHomeAtom),
+        defaultModelSelection: {
+          instanceId: batchInput.launch.modelSelection.instanceId,
+          model: "other-free",
+        },
+        defaultThreadEnvMode: "local",
+      });
       const distributed = yield* Effect.promise(() =>
         commands.prepareBatch.run(registry, batchInput),
       );
@@ -291,6 +314,17 @@ it.effect("retries the link without sending a second turn after the home environ
           home.environmentId,
           target.environmentId,
         ]);
+      if (distributed._tag === "Success") {
+        for (const group of distributed.value)
+          for (const entry of group.input.entries) {
+            expect(entry.launch.modelSelection.model).toBe(
+              entry.source.projectId === home.projectId ? "home-free" : "other-free",
+            );
+            expect(entry.launch.threadEnvMode).toBe(
+              entry.source.projectId === home.projectId ? "worktree" : "local",
+            );
+          }
+      }
       expect(batchStarts).toBe(0);
       const prepared = yield* Effect.promise(() =>
         commands.prepareBatch.run(registry, { ...batchInput, target, distribute: false }),
@@ -305,7 +339,10 @@ it.effect("retries the link without sending a second turn after the home environ
       registry.set(targetAtom, { ...registry.get(targetAtom), taskBatches: [queued.value] });
       expect(
         registry.get(
-          commands.batchQueueAtom({ source: { home, taskId: "task2" }, targets: [home, target] }),
+          commands.batchQueueAtom({
+            source: { home: otherHome, taskId: "task2" },
+            targets: [home, target],
+          }),
         )[0]?.position,
       ).toBe(2);
       const settled: ProjectTaskBatch = {
