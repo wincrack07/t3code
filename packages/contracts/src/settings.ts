@@ -411,12 +411,17 @@ export const VoiceTranscriptionDestination = Schema.Union([
 ]);
 export type VoiceTranscriptionDestination = typeof VoiceTranscriptionDestination.Type;
 
+export const SidebarColor = Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i));
+
 const SidebarProjectFolders = Schema.Array(
   Schema.Struct({
     id: TrimmedNonEmptyString,
     name: TrimmedNonEmptyString,
     emoji: Schema.String,
+    sidebarColor: Schema.optionalKey(Schema.NullOr(SidebarColor)),
     projectKeys: Schema.Array(Schema.String),
+    // Absent on top-level groups, including every group saved before nesting existed.
+    parentId: Schema.optionalKey(TrimmedNonEmptyString),
   }),
 );
 
@@ -1199,6 +1204,7 @@ export const WorktreeCleanup = Schema.NullOr(
 export type WorktreeCleanup = typeof WorktreeCleanup.Type;
 
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
+  "sidebarColor",
   "worktreeCleanup",
   "defaultModelSelection",
   "defaultRuntimeMode",
@@ -1237,6 +1243,7 @@ export type ProjectProviderInstanceOverride = typeof ProjectProviderInstanceOver
 /** Absent keys inherit; null is a value for nullable settings.
  * providerInstances overrides fields per instance; other keys replace the whole setting. */
 export const ProjectSettingsOverrides = Schema.Struct({
+  sidebarColor: Schema.optionalKey(Schema.NullOr(SidebarColor)),
   worktreeCleanup: Schema.optionalKey(WorktreeCleanup),
   defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   defaultRuntimeMode: Schema.optionalKey(RuntimeMode),
@@ -1289,6 +1296,7 @@ const NULLABLE_PROJECT_SETTINGS_OVERRIDES: ReadonlySet<ProjectScopedServerSettin
     [K in ProjectScopedServerSettingKey]: null extends ProjectSettingsOverrides[K] ? K : never;
   }[ProjectScopedServerSettingKey]
 >([
+  "sidebarColor",
   "defaultModelSelection",
   "sourceControlWriterModelSelection",
   "reviewGuideModelSelection",
@@ -1458,6 +1466,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE)),
   ),
 
+  sidebarColor: Schema.NullOr(SidebarColor).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   projectSettingsOverrides: Schema.Record(
     ProjectId,
     keepUnknownOverrideKeys(ProjectSettingsOverrides),
@@ -1915,6 +1924,7 @@ export const ServerSettingsPatch = Schema.Struct({
   defaultRuntimeMode: Schema.optionalKey(RuntimeMode),
   fallbackModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   /** Replaces each project's override set; null removes it. Omitted providerInstances retains its stored value. */
+  sidebarColor: Schema.optionalKey(Schema.NullOr(SidebarColor)),
   projectSettingsOverrides: Schema.optionalKey(
     Schema.Record(
       ProjectId,

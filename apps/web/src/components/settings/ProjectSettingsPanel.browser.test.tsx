@@ -13,7 +13,7 @@ import {
   type AuthEnvironmentScope,
   type AuthSessionState,
 } from "@t3tools/contracts";
-import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { DEFAULT_CLIENT_SETTINGS, type ClientSettings } from "@t3tools/contracts/settings";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import {
   createMemoryHistory,
@@ -52,6 +52,8 @@ const state = vi.hoisted(() => ({
   releaseUploads: vi.fn(),
   clearDraft: vi.fn(),
   toast: vi.fn(),
+  sidebarProjectFolders: [] as ClientSettings["sidebarProjectFolders"],
+  settingsListeners: new Set<() => void>(),
 }));
 
 // Session grants come from the server; each test drives them through these atoms.
@@ -99,11 +101,34 @@ vi.mock(import("~/state/use-atom-command"), async (original) => ({
   ...(await original()),
   useAtomCommand: ((command: "update" | "delete") => state[command]) as never,
 }));
-vi.mock(import("~/hooks/useSettings"), async (original) => ({
-  ...(await original()),
-  useClientSettings: ((selector?: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
-    selector ? selector(DEFAULT_CLIENT_SETTINGS) : DEFAULT_CLIENT_SETTINGS) as never,
-}));
+// Only sidebar groups change in these tests, so the rest of the settings stay at defaults.
+vi.mock(import("~/hooks/useSettings"), async (original) => {
+  const { useSyncExternalStore } = await import("react");
+  const read = () => ({
+    ...DEFAULT_CLIENT_SETTINGS,
+    sidebarProjectFolders: state.sidebarProjectFolders,
+  });
+  return {
+    ...(await original()),
+    useClientSettings: ((selector?: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) => {
+      const folders = useSyncExternalStore(
+        (listener) => {
+          state.settingsListeners.add(listener);
+          return () => state.settingsListeners.delete(listener);
+        },
+        () => state.sidebarProjectFolders,
+      );
+      const settings = { ...DEFAULT_CLIENT_SETTINGS, sidebarProjectFolders: folders };
+      return selector ? selector(settings) : settings;
+    }) as never,
+    persistClientSettingsUpdate: (async (update: (current: ClientSettings) => ClientSettings) => {
+      const next = update(read());
+      state.sidebarProjectFolders = next.sidebarProjectFolders;
+      for (const listener of state.settingsListeners) listener();
+      return next;
+    }) as never,
+  };
+});
 vi.mock(import("~/localApi"), async (original) => ({
   ...(await original()),
   readLocalApi: (() => ({ dialogs: { confirm: state.confirm } })) as never,
@@ -214,6 +239,7 @@ function setup() {
   state.delete.mockResolvedValue(AsyncResult.success(undefined));
   state.confirm.mockResolvedValue(true);
   useComposerDraftStore.setState({ clearProjectDraftThreadId: state.clearDraft });
+  state.sidebarProjectFolders = [];
 }
 
 function projectKey() {
@@ -334,6 +360,32 @@ async function expectProjectAccessDeniedToast(title: string) {
 }
 
 describe("project organization", () => {
+  it("shows and changes the project's sidebar group through the group tree", async () => {
+    setup();
+    state.sidebarProjectFolders = [
+      { id: "clau", name: "Clau", emoji: "", projectKeys: [] },
+      { id: "backend", name: "Backend", emoji: "", projectKeys: [], parentId: "clau" },
+    ];
+    await using screen = await mountPanel();
+    // The row's description and the select's value both name the group.
+    await expect.element(screen.getByText("No group", { exact: true }).first()).toBeVisible();
+    await userEvent.click(screen.getByRole("combobox", { name: "Sidebar group" }));
+    await expect.element(page.getByRole("option", { name: "Clau", exact: true })).toBeVisible();
+    await userEvent.click(page.getByRole("option", { name: "Backend", exact: true }));
+    await vi.waitFor(() =>
+      expect(state.sidebarProjectFolders.map((folder) => folder.projectKeys)).toEqual([
+        [],
+        [projectKey()],
+      ]),
+    );
+    await expect.element(screen.getByText("Clau / Backend", { exact: true }).first()).toBeVisible();
+    await userEvent.click(screen.getByRole("combobox", { name: "Sidebar group" }));
+    await userEvent.click(page.getByRole("option", { name: "No group", exact: true }));
+    await vi.waitFor(() =>
+      expect(state.sidebarProjectFolders.flatMap((folder) => folder.projectKeys)).toEqual([]),
+    );
+  });
+
   it("archives the checkout on every machine while one machine is picked", async () => {
     setup();
     await using _screen = await mountPanel({ machine: primaryId });

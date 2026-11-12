@@ -1,3 +1,4 @@
+import { SidebarColorMarker } from "./sidebar/SidebarColorPicker";
 import type { EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
 
 import type { SidebarProjectSnapshot } from "../sidebarProjectGrouping";
@@ -75,7 +76,17 @@ export function buildProjectSearchItems(input: ProjectItemsInput) {
         />
       );
     },
-    icon: projectFaviconIcon,
+    icon: (project) => (
+      <span className="flex items-center gap-1">
+        {projectFaviconIcon(project)}
+        <SidebarColorMarker
+          color={
+            input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`)
+              ?.sidebarColor
+          }
+        />
+      </span>
+    ),
     runProject: input.runProject,
     ...(input.pin ? { pin: input.pin } : {}),
   });

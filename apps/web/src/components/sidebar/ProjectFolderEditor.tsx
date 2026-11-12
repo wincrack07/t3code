@@ -1,3 +1,4 @@
+import { SidebarColorPicker } from "./SidebarColorPicker";
 import { randomUUID } from "../../lib/utils";
 import { useState } from "react";
 import { useClientSettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
@@ -20,16 +21,20 @@ import {
 
 export function ProjectFolderEditor({
   folder,
+  parentId,
   projectKeys = [],
   onClose,
 }: {
   folder?: ProjectFolder;
+  /** Creates the new group inside this one. */
+  parentId?: string;
   projectKeys?: readonly string[];
   onClose: () => void;
 }) {
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const update = useUpdatePrimarySettings();
   const [name, setName] = useState(folder?.name ?? "");
+  const [sidebarColor, setSidebarColor] = useState(folder?.sidebarColor ?? null);
   const [emoji, setEmoji] = useState(folder?.emoji ?? "");
   return (
     <Dialog
@@ -40,7 +45,13 @@ export function ProjectFolderEditor({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>{folder ? "Rename group" : "New project group"}</DialogTitle>
+          <DialogTitle>
+            {folder
+              ? "Rename group"
+              : parentId
+                ? `New group inside ${folders.find((entry) => entry.id === parentId)?.name ?? "group"}`
+                : "New project group"}
+          </DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <label className="block space-y-2 text-sm">
@@ -60,6 +71,7 @@ export function ProjectFolderEditor({
               onChange={(event) => setEmoji(event.target.value)}
             />
           </label>
+          <SidebarColorPicker value={sidebarColor} onChange={setSidebarColor} />
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -68,11 +80,14 @@ export function ProjectFolderEditor({
           <Button
             disabled={!name.trim()}
             onClick={() => {
-              const next = {
+              const next: ProjectFolder = {
+                ...folder,
                 id: folder?.id ?? randomUUID(),
                 name: name.trim(),
                 emoji: emoji.trim(),
+                sidebarColor,
                 projectKeys: folder?.projectKeys ?? [],
+                ...(parentId === undefined ? {} : { parentId }),
               };
               const updated = folder
                 ? folders.map((entry) => (entry.id === folder.id ? next : entry))

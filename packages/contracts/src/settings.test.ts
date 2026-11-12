@@ -438,6 +438,26 @@ it("validates remote device hosts and rejects ambiguous host ids", () => {
 });
 
 describe("ServerSettings project overrides across versions", () => {
+  it("round trips sidebar colours and decodes old project and group settings", () => {
+    expect(decodeServerSettings({}).sidebarColor).toBeNull();
+    expect(decodeClientSettings({}).sidebarProjectFolders).toEqual([]);
+    const oldFolder = { id: "staff", name: "StaffPass", emoji: "", projectKeys: ["repo:staff"] };
+    expect(
+      decodeClientSettings({ sidebarProjectFolders: [oldFolder] }).sidebarProjectFolders,
+    ).toEqual([oldFolder]);
+    const patch = { projectSettingsOverrides: { project: { sidebarColor: "#123456" } } };
+    expect(decodeServerSettingsPatch(encodeServerSettingsPatch(patch))).toEqual(patch);
+    expect(
+      decodeClientSettings({ sidebarProjectFolders: [{ ...oldFolder, sidebarColor: "#654321" }] })
+        .sidebarProjectFolders[0]?.sidebarColor,
+    ).toBe("#654321");
+    expect(() =>
+      decodeServerSettingsPatch({
+        projectSettingsOverrides: { project: { sidebarColor: "url(x)" } },
+      }),
+    ).toThrow();
+  });
+
   it("sends back an override key from a newer server when an older client edits the entry", () => {
     const projectId = ProjectId.make("project-a");
     // As an older client reads a newer server's settings, with one key it does not know.
