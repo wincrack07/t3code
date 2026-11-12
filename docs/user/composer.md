@@ -15,8 +15,9 @@ to keep a large paste editable in the composer instead.
 ## Save for later
 
 Use **Save for later** beside Send, or `Cmd+Alt+S` (`Ctrl+Alt+S` on
-Windows and Linux), to park the draft text in the current project. You can also
-find it in the command palette. Attachments and rich context stay in the composer.
+Windows and Linux), to park the draft in the current project with its images and files.
+You can also find it in the command palette. Rich context, such as terminal selections,
+stays in the composer. Undo puts the text and attachments back.
 
 Open **Tasks** in the sidebar to manage saved prompts for every project, or click the
 bookmark count beside the project name to open that project's tasks beside the chat
@@ -28,12 +29,24 @@ undo an accepted rewrite until you edit again.
 
 **Start thread** sends the task's prompt in a new thread using the project's default
 model. The task becomes **In progress** and links to the thread. Finishing the thread
-does not mark the task done. **Open without sending**, in the start menu, lets you choose a model or adjust the draft first. Deleting a task offers Undo.
+does not mark the task done. **Open without sending**, in the start menu, opens the task
+with its attachments as a draft so you can choose a model or adjust it first; sending that
+draft links the thread to the task too. A task keeps its last ten threads: the newest shows
+under the prompt and the rest under **Previous threads**. Deleting a task, or **Clear done**
+on the Done group, offers Undo, which brings tasks back with their threads and attachments.
+
+Paste or drop images and files onto a task's prompt, or use **Add file or folder path** in
+its menu for a path on the task's machine. A task holds up to 8 attachments: images up to
+10 MiB and files up to 50 MiB. Pasted and dropped files, and files in temporary folders, are
+copied and kept with the task. Other paths stay links to the original, so a missing file shows
+struck through, and a temporary folder is linked with a warning because it may disappear.
 
 A project on several machines shows one task list: each task is stored on one machine and
 edits go there. Tasks on a machine that is not connected are missing until it reconnects,
-and the list says how many machines it could not reach. A thread started from a task runs
-on the task's machine. Links of the form `/tasks/new?prompt=…&title=…` open a new task
+and the list says how many machines it could not reach. A thread starts on the task's
+machine unless you pick another machine with the same project under **Start on**. A task
+with copied attachments starts only on its own machine, because the copies are stored there.
+If a thread starts but the task can't record it, the task says so and offers **Retry link**. Links of the form `/tasks/new?prompt=…&title=…` open a new task
 draft; nothing is saved until you press **Save task**. **Copy link** in a task's menu copies
 a `/new?prompt=…` thread link, for prompts up to 8,000 characters.
 

@@ -1,14 +1,17 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { type EnvironmentId, type ProjectId, PromptPolishLimitError } from "@t3tools/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import * as Schema from "effect/Schema";
 import { type RefObject, useState } from "react";
 
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { toastManager } from "../ui/toast";
+
+const isPolishLimitError = Schema.is(PromptPolishLimitError);
 
 /** `/polish` and the composer's polish button: rewrite the draft on the environment's text model, with an undo. */
 export function usePromptPolish(input: {
@@ -43,7 +46,11 @@ export function usePromptPolish(input: {
       toastManager.update(toastId, {
         type: "error",
         title: "Could not polish the prompt",
-        description: error instanceof Error ? error.message : undefined,
+        description: isPolishLimitError(error)
+          ? `Polish rewrites prompts up to ${error.maxLength.toLocaleString()} characters. This one has ${error.length.toLocaleString()}.`
+          : error instanceof Error
+            ? error.message
+            : undefined,
       });
       return;
     }

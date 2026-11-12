@@ -1,4 +1,9 @@
-import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
+import {
+  scopedProjectKey,
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
 import {
   buildProjectGroups,
@@ -8,7 +13,17 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ProjectSavedPrompt, SavedPromptStatus } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+  type ProjectSavedPrompt,
+  type ProjectTaskAttachment,
+  repositoryGroupingKeyOf,
+  type SavedPromptStatus,
+  type ScopedThreadRef,
+  taskAttachmentKey,
+} from "@t3tools/contracts";
 import { buildNewThreadLink, PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 
 export const TASK_STATUSES = [
@@ -259,4 +274,193 @@ export function taskThreadState(
 export function taskThreadLink(text: string, origin?: string): string | null {
   if (text.length > PROMPT_LINK_MAX_PROMPT_LENGTH) return null;
   return buildNewThreadLink({ prompt: text, ...(origin ? { origin } : {}) });
+}
+
+const TASK_ATTACHMENT_MAX_COUNT = 8;
+const MIB = 1024 * 1024;
+const TASK_IMAGE_MAX_BYTES = PROVIDER_SEND_TURN_MAX_IMAGE_BYTES;
+const TASK_FILE_MAX_BYTES = PROVIDER_SEND_TURN_MAX_FILE_BYTES;
+
+export interface TaskAttachmentCandidate {
+  readonly name: string;
+  readonly kind: "image" | "file" | "path";
+  readonly sizeBytes: number;
+}
+
+/**
+ * The server's task attachment limits, checked before anything is uploaded or copied. Its 80 MiB
+ * image total can't be reached within eight images of 10 MiB.
+ */
+export function taskAttachmentLimitError(
+  existing: ReadonlyArray<ProjectTaskAttachment>,
+  incoming: ReadonlyArray<TaskAttachmentCandidate>,
+): string | null {
+  if (existing.length + incoming.length > TASK_ATTACHMENT_MAX_COUNT) {
+    const room = Math.max(0, TASK_ATTACHMENT_MAX_COUNT - existing.length);
+    return room === 0
+      ? `A task holds up to ${TASK_ATTACHMENT_MAX_COUNT} attachments. Remove one to add another.`
+      : `A task holds up to ${TASK_ATTACHMENT_MAX_COUNT} attachments. There is room for ${room} more.`;
+  }
+  for (const item of incoming) {
+    if (item.kind === "image" && item.sizeBytes > TASK_IMAGE_MAX_BYTES)
+      return `${item.name} is larger than the ${TASK_IMAGE_MAX_BYTES / MIB} MiB image limit.`;
+    if (item.kind === "file" && item.sizeBytes > TASK_FILE_MAX_BYTES)
+      return `${item.name} is larger than the ${TASK_FILE_MAX_BYTES / MIB} MiB file limit.`;
+  }
+  return null;
+}
+
+export type TaskReferenceState = "ok" | "missing" | "unavailable";
+
+/** What `tasks.attachments` reports per attachment, reduced to what the strip reads. */
+export interface InspectedTaskAttachment {
+  readonly key: string;
+  readonly missing: boolean;
+  readonly sizeBytes: number;
+  readonly isDirectory: boolean;
+  readonly warning: string | null;
+  readonly referenceStates: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly state: TaskReferenceState;
+  }>;
+}
+
+export interface TaskAttachmentView {
+  readonly key: string;
+  readonly kind: "image" | "file" | "folder";
+  readonly name: string;
+  /** The full path of a reference, or where a stored copy lives. */
+  readonly detail: string;
+  readonly sizeBytes: number | null;
+  /** Missing on the task's own machine. */
+  readonly missing: boolean;
+  readonly warning: string | null;
+  readonly image: { readonly attachmentId: string; readonly mimeType: string } | null;
+  /** A reference's state on each other machine that was checked. */
+  readonly machines: ReadonlyArray<{ readonly label: string; readonly state: TaskReferenceState }>;
+}
+
+const basename = (path: string) =>
+  path
+    .replace(/[/\\]+$/, "")
+    .split(/[/\\]/)
+    .at(-1) || path;
+
+export function taskAttachmentViews(input: {
+  readonly attachments: ReadonlyArray<ProjectTaskAttachment>;
+  readonly inspected: ReadonlyArray<InspectedTaskAttachment> | null;
+  readonly homeEnvironmentId: EnvironmentId;
+  readonly labelOf: (environmentId: EnvironmentId) => string;
+}): TaskAttachmentView[] {
+  const byKey = new Map(input.inspected?.map((item) => [item.key, item]));
+  return input.attachments.map((item): TaskAttachmentView => {
+    const key = taskAttachmentKey(item);
+    const inspected = byKey.get(key);
+    if (item.kind === "stored") {
+      const { attachment } = item;
+      const image = attachment.type === "image";
+      return {
+        key,
+        kind: image ? "image" : "file",
+        name: "name" in attachment ? attachment.name : "Attachment",
+        detail: `Stored copy on ${input.labelOf(input.homeEnvironmentId)}`,
+        sizeBytes: "sizeBytes" in attachment ? attachment.sizeBytes : null,
+        missing: inspected?.missing ?? false,
+        warning: inspected?.warning ?? null,
+        image: image ? { attachmentId: attachment.id, mimeType: attachment.mimeType } : null,
+        machines: [],
+      };
+    }
+    const directory = inspected?.isDirectory ?? item.isDirectory ?? false;
+    return {
+      key,
+      kind: directory ? "folder" : "file",
+      name: basename(item.path),
+      detail: item.path,
+      sizeBytes: directory ? null : (inspected?.sizeBytes ?? item.sizeBytes ?? null),
+      missing: inspected?.missing ?? false,
+      warning: inspected?.warning ?? null,
+      image: null,
+      machines: (inspected?.referenceStates ?? [])
+        .filter((state) => state.environmentId !== input.homeEnvironmentId)
+        .map((state) => ({ label: input.labelOf(state.environmentId), state: state.state })),
+    };
+  });
+}
+
+export interface TaskStartTarget {
+  readonly project: EnvironmentProject;
+  readonly home: boolean;
+  readonly disabledReason: string | null;
+}
+
+/**
+ * Where a task's thread can start: its own machine first, then every other machine with the
+ * project. Stored copies live only on the task's machine, so other machines can't send them.
+ */
+export function taskStartTargets(
+  group: Pick<TaskProjectGroup, "members">,
+  entry: Pick<TaskEntry, "task" | "home">,
+  labelOf: (environmentId: EnvironmentId) => string,
+): TaskStartTarget[] {
+  const homeId = entry.home.environmentId;
+  const stored = (entry.task.attachments ?? []).some((item) => item.kind === "stored");
+  const seen = new Set([homeId]);
+  const others = group.members.filter(({ project }) => {
+    if (seen.has(project.environmentId)) return false;
+    seen.add(project.environmentId);
+    return true;
+  });
+  const homeKey = entry.home.repositoryIdentity
+    ? repositoryGroupingKeyOf(entry.home.repositoryIdentity)
+    : null;
+  return [
+    { project: entry.home, home: true, disabledReason: null },
+    ...others.map(({ project, reachable }) => ({
+      project,
+      home: false,
+      disabledReason: !reachable
+        ? "Not connected"
+        : homeKey === null ||
+            !project.repositoryIdentity ||
+            repositoryGroupingKeyOf(project.repositoryIdentity) !== homeKey
+          ? "Not the same repository"
+          : stored
+            ? `Has attachments stored on ${labelOf(homeId)}`
+            : null,
+    })),
+  ];
+}
+
+/** The task's latest thread and the older ones it keeps, each on the machine that ran it. */
+export function taskThreadRefs(
+  task: Pick<ProjectSavedPrompt, "latestThreadId" | "latestThreadEnvironmentId" | "threadLinks">,
+  homeEnvironmentId: EnvironmentId,
+): { latest: ScopedThreadRef | null; previous: ScopedThreadRef[] } {
+  const latest = task.latestThreadId
+    ? scopeThreadRef(task.latestThreadEnvironmentId ?? homeEnvironmentId, task.latestThreadId)
+    : null;
+  const seen = new Set(latest ? [scopedThreadKey(latest)] : []);
+  const previous = (task.threadLinks ?? []).flatMap((link) => {
+    const ref = scopeThreadRef(link.environmentId ?? homeEnvironmentId, link.threadId);
+    const key = scopedThreadKey(ref);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [ref];
+  });
+  return { latest, previous };
+}
+
+/** A start whose link failed, until the task records that thread by any route. */
+export function pendingTaskLink<R extends { readonly thread: ScopedThreadRef }>(
+  receipt: R | undefined,
+  task: Pick<ProjectSavedPrompt, "latestThreadId" | "latestThreadEnvironmentId" | "threadLinks">,
+  homeEnvironmentId: EnvironmentId,
+): R | null {
+  if (!receipt) return null;
+  const { latest, previous } = taskThreadRefs(task, homeEnvironmentId);
+  const key = scopedThreadKey(receipt.thread);
+  return [latest, ...previous].some((ref) => ref !== null && scopedThreadKey(ref) === key)
+    ? null
+    : receipt;
 }

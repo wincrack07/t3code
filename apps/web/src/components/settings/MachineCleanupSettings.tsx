@@ -201,6 +201,9 @@ function EnvironmentCleanup({
             <div className="-mx-2 tabular-nums">
               <CleanupReportSummary report={report} />
             </div>
+            {report.taskAttachments ? (
+              <TaskAttachmentUsageSummary usage={report.taskAttachments} />
+            ) : null}
             <details>
               <summary className={SUMMARY_CLASSNAME}>Regenerable files and skips</summary>
               <ul className="space-y-1 pt-1">
@@ -414,7 +417,7 @@ function EnvironmentCleanup({
           <SettingsRow
             key={item.id}
             title={item.path}
-            description={`${formatBytes(item.bytes)}${item.probablyActive ? " · Probably active. Recommend keeping" : ""}`}
+            description={`${formatBytes(item.bytes)}${isTaskAttachmentItem(item) ? ` · ${TASK_ATTACHMENT_RULE_LABELS[item.rule] ?? "Task attachment copy"}${item.project ? ` in ${item.project}` : ""}` : ""}${item.probablyActive ? " · Probably active. Recommend keeping" : ""}`}
             control={
               <Checkbox
                 aria-label={`Select ${item.path}`}
@@ -435,8 +438,12 @@ function EnvironmentCleanup({
         .map((item) => (
           <SettingsRow
             key={item.id}
-            title={item.rule}
-            description={`${item.path} · ${formatBytes(item.bytes)}. ${item.effect}`}
+            title={
+              isTaskAttachmentItem(item)
+                ? `${TASK_ATTACHMENT_RULE_LABELS[item.rule] ?? "Task attachment copy"}${item.project ? ` · ${item.project}` : ""}`
+                : item.rule
+            }
+            description={`${item.path} · ${formatBytes(item.bytes)}. ${isTaskAttachmentItem(item) ? `${item.reason}. ` : ""}${item.effect}`}
             control={
               <Button
                 size="sm"
@@ -532,7 +539,53 @@ function EnvironmentCleanup({
   );
 }
 
+const isTaskAttachmentItem = (item: MachineCleanupItem) =>
+  item.rule.startsWith("task-attachments-");
+const TASK_ATTACHMENT_RULE_LABELS: Record<string, string> = {
+  "task-attachments-open": "Open task's attachment copy",
+  "task-attachments-done": "Done task's attachment copy",
+  "task-attachments-orphaned": "Deleted task's attachment copy",
+};
+
+/** Stored copies of task attachments: done and deleted tasks' copies wait for approval; open ones are reviewed one by one. */
+function TaskAttachmentUsageSummary({
+  usage,
+}: {
+  usage: NonNullable<MachineCleanupReport["taskAttachments"]>;
+}) {
+  const rows = [
+    { label: "Open tasks", bucket: usage.open, note: "Reviewed one at a time" },
+    { label: "Done tasks", bucket: usage.done, note: "Awaiting your approval" },
+    { label: "Deleted tasks", bucket: usage.orphaned, note: "Awaiting your approval" },
+  ];
+  return (
+    <div className="-mx-2 tabular-nums">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Task attachments</TableHead>
+            <TableHead className="text-right">Copies</TableHead>
+            <TableHead className="text-right">Size</TableHead>
+            <TableHead>Cleanup</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.label}>
+              <TableCell>{row.label}</TableCell>
+              <TableCell className="text-right">{row.bucket.count}</TableCell>
+              <TableCell className="text-right">{formatBytes(row.bucket.bytes)}</TableCell>
+              <TableCell>{row.bucket.count > 0 ? row.note : "None"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function cleanupCategory(item: MachineCleanupItem) {
+  if (isTaskAttachmentItem(item)) return "Task attachments";
   return item.rule === "worktree"
     ? "Worktrees"
     : item.rule === "node-modules" || item.rule === "pods"

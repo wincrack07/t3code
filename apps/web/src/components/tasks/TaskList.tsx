@@ -1,8 +1,14 @@
 import { ChevronRightIcon } from "lucide-react";
 import { Fragment, type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 
+import { CommandId } from "@t3tools/contracts";
+
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
-import { cn } from "../../lib/utils";
+import { cn, randomUUID } from "../../lib/utils";
+import { projectEnvironment } from "../../state/projects";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { Button } from "../ui/button";
+import { toastManager } from "../ui/toast";
 import { Checkbox } from "../ui/checkbox";
 import { Kbd } from "../ui/kbd";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -37,6 +43,7 @@ export function TaskList({
   renderExpanded?: (entry: TaskEntry) => ReactNode;
 }) {
   const [doneExpanded, setDoneExpanded] = useState(false);
+  const clearDone = useClearDone(model);
   const listRef = useRef<HTMLDivElement>(null);
   const order = taskListOrder(model, doneExpanded);
   const focusKey = selectedKey !== null && order.includes(selectedKey) ? selectedKey : order[0];
@@ -104,15 +111,24 @@ export function TaskList({
         ) : null}
         {model.doneCount > 0 ? (
           <div className="mt-1 flex flex-col">
-            <button
-              type="button"
-              aria-expanded={doneExpanded}
-              className="flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
-              onClick={() => setDoneExpanded(!doneExpanded)}
-            >
-              <ChevronRightIcon className={cn("size-3.5 shrink-0", doneExpanded && "rotate-90")} />
-              Done <span className="tabular-nums">· {model.doneCount}</span>
-            </button>
+            <div className="flex h-8 items-center justify-between gap-2 pr-1">
+              <button
+                type="button"
+                aria-expanded={doneExpanded}
+                className="flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+                onClick={() => setDoneExpanded(!doneExpanded)}
+              >
+                <ChevronRightIcon
+                  className={cn("size-3.5 shrink-0", doneExpanded && "rotate-90")}
+                />
+                Done <span className="tabular-nums">· {model.doneCount}</span>
+              </button>
+              {clearDone.allowed ? (
+                <Button size="micro" variant="ghost-muted" onClick={() => void clearDone.run()}>
+                  Clear done
+                </Button>
+              ) : null}
+            </div>
             {doneExpanded ? model.done.map(renderSection) : null}
           </div>
         ) : null}
@@ -219,4 +235,51 @@ function TaskRow({
       <TaskAttachmentCount count={entry.task.attachments?.length ?? 0} />
     </div>
   );
+}
+
+/** Clears the listed done tasks on every machine that stores them; Undo restores each one. */
+function useClearDone(model: TaskListModel) {
+  const run = useAtomCommand(projectEnvironment.savedPromptUpdate);
+  const homes = new Map<string, TaskEntry[]>();
+  for (const section of model.done) {
+    for (const entry of section.tasks) {
+      const key = `${entry.home.environmentId}:${entry.home.id}`;
+      homes.set(key, [...(homes.get(key) ?? []), entry]);
+    }
+  }
+  const mutate = (
+    entry: TaskEntry,
+    savedPrompt: { kind: "clear-done" } | { kind: "restore"; id: string },
+  ) =>
+    run({
+      environmentId: entry.home.environmentId,
+      input: {
+        type: "project.update",
+        projectId: entry.home.id,
+        commandId: CommandId.make(randomUUID()),
+        savedPrompt,
+      },
+    });
+  return {
+    allowed: homes.size > 0,
+    run: async () => {
+      const groups = [...homes.values()];
+      const results = await Promise.all(
+        groups.map((entries) => mutate(entries[0]!, { kind: "clear-done" })),
+      );
+      const cleared = groups.filter((_, index) => results[index]?._tag === "Success").flat();
+      if (cleared.length === 0) return;
+      toastManager.add({
+        type: "success",
+        title: `Cleared ${cleared.length} done ${cleared.length === 1 ? "task" : "tasks"}`,
+        actionProps: {
+          children: "Undo",
+          onClick: () =>
+            void Promise.all(
+              cleared.map((entry) => mutate(entry, { kind: "restore", id: entry.task.id })),
+            ),
+        },
+      });
+    },
+  };
 }
