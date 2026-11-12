@@ -590,6 +590,7 @@ describe("DesktopUpdates", () => {
         assert.isTrue(result.accepted);
         assert.isFalse(yield* Ref.get(desktopState.quitting));
         assert.deepEqual(harness.installSteps, ["quitAndInstall", "startBackend"]);
+        assert.deepEqual(harness.flushesAtInstall, [1]);
         assert.equal(harness.updateRestartMarkers.size, 0);
         assert.equal(harness.installRecords.size, 0);
       }),
