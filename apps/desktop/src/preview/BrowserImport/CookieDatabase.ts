@@ -43,6 +43,19 @@ export const cookieScope = (
 
 export const bareHost = (host: string): string => (host.startsWith(".") ? host.slice(1) : host);
 
+const vacuumInto = Effect.fn("CookieDatabase.vacuumInto")(function* (
+  filename: string,
+  target: string,
+  readonly: boolean,
+) {
+  yield* Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql`VACUUM INTO ${target}`;
+  }).pipe(Effect.provide(NodeSqliteClient.layer({ filename, readonly })));
+});
+
+const SIDECAR_SUFFIXES = ["-wal", "-journal"];
+
 /** Copy before reading to avoid live WAL writes and never open the source browser database for writing. */
 export const snapshotCookieDatabase = Effect.fn("CookieDatabase.snapshotCookieDatabase")(function* (
   cookiePath: string,
@@ -52,9 +65,18 @@ export const snapshotCookieDatabase = Effect.fn("CookieDatabase.snapshotCookieDa
   const path = yield* Path.Path;
   const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: tempPrefix });
   const target = path.join(directory, path.basename(cookiePath));
-  yield* Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    yield* sql`VACUUM INTO ${target}`;
-  }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: cookiePath, readonly: true })));
+  yield* vacuumInto(cookiePath, target, true).pipe(
+    // A running Chromium holds an exclusive lock, so SQLite cannot read the file but a plain copy can.
+    Effect.catch((cause) =>
+      Effect.gen(function* () {
+        const copy = path.join(directory, `${path.basename(cookiePath)}.copy`);
+        yield* fileSystem.copyFile(cookiePath, copy);
+        yield* Effect.forEach(SIDECAR_SUFFIXES, (suffix) =>
+          fileSystem.copyFile(`${cookiePath}${suffix}`, `${copy}${suffix}`).pipe(Effect.ignore),
+        );
+        yield* vacuumInto(copy, target, false);
+      }).pipe(Effect.mapError(() => cause)),
+    ),
+  );
   return target;
 });

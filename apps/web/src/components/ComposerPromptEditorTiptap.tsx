@@ -761,6 +761,8 @@ const ComposerGhostTextExtension = Extension.create({
                   box.className = "composer-ghost-text";
                   box.setAttribute("aria-hidden", "true");
                   box.contentEditable = "false";
+                  // Inline, because Tiptap's injected `[contenteditable="false"]` rule resets it to normal.
+                  box.style.whiteSpace = "pre";
                   const label = document.createElement("span");
                   label.textContent = text;
                   box.append(label);
