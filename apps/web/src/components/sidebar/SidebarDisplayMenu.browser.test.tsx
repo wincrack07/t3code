@@ -1,3 +1,5 @@
+import type * as Context from "effect/Context";
+import { installFakeEnvironment, type FakeDriver } from "../../../test/fakeEnvironment";
 import "../../index.css";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
@@ -12,6 +14,18 @@ import { Menu, MenuTrigger, MenuPopup } from "../ui/menu";
 import { buildSidebarProjectSnapshots } from "../../sidebarProjectGrouping";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { sidebarFolderExpansionKeys } from "../Sidebar.logic";
+
+vi.mock(
+  "../../../../../packages/client-runtime/src/connection/driver.ts",
+  async (importOriginal) => {
+    const [actual, { fakeDriver }, Layer] = await Promise.all([
+      importOriginal<{ readonly ConnectionDriver: Context.Key<unknown, FakeDriver> }>(),
+      import("../../../test/fakeEnvironment"),
+      import("effect/Layer"),
+    ]);
+    return { ...actual, layer: Layer.succeed(actual.ConnectionDriver, fakeDriver) };
+  },
+);
 
 function setup() {
   const stack = new DisposableStack();
@@ -32,6 +46,7 @@ function setup() {
 }
 
 it("opens the display menu and collapses all projects while preserving the current project", async () => {
+  using _environment = installFakeEnvironment([]);
   using _fixture = setup();
   const projects = buildSidebarProjectSnapshots({
     projects: ["active", "idle"].map((id) => ({
@@ -92,6 +107,7 @@ it("opens the display menu and collapses all projects while preserving the curre
 });
 
 it("opens group actions and the move-to-group submenu", async () => {
+  using _environment = installFakeEnvironment([]);
   using _fixture = setup();
   const folder = getClientSettings().sidebarProjectFolders[0]!;
   const child = { id: "child", name: "Backend", emoji: "", projectKeys: [], parentId: "staff" };
