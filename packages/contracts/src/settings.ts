@@ -413,6 +413,8 @@ const SidebarProjectFolders = Schema.Array(
     name: TrimmedNonEmptyString,
     emoji: Schema.String,
     projectKeys: Schema.Array(Schema.String),
+    // Absent on top-level groups, including every group saved before nesting existed.
+    parentId: Schema.optionalKey(TrimmedNonEmptyString),
   }),
 );
 

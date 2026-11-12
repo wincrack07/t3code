@@ -1,6 +1,7 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";
@@ -9,6 +10,12 @@ import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "../Sidebar.
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  SIDEBAR_TREE_DROP_CLASS_NAME,
+  sidebarTreeDragId,
+  sidebarTreeIndent,
+  sidebarTreeRow,
+} from "./sidebarTreeDrag";
 
 const FOLDER_DOT_CLASS_NAME = {
   attention: "bg-warning",
@@ -36,7 +43,8 @@ export function sidebarFolderRowId(projectKey: string) {
  */
 export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHeader(props: {
   group: SidebarProjectSnapshot;
-  indented?: boolean;
+  /** Nesting depth under sidebar groups. */
+  depth?: number;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
   localLastVisitedAtById: Readonly<Record<string, string>>;
@@ -59,18 +67,21 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         })),
       )
     : null;
+  const item = { kind: "project", key: group.projectKey } as const;
+  const { setNodeRef, listeners } = useDraggable({ id: sidebarTreeDragId(item) });
   return (
     <li
+      ref={setNodeRef}
       data-testid="sidebar-project-folder"
-      className={cn(
-        "group/project-folder relative mt-2 list-none first:mt-0",
-        props.indented && "ms-4",
-      )}
+      data-tree-row={sidebarTreeRow(item)}
+      style={sidebarTreeIndent(props.depth ?? 0)}
+      className={cn("group/project-folder mt-2 list-none first:mt-0", SIDEBAR_TREE_DROP_CLASS_NAME)}
     >
       <button
         type="button"
         data-sidebar-row={rowId}
         aria-expanded={!collapsed}
+        {...listeners}
         onClick={() => props.onToggle(group)}
         onContextMenu={(event) => {
           event.preventDefault();

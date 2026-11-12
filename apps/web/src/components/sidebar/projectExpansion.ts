@@ -1,5 +1,10 @@
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
-import type { ProjectFolder } from "../../projectFolders";
+import {
+  projectFolderAncestors,
+  projectFolderExpansionKey,
+  projectFolderOfProject,
+  type ProjectFolder,
+} from "../../projectFolders";
 import { sidebarFolderExpansionKeys } from "../Sidebar.logic";
 import { useUiStateStore } from "../../uiStateStore";
 
@@ -13,14 +18,18 @@ export function setAllProjectsExpanded(
   store.setProjectExpanded(
     [
       ...projects.flatMap(sidebarFolderExpansionKeys),
-      ...folders.map((folder) => `project-group:${folder.id}`),
+      ...folders.map((folder) => projectFolderExpansionKey(folder.id)),
     ],
     expanded,
   );
   if (!expanded && activeProjectKey !== null) {
     const active = projects.find((project) => project.projectKey === activeProjectKey);
     if (active) store.setProjectExpanded(sidebarFolderExpansionKeys(active), true);
-    const parent = folders.find((folder) => folder.projectKeys.includes(activeProjectKey));
-    if (parent) store.setProjectExpanded(`project-group:${parent.id}`, true);
+    const parent = projectFolderOfProject(folders, activeProjectKey);
+    if (parent)
+      store.setProjectExpanded(
+        [parent.id, ...projectFolderAncestors(folders, parent.id)].map(projectFolderExpansionKey),
+        true,
+      );
   }
 }

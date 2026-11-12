@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
-import { useClientSettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
-import { moveProjectsToFolder, type ProjectFolder } from "../../projectFolders";
+import { useClientSettings } from "../../hooks/useSettings";
+import {
+  projectFolderOfProject,
+  projectFolderPath,
+  projectFolderTree,
+  type ProjectFolder,
+} from "../../projectFolders";
+import { deleteSidebarFolder, moveSidebarProjectToFolder } from "../sidebar/projectFolderActions";
 import { ProjectFolderEditor, ProjectFolderSuggestions } from "../sidebar/ProjectFolderEditor";
 import { ProjectFolderMenu } from "../sidebar/ProjectFolderMenu";
 import { Button } from "../ui/button";
@@ -10,7 +16,6 @@ import { Menu, MenuTrigger, MenuPopup } from "../ui/menu";
 export function ProjectFoldersSettings() {
   const projects = useSidebarProjectGroups();
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
-  const update = useUpdatePrimarySettings();
   const [editor, setEditor] = useState<{ folder?: ProjectFolder; projectKeys?: string[] } | null>(
     null,
   );
@@ -19,7 +24,8 @@ export function ProjectFoldersSettings() {
     <section className="space-y-4 p-6">
       <h2 className="text-sm font-medium">Project groups</h2>
       <p className="text-sm text-muted-foreground">
-        Organize projects across environments. Deleting a group keeps its projects.
+        Organize projects across environments. Deleting a group moves its projects and subgroups up
+        a level.
       </p>
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={() => setEditor({})}>
@@ -29,22 +35,16 @@ export function ProjectFoldersSettings() {
           Suggest groups
         </Button>
       </div>
-      {folders.map((folder) => (
+      {projectFolderTree(folders).map(({ folder }) => (
         <div key={folder.id} className="space-y-2 rounded-md border border-border p-3">
           <div className="flex items-center gap-2">
             <span className="flex-1 text-sm">
-              {folder.emoji} {folder.name}
+              {folder.emoji} {projectFolderPath(folders, folder.id)}
             </span>
             <Button size="xs" variant="ghost" onClick={() => setEditor({ folder })}>
               Rename
             </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() =>
-                update({ sidebarProjectFolders: folders.filter((entry) => entry.id !== folder.id) })
-              }
-            >
+            <Button size="xs" variant="ghost" onClick={() => deleteSidebarFolder(folder.id)}>
               Delete
             </Button>
           </div>
@@ -58,9 +58,7 @@ export function ProjectFoldersSettings() {
                 <Button
                   size="xs"
                   variant="ghost"
-                  onClick={() =>
-                    update({ sidebarProjectFolders: moveProjectsToFolder(folders, [key], null) })
-                  }
+                  onClick={() => moveSidebarProjectToFolder(key, null)}
                 >
                   Remove
                 </Button>
@@ -79,12 +77,8 @@ export function ProjectFoldersSettings() {
             <MenuPopup>
               <ProjectFolderMenu
                 folders={folders}
-                assigned={folders.some((folder) => folder.projectKeys.includes(project.projectKey))}
-                onMove={(id) =>
-                  update({
-                    sidebarProjectFolders: moveProjectsToFolder(folders, [project.projectKey], id),
-                  })
-                }
+                currentFolderId={projectFolderOfProject(folders, project.projectKey)?.id ?? null}
+                onMove={(id) => moveSidebarProjectToFolder(project.projectKey, id)}
                 onCreate={() => setEditor({ projectKeys: [project.projectKey] })}
               />
             </MenuPopup>

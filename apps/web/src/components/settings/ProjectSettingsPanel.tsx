@@ -57,6 +57,9 @@ import {
   SCRATCH_PROJECT_TITLE,
 } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
+import { projectFolderOfProject, projectFolderPath, projectFolderTree } from "../../projectFolders";
+import { moveSidebarProjectToFolder } from "../sidebar/projectFolderActions";
+import { sidebarTreeIndent } from "../sidebar/sidebarTreeDrag";
 import { readUnloadedThreadCount } from "../../state/olderSettledShelf";
 import { settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
 
@@ -76,6 +79,46 @@ function isGroupingSelection(value: unknown): value is SidebarProjectGroupingMod
 }
 
 // Grouping overrides are client settings, so they stay editable without project write access.
+const NO_SIDEBAR_GROUP = "none";
+
+function SidebarGroupRow({ projectKey }: { projectKey: string }) {
+  const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const current = projectFolderOfProject(folders, projectKey)?.id ?? NO_SIDEBAR_GROUP;
+  const label = (id: string) =>
+    id === NO_SIDEBAR_GROUP ? "No group" : projectFolderPath(folders, id);
+  return (
+    <SettingsRow
+      title="Sidebar group"
+      description={label(current)}
+      control={
+        <Select
+          value={current}
+          onValueChange={(value) => {
+            if (typeof value !== "string" || value === current) return;
+            moveSidebarProjectToFolder(projectKey, value === NO_SIDEBAR_GROUP ? null : value);
+          }}
+        >
+          <SelectTrigger size="sm" aria-label="Sidebar group">
+            <SelectValue>{label(current)}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            <SelectItem hideIndicator value={NO_SIDEBAR_GROUP}>
+              No group
+            </SelectItem>
+            {projectFolderTree(folders).map(({ folder, depth }) => (
+              <SelectItem hideIndicator key={folder.id} value={folder.id}>
+                <span style={sidebarTreeIndent(depth)}>
+                  {folder.emoji} {folder.name}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      }
+    />
+  );
+}
+
 function CheckoutGroupingSelect({ member }: { member: SidebarProjectGroupMember }) {
   const overrideKey = derivePhysicalProjectKey(member);
   const globalMode = useClientSettings((settings) => settings.sidebarProjectGroupingMode);
@@ -606,6 +649,7 @@ function ProjectDetail({
               </div>
             }
           />
+          <SidebarGroupRow projectKey={group.projectKey} />
           {canOrganize ? (
             <>
               <SettingsRow

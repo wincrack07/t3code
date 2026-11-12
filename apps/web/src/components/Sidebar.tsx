@@ -1,5 +1,28 @@
-import { updateClientSettings } from "../hooks/useSettings";
-import { arrangeProjectFolders, moveProjectsToFolder, type ProjectFolder } from "../projectFolders";
+import {
+  arrangeProjectFolderTree,
+  planSidebarTreeDrop,
+  projectFolderAncestors,
+  projectFolderExpansionKey,
+  projectFolderOfProject,
+  projectFolderPath,
+  projectFolderTree,
+  resolveSidebarTreeDropZone,
+  type ProjectFolder,
+  type SidebarTreeDragItem,
+  type SidebarTreeDropTarget,
+} from "../projectFolders";
+import {
+  applySidebarTreeDrop,
+  deleteSidebarFolder,
+  moveSidebarFolder,
+  moveSidebarProjectToFolder,
+} from "./sidebar/projectFolderActions";
+import {
+  SIDEBAR_TREE_DROP_CLASS_NAME,
+  parseSidebarTreeDragId,
+  parseSidebarTreeRow,
+  sidebarTreeRow,
+} from "./sidebar/sidebarTreeDrag";
 import { ProjectFolderEditor, ProjectFolderSuggestions } from "./sidebar/ProjectFolderEditor";
 import { ProjectGroupHeader } from "./sidebar/ProjectGroupHeader";
 import { sidebarProjectIsOther, sidebarNestedThreads } from "./Sidebar.logic";
@@ -505,14 +528,20 @@ function useSidebarThreads(input: {
       now: `${nowMinute}:00.000Z`,
     });
   };
+  // A project's threads hide while any group above it is collapsed.
+  const hiddenByGroup = (projectKey: string) => {
+    const owner = projectFolderOfProject(namedProjectFolders, projectKey);
+    return (
+      owner !== undefined &&
+      [owner.id, ...projectFolderAncestors(namedProjectFolders, owner.id)].some(
+        (id) => projectExpandedById[projectFolderExpansionKey(id)] === false,
+      )
+    );
+  };
   const expandedGroups = projectSettledGrouping
     ? (folderGroups ?? []).filter(
         (group) =>
-          !namedProjectFolders.some(
-            (folder) =>
-              folder.projectKeys.includes(group.projectKey) &&
-              projectExpandedById[`project-group:${folder.id}`] === false,
-          ) &&
+          !hiddenByGroup(group.projectKey) &&
           projectSettledExpanded[group.projectKey] &&
           (otherProjectsExpanded || !projectIsOther(group)) &&
           resolveProjectExpanded(projectExpandedById, sidebarFolderExpansionKeys(group)),
@@ -586,12 +615,7 @@ function useSidebarThreads(input: {
                   threads,
                 ) > 0)),
         ).map((folder) => {
-          const namedFolder = namedProjectFolders.find((entry) =>
-            entry.projectKeys.includes(folder.group.projectKey),
-          );
-          const parentCollapsed =
-            namedFolder !== undefined &&
-            projectExpandedById[`project-group:${namedFolder.id}`] === false;
+          const parentCollapsed = hiddenByGroup(folder.group.projectKey);
           const collapsed = !resolveProjectExpanded(
             projectExpandedById,
             sidebarFolderExpansionKeys(folder.group),
@@ -1018,6 +1042,8 @@ function checkThreadOperations(
 }
 
 const SIDEBAR_DRAG_DISTANCE = 10;
+// Hovering a dragged group or project over a collapsed group opens it after this long.
+const SIDEBAR_TREE_EXPAND_DELAY_MS = 500;
 
 // dnd-kit's 20% edge zone at full speed runs the list away while the pointer rests near the bottom.
 const SIDEBAR_AUTO_SCROLL: AutoScrollOptions = { threshold: { x: 0, y: 0.05 }, acceleration: 3 };
@@ -1135,6 +1161,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const namedProjectFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const [folderEditor, setFolderEditor] = useState<{
     folder?: ProjectFolder;
+    parentId?: string;
     projectKeys?: readonly string[];
   } | null>(null);
   const [suggestFolders, setSuggestFolders] = useState(false);
@@ -1226,6 +1253,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
   const contextDragKeyRef = useRef<string | null>(null);
   const dragScrollRef = useRef<{ readonly viewport: Element; readonly top: number } | null>(null);
+  // Group and project drags; the pointer target lives in refs and DOM attributes only.
+  const [treeDragActive, setTreeDragActive] = useState(false);
+  const treeDragRef = useRef<SidebarTreeDragItem | null>(null);
+  const treeDropRef = useRef<{ target: SidebarTreeDropTarget; row: HTMLElement } | null>(null);
+  const treeExpandTimerRef = useRef<{ folderId: string; timer: number } | null>(null);
+  const namedProjectFoldersRef = useRef(namedProjectFolders);
   const [actionSweep, setActionSweep] = useState<{
     action: SidebarSweepAction;
     keys: ReadonlySet<string>;
@@ -1294,9 +1327,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ref.projectId === activeFolderThread?.projectId,
       ),
     )?.projectKey ?? null;
-  const activeNamedFolderId = namedProjectFolders.find((folder) =>
-    folder.projectKeys.includes(activeFolderProjectKey ?? ""),
+  const activeNamedFolderId = projectFolderOfProject(
+    namedProjectFolders,
+    activeFolderProjectKey ?? "",
   )?.id;
+  // Joined so the effect below reruns only when the chain of groups changes.
+  const activeFolderChainKey = activeNamedFolderId
+    ? [activeNamedFolderId, ...projectFolderAncestors(namedProjectFolders, activeNamedFolderId)]
+        .map(projectFolderExpansionKey)
+        .join("\n")
+    : "";
   const revealProject =
     routeRowThreadKey !== null &&
     (routeReveal.observedKey !== routeRowThreadKey || routeReveal.pendingKey === routeRowThreadKey);
@@ -1304,9 +1344,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   useEffect(() => {
     if (!revealProject || !activeFolderProjectKey) return;
     useUiStateStore.getState().setProjectExpanded(activeFolderProjectKey, true);
-    if (activeNamedFolderId)
-      useUiStateStore.getState().setProjectExpanded(`project-group:${activeNamedFolderId}`, true);
-  }, [revealProject, activeFolderProjectKey, activeNamedFolderId]);
+    if (activeFolderChainKey)
+      useUiStateStore.getState().setProjectExpanded(activeFolderChainKey.split("\n"), true);
+  }, [revealProject, activeFolderProjectKey, activeFolderChainKey]);
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
 
   // History, the palette and links can open a thread the scope hides or the list
@@ -1445,6 +1485,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     (group: SidebarProjectSnapshot, position: { x: number; y: number }) => {
       const api = readLocalApi();
       if (!api) return;
+      const currentFolderId =
+        projectFolderOfProject(namedProjectFolders, group.projectKey)?.id ?? null;
       void (async () => {
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
@@ -1462,17 +1504,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 id: "move-group",
                 label: "Move to group",
                 children: [
-                  ...namedProjectFolders.map((folder) => ({
-                    id: `move-group:${folder.id}`,
-                    label: `${folder.emoji} ${folder.name}`.trim(),
-                  })),
+                  ...projectFolderTree(namedProjectFolders)
+                    .filter(({ folder }) => folder.id !== currentFolderId)
+                    .map(({ folder }) => ({
+                      id: `move-group:${folder.id}`,
+                      label:
+                        `${folder.emoji} ${projectFolderPath(namedProjectFolders, folder.id)}`.trim(),
+                    })),
                   { id: "new-group", label: "New group…" },
                 ],
               },
-              ...(namedProjectFolders.some((folder) =>
-                folder.projectKeys.includes(group.projectKey),
-              )
-                ? [{ id: "remove-group", label: "Remove from group" }]
+              ...(currentFolderId !== null
+                ? [{ id: "remove-group", label: "Move to top level" }]
                 : []),
               { id: "project-settings", label: "Project settings", icon: "settings" },
             ],
@@ -1481,13 +1524,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
         if (clicked._tag === "Failure") return;
         if (clicked.value?.startsWith("move-group:") || clicked.value === "remove-group") {
-          updateClientSettings({
-            sidebarProjectFolders: moveProjectsToFolder(
-              namedProjectFolders,
-              [group.projectKey],
-              clicked.value === "remove-group" ? null : clicked.value.slice("move-group:".length),
-            ),
-          });
+          moveSidebarProjectToFolder(
+            group.projectKey,
+            clicked.value === "remove-group" ? null : clicked.value.slice("move-group:".length),
+          );
           return;
         }
         switch (clicked.value) {
@@ -1964,7 +2004,92 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     dragState?.contextDrag === true ||
     dragState?.activeSection === "working";
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
+  const clearTreeExpandTimer = () => {
+    if (treeExpandTimerRef.current) window.clearTimeout(treeExpandTimerRef.current.timer);
+    treeExpandTimerRef.current = null;
+  };
+  const setTreeDrop = (next: { target: SidebarTreeDropTarget; row: HTMLElement } | null) => {
+    const previous = treeDropRef.current;
+    previous?.row.removeAttribute("data-tree-drop");
+    treeDropRef.current = next;
+    if (next)
+      next.row.setAttribute(
+        "data-tree-drop",
+        next.target.kind === "root" ? "into" : next.target.zone,
+      );
+    const expandId =
+      next?.target.kind === "folder" &&
+      next.target.zone === "into" &&
+      next.row.dataset.treeExpanded === "false"
+        ? next.target.id
+        : null;
+    if (treeExpandTimerRef.current?.folderId === expandId) return;
+    clearTreeExpandTimer();
+    if (expandId === null) return;
+    treeExpandTimerRef.current = {
+      folderId: expandId,
+      timer: window.setTimeout(() => {
+        treeExpandTimerRef.current = null;
+        useUiStateStore.getState().setProjectExpanded(projectFolderExpansionKey(expandId), true);
+      }, SIDEBAR_TREE_EXPAND_DELAY_MS),
+    };
+  };
+  const moveTreeDrag = (item: SidebarTreeDragItem, point: { x: number; y: number }) => {
+    const row = document
+      .elementFromPoint(point.x, point.y)
+      ?.closest<HTMLElement>("[data-tree-row]");
+    if (!row || !threadListRef.current?.contains(row)) return setTreeDrop(null);
+    const rowValue = row.dataset.treeRow ?? "";
+    const over = parseSidebarTreeRow(rowValue);
+    let target: SidebarTreeDropTarget | null = null;
+    if (rowValue === "root") target = { kind: "root" };
+    else if (over) {
+      const bounds = row.getBoundingClientRect();
+      const zone = resolveSidebarTreeDropZone(
+        item.kind,
+        over.kind === "folder"
+          ? { kind: "folder", expanded: row.dataset.treeExpanded === "true" }
+          : { kind: "project" },
+        bounds.height > 0 ? (point.y - bounds.top) / bounds.height : 0.5,
+      );
+      if (zone !== null)
+        target =
+          over.kind === "folder"
+            ? { kind: "folder", id: over.id, zone }
+            : { kind: "project", key: over.key, zone: zone === "before" ? "before" : "after" };
+    }
+    if (
+      target === null ||
+      planSidebarTreeDrop(namedProjectFoldersRef.current, item, target).kind === "none"
+    )
+      return setTreeDrop(null);
+    const current = treeDropRef.current;
+    if (
+      current?.row === row &&
+      (current.target.kind === "root" ? "root" : current.target.zone) ===
+        (target.kind === "root" ? "root" : target.zone)
+    )
+      return;
+    setTreeDrop({ target, row });
+  };
+  const dropTreeDrag = (item: SidebarTreeDragItem) => {
+    const target = treeDropRef.current?.target;
+    if (!target) return;
+    applySidebarTreeDrop(
+      planSidebarTreeDrop(namedProjectFoldersRef.current, item, target),
+      projectGroupsRef.current,
+    );
+  };
   const finishThreadDrag = (started: boolean) => {
+    const treeItem = treeDragRef.current;
+    if (treeItem) {
+      treeDragRef.current = null;
+      setTreeDrop(null);
+      threadListRef.current
+        ?.querySelector(`[data-tree-row="${CSS.escape(sidebarTreeRow(treeItem))}"]`)
+        ?.removeAttribute("data-tree-dragging");
+      setTreeDragActive(false);
+    }
     dragSensorRef.current = null;
     contextDragKeyRef.current = null;
     dragScrollRef.current = null;
@@ -2001,6 +2126,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (scroll && scroll.viewport.scrollTop !== scroll.top) scroll.viewport.scrollTop = scroll.top;
   };
   const moveThreadContextDrag = (point: { x: number; y: number }) => {
+    if (treeDragRef.current) {
+      moveTreeDrag(treeDragRef.current, point);
+      return false;
+    }
     const contextDrag = pointerOutsideThreadList(point);
     setDragState((current) =>
       current === null || current.contextDrag === contextDrag
@@ -2019,6 +2148,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     return true;
   };
   const dropThreadContextDrag = (point: { x: number; y: number }) => {
+    if (treeDragRef.current) {
+      dropTreeDrag(treeDragRef.current);
+      return true;
+    }
     if (!pointerOutsideThreadList(point)) return false;
     restoreDragScroll();
     dropThreadContext(point, contextDragThreads());
@@ -2037,6 +2170,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes committed list data to refs read by stable drag and sweep callbacks
   useLayoutEffect(() => {
     projectGroupsRef.current = projectGroups;
+    namedProjectFoldersRef.current = namedProjectFolders;
     orderedThreadKeysRef.current = orderedThreadKeys;
     threadByKeyRef.current = threadByKey;
     settledThreadKeysRef.current = settledThreadKeys;
@@ -2142,6 +2276,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
 
   const handleThreadDragStart = (event: DragStartEvent) => {
     const activeKey = String(event.active.id);
+    const treeItem = parseSidebarTreeDragId(activeKey);
+    if (treeItem) {
+      treeDragRef.current = treeItem;
+      listMotionRef.current?.suspend();
+      threadListRef.current
+        ?.querySelector(`[data-tree-row="${CSS.escape(sidebarTreeRow(treeItem))}"]`)
+        ?.setAttribute("data-tree-dragging", "");
+      setTreeDragActive(true);
+      return;
+    }
     contextDragKeyRef.current = activeKey;
     const activeSection = sectionByThreadKey.get(activeKey);
     if (activeSection === undefined) return;
@@ -3591,8 +3735,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             >
               <DndContext
                 sensors={dndSensors}
-                autoScroll={isContextDrag ? false : SIDEBAR_AUTO_SCROLL}
-                collisionDetection={dndCollisionDetection}
+                autoScroll={isContextDrag && !treeDragActive ? false : SIDEBAR_AUTO_SCROLL}
+                collisionDetection={(args) =>
+                  parseSidebarTreeDragId(String(args.active.id)) ? [] : dndCollisionDetection(args)
+                }
                 modifiers={dndModifiers}
                 onDragStart={handleThreadDragStart}
                 onDragOver={handleThreadDragOver}
@@ -3831,44 +3977,63 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         }
                         if (projectFolders !== null && item.marker === "active-placeholder") {
                           let otherHeaderShown = false;
-                          const entries = arrangeProjectFolders(
+                          const rows = arrangeProjectFolderTree(
                             [
                               ...projectFolders.filter((folder) => !folder.other),
                               ...projectFolders.filter((folder) => folder.other),
                             ],
                             namedProjectFolders,
+                            {
+                              isCollapsed: (id) =>
+                                folderExpandedById[projectFolderExpansionKey(id)] === false,
+                              // A project filter would otherwise list every unrelated group.
+                              includeEmpty: scopedProjectGroups.length === 0,
+                            },
                           );
-                          for (const entry of entries) {
-                            if (entry.kind === "folder") {
-                              const collapsed =
-                                folderExpandedById[`project-group:${entry.folder.id}`] === false;
+                          const folderParents = new Map(
+                            projectFolderTree(namedProjectFolders).map(({ folder }) => [
+                              folder.id,
+                              projectFolderAncestors(namedProjectFolders, folder.id)[0] ?? null,
+                            ]),
+                          );
+                          for (const row of rows) {
+                            if (row.kind === "folder") {
+                              const { folder: group, collapsed } = row;
+                              const expansionKey = projectFolderExpansionKey(group.id);
                               items.push(
                                 <ProjectGroupHeader
-                                  key={`project-group:${entry.folder.id}`}
-                                  folder={entry.folder}
+                                  key={expansionKey}
+                                  folder={group}
+                                  folders={namedProjectFolders}
+                                  depth={row.depth}
+                                  parentId={folderParents.get(group.id) ?? null}
+                                  excludedFolderIds={
+                                    new Set([
+                                      group.id,
+                                      ...namedProjectFolders
+                                        .filter((candidate) =>
+                                          projectFolderAncestors(
+                                            namedProjectFolders,
+                                            candidate.id,
+                                          ).includes(group.id),
+                                        )
+                                        .map((candidate) => candidate.id),
+                                    ])
+                                  }
                                   collapsed={collapsed}
-                                  threads={entry.projects.flatMap(
-                                    (project) => project.hiddenThreads,
-                                  )}
-                                  onToggle={() =>
-                                    setFolderExpanded(`project-group:${entry.folder.id}`, collapsed)
-                                  }
-                                  onRename={() => setFolderEditor({ folder: entry.folder })}
-                                  onDelete={() =>
-                                    updateClientSettings({
-                                      sidebarProjectFolders: namedProjectFolders.filter(
-                                        (folder) => folder.id !== entry.folder.id,
-                                      ),
-                                    })
-                                  }
+                                  threads={row.projects.flatMap((project) => project.hiddenThreads)}
+                                  onToggle={() => setFolderExpanded(expansionKey, collapsed)}
+                                  onRename={() => setFolderEditor({ folder: group })}
+                                  onCreateInside={() => setFolderEditor({ parentId: group.id })}
+                                  onMove={(parentId) => moveSidebarFolder(group.id, { parentId })}
+                                  onDelete={() => deleteSidebarFolder(group.id)}
                                 />,
                               );
-                              if (collapsed) continue;
+                              continue;
                             }
-                            for (const folder of entry.kind === "folder"
-                              ? entry.projects
-                              : [entry.project]) {
-                              if (entry.kind === "project" && folder.other && !otherHeaderShown) {
+                            {
+                              const folder = row.project;
+                              if (row.depth === 0 && folder.other && !otherHeaderShown) {
                                 otherHeaderShown = true;
                                 items.push(
                                   <li key="other-projects" className="list-none">
@@ -3890,17 +4055,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   </li>,
                                 );
                               }
-                              if (
-                                entry.kind === "project" &&
-                                folder.other &&
-                                !otherProjectsExpanded
-                              )
+                              if (row.depth === 0 && folder.other && !otherProjectsExpanded)
                                 continue;
                               items.push(
                                 <SidebarProjectFolderHeader
                                   key={`project-folder:${folder.group.projectKey}`}
                                   group={folder.group}
-                                  indented={entry.kind === "folder"}
+                                  depth={row.depth}
                                   collapsed={folder.collapsed}
                                   localLastVisitedAtById={folderLastVisitedByThreadKey}
                                   hiddenThreads={folder.hiddenThreads}
@@ -3974,6 +4135,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               }
                             }
                           }
+                          if (treeDragActive && namedProjectFolders.length > 0)
+                            items.push(
+                              <li
+                                key="tree-root"
+                                data-tree-row="root"
+                                className={`mt-2 flex h-8 list-none items-center px-2 text-xs text-sidebar-muted-foreground ${SIDEBAR_TREE_DROP_CLASS_NAME}`}
+                              >
+                                Move to top level
+                              </li>,
+                            );
                           continue;
                         }
                         if (projectSettledGrouping) continue;

@@ -20,10 +20,13 @@ import {
 
 export function ProjectFolderEditor({
   folder,
+  parentId,
   projectKeys = [],
   onClose,
 }: {
   folder?: ProjectFolder;
+  /** Creates the new group inside this one. */
+  parentId?: string;
   projectKeys?: readonly string[];
   onClose: () => void;
 }) {
@@ -40,7 +43,13 @@ export function ProjectFolderEditor({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>{folder ? "Rename group" : "New project group"}</DialogTitle>
+          <DialogTitle>
+            {folder
+              ? "Rename group"
+              : parentId
+                ? `New group inside ${folders.find((entry) => entry.id === parentId)?.name ?? "group"}`
+                : "New project group"}
+          </DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <label className="block space-y-2 text-sm">
@@ -68,11 +77,13 @@ export function ProjectFolderEditor({
           <Button
             disabled={!name.trim()}
             onClick={() => {
-              const next = {
+              const next: ProjectFolder = {
+                ...folder,
                 id: folder?.id ?? randomUUID(),
                 name: name.trim(),
                 emoji: emoji.trim(),
                 projectKeys: folder?.projectKeys ?? [],
+                ...(parentId === undefined ? {} : { parentId }),
               };
               const updated = folder
                 ? folders.map((entry) => (entry.id === folder.id ? next : entry))
