@@ -84,7 +84,11 @@ import { isElectron } from "~/env";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "~/keybindings";
 import { registerCommands } from "~/shortcuts/dispatcher";
 import { isTerminalFocused } from "~/lib/terminalFocus";
-import { PanelLayoutControls, RightPanelMaximizeControl } from "../chat/PanelLayoutControls";
+import {
+  PanelLayoutControls,
+  RightPanelMaximizeControl,
+  reserveTitlebarControls,
+} from "../chat/PanelLayoutControls";
 import { Button } from "../ui/button";
 import { SidebarInset, useMobileSidebarSheetMounted } from "../ui/sidebar";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
@@ -1161,6 +1165,7 @@ export function PullRequestsPage() {
   );
   const openPanelControls = (
     <div
+      ref={reserveTitlebarControls}
       className={cn(
         "absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]",
         mobileSidebarSheetMounted && "hidden",
