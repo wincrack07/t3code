@@ -135,6 +135,10 @@ import {
 import { PromptCompletionInput, PromptCompletionResult } from "./promptCompletion.ts";
 import { PromptPolishInput, PromptPolishResult } from "./promptPolish.ts";
 import {
+  ProjectGroupSuggestionInput,
+  ProjectGroupSuggestionResult,
+} from "./projectGroupSuggestions.ts";
+import {
   WorktreeSetupCancelInput,
   WorktreeSetupCancelResult,
   WorktreeSetupStreamEvent,
@@ -582,6 +586,7 @@ export const WS_METHODS = {
   serverCheckOtlpEndpoint: "server.checkOtlpEndpoint",
   serverListTextGeneratorModels: "server.listTextGeneratorModels",
   serverPolishPrompt: "server.polishPrompt",
+  serverSuggestProjectGroups: "server.suggestProjectGroups",
   serverCompletePrompt: "server.completePrompt",
   serverDecide: "server.decide",
   serverTestDecisionConnection: "server.testDecisionConnection",
@@ -1090,6 +1095,12 @@ const WsServerPolishPromptRpc = Rpc.make(WS_METHODS.serverPolishPrompt, {
   payload: PromptPolishInput,
   success: PromptPolishResult,
   error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+});
+
+const WsServerSuggestProjectGroupsRpc = Rpc.make(WS_METHODS.serverSuggestProjectGroups, {
+  payload: ProjectGroupSuggestionInput,
+  success: ProjectGroupSuggestionResult,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerCompletePromptRpc = Rpc.make(WS_METHODS.serverCompletePrompt, {
@@ -2308,6 +2319,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerCheckOtlpEndpointRpc,
   WsServerListTextGeneratorModelsRpc,
   WsServerPolishPromptRpc,
+  WsServerSuggestProjectGroupsRpc,
   WsServerCompletePromptRpc,
   WsServerDecideRpc,
   WsServerTestDecisionConnectionRpc,

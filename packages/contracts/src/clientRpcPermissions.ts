@@ -42,6 +42,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.serverTestDecisionConnection]: AuthSettingsWriteScope,
   [WS_METHODS.serverDecide]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverPolishPrompt]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverSuggestProjectGroups]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverCompletePrompt]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsRunAction]: AuthSourceControlWriteScope,

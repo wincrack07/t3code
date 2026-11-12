@@ -39,6 +39,79 @@ export function suggestProjectFolders(
   return [...prefixes.values()].filter((entry) => entry.projectKeys.length > 1);
 }
 
+/** One reviewable row of a suggestion: a group to create, or an existing group to fill. */
+export type ProjectGroupProposalRow = {
+  /** The proposal's ref for a new group, the group id for an existing one. */
+  id: string;
+  kind: "new" | "existing";
+  name: string;
+  parentGroupId?: string;
+  /** A new group listed earlier in the same proposal. */
+  parentRef?: string;
+  checked: boolean;
+  projects: { key: string; title: string; checked: boolean }[];
+};
+
+function plannedProposalRows(rows: readonly ProjectGroupProposalRow[]) {
+  const checkedKeys = (row: ProjectGroupProposalRow) =>
+    row.checked
+      ? row.projects.filter((project) => project.checked).map((project) => project.key)
+      : [];
+  const fills = (row: ProjectGroupProposalRow): boolean =>
+    checkedKeys(row).length > 0 ||
+    (row.kind === "new" &&
+      row.checked &&
+      row.name.trim().length > 0 &&
+      rows.some((child) => child.kind === "new" && child.parentRef === row.id && fills(child)));
+  return rows
+    .filter((row) => (row.kind === "existing" || row.name.trim().length > 0) && fills(row))
+    .map((row) => ({ row, keys: checkedKeys(row) }));
+}
+
+export function countProjectGroupProposal(rows: readonly ProjectGroupProposalRow[]) {
+  const planned = plannedProposalRows(rows);
+  return {
+    groups: planned.filter(({ row }) => row.kind === "new").length,
+    projects: planned.reduce((total, { keys }) => total + keys.length, 0),
+  };
+}
+
+/**
+ * Applies the checked part of a suggestion the way creating and moving by hand does:
+ * new groups append in proposal order and projects move with `moveProjectsToFolder`.
+ * A group whose parent is gone or not created lands at the top level.
+ */
+export function applyProjectGroupProposal(
+  folders: readonly ProjectFolder[],
+  rows: readonly ProjectGroupProposalRow[],
+  makeId: () => string,
+): ProjectFolder[] {
+  let next = [...folders];
+  const created = new Map<string, string>();
+  for (const { row, keys } of plannedProposalRows(rows)) {
+    let folderId = row.id;
+    if (row.kind === "new") {
+      folderId = makeId();
+      created.set(row.id, folderId);
+      const parentId =
+        row.parentGroupId !== undefined && next.some((folder) => folder.id === row.parentGroupId)
+          ? row.parentGroupId
+          : row.parentRef === undefined
+            ? undefined
+            : created.get(row.parentRef);
+      next.push({
+        id: folderId,
+        name: row.name.trim(),
+        emoji: "",
+        projectKeys: [],
+        ...(parentId === undefined ? {} : { parentId }),
+      });
+    }
+    next = moveProjectsToFolder(next, keys, folderId);
+  }
+  return next;
+}
+
 export const projectFolderExpansionKey = (folderId: string) => `project-group:${folderId}`;
 
 /** Parents that are missing or would close a cycle read as top level, so no group is lost. */

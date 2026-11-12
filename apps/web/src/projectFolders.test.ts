@@ -2,7 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 import { ClientSettingsSchema, ClientSettingsPatch } from "@t3tools/contracts/settings";
 import {
+  applyProjectGroupProposal,
   arrangeProjectFolderTree,
+  countProjectGroupProposal,
   UNGROUPED_PROJECT_FOLDER_ID,
   deleteProjectFolder,
   moveProjectFolder,
@@ -15,6 +17,7 @@ import {
   resolveSidebarTreeDropZone,
   suggestProjectFolders,
   type ProjectFolder,
+  type ProjectGroupProposalRow,
 } from "./projectFolders";
 
 const decodeSettings = Schema.decodeSync(ClientSettingsSchema);
@@ -68,6 +71,64 @@ describe("project folders", () => {
     expect(suggestProjectFolders(projects, [{ ...folders[0]!, projectKeys: ["0", "1"] }])).toEqual(
       [],
     );
+  });
+
+  it("applies only the checked part of a suggestion, across environments", () => {
+    const project = (key: string, checked = true) => ({ key, title: key, checked });
+    const rows: ProjectGroupProposalRow[] = [
+      {
+        id: "n1",
+        kind: "new",
+        name: " Billing ",
+        parentGroupId: "a",
+        checked: true,
+        projects: [project("mac:billing-api"), project("server:billing-web", false)],
+      },
+      // Holds no projects itself, but a checked child does.
+      { id: "n2", kind: "new", name: "Personal", checked: true, projects: [] },
+      {
+        id: "n3",
+        kind: "new",
+        name: "Blogs",
+        parentRef: "n2",
+        checked: true,
+        projects: [project("server:blog")],
+      },
+      // Unchecked: its member stays ungrouped and its child moves to the top level.
+      { id: "n4", kind: "new", name: "Dropped", checked: false, projects: [project("mac:x")] },
+      {
+        id: "n5",
+        kind: "new",
+        name: "Orphan",
+        parentRef: "n4",
+        checked: true,
+        projects: [project("mac:y")],
+      },
+      { id: "n6", kind: "new", name: "  ", checked: true, projects: [project("mac:z")] },
+      { id: "b", kind: "existing", name: "Other", checked: true, projects: [project("mac:docs")] },
+      {
+        id: "gone",
+        kind: "existing",
+        name: "Deleted",
+        checked: true,
+        projects: [project("mac:w")],
+      },
+    ];
+    expect(countProjectGroupProposal(rows)).toEqual({ groups: 4, projects: 5 });
+    let id = 0;
+    const applied = applyProjectGroupProposal(folders, rows, () => `new-${++id}`);
+    expect(applied).toEqual([
+      folders[0],
+      { ...folders[1], projectKeys: ["server:other", "mac:docs"] },
+      { id: "new-1", name: "Billing", emoji: "", parentId: "a", projectKeys: ["mac:billing-api"] },
+      { id: "new-2", name: "Personal", emoji: "", projectKeys: [] },
+      { id: "new-3", name: "Blogs", emoji: "", parentId: "new-2", projectKeys: ["server:blog"] },
+      { id: "new-4", name: "Orphan", emoji: "", projectKeys: ["mac:y"] },
+    ]);
+    expect(countProjectGroupProposal(rows.map((row) => ({ ...row, checked: false })))).toEqual({
+      groups: 0,
+      projects: 0,
+    });
   });
 
   it("lists groups before projects at every level, in stored group order", () => {

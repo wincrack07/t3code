@@ -248,6 +248,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import * as PromptCompletion from "./promptCompletion/PromptCompletion.ts";
 import * as PromptPolish from "./promptPolish/PromptPolish.ts";
+import * as ProjectGroupSuggestions from "./projectGroupSuggestions/ProjectGroupSuggestions.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -1550,6 +1551,7 @@ export const layerWsRpc = (
       const otlpEndpointCheck = yield* OtlpEndpointCheck.OtlpEndpointCheck;
       const textGenerators = yield* TextGenerators.TextGenerators;
       const promptPolish = yield* PromptPolish.PromptPolish;
+      const projectGroupSuggestions = yield* ProjectGroupSuggestions.ProjectGroupSuggestions;
       const promptCompletion = yield* PromptCompletion.PromptCompletion;
       const decisions = yield* Decisions.Decisions;
       const sourceControlRepositories =
@@ -2673,6 +2675,7 @@ export const layerWsRpc = (
         [WS_METHODS.serverTestDecisionConnection]: () => decisions.testConnection(),
         [WS_METHODS.serverDecide]: (input) => decisions.decide(input),
         [WS_METHODS.serverPolishPrompt]: (input) => promptPolish.polish(input),
+        [WS_METHODS.serverSuggestProjectGroups]: (input) => projectGroupSuggestions.suggest(input),
         [WS_METHODS.serverCompletePrompt]: (input) => promptCompletion.complete(input),
         [WS_METHODS.serverPrepareTriage]: (input) => triage.prepare(input),
         [WS_METHODS.prReviewsGetState]: () => prReviews.getState,
@@ -3565,6 +3568,7 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(ClaudeArtifacts.ClaudeArtifacts, claudeArtifacts)),
               Layer.provide(OtlpEndpointCheck.layer),
               Layer.provide(PromptPolish.layer),
+              Layer.provide(ProjectGroupSuggestions.layer),
               Layer.provide(PromptCompletion.layer),
               Layer.provide(Decisions.layer),
               Layer.provide(
