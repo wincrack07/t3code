@@ -226,12 +226,33 @@ export function planProjectCommand(input: {
                 id: action.id,
                 text: action.text,
                 title: action.title ?? null,
+                ...(action.priority === undefined ? {} : { priority: action.priority }),
+                ...(action.when === undefined ? {} : { when: action.when }),
+                ...(action.tags === undefined
+                  ? {}
+                  : { tags: [...new Set(action.tags.map((tag) => tag.trim().toLowerCase()))] }),
                 status: action.status ?? "open",
                 createdAt: occurredAt,
                 completedAt: action.status === "done" ? occurredAt : null,
               },
               ...savedPrompts,
             ];
+        } else if (action.kind === "reorder") {
+          if (
+            new Set(action.ids).size !== action.ids.length ||
+            action.ids.some(
+              (id) => !savedPrompts.some((item) => item.id === id && item.deletedAt === undefined),
+            )
+          )
+            return invariant("Reorder requires unique active task ids.");
+          const order = new Map(action.ids.map((id, index) => [id, index]));
+          const selected = savedPrompts
+            .filter((item) => order.has(item.id))
+            .sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+          let index = 0;
+          savedPrompts = savedPrompts.map((item) =>
+            order.has(item.id) ? selected[index++]! : item,
+          );
         } else if (action.kind === "clear-done") {
           const completed = savedPrompts.filter(
             (item) => item.deletedAt === undefined && item.completedAt !== null,
@@ -319,6 +340,15 @@ export function planProjectCommand(input: {
                     : action.kind === "edit"
                       ? {
                           ...item,
+                          ...(action.priority === undefined ? {} : { priority: action.priority }),
+                          ...(action.when === undefined ? {} : { when: action.when }),
+                          ...(action.tags === undefined
+                            ? {}
+                            : {
+                                tags: [
+                                  ...new Set(action.tags.map((tag) => tag.trim().toLowerCase())),
+                                ],
+                              }),
                           ...(action.text === undefined ? {} : { text: action.text }),
                           ...(action.title === undefined ? {} : { title: action.title }),
                           ...(action.status === undefined

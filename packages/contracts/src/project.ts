@@ -156,6 +156,14 @@ export const SavedPromptStatus = Schema.Literals(["open", "in-progress", "done"]
 export type SavedPromptStatus = typeof SavedPromptStatus.Type;
 const SavedPromptTitle = Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(160)));
 
+const TaskInboxFields = {
+  priority: Schema.optional(Schema.Literals(["p1", "p2", "p3"])),
+  tags: Schema.optional(
+    Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(32))).check(Schema.isMaxLength(12)),
+  ),
+  when: Schema.optional(Schema.Literals(["today", "later", "none"])),
+};
+
 export const ProjectTaskAttachment = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("reference"),
@@ -226,6 +234,7 @@ export const ProjectSavedPrompt = Schema.Struct({
   completedAt: Schema.NullOr(IsoDateTime),
   title: Schema.optional(SavedPromptTitle),
   status: Schema.optional(SavedPromptStatus),
+  ...TaskInboxFields,
   deletedAt: Schema.optional(IsoDateTime),
   latestThreadId: Schema.optional(ThreadId),
   latestThreadEnvironmentId: Schema.optional(EnvironmentId),
@@ -248,12 +257,17 @@ export type TaskAttachmentListResult = typeof TaskAttachmentListResult.Type;
 
 export const SavedPromptAction = Schema.Union([
   Schema.Struct({
+    kind: Schema.Literal("reorder"),
+    ids: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(100)),
+  }),
+  Schema.Struct({
     kind: Schema.Literal("add"),
     id: TrimmedNonEmptyString,
     text: ProjectSavedPrompt.fields.text,
     attachments: Schema.optional(TaskAttachmentInputs),
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
+    ...TaskInboxFields,
   }),
   Schema.Struct({
     kind: Schema.Literal("edit"),
@@ -261,6 +275,7 @@ export const SavedPromptAction = Schema.Union([
     text: Schema.optional(ProjectSavedPrompt.fields.text),
     title: Schema.optional(SavedPromptTitle),
     status: Schema.optional(SavedPromptStatus),
+    ...TaskInboxFields,
   }),
   Schema.Struct({
     kind: Schema.Literal("complete"),

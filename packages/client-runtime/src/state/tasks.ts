@@ -213,7 +213,21 @@ export function createSavedTaskCommands<R, E>(
       (effect, _input, registry) => effect.pipe(withCommandPermissions(runtime, registry)),
     ),
   });
+  const quickCreate = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:quick-create",
+    execute: (input: { home: ScopedProjectRef; commandId: CommandId; text: string }, registry) =>
+      runInEnvironment(
+        input.home.environmentId,
+        requestGuarded(WS_METHODS.projectsMutate, {
+          type: "project.update",
+          projectId: input.home.projectId,
+          commandId: input.commandId,
+          savedPrompt: { kind: "add", id: String(input.commandId), text: input.text },
+        }),
+      ).pipe(withCommandPermissions(runtime, registry)),
+  });
   return {
+    quickCreate: { ...quickCreate, permissionAtom: permissions.permissionAtom },
     launch: { ...launch, permissionAtom: permissions.permissionAtom },
     retryLink: { ...retryLink, permissionAtom: permissions.permissionAtom },
     prepareDraft: { ...prepareDraft, permissionAtom: permissions.permissionAtom },

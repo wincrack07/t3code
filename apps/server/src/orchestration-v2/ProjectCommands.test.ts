@@ -113,6 +113,37 @@ describe("planProjectCommand", () => {
       )._tag,
       "ProjectCommandInvariantError",
     );
+    const inbox = payloadOf(
+      update({
+        kind: "edit",
+        id: "one",
+        priority: "p1",
+        when: "today",
+        tags: ["Bug", "bug", "API"],
+      }),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.deepStrictEqual(inbox[0]?.tags, ["bug", "api"]);
+    assert.strictEqual(inbox[0]?.priority, "p1");
+    assert.strictEqual(inbox[0]?.when, "today");
+    assert.strictEqual(
+      failureOf(update({ kind: "edit", id: "one", tags: ["x".repeat(33)] }))._tag,
+      "ProjectCommandInvariantError",
+    );
+    const reordered = payloadOf(
+      update({ kind: "reorder", ids: ["two", "one"] }, [
+        task,
+        { ...task, id: "middle" },
+        { ...task, id: "two" },
+      ]),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.deepStrictEqual(
+      reordered.map((item) => item.id),
+      ["two", "middle", "one"],
+    );
+    assert.strictEqual(
+      failureOf(update({ kind: "reorder", ids: ["one", "one"] }))._tag,
+      "ProjectCommandInvariantError",
+    );
     const max = payloadOf(
       update({
         kind: "edit",
