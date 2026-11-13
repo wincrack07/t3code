@@ -1,3 +1,4 @@
+import { ChatImportSettings } from "./ChatImportSettings";
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { SettingsSection } from "./settingsLayout";
@@ -17,7 +18,7 @@ export function ChatBackupSettings() {
       </p>
       <div>
         <Button
-          disabled={busy || connected.size === 0}
+          disabled={busy || connected.length === 0}
           onClick={() => {
             setBusy(true);
             setStatus("Preparing export…");
@@ -35,6 +36,7 @@ export function ChatBackupSettings() {
           Export all chats
         </Button>
       </div>
+      <ChatImportSettings />
       <p role="status" className="text-sm text-muted-foreground">
         {status}
       </p>

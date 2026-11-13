@@ -183,6 +183,7 @@ describe("command permissions", () => {
   );
 
   it.effect.each([
+    { method: ORCHESTRATION_V2_WS_METHODS.importThread, scope: AuthOrchestrationOperateScope },
     { method: WS_METHODS.projectsMutate, scope: AuthOrchestrationOperateScope },
     { method: WS_METHODS.projectsTaskAttachments, scope: AuthOrchestrationReadScope },
     { method: WS_METHODS.projectsTaskBatchStart, scope: AuthOrchestrationOperateScope },

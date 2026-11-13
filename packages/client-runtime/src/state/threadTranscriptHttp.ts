@@ -64,7 +64,7 @@ export const fetchEnvironmentThreadExportIndex = Effect.fn(
     ...input,
     group: "orchestration",
     method: "GET",
-    url: (urls) => urls.threadExportIndex({}),
+    url: (urls) => urls.threadExportIndex(),
     timeoutMs: 60_000,
     request: ({ client, headers }) =>
       client.threadExportIndex({

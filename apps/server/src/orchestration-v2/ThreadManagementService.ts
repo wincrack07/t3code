@@ -1,5 +1,10 @@
+import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 import type { T3ThreadExportResult, T3ThreadExport } from "@t3tools/contracts";
-import { portableConversation, limitThreadExport } from "@t3tools/shared/threadExport";
+import {
+  portableConversation,
+  limitThreadExport,
+  portableImportThreadId,
+} from "@t3tools/shared/threadExport";
 import * as ProjectStore from "./ProjectStore.ts";
 import type {
   OrchestrationV2SearchThreadInput,
@@ -391,6 +396,11 @@ export interface ThreadManagementServiceShape {
   ) => Effect.Effect<OrchestrationV2ThreadProjection, Orchestrator.OrchestratorV2Error>;
   readonly getCheckpointContext: Orchestrator.OrchestratorV2["Service"]["getCheckpointContext"];
   readonly getThreadSnapshot: Orchestrator.OrchestratorV2["Service"]["getThreadSnapshot"];
+  readonly importThread: (input: {
+    readonly bundle: T3ThreadExport;
+    readonly projectId: ProjectId;
+    readonly modelSelection: import("@t3tools/contracts").ModelSelection;
+  }) => ReturnType<ThreadManagementServiceShape["dispatch"]>;
   readonly exportThreadIds: () => Effect.Effect<
     ReadonlyArray<ThreadId>,
     Orchestrator.OrchestratorV2Error
@@ -1631,6 +1641,24 @@ const make = Effect.gen(function* () {
       );
     }),
     dispatch,
+    importThread: Effect.fn("threadManagement.importThread")(function* (input) {
+      const threadId = portableImportThreadId(input.bundle);
+      return yield* dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`import:${yield* randomUuidV4}`),
+        threadId,
+        projectId: input.projectId,
+        title: input.bundle.title.trim().slice(0, 200) || "Imported chat",
+        modelSelection: input.modelSelection,
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+        importedChat: input.bundle,
+      });
+    }),
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
       function (threadId, cursor, throughEntryId, conversationOnly, workMode) {
         return ensureProjectionTranscript(threadId).pipe(

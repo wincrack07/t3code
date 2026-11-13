@@ -131,8 +131,6 @@ export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
   const items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> = [
-    { id: "export-md", label: "Export chat… (Markdown)" },
-    { id: "export-json", label: "Export chat… (JSON)" },
     ...(state.canOpenNewWindow
       ? [{ id: "open-in-new-window" as const, label: "Open in new window" }]
       : []),
@@ -275,6 +273,8 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },
+    { id: "export-md", label: "Export chat… (Markdown)" },
+    { id: "export-json", label: "Export chat… (JSON)" },
     {
       id: "archive",
       label: "Archive thread",

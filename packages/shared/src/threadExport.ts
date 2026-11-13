@@ -1,3 +1,6 @@
+import { ThreadId } from "@t3tools/contracts";
+import { sha256 } from "@noble/hashes/sha2";
+import * as Hex from "effect/encoding/Hex";
 import type { OrchestrationV2ThreadTranscript, T3ThreadExport } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
@@ -33,16 +36,20 @@ export function safeBackupName(value: string): string {
   return (
     value
       .normalize("NFC")
-      .replace(/[\[\]#^|:\\/?*<>"\u0000-\u001f\u007f]/g, "_")
+      .replace(/[[\]#^|:\\/?*<>"\u0000-\u001f\u007f]/g, "_")
       .replace(/^\.+|[. ]+$/g, "")
       .trim()
-      .slice(0, 80)
+      .slice(0, 48)
       .trim() || "Untitled"
   );
 }
 
 export function threadExportPath(bundle: T3ThreadExport): string {
-  return `${safeBackupName(bundle.source.label)} ${safeBackupName(bundle.source.environmentId).slice(0, 8)}/${safeBackupName(bundle.project.title)}/${bundle.createdAt.slice(0, 10)} ${safeBackupName(bundle.title)} ${safeBackupName(bundle.threadId)} `.trim();
+  const shortId = Hex.encode(sha256(new TextEncoder().encode(bundle.threadId))).slice(0, 12);
+  const environmentId = Hex.encode(
+    sha256(new TextEncoder().encode(bundle.source.environmentId)),
+  ).slice(0, 8);
+  return `${safeBackupName(bundle.source.label)} ${environmentId}/${safeBackupName(bundle.project.title)}/${bundle.createdAt.slice(0, 10)} ${safeBackupName(bundle.title)} ${shortId}`;
 }
 
 export function renderThreadExportMarkdown(bundle: T3ThreadExport): string {
@@ -84,4 +91,10 @@ export function limitThreadExport(bundle: T3ThreadExport): T3ThreadExport {
       attachments: [],
     });
   return { ...bundle, conversation };
+}
+
+export function portableImportThreadId(bundle: Pick<T3ThreadExport, "threadId" | "source">) {
+  return ThreadId.make(
+    `import-${Hex.encode(sha256(new TextEncoder().encode(JSON.stringify([bundle.source.environmentId, bundle.threadId]))))}`,
+  );
 }

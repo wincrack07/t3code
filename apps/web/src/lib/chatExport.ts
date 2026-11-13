@@ -1,15 +1,17 @@
+import { T3ThreadExport as T3ThreadExportSchema } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import type { EnvironmentId, ScopedThreadRef, T3ThreadExport } from "@t3tools/contracts";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { renderThreadExportMarkdown, threadExportPath } from "@t3tools/shared/threadExport";
 import { appAtomRegistry } from "../rpc/atomRegistry";
-import { orchestrationEnvironment } from "../state/orchestration";
 
-export async function loadChatExport(ref: ScopedThreadRef) {
+async function loadChatExport(ref: ScopedThreadRef) {
+  const { orchestrationEnvironment } = await import("../state/orchestration");
   const result = await runAtomCommand(
     appAtomRegistry,
     orchestrationEnvironment.threadExport,
-    { ...ref },
+    { environmentId: ref.environmentId, input: { threadId: ref.threadId } },
     { reportFailure: false },
   );
   if (!AsyncResult.isSuccess(result))
@@ -44,6 +46,7 @@ export async function downloadAllChats(
   environmentIds: ReadonlyArray<EnvironmentId>,
   progress: (count: number) => void,
 ) {
+  const { orchestrationEnvironment } = await import("../state/orchestration");
   const { default: JSZip } = await import("jszip");
   const zip = new JSZip();
   const folders = new Map<string, Array<{ bundle: T3ThreadExport; filename: string }>>();
@@ -52,7 +55,7 @@ export async function downloadAllChats(
     const result = await runAtomCommand(
       appAtomRegistry,
       orchestrationEnvironment.threadExportIndex,
-      { environmentId },
+      { environmentId, input: {} },
       { reportFailure: false },
     );
     if (!AsyncResult.isSuccess(result))
@@ -77,8 +80,7 @@ export async function downloadAllChats(
       `${folder}/_index.md`,
       rows
         .map(
-          ({ bundle, filename }) =>
-            `- [[${filename}|${bundle.title.replace(/[\]\[|\r\n]/g, " ")}]]`,
+          ({ bundle, filename }) => `- [[${filename}|${bundle.title.replace(/[\][|\r\n]/g, " ")}]]`,
         )
         .join("\n") + "\n",
     );
@@ -88,4 +90,31 @@ export async function downloadAllChats(
     "t3code-chats.zip",
   );
   return count;
+}
+
+const decodeBundle = Schema.decodeUnknownSync(T3ThreadExportSchema);
+
+export async function readChatImports(files: FileList): Promise<T3ThreadExport[]> {
+  const bundles: T3ThreadExport[] = [];
+  let bytes = 0;
+  for (const file of Array.from(files)) {
+    if (file.size > 100_000_000) throw new Error("Import files must be smaller than 100 MB.");
+    if (file.name.toLowerCase().endsWith(".zip")) {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      for (const entry of Object.values(zip.files)) {
+        if (entry.dir || !entry.name.endsWith(".t3thread.json")) continue;
+        const raw = await entry.async("string");
+        bytes += raw.length;
+        if (bytes > 100_000_000 || raw.length > 10_000_000)
+          throw new Error("Import exceeds the 100 MB batch or 10 MB thread limit.");
+        bundles.push(decodeBundle(JSON.parse(raw)));
+      }
+    } else {
+      if (file.size > 10_000_000) throw new Error("Thread bundles must be smaller than 10 MB.");
+      bundles.push(decodeBundle(JSON.parse(await file.text())));
+    }
+  }
+  if (!bundles.length) throw new Error("No .t3thread.json files found.");
+  return bundles;
 }

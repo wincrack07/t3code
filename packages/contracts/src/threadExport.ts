@@ -1,21 +1,28 @@
 import * as Schema from "effect/Schema";
 
+const Timestamp = Schema.String.check(
+  Schema.makeFilter(
+    (value) => /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)),
+    { expected: "an ISO timestamp" },
+  ),
+);
+const Metadata = Schema.String.check(Schema.isMaxLength(8192));
 export const T3ThreadExport = Schema.Struct({
   format: Schema.Literal("t3code.thread"),
   version: Schema.Literal(1),
-  threadId: Schema.String,
-  title: Schema.String,
-  createdAt: Schema.String,
-  updatedAt: Schema.String,
-  source: Schema.Struct({ environmentId: Schema.String, label: Schema.String }),
-  project: Schema.Struct({ title: Schema.String, workspacePath: Schema.String }),
-  provider: Schema.String,
-  model: Schema.String,
+  threadId: Metadata,
+  title: Metadata,
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  source: Schema.Struct({ environmentId: Metadata, label: Metadata }),
+  project: Schema.Struct({ title: Metadata, workspacePath: Metadata }),
+  provider: Metadata,
+  model: Metadata,
   conversation: Schema.Array(
     Schema.Struct({
       role: Schema.Literals(["user", "assistant", "plan"]),
       text: Schema.String,
-      timestamp: Schema.String,
+      timestamp: Timestamp,
       attachments: Schema.Array(Schema.Struct({ name: Schema.String })),
     }),
   ),
@@ -25,16 +32,16 @@ export type T3ThreadExport = typeof T3ThreadExport.Type;
 export const T3ThreadExportResult = Schema.Struct({
   bundle: T3ThreadExport,
   meta: Schema.Struct({
-    environmentId: Schema.String,
+    environmentId: Metadata,
     environmentLabel: Schema.String,
-    threadId: Schema.String,
-    title: Schema.String,
+    threadId: Metadata,
+    title: Metadata,
     projectTitle: Schema.NullOr(Schema.String),
     workspaceRoot: Schema.NullOr(Schema.String),
     provider: Schema.NullOr(Schema.String),
     model: Schema.NullOr(Schema.String),
-    createdAt: Schema.String,
-    updatedAt: Schema.String,
+    createdAt: Timestamp,
+    updatedAt: Timestamp,
     archived: Schema.Boolean,
     deletedAt: Schema.NullOr(Schema.String),
     messageCount: Schema.Number,

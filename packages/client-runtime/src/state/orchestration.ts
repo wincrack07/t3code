@@ -191,6 +191,10 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
         });
       }),
     }),
+    importThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:import-thread",
+      tag: ORCHESTRATION_V2_WS_METHODS.importThread,
+    }),
     v2: {
       dispatchCommand: createEnvironmentRpcCommand(runtime, {
         label: "environment-data:orchestration-v2:dispatch-command",
