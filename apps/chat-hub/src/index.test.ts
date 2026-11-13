@@ -204,6 +204,16 @@ it("stores opaque bundles and markdown, ignores equal/older PUTs, and serializes
   expect(s.sqlite.prepare("SELECT count(*) AS n FROM thread_search").get()?.n).toBe(0);
 });
 
+it("accepts percent-encoded T3 ids with colons and rejects ids outside the id alphabet", async () => {
+  using s = setup();
+  const realId = "mcp:launch:3f2a%3Aordinal";
+  expect(
+    (await s.call(`/threads/mac/${encodeURIComponent(realId)}`, "PUT", input(realId))).status,
+  ).toBe(200);
+  expect((await s.call(`/threads/mac/${encodeURIComponent(realId)}`)).status).toBe(200);
+  expect((await s.call("/threads/mac/bad%20id", "PUT", input("bad id"))).status).toBe(404);
+});
+
 it("rejects mismatched ids, invalid bodies/dates and both declared and streamed oversized bodies", async () => {
   using s = setup();
   expect((await s.call("/threads/mac/other", "PUT", input())).status).toBe(400);

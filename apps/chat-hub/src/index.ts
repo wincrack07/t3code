@@ -1,4 +1,9 @@
-import { ChatHubMeta, ChatHubPut, ChatHubTokenInput } from "@t3tools/contracts/chat-hub";
+import {
+  CHAT_HUB_ID_PATTERN,
+  ChatHubMeta,
+  ChatHubPut,
+  ChatHubTokenInput,
+} from "@t3tools/contracts/chat-hub";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
@@ -100,10 +105,14 @@ function decode<S extends Schema.Top>(schema: S, value: unknown): S["Type"] {
   }
 }
 function threadIds(url: URL) {
-  const match = /^\/v1\/threads\/([A-Za-z0-9_-]{1,256})\/([A-Za-z0-9_-]{1,256})$/.exec(
-    url.pathname,
-  );
-  return match ? ([match[1]!, match[2]!] as const) : null;
+  const match = /^\/v1\/threads\/([^/]{1,1024})\/([^/]{1,1024})$/.exec(url.pathname);
+  if (!match) return null;
+  try {
+    const ids = [decodeURIComponent(match[1]!), decodeURIComponent(match[2]!)] as const;
+    return ids.every((id) => CHAT_HUB_ID_PATTERN.test(id)) ? ids : null;
+  } catch {
+    return null;
+  }
 }
 
 // D1 and R2 have no shared transaction; serialize each thread across Worker instances.
@@ -129,7 +138,7 @@ async function threadRequest(request: Request, env: Env) {
   const ids = threadIds(url);
   if (!ids) return fail(404, "not_found", "Thread route not found");
   const [environmentId, threadId] = ids;
-  const key = `threads/${environmentId}/${threadId}`;
+  const key = `threads/${encodeURIComponent(environmentId)}/${encodeURIComponent(threadId)}`;
   const row = await env.DB.prepare(
     "SELECT id, meta, updated_at FROM threads WHERE environment_id = ? AND thread_id = ?",
   )

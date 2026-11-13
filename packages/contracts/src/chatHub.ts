@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 
-const Id = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,256}$/));
+// T3 ids include `:` and `%` (e.g. `mcp:launch:<hex>`); clients percent-encode path segments.
+export const CHAT_HUB_ID_PATTERN = /^[A-Za-z0-9_.:%~-]{1,256}$/;
+const Id = Schema.String.check(Schema.isPattern(CHAT_HUB_ID_PATTERN));
 const Timestamp = Schema.String.check(
   Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/),
 );
