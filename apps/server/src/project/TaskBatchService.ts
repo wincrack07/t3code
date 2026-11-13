@@ -3,6 +3,7 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import {
   CommandId,
   Project,
+  AUTO_MODEL,
   MessageId,
   ThreadId,
   TaskBatchError,
@@ -99,7 +100,10 @@ const make = Effect.gen(function* () {
     source: TaskBatchEntry["source"],
   ) {
     if (source.environmentId === environmentId)
-      return { project: Option.getOrUndefined(yield* store.get(source.projectId)), verified: true };
+      return {
+        project: Option.getOrUndefined(yield* projects.getById(source.projectId)),
+        verified: true,
+      };
     const result = yield* peers
       .call({
         environmentId: source.environmentId,
@@ -110,7 +114,7 @@ const make = Effect.gen(function* () {
       })
       .pipe(Effect.timeout("10 seconds"), Effect.result);
     return result._tag === "Success"
-      ? { project: result.success, verified: true }
+      ? { project: result.success, verified: result.success.taskDefaults !== undefined }
       : { project: undefined, verified: false };
   });
   const readSources = Effect.fn("TaskBatchService.readSources")(function* (
@@ -215,11 +219,16 @@ const make = Effect.gen(function* () {
         if (!task || !source) return "source-deleted" as const;
         const resolved = resolveTaskBatchLaunch(
           task,
-          source,
+          source.taskDefaults ?? source,
           entry.fallback ?? entry.launch,
           entry.overrides,
         );
         const prepared = resolveTaskBatchLaunch({}, {}, entry.launch);
+        if (
+          prepared.modelSelection.model === AUTO_MODEL ||
+          prepared.modelSelection.routing === "auto"
+        )
+          return "unresolved-model" as const;
         if (stableStringify(resolved) !== stableStringify(prepared))
           return "settings-changed" as const;
         if (taskBatchBriefKey(task) !== taskBatchBriefKey(entry.brief))

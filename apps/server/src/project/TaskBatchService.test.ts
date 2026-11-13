@@ -16,7 +16,6 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -47,7 +46,17 @@ const persistence = Layer.mergeAll(
   EffectOutbox.layer,
 ).pipe(
   Layer.provideMerge(Sqlite.layerMemory),
-  Layer.provide(ServerSettings.layerTest()),
+  Layer.provide(
+    ServerSettings.layerTest({
+      defaultRuntimeMode: "full-access",
+      projectSettingsOverrides: {
+        [ProjectId.make("folded")]: {
+          defaultModelSelection: { ...modelSelection, model: "folded-free" },
+          defaultThreadEnvMode: "worktree",
+        },
+      },
+    }),
+  ),
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "task-batch-test-" })),
   Layer.provide(
     Layer.mock(WorkspacePaths.WorkspacePaths)({ normalizeWorkspaceRoot: Effect.succeed }),
@@ -179,11 +188,11 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
   ).pipe(Layer.provideMerge(persistence));
   const services = Layer.mergeAll(TaskBatchService.layer, TaskReviewService.layer).pipe(
     Layer.provideMerge(launches),
-    Layer.provide(
+    Layer.provideMerge(
       Layer.effect(
         PeerMcpClient.PeerMcpClient,
         Effect.gen(function* () {
-          const store = yield* ProjectStore.ProjectStoreV2;
+          const projects = yield* ProjectService.ProjectService;
           return PeerMcpClient.PeerMcpClient.of({
             call: (input) =>
               Effect.gen(function* () {
@@ -193,13 +202,12 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
                     message: "Unavailable fixture",
                   });
                 const project = Option.getOrThrow(
-                  yield* store.get(ProjectId.make(String(input.arguments.projectId))),
+                  yield* projects
+                    .getById(ProjectId.make(String(input.arguments.projectId)))
+                    .pipe(Effect.orDie),
                 );
-                // oxlint-disable-next-line t3code/no-inline-schema-compile -- The fixture decodes the generic success schema supplied by its caller.
-                return yield* Schema.decodeUnknownEffect(input.success)({
-                  ...project,
-                  id: project.projectId,
-                }).pipe(Effect.orDie);
+                assert.strictEqual(input.tool, "t3_project_read");
+                return project as typeof input.success.Type;
               }),
           });
         }),
@@ -547,5 +555,45 @@ it.effect("validates linked sources and refuses unavailable peers", () => {
     yield* batches.pump();
     assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "test");
     assert.strictEqual(fixture.accepted.size, 1);
+  }).pipe(Effect.provide(fixture.layer));
+});
+
+it.effect("honors folded project settings and requires a concrete prepared model", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const input = yield* seed("folded", 1);
+    const entry = input.entries[0]!;
+    const prepared = {
+      ...input,
+      entries: [
+        {
+          ...entry,
+          fallback: entry.launch,
+          launch: {
+            ...entry.launch,
+            modelSelection: { ...modelSelection, model: "folded-free" },
+            threadEnvMode: "worktree" as const,
+          },
+        },
+      ],
+    };
+    const queued = yield* batches.start(prepared);
+    assert.strictEqual(queued.entries[0]?.state, "queued");
+    yield* batches.pump();
+    assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "folded-free");
+    assert.deepStrictEqual(fixture.launchInputs[0]?.workspaceStrategy, {
+      type: "worktree",
+      baseRef: "HEAD",
+    });
+    const auto = yield* seed("auto", 1);
+    const refused = yield* batches.start({
+      ...auto,
+      entries: auto.entries.map((entry) => ({
+        ...entry,
+        launch: { ...entry.launch, modelSelection: { ...modelSelection, model: "t3:auto" } },
+      })),
+    });
+    assert.strictEqual(refused.entries[0]?.failureReason, "unresolved-model");
   }).pipe(Effect.provide(fixture.layer));
 });

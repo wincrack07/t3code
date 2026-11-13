@@ -340,7 +340,13 @@ export const TaskBatchEntry = Schema.Struct({
     "failed-to-start",
   ]),
   failureReason: Schema.optional(
-    Schema.Literals(["settings-changed", "task-changed", "source-deleted", "source-unverifiable"]),
+    Schema.Literals([
+      "settings-changed",
+      "task-changed",
+      "source-deleted",
+      "source-unverifiable",
+      "unresolved-model",
+    ]),
   ),
   reason: Schema.optional(Schema.String.check(Schema.isMaxLength(1000))),
   snapshot: Schema.optional(TaskReviewSnapshot),
@@ -401,7 +407,13 @@ export class TaskBatchError extends Schema.TaggedError<TaskBatchError>()("TaskBa
   }
 }
 
+const TaskProjectDefaults = Schema.Struct({
+  defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
+  defaultRuntimeMode: RuntimeMode,
+});
 export const TaskAttachmentListResult = Schema.Struct({
+  projectDefaults: Schema.optional(TaskProjectDefaults),
   task: Schema.optional(ProjectSavedPrompt),
   attachments: Schema.Array(TaskAttachmentMetadata),
 });
@@ -491,6 +503,7 @@ export const SavedPromptAction = Schema.Union([
 export type SavedPromptAction = typeof SavedPromptAction.Type;
 
 export const Project = Schema.Struct({
+  taskDefaults: Schema.optional(TaskProjectDefaults),
   id: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,

@@ -6,6 +6,7 @@ import type {
   TaskRunSettings,
   ProjectTaskBatch,
   ThreadEnvMode,
+  RuntimeMode,
   RunId,
   TaskReviewSnapshot,
   ProjectSavedPrompt,
@@ -145,8 +146,9 @@ export function savedTaskLaunchSettings(
 export function resolveTaskBatchLaunch(
   task: Pick<ProjectSavedPrompt, "runSettings">,
   project: {
-    defaultModelSelection?: ModelSelection | null;
-    defaultThreadEnvMode?: ThreadEnvMode | null;
+    defaultModelSelection?: ModelSelection | null | undefined;
+    defaultThreadEnvMode?: ThreadEnvMode | null | undefined;
+    defaultRuntimeMode?: RuntimeMode | undefined;
   },
   fallback: TaskBatchStartInput["entries"][number]["launch"],
   overrides?: TaskRunSettings,
@@ -157,7 +159,11 @@ export function resolveTaskBatchLaunch(
       task.runSettings?.defaultModelSelection ??
       project.defaultModelSelection ??
       fallback.modelSelection,
-    runtimeMode: overrides?.runtimeMode ?? task.runSettings?.runtimeMode ?? fallback.runtimeMode,
+    runtimeMode:
+      overrides?.runtimeMode ??
+      task.runSettings?.runtimeMode ??
+      project.defaultRuntimeMode ??
+      fallback.runtimeMode,
     interactionMode:
       overrides?.interactionMode ?? task.runSettings?.interactionMode ?? fallback.interactionMode,
     threadEnvMode:
@@ -191,7 +197,11 @@ export function taskBatchEffectiveConcurrency(batches: ReadonlyArray<ProjectTask
 
 export function taskBatchBriefKey(task: ProjectSavedPrompt) {
   return stableStringify({
-    draft: savedTaskDraftContent(task),
+    text: task.text,
+    title: task.title ?? null,
+    attachments: task.attachments ?? [],
+    acceptanceCriteria: task.acceptanceCriteria ?? [],
+    runSettings: task.runSettings ?? null,
     status: task.status ?? (task.completedAt === null ? "open" : "done"),
     priority: task.priority ?? null,
     when: task.when ?? null,

@@ -969,12 +969,23 @@ const layerBase: Layer.Layer<
                     entry.state === "starting" ||
                     entry.state === "running",
                 );
-              if (active)
+              const remaining =
+                !active && event.payload.taskBatches !== undefined
+                  ? yield* sql<{
+                      readonly threadId: string;
+                    }>`SELECT json_extract(e.value, '$.threadId') AS threadId
+                  FROM projection_projects p, json_each(p.task_batches_json) b, json_each(b.value, '$.entries') e
+                  WHERE p.deleted_at IS NULL AND json_extract(e.value, '$.state') IN ('queued', 'starting', 'running') LIMIT 1`
+                  : [];
+              const pumpThreadId =
+                active?.threadId ??
+                (remaining[0] ? ThreadId.make(remaining[0].threadId) : undefined);
+              if (pumpThreadId)
                 yield* effectOutbox.enqueue([
                   {
                     id: `effect:task-batch:${event.sequence}`,
                     commandId: CommandId.make(`command:task-batch:${event.sequence}`),
-                    threadId: active.threadId,
+                    threadId: pumpThreadId,
                     request: { type: "task.batch-pump" },
                   },
                 ]);

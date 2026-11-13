@@ -7,6 +7,7 @@ import {
   MessageId,
   RunId,
   type TaskBatchStartInput,
+  type TaskAttachmentListResult,
   type ProjectTaskBatch,
   type ProjectMutation,
   EnvironmentId,
@@ -49,6 +50,7 @@ it.effect("retries the link without sending a second turn after the home environ
     };
     let taskAttachments: ProjectTaskAttachment[] = [];
     let taskSettings: TaskRunSettings | undefined;
+    let projectDefaults: TaskAttachmentListResult["projectDefaults"];
     let launches = 0;
     let links = 0;
     let batchStarts = 0;
@@ -74,6 +76,7 @@ it.effect("retries the link without sending a second turn after the home environ
             },
             [WS_METHODS.projectsTaskAttachments]: (input: { taskId: string }) =>
               Effect.succeed({
+                projectDefaults,
                 task: {
                   id: input.taskId,
                   createdAt: "2026-01-01T00:00:00Z",
@@ -396,6 +399,72 @@ it.effect("retries the link without sending a second turn after the home environ
       expect(pinned._tag).toBe("Success");
       if (pinned._tag === "Success")
         expect(pinned.value[0]?.environmentId).toBe(home.environmentId);
+      taskAttachments = [];
+      projectDefaults = {
+        defaultModelSelection: { ...batchInput.launch.modelSelection, model: "folded-free" },
+        defaultThreadEnvMode: "worktree",
+        defaultRuntimeMode: "approval-required",
+      };
+      const saved: TaskRunSettings = {
+        defaultModelSelection: {
+          ...batchInput.launch.modelSelection,
+          model: "saved",
+          options: [{ id: "effort", value: "low" }],
+        },
+        runtimeMode: "auto-accept-edits",
+        threadEnvMode: "local",
+      };
+      const overrides: TaskRunSettings = {
+        defaultModelSelection: {
+          ...batchInput.launch.modelSelection,
+          model: "override",
+          options: [{ id: "effort", value: "high" }],
+        },
+        runtimeMode: "full-access",
+        threadEnvMode: "worktree",
+      };
+      for (const scenario of [
+        {
+          settings: undefined,
+          overrides: undefined,
+          model: projectDefaults.defaultModelSelection,
+          runtimeMode: "approval-required",
+          mode: "worktree",
+        },
+        {
+          settings: saved,
+          overrides: undefined,
+          model: saved.defaultModelSelection,
+          runtimeMode: "auto-accept-edits",
+          mode: "local",
+        },
+        {
+          settings: saved,
+          overrides,
+          model: overrides.defaultModelSelection,
+          runtimeMode: "full-access",
+          mode: "worktree",
+        },
+      ]) {
+        taskSettings = scenario.settings;
+        const result = yield* Effect.promise(() =>
+          commands.prepareBatch.run(registry, {
+            ...batchInput,
+            sources: [{ home, taskId: "task" }],
+            target: home,
+            distribute: false,
+            overrides: scenario.overrides,
+          }),
+        );
+        expect(result._tag).toBe("Success");
+        if (result._tag === "Success") {
+          const entry = result.value[0]!.input.entries[0]!;
+          expect(entry.launch.modelSelection).toEqual(scenario.model);
+          expect(entry.launch.runtimeMode).toBe(scenario.runtimeMode);
+          expect(entry.launch.threadEnvMode).toBe(scenario.mode);
+          expect(entry.destination).toEqual(home);
+        }
+      }
       expect(batchStarts).toBe(1);
       expect(launches).toBe(2);
     } finally {

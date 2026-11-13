@@ -13,6 +13,7 @@ import {
 } from "@t3tools/shared/savedTasks";
 import {
   CommandId,
+  AUTO_MODEL,
   type TaskBatchStartInput,
   type TaskRunSettings,
   type SavedPromptAction,
@@ -132,6 +133,7 @@ export function createSavedTaskCommands<R, E>(
       ...savedTaskDraftContent(task),
       target: targetRef,
       runSettings: task.runSettings,
+      projectDefaults: snapshot.projectDefaults,
       task,
     };
   });
@@ -582,10 +584,23 @@ export function createSavedTaskCommands<R, E>(
             source: { ...source.home, taskId: source.taskId },
             brief: draft.task,
             destination: target,
-            launch: resolveTaskBatchLaunch(draft.task, home, input.launch, input.overrides),
+            launch: resolveTaskBatchLaunch(
+              draft.task,
+              draft.projectDefaults ?? home,
+              input.launch,
+              input.overrides,
+            ),
             fallback: input.launch,
             ...(input.overrides === undefined ? {} : { overrides: input.overrides }),
           };
+          if (
+            entry.launch.modelSelection.model === AUTO_MODEL ||
+            entry.launch.modelSelection.routing === "auto"
+          )
+            return yield* new SavedTaskLaunchError({
+              detail:
+                "Choose a concrete model for batch runs so it can be confirmed before starting.",
+            });
           groups.set(key, {
             environmentId: target.environmentId,
             currentEffectiveConcurrency: taskBatchEffectiveConcurrency(
