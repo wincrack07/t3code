@@ -22,6 +22,7 @@ const setup = Effect.gen(function* () {
   yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES('chat','1970-01-01T00:00:00.000Z')`;
   let revision = "1970-01-01T00:00:00.000Z";
   const calls: string[] = [];
+  const urls: string[] = [];
   let httpStatus = 200;
   let secret: Uint8Array | undefined;
   const exported = (): T3ThreadExportResult => ({
@@ -73,6 +74,18 @@ const setup = Effect.gen(function* () {
       HttpClient.HttpClient,
       HttpClient.make((request) =>
         Effect.sync(() => {
+          urls.push(request.url);
+          assert.equal(request.headers.authorization, "Bearer fake-test-token");
+          if (request.method === "GET") {
+            const body = request.url.includes("format=md")
+              ? "# Example"
+              : JSON.stringify(
+                  request.url.includes("threads?")
+                    ? { items: [exported().meta], nextCursor: null }
+                    : exported(),
+                );
+            return HttpClientResponse.fromWeb(request, new Response(body));
+          }
           calls.push(revision);
           return HttpClientResponse.fromWeb(
             request,
@@ -92,6 +105,7 @@ const setup = Effect.gen(function* () {
     service,
     build,
     calls,
+    urls,
     fail: () => {
       httpStatus = 503;
     },
@@ -156,4 +170,19 @@ it.effect("backs off, pauses after five failures, retries later and never expose
     yield* service.sweep;
     assert.equal(calls.length, 7);
   }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+);
+
+it.effect(
+  "proxies typed list and detail reads with encoded filters and no credential in responses",
+  () =>
+    Effect.gen(function* () {
+      const { service, urls } = yield* setup;
+      const list = yield* service.list({ q: "a&b", project: "Project / one" });
+      assert.equal(list.items[0]?.title, "Example");
+      const detail = yield* service.get({ environmentId: "machine:one", threadId: "chat%two" });
+      assert.equal(detail.markdown, "# Example");
+      assert.notInclude(JSON.stringify({ list, detail }), "fake-test-token");
+      assert.include(urls[0]!, "q=a%26b");
+      assert.include(urls[1]!, "machine%3Aone/chat%25two");
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
 );
