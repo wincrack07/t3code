@@ -10,7 +10,8 @@ export function chatHubPayload(exported: T3ThreadExportResult, updatedAt: string
   while (Buffer.byteLength(JSON.stringify(payload)) > 10_400_000 && conversation.length > 0) {
     conversation = conversation.slice(Math.max(1, Math.floor(conversation.length / 2)));
     bundle = {
-      ...bundle,
+      ...exported.bundle,
+      updatedAt,
       conversation: [
         {
           role: "plan",
