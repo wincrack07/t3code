@@ -27,31 +27,34 @@ import {
   TASK_STATUS_LABELS,
   TASK_STATUSES,
   taskStatusForDrop,
+  taskPriority,
   taskTitle,
   type TaskEntry,
   type TaskProjectGroup,
+  type TaskRow,
 } from "./tasks.logic";
+import { TaskPriorityChip } from "./TaskFields";
+import { TaskReviewActions, TaskReviewSummary } from "./TaskReview";
+import { TaskQueueChip, useTaskQueue } from "./TaskBatch";
+import type { TaskSelection } from "./TaskList";
+import { Checkbox } from "../ui/checkbox";
 import { useEnvironmentLabel } from "./useTaskProjects";
 
 export function TaskBoard({
   board,
-  groups,
+  showProject,
   selectedKey,
   onSelect,
+  selection,
 }: {
-  board: Record<SavedPromptStatus, TaskEntry[]>;
-  groups: ReadonlyArray<TaskProjectGroup>;
+  board: Record<SavedPromptStatus, TaskRow[]>;
+  showProject: boolean;
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  selection: TaskSelection;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const entries = TASK_STATUSES.flatMap((status) => board[status]);
-  const multiMachine = new Set(
-    groups.filter((group) => group.multiMachine).map((group) => group.key),
-  );
-  const groupOf = new Map(
-    groups.flatMap((group) => group.tasks.map((entry) => [entry.key, group] as const)),
-  );
+  const entries = TASK_STATUSES.flatMap((status) => board[status].map((row) => row.entry));
   const updateTask = useAtomCommand(projectEnvironment.savedPromptUpdate);
   // A drop writes to the task's own machine, like every other task edit.
   const onDragEnd = (event: DragEndEvent) => {
@@ -64,7 +67,10 @@ export function TaskBoard({
         type: "project.update",
         projectId: entry.home.id,
         commandId: CommandId.make(randomUUID()),
-        savedPrompt: { kind: "edit", id: entry.task.id, status },
+        savedPrompt:
+          status === "approve"
+            ? { kind: "approve", id: entry.task.id }
+            : { kind: "edit", id: entry.task.id, status },
       },
     });
   };
@@ -73,13 +79,15 @@ export function TaskBoard({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:flex-row md:overflow-x-auto md:overflow-y-hidden">
         {TASK_STATUSES.map((status) => (
           <BoardColumn key={status} status={status} count={board[status].length}>
-            {board[status].map((entry) => (
+            {board[status].map(({ entry, group }) => (
               <TaskCard
                 key={entry.key}
                 entry={entry}
-                projectLabel={groupOf.get(entry.key)?.label ?? entry.home.title}
-                showMachine={multiMachine.has(groupOf.get(entry.key)?.key ?? "")}
+                projectLabel={showProject ? group.label : null}
+                showMachine={group.multiMachine}
+                group={group}
                 selected={entry.key === selectedKey}
+                selection={selection}
                 onSelect={() => onSelect(entry.key)}
               />
             ))}
@@ -105,7 +113,7 @@ function BoardColumn({
       ref={setNodeRef}
       aria-label={TASK_STATUS_LABELS[status]}
       className={cn(
-        "flex shrink-0 flex-col rounded-lg border bg-card md:min-h-0 md:min-w-64 md:max-w-96 md:flex-1 md:basis-0",
+        "flex shrink-0 flex-col rounded-lg border bg-card md:min-h-0 md:min-w-52 md:max-w-96 md:flex-1 md:basis-0",
         isOver ? "border-ring" : "border-border",
       )}
     >
@@ -119,7 +127,9 @@ function BoardColumn({
       </header>
       <div className="flex flex-col gap-2 p-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {count === 0 ? (
-          <p className="px-1 py-2 text-xs text-muted-foreground">Drop a task here.</p>
+          <p className="px-1 py-2 text-xs text-muted-foreground">
+            {status === "review" ? "Finished threads land here for review." : "Drop a task here."}
+          </p>
         ) : (
           children
         )}
@@ -132,18 +142,26 @@ function TaskCard({
   entry,
   projectLabel,
   showMachine,
+  group,
   selected,
+  selection,
   onSelect,
 }: {
   entry: TaskEntry;
-  projectLabel: string;
+  projectLabel: string | null;
   showMachine: boolean;
+  group: TaskProjectGroup;
   selected: boolean;
+  selection: TaskSelection;
   onSelect: () => void;
 }) {
+  const queue = useTaskQueue(entry);
+  const pickable = entry.status !== "done";
+  const picked = selection.keys.has(entry.key);
   const { allowed, update } = useSavedPrompts(entry.home.environmentId, entry.home.id);
   const labelOf = useEnvironmentLabel();
   const thread = useTaskThread(entry);
+  const review = entry.status === "review" && entry.task.review !== undefined;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: entry.key,
     disabled: !allowed,
@@ -156,7 +174,7 @@ function TaskCard({
       }
       className={cn(
         "relative flex flex-col gap-1.5 rounded-md border bg-background p-2.5 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring",
-        selected ? "border-ring" : "border-border hover:bg-accent/40",
+        selected || picked ? "border-ring" : "border-border hover:bg-accent/40",
         isDragging && "z-10 shadow-lg",
       )}
       {...listeners}
@@ -165,18 +183,47 @@ function TaskCard({
       role="group"
       aria-roledescription="Task card"
     >
-      <button
-        type="button"
-        className="truncate text-left text-sm font-medium outline-none after:absolute after:inset-0 after:content-['']"
-        onClick={onSelect}
-      >
-        {taskTitle(entry.task)}
-      </button>
-      <p className="line-clamp-2 text-xs leading-4 text-muted-foreground">{entry.task.text}</p>
+      <div className="flex min-w-0 items-center gap-2">
+        {selection.active && pickable ? (
+          <span className="relative z-1 flex">
+            <Checkbox
+              aria-label={picked ? "Deselect task" : "Select task"}
+              checked={picked}
+              onCheckedChange={() => selection.onToggle(entry.key, false)}
+            />
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-sm font-medium outline-none after:absolute after:inset-0 after:content-['']"
+          onClick={(event) => {
+            const modified = event.metaKey || event.ctrlKey || event.shiftKey;
+            if (pickable && (selection.active || modified)) {
+              selection.onToggle(entry.key, event.shiftKey);
+              return;
+            }
+            onSelect();
+          }}
+        >
+          {taskTitle(entry.task)}
+        </button>
+      </div>
+      {review ? (
+        <div className="relative z-1">
+          <TaskReviewSummary entry={entry} density="card" />
+        </div>
+      ) : (
+        entry.task.text.trim() !== taskTitle(entry.task) && (
+          <p className="line-clamp-2 text-xs leading-4 text-muted-foreground">{entry.task.text}</p>
+        )
+      )}
       <div className="relative z-1 flex min-w-0 items-center gap-1.5">
-        <Badge variant="outline" size="sm" className="min-w-0 max-w-36">
-          <span className="truncate">{projectLabel}</span>
-        </Badge>
+        <TaskPriorityChip priority={taskPriority(entry.task)} />
+        {projectLabel !== null ? (
+          <Badge variant="outline" size="sm" className="min-w-0 max-w-36">
+            <span className="truncate">{projectLabel}</span>
+          </Badge>
+        ) : null}
         {entry.status === "in-progress" && thread.state !== null ? (
           <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <TaskThreadDot state={thread.state} />
@@ -189,6 +236,9 @@ function TaskCard({
           </span>
         ) : null}
         <TaskAttachmentCount count={entry.task.attachments?.length ?? 0} />
+        {queue && thread.state !== "running" ? (
+          <TaskQueueChip entry={entry} group={group} queue={queue} />
+        ) : null}
         <span className="ml-auto shrink-0">
           <TaskStatusMenu
             status={entry.status}
@@ -197,6 +247,11 @@ function TaskCard({
           />
         </span>
       </div>
+      {review ? (
+        <div className="relative z-1 border-t border-border pt-2">
+          <TaskReviewActions entry={entry} showOpenThread={false} />
+        </div>
+      ) : null}
     </div>
   );
 }

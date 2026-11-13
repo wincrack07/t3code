@@ -4,7 +4,7 @@ import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contrac
 
 import { useRightPanelStore } from "../rightPanelStore";
 
-import { findTaskGroupForProject, openTaskCount } from "./tasks/tasks.logic";
+import { findTaskGroupForProject, openTaskCount, reviewTaskCount } from "./tasks/tasks.logic";
 import { useTaskProjectGroups } from "./tasks/useTaskProjects";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -24,10 +24,16 @@ export function SavedPrompts({
   const navigate = useNavigate();
   if (!group?.members.some((member) => member.project.savedPrompts !== undefined)) return null;
   const count = openTaskCount(group);
-  const label =
+  const review = reviewTaskCount(group);
+  const label = [
+    `${count} open ${count === 1 ? "task" : "tasks"}`,
+    review > 0 ? `${review} to review` : null,
     group.unreachable > 0
-      ? `${count} open tasks · ${group.unreachable} ${group.unreachable === 1 ? "machine" : "machines"} not reachable`
-      : `${count} open ${count === 1 ? "task" : "tasks"}`;
+      ? `${group.unreachable} ${group.unreachable === 1 ? "machine" : "machines"} not reachable`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <Tooltip>
       <TooltipTrigger
@@ -45,6 +51,9 @@ export function SavedPrompts({
       >
         <BookmarkIcon />
         <span className="tabular-nums">{count}</span>
+        {review > 0 ? (
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-foreground" />
+        ) : null}
       </TooltipTrigger>
       <TooltipPopup side="bottom">{label}</TooltipPopup>
     </Tooltip>

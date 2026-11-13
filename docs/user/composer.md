@@ -21,19 +21,49 @@ stays in the composer. Undo puts the text and attachments back.
 
 Open **Tasks** in the sidebar to manage saved prompts for every project, or click the
 bookmark count beside the project name to open that project's tasks beside the chat
-(**Open in Tasks** there goes to the full page). Switch between a list and a board in the
-page header; drag a card, or use its status chip, to change its status. Give a task a short
-title, edit its prompt, and change its status as work progresses. Edits save automatically.
-**Polish** previews a rewrite using your prompt polish settings; accept or revert it, and
-undo an accepted rewrite until you edit again.
+(**Open in Tasks** there goes to the full page).
 
-**Start thread** sends the task's prompt and acceptance criteria in a new thread, using
-the task's saved run settings when present and otherwise the project's defaults. The task becomes **In progress** and links to the thread. Finishing the thread
-does not mark the task done. **Open without sending**, in the start menu, opens the task
-with its attachments as a draft so you can choose a model or adjust it first; sending that
-draft links the thread to the task too. A task keeps its last ten threads: the newest shows
-under the prompt and the rest under **Previous threads**. Deleting a task, or **Clear done**
-on the Done group, offers Undo, which brings tasks back with their threads and attachments.
+### Tasks
+
+**Capture.** Type in the field at the top of the Tasks page and press Enter; the task lands
+in the project on its right and the field is ready for the next one. Press `N` anywhere on
+the page to jump to it.
+
+**Views.** **Inbox** groups open tasks into Today, Later and Anytime; **By project** groups
+them by project; **Board** shows Open, In progress, Review and Done columns. Search and the
+filter menu narrow every view by words, priority, tag or machine. Drag rows to set their
+order, or between Today and Later to reschedule them. Each task's menu, and its detail, set
+priority (P1–P3), when, and tags. On a focused row, `1`, `2` and `3` set priority, `T`
+toggles Today and `X` marks it done.
+
+**The brief.** A task's prompt can carry **Acceptance criteria**, a checklist the agent
+receives with the prompt. **Run with** saves the model, effort, machine, workspace and
+permissions the task runs with; **Use project default** clears them. **Split into
+subtasks** adds child tasks by hand or one per open criterion; the parent shows how many
+are done. Edits save automatically. **Polish** previews a rewrite using your prompt polish
+settings; accept or revert it, and undo an accepted rewrite until you edit again.
+
+**Run.** **Run** starts a thread from the task with its saved settings, or the project's
+defaults. The task becomes **In progress** and links to the thread. **Run on**, in the Run
+menu, picks another machine with the same project; **Open without sending** opens the task
+as a draft so you can adjust it first, and sending that draft links the thread too.
+
+**Review.** When the thread finishes, the task moves to **Review** with the result: how it
+ended, the start of the final reply, changed lines and any pull requests. **Approve** marks
+it done (it never merges anything). **Request changes** sends your note to the same thread
+and moves the task back to In progress. **History** lists every attempt with its result,
+time, machine and a link to its thread.
+
+**Run several.** Click **Select** (or Cmd/Ctrl-click tasks, Shift-click for a range), then
+choose where they run (each task's machine, spread across machines, or one machine) and how
+many run at once on each machine (up to 4). **Run** shows where each task will go before
+anything starts, because every task is an unattended paid run. Tasks then show their place
+in the queue; **Cancel remaining** stops the ones that have not started, and a task that
+failed to start offers **Retry**. Scheduling runs for later is not available.
+
+Deleting a task, or **Clear done** on the Done group, offers Undo, which brings tasks back
+with their threads and attachments. A task with subtasks that are still open can't be
+deleted.
 
 Paste or drop images and files onto a task's prompt, or use **Add file or folder path** in
 its menu for a path on the task's machine. A task holds up to 8 attachments: images up to
@@ -43,12 +73,13 @@ struck through, and a temporary folder is linked with a warning because it may d
 
 A project on several machines shows one task list: each task is stored on one machine and
 edits go there. Tasks on a machine that is not connected are missing until it reconnects,
-and the list says how many machines it could not reach. A thread starts on the task's
-machine unless you pick another machine with the same project under **Start on**. A task
-with copied attachments starts only on its own machine, because the copies are stored there.
-If a thread starts but the task can't record it, the task says so and offers **Retry link**. Links of the form `/tasks/new?prompt=…&title=…` open a new task
-draft; nothing is saved until you press **Save task**. **Copy link** in a task's menu copies
-a `/new?prompt=…` thread link, for prompts up to 8,000 characters.
+and the list says how many machines it could not reach. A task with copied attachments runs
+only on its own machine, because the copies are stored there; a batch keeps such tasks there
+and says so. A task that ran on another machine reaches Review once both machines are
+connected to the same window. If a thread starts but the task can't record it, the task says
+so and offers **Retry link**. Links of the form `/tasks/new?prompt=…&title=…` open a new
+task draft; nothing is saved until you press **Save task**. **Copy link** in a task's menu
+copies a `/new?prompt=…` thread link, for prompts up to 8,000 characters.
 
 ## Formatting
 
