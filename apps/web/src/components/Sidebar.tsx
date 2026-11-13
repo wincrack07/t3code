@@ -1,3 +1,4 @@
+import { downloadChat } from "../lib/chatExport";
 import { createSidebarColorBlocks } from "./sidebar/sidebarColorBlocks";
 import {
   arrangeProjectFolderTree,
@@ -3342,6 +3343,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           case "copy-thread":
             void copyThreadReference(
               threadChipCopyTarget(threadRef, thread.title, configuredHostedAppUrl()),
+            );
+            return;
+          case "export-md":
+          case "export-json":
+            void downloadChat(threadRef, clicked.value === "export-md" ? "md" : "json").catch(() =>
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Export failed",
+                  description: "Check that the environment is connected and up to date.",
+                }),
+              ),
             );
             return;
           case "copy-thread-id":

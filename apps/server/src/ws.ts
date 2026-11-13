@@ -2018,6 +2018,16 @@ export const layerWsRpc = (
                 }),
             ),
           ),
+        [ORCHESTRATION_V2_WS_METHODS.importThread]: (input) =>
+          threadManagement.importThread(input).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationV2GetShellSnapshotError({
+                  message: "Failed to import chat",
+                  cause,
+                }),
+            ),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.getThreadTitles]: (input) =>
           threadManagement.getThreadTitles(input.threadIds).pipe(
             Effect.mapError(

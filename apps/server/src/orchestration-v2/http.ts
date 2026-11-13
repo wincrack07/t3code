@@ -55,6 +55,7 @@ export const layer = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const sql = yield* SqlClient.SqlClient;
     const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
+
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
     const projectStore = yield* ProjectStore.ProjectStoreV2;
@@ -190,6 +191,32 @@ export const layer = HttpApiBuilder.group(
             snapshotSequence: snapshot.snapshotSequence,
             projection: snapshot.projection,
           };
+        }),
+      )
+      .handle(
+        "threadExportIndex",
+        Effect.fn("environment.orchestration.threadExportIndex")(function* () {
+          yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+          return yield* threadManagement
+            .exportThreadIds()
+            .pipe(
+              Effect.catch((cause) =>
+                failEnvironmentInternal("orchestration_snapshot_failed", cause),
+              ),
+            );
+        }),
+      )
+      .handle(
+        "threadExport",
+        Effect.fn("environment.orchestration.threadExport")(function* (args) {
+          yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+          return yield* threadManagement.exportThread(args.params.threadId).pipe(
+            Effect.provideService(ServerEnvironment.ServerEnvironmentIdentity, environment),
+            Effect.provideService(ProjectStore.ProjectStoreV2, projectStore),
+            Effect.catch((cause) =>
+              failEnvironmentInternal("orchestration_thread_snapshot_failed", cause),
+            ),
+          );
         }),
       )
       .handle(

@@ -1961,6 +1961,17 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:import-chats",
+    searchTerms: ["import", "chats", "backup", "restore"],
+    title: "Import chats…",
+    icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/settings/general", hash: "chat-backup" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:settings",
     searchTerms: ["settings", "preferences", "configuration", "keybindings"],
     title: "Open settings",

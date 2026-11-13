@@ -1,3 +1,4 @@
+import { T3ThreadExport } from "./threadExport.ts";
 import { DecisionResult } from "./decisions.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
@@ -122,7 +123,11 @@ export const OrchestrationV2CreationSource = Schema.Literals([
 ]);
 export type OrchestrationV2CreationSource = typeof OrchestrationV2CreationSource.Type;
 
-export const OrchestrationV2ThreadHistoryOrigin = Schema.Literals(["native", "v1_import"]);
+export const OrchestrationV2ThreadHistoryOrigin = Schema.Literals([
+  "native",
+  "v1_import",
+  "portable_import",
+]);
 export type OrchestrationV2ThreadHistoryOrigin = typeof OrchestrationV2ThreadHistoryOrigin.Type;
 
 const OrchestrationV2CreationFields = {
@@ -3086,6 +3091,7 @@ export const OrchestrationV2Command = Schema.Union([
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
     delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+    importedChat: Schema.optional(T3ThreadExport),
     importedNativeThread: Schema.optional(
       Schema.Struct({
         ref: Schema.Struct({
@@ -3754,6 +3760,7 @@ export type OrchestrationV2InternalCommand = typeof OrchestrationV2InternalComma
 export type OrchestrationV2ServerCommand = OrchestrationV2Command | OrchestrationV2InternalCommand;
 
 export const ORCHESTRATION_V2_WS_METHODS = {
+  importThread: "orchestration.importThread",
   dispatchCommand: "orchestration.dispatchCommand",
   moveThreadToProject: "orchestration.moveThreadToProject",
   getTurnDiff: "orchestration.getTurnDiff",
@@ -4435,6 +4442,14 @@ export const OrchestrationV2RpcSchemas = {
   moveThreadToProject: {
     input: Schema.Struct(ThreadProjectMoveFields),
     output: Schema.Struct({ sequence: NonNegativeInt }),
+  },
+  importThread: {
+    input: Schema.Struct({
+      bundle: T3ThreadExport,
+      projectId: ProjectId,
+      modelSelection: ModelSelection,
+    }),
+    output: OrchestrationV2DispatchCommandResult,
   },
   dispatchCommand: {
     input: OrchestrationV2Command,

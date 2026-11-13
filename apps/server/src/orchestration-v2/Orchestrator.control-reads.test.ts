@@ -1,3 +1,4 @@
+import { portableImportThreadId } from "@t3tools/shared/threadExport";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -2058,6 +2059,84 @@ it.effect("persists an automatic routing decision with its preparing run and rep
     assert.deepEqual(
       (yield* projections.getThreadProjection(threadId)).runs[0]?.routingDecision,
       routingDecision,
+    );
+  }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("imports portable history once and prepares its continuation handoff", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const bundle = {
+      format: "t3code.thread" as const,
+      version: 1 as const,
+      threadId: "source-thread",
+      title: "Imported",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      source: { environmentId: "mac", label: "Mac" },
+      project: { title: "App", workspacePath: "/app" },
+      provider: "codex",
+      model: "test",
+      conversation: [
+        {
+          role: "user" as const,
+          text: "Remember the blue door",
+          timestamp: "2026-01-01T00:00:00Z",
+          attachments: [],
+        },
+        {
+          role: "assistant" as const,
+          text: "I will",
+          timestamp: "2026-01-01T00:00:01Z",
+          attachments: [],
+        },
+      ],
+    };
+    const threadId = portableImportThreadId(bundle);
+    const command = {
+      type: "thread.create" as const,
+      commandId: CommandId.make("portable-first"),
+      threadId,
+      projectId: ProjectId.make("project:portable"),
+      title: "Imported",
+      modelSelection,
+      runtimeMode: "full-access" as const,
+      interactionMode: "default" as const,
+      branch: null,
+      worktreePath: null,
+      createdBy: "user" as const,
+      creationSource: "web" as const,
+      importedChat: bundle,
+    };
+    yield* orchestrator.dispatch(command);
+    yield* orchestrator.dispatch({ ...command, commandId: CommandId.make("portable-again") });
+    const snapshot = yield* orchestrator.getThreadSnapshot(threadId);
+    assert.equal(snapshot.projection.thread.historyOrigin, "portable_import");
+    assert.equal(snapshot.projection.messages.length, 3);
+    assert.equal(snapshot.projection.messages[1]?.text, "Remember the blue door");
+    assert.isTrue(
+      Orchestrator.shouldPrepareLegacyImportHandoff({
+        historyOrigin: "portable_import",
+        hasCompletedRun: false,
+        legacyImportItemCount: 3,
+      }),
+    );
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("portable-continue"),
+      threadId,
+      messageId: MessageId.make("portable-continue"),
+      text: "Continue",
+      attachments: [],
+      dispatchMode: { type: "defer_start" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const continued = yield* orchestrator.getThreadSnapshot(threadId);
+    assert.isTrue(
+      continued.projection.contextHandoffs.some((handoff) =>
+        handoff.history?.messages.some((message) => message.text.includes("blue door")),
+      ),
     );
   }).pipe(Effect.provide(layerTest)),
 );

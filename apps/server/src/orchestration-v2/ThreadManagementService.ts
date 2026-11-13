@@ -1,3 +1,11 @@
+import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
+import type { T3ThreadExportResult, T3ThreadExport } from "@t3tools/contracts";
+import {
+  portableConversation,
+  limitThreadExport,
+  portableImportThreadId,
+} from "@t3tools/shared/threadExport";
+import * as ProjectStore from "./ProjectStore.ts";
 import type {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -388,6 +396,24 @@ export interface ThreadManagementServiceShape {
   ) => Effect.Effect<OrchestrationV2ThreadProjection, Orchestrator.OrchestratorV2Error>;
   readonly getCheckpointContext: Orchestrator.OrchestratorV2["Service"]["getCheckpointContext"];
   readonly getThreadSnapshot: Orchestrator.OrchestratorV2["Service"]["getThreadSnapshot"];
+  readonly importThread: (input: {
+    readonly bundle: T3ThreadExport;
+    readonly projectId: ProjectId;
+    readonly modelSelection: import("@t3tools/contracts").ModelSelection;
+  }) => ReturnType<ThreadManagementServiceShape["dispatch"]>;
+  readonly exportThreadIds: () => Effect.Effect<
+    ReadonlyArray<ThreadId>,
+    Orchestrator.OrchestratorV2Error
+  >;
+  readonly exportThread: (
+    threadId: ThreadId,
+  ) => Effect.Effect<
+    T3ThreadExportResult,
+    | Orchestrator.OrchestratorV2Error
+    | ThreadTranscriptTooLargeError
+    | ProjectStore.ProjectStoreV2Error,
+    ServerEnvironment.ServerEnvironmentIdentity | ProjectStore.ProjectStoreV2
+  >;
   readonly getThreadTranscript: (
     threadId: ThreadId,
   ) => Effect.Effect<
@@ -679,6 +705,55 @@ const make = Effect.gen(function* () {
     ensureProjectionTranscript(threadId).pipe(
       Effect.andThen(orchestrator.getThreadSnapshot(threadId)),
     );
+  const exportThread = Effect.fn("orchestrationV2.threadManagement.exportThread")(function* (
+    threadId: ThreadId,
+  ) {
+    const { projection } = yield* getThreadSnapshot(threadId);
+    const transcript = { items: projection.visibleTurnItems, updatedAt: projection.updatedAt };
+    const store = yield* ProjectStore.ProjectStoreV2;
+    const projects = yield* store.listShells({ projectIds: [projection.thread.projectId] });
+    const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
+    const environmentId = yield* environment.getEnvironmentId;
+    const environmentOption = yield* Effect.serviceOption(ServerEnvironment.ServerEnvironment);
+    const label = Option.isSome(environmentOption)
+      ? (yield* environmentOption.value.getDescriptor).label
+      : environmentId;
+    const thread = projection.thread;
+    const bundle: T3ThreadExport = {
+      format: "t3code.thread" as const,
+      version: 1 as const,
+      threadId,
+      title: thread.title,
+      createdAt: DateTime.formatIso(thread.createdAt),
+      updatedAt: DateTime.formatIso(transcript.updatedAt),
+      source: { environmentId, label },
+      project: {
+        title: projects[0]?.title ?? "No project",
+        workspacePath: projects[0]?.workspaceRoot ?? "",
+      },
+      provider: thread.providerInstanceId,
+      model: thread.modelSelection.model,
+      conversation: portableConversation(transcript),
+    };
+    return {
+      bundle: limitThreadExport(bundle),
+      meta: {
+        environmentId,
+        environmentLabel: bundle.source.label,
+        threadId,
+        title: bundle.title,
+        projectTitle: projects[0]?.title ?? null,
+        workspaceRoot: projects[0]?.workspaceRoot ?? null,
+        provider: bundle.provider,
+        model: bundle.model,
+        createdAt: bundle.createdAt,
+        updatedAt: bundle.updatedAt,
+        archived: thread.archivedAt !== null,
+        deletedAt: thread.deletedAt === null ? null : DateTime.formatIso(thread.deletedAt),
+        messageCount: bundle.conversation.filter((message) => message.role !== "plan").length,
+      },
+    };
+  });
   const getThreadTranscript = Effect.fn("orchestrationV2.threadManagement.getThreadTranscript")(
     function* (threadId: ThreadId) {
       const { projection } = yield* getThreadSnapshot(threadId);
@@ -1566,6 +1641,24 @@ const make = Effect.gen(function* () {
       );
     }),
     dispatch,
+    importThread: Effect.fn("threadManagement.importThread")(function* (input) {
+      const threadId = portableImportThreadId(input.bundle);
+      return yield* dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`import:${yield* randomUuidV4}`),
+        threadId,
+        projectId: input.projectId,
+        title: input.bundle.title.trim().slice(0, 200) || "Imported chat",
+        modelSelection: input.modelSelection,
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+        importedChat: input.bundle,
+      });
+    }),
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
       function (threadId, cursor, throughEntryId, conversationOnly, workMode) {
         return ensureProjectionTranscript(threadId).pipe(
@@ -1610,6 +1703,23 @@ const make = Effect.gen(function* () {
     getCheckpointContext,
     getThreadSnapshot,
     getThreadTranscript,
+    exportThread,
+    exportThreadIds: Effect.fn("threadManagement.exportThreadIds")(function* () {
+      const active = yield* orchestrator.getShellSnapshot({ location: "active" });
+      const archived = yield* orchestrator.getShellSnapshot({ location: "archive" });
+      return [
+        ...new Set(
+          [
+            ...active.threads,
+            ...active.archivedThreads,
+            ...archived.threads,
+            ...archived.archivedThreads,
+          ]
+            .filter((thread) => thread.deletedAt === null)
+            .map((thread) => thread.id),
+        ),
+      ];
+    }),
     getThreadSnapshotWindow,
     getProjectThreadRecords,
     getAgentAwarenessSnapshot: orchestrator.getAgentAwarenessSnapshot,

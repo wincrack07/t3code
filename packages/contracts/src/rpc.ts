@@ -2028,6 +2028,12 @@ const WsOrchestrationV2GetThreadFamilyRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS
   error: Schema.Union([OrchestrationV2GetShellSnapshotError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationV2ImportThreadRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.importThread, {
+  payload: OrchestrationV2RpcSchemas.importThread.input,
+  success: OrchestrationV2RpcSchemas.importThread.output,
+  error: Schema.Union([OrchestrationV2GetShellSnapshotError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationV2GetThreadTitlesRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.getThreadTitles, {
   payload: OrchestrationV2RpcSchemas.getThreadTitles.input,
   success: OrchestrationV2RpcSchemas.getThreadTitles.output,
@@ -2525,6 +2531,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SearchThreadStreamRpc,
   WsOrchestrationV2GetArchivedShellSnapshotRpc,
   WsOrchestrationV2GetThreadFamilyRpc,
+  WsOrchestrationV2ImportThreadRpc,
   WsOrchestrationV2GetThreadTitlesRpc,
   WsOrchestrationV2GetThreadLinkMetadataRpc,
   WsOrchestrationV2GetWorktreeThreadIdsRpc,

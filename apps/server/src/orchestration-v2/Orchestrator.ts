@@ -1,3 +1,5 @@
+import { portableImportThreadId } from "@t3tools/shared/threadExport";
+import { portableImportRecords } from "./portableImport.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import type {
   OrchestrationV2ThreadLinkMetadata,
@@ -1175,7 +1177,7 @@ export function shouldPrepareLegacyImportHandoff(input: {
   readonly legacyImportItemCount: number;
 }): boolean {
   return (
-    input.historyOrigin === "v1_import" &&
+    (input.historyOrigin === "v1_import" || input.historyOrigin === "portable_import") &&
     !input.hasNativeHistory &&
     !input.hasCompletedRun &&
     input.legacyImportItemCount > 0
@@ -2500,7 +2502,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             );
       const needsFullContext = deliveryProviderThread.nativeThreadRef === null;
       const legacyImportItems =
-        projection.thread.historyOrigin === "v1_import" && contextBoundary === 0
+        (projection.thread.historyOrigin === "v1_import" ||
+          projection.thread.historyOrigin === "portable_import") &&
+        contextBoundary === 0
           ? yield* readHandoffItems(threadId, [null])
           : [];
       const handoffStrategy = needsFullContext
@@ -3501,6 +3505,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
       ),
     );
+    if (
+      command.importedChat !== undefined &&
+      command.threadId !== portableImportThreadId(command.importedChat)
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: "Imported thread id does not match its source.",
+      });
+    }
+    if (
+      existing !== null &&
+      existing.historyOrigin === "portable_import" &&
+      command.importedChat !== undefined
+    )
+      return;
     if (existing !== null) {
       return yield* new OrchestratorThreadAlreadyExistsError({
         commandId: command.commandId,
@@ -3522,6 +3542,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       interactionMode: command.interactionMode,
       branch: command.branch,
       worktreePath: command.worktreePath,
+      ...(command.importedChat === undefined ? {} : { historyOrigin: "portable_import" as const }),
       activeProviderThreadId: null,
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
@@ -3553,6 +3574,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       occurredAt: now,
       payload: thread,
     });
+    if (command.importedChat !== undefined) {
+      for (const { message, item } of portableImportRecords(
+        command.threadId,
+        command.importedChat,
+      )) {
+        yield* emitEvent({
+          type: "message.updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: message,
+        });
+        yield* emitEvent({
+          type: "turn-item.updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: item,
+        });
+      }
+    }
     if (command.importedNativeThread !== undefined) {
       yield* emitEvent({
         type: "provider-thread.updated",
@@ -7366,7 +7406,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const latestCompletedRun = projection.runs.findLast((run) => run.status === "completed");
     const latestHandoffRun = projection.runs.findLast(isHandoffSourceRun);
     const legacyImportItems =
-      projection.thread.historyOrigin === "v1_import" && contextBoundary === 0
+      (projection.thread.historyOrigin === "v1_import" ||
+        projection.thread.historyOrigin === "portable_import") &&
+      contextBoundary === 0
         ? yield* readHandoffItems(command.threadId, [null])
         : [];
     const providerWorkspaceChanged = projectMoveChangesProviderWorkspace(projection);
@@ -8027,7 +8069,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const sideChatParentRunIds = [
       // Queued messages have not reached the main thread yet.
       ...sourceRunsAfterFork.filter((run) => run.status !== "queued").map((run) => run.id),
-      ...(sourceRun === null && sourceProjection?.thread.historyOrigin === "v1_import"
+      ...(sourceRun === null &&
+      (sourceProjection?.thread.historyOrigin === "v1_import" ||
+        sourceProjection?.thread.historyOrigin === "portable_import")
         ? [null]
         : []),
     ];
@@ -14659,6 +14703,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       Effect.filterOrFail(
         (planned) =>
           planned.events.length > 0 ||
+          (command.type === "thread.create" && command.importedChat !== undefined) ||
           isUnobservedAcknowledgement(command) ||
           command.type === "thread.background-work.settle" ||
           command.type === "thread.interrupt.unresponsive" ||

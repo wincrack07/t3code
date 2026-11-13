@@ -1,3 +1,4 @@
+import { ChatBackupSettings } from "./ChatBackupSettings";
 import { MachineCleanupSettings } from "./MachineCleanupSettings";
 import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
 import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
@@ -788,6 +789,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <ChatBackupSettings />
       <SettingsSection id="notifications" title="Notifications">
         <NotificationSettings />
         <SettingsRow

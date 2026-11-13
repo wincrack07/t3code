@@ -2,6 +2,8 @@ import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
 export type ThreadActionMenuId =
+  | "export-md"
+  | "export-json"
   | "find"
   | "open-in-new-window"
   | "open-in-split"
@@ -108,6 +110,8 @@ export interface ThreadActionMenuState {
 /** Local navigation, read markers, and copying remain available to read-only clients. */
 export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean {
   return ![
+    "export-md",
+    "export-json",
     "find",
     "open-in-new-window",
     "open-in-split",
@@ -269,6 +273,8 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },
+    { id: "export-md", label: "Export chat… (Markdown)" },
+    { id: "export-json", label: "Export chat… (JSON)" },
     {
       id: "archive",
       label: "Archive thread",
