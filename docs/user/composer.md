@@ -56,7 +56,9 @@ time, machine and a link to its thread.
 
 **Run several.** Click **Select** (or Cmd/Ctrl-click tasks, Shift-click for a range), then
 choose where they run (each task's machine, spread across machines, or one machine) and how
-many run at once on each machine (up to 4). **Run** shows where each task will go before
+many run at once on each machine (up to 4). The newest batch with unfinished tasks sets
+that machine's shared limit. Lowering it lets active runs finish before starting more.
+**Run** shows where each task will go before
 anything starts, because every task is an unattended paid run. Tasks then show their place
 in the queue; **Cancel remaining** stops the ones that have not started, and a task that
 failed to start offers **Retry**. Scheduling runs for later is not available.
@@ -75,7 +77,8 @@ A project on several machines shows one task list: each task is stored on one ma
 edits go there. Tasks on a machine that is not connected are missing until it reconnects,
 and the list says how many machines it could not reach. A task with copied attachments runs
 only on its own machine, because the copies are stored there; a batch keeps such tasks there
-and says so. A task that ran on another machine reaches Review once both machines are
+and says so. Batch destinations need a [link back to the task's home machine](remote-access.md#link-another-environment)
+to verify its settings; update both servers before using this check. A task that ran on another machine reaches Review once both machines are
 connected to the same window. If a thread starts but the task can't record it, the task says
 so and offers **Retry link**. Links of the form `/tasks/new?prompt=…&title=…` open a new
 task draft; nothing is saved until you press **Save task**. **Copy link** in a task's menu

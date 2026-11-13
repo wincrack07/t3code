@@ -276,7 +276,10 @@ const make = Effect.gen(function* () {
               ? {}
               : {
                   failureReason: failures[index],
-                  reason: "The prepared entry could not be validated. Prepare the batch again.",
+                  reason:
+                    failures[index] === "source-unverifiable"
+                      ? "The destination could not verify the source task. Check its link to the source environment and update both servers."
+                      : "The prepared entry could not be validated. Prepare the batch again.",
                 }),
           };
         }),
@@ -394,6 +397,18 @@ const make = Effect.gen(function* () {
         for (const batch of row.taskBatches ?? []) {
           const entries: TaskBatchEntry[] = [];
           for (const entry of batch.entries) {
+            // Older queues never confirmed per-task settings, so they must be prepared again.
+            if (entry.state === "queued" && entry.destination === undefined) {
+              entries.push({
+                ...entry,
+                brief: undefined,
+                state: "cancelled",
+                failureReason: "settings-changed",
+                reason: "Prepare this older queued task again to confirm its launch settings.",
+              });
+              changed = true;
+              continue;
+            }
             if (entry.state === "queued") {
               const sourceResult = sources.get(sourceProjectKey(entry.source))!;
               const source = sourceResult.project;
@@ -557,13 +572,17 @@ const make = Effect.gen(function* () {
           continue;
         }
         const draft = savedTaskDraftContent(entry.brief);
+        const launch =
+          entry.destination === undefined
+            ? resolveTaskBatchLaunch(entry.brief, {}, entry.launch, entry.overrides)
+            : entry.launch;
         const base = {
-          modelSelection: entry.launch.modelSelection,
-          runtimeMode: entry.launch.runtimeMode,
-          interactionMode: entry.launch.interactionMode,
+          modelSelection: launch.modelSelection,
+          runtimeMode: launch.runtimeMode,
+          interactionMode: launch.interactionMode,
           workspaceStrategy:
-            entry.launch.threadEnvMode === "worktree"
-              ? { type: "worktree" as const, baseRef: entry.launch.baseRef ?? "HEAD" }
+            launch.threadEnvMode === "worktree"
+              ? { type: "worktree" as const, baseRef: launch.baseRef ?? "HEAD" }
               : { type: "root" as const },
         };
         const settings = base;
@@ -576,7 +595,9 @@ const make = Effect.gen(function* () {
             projectId: row.projectId,
             title: draft.title,
             ...settings,
-            useProjectDefaultModel: false,
+            ...(entry.destination === undefined
+              ? { taskOverrides: { modelSelection: settings.modelSelection } }
+              : { useProjectDefaultModel: false }),
             initialMessage: { ...draft, messageId: entry.userMessageId },
           })
           .pipe(Effect.result);
