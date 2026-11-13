@@ -37,7 +37,14 @@ describe("filesystem read access", () => {
         error: null,
       });
       expect(
-        resolveFilesystemReadAccess({ ...input, sessionError: "The session has expired." }),
+        resolveFilesystemReadAccess({ ...input, sessionError: "Network request failed." }),
+      ).toEqual({ canReadFiles: true, isPending: false, error: null });
+      expect(
+        resolveFilesystemReadAccess({
+          ...input,
+          session: null,
+          sessionError: "The session has expired.",
+        }),
       ).toEqual({ canReadFiles: false, isPending: false, error: "The session has expired." });
     },
   );

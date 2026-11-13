@@ -541,9 +541,9 @@ export function useThreadActions() {
       const sessionResult = await loadSessionState(threadRef.environmentId);
       const permissionFailure = threadOperationFailure(threadRef);
       if (permissionFailure) return permissionFailure;
+      const session = AsyncResult.getOrElse(sessionResult, () => null);
       canDeleteWorktree =
-        sessionResult._tag === "Success" &&
-        sessionGrantsScope(sessionResult.value, AuthSourceControlWriteScope);
+        session !== null && sessionGrantsScope(session, AuthSourceControlWriteScope);
     }
     let shouldDeleteWorktree = false;
     const environmentSettings = environmentConfig?.settings;
