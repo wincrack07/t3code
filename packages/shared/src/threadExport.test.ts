@@ -1,7 +1,7 @@
 import { parse } from "yaml";
 import { OrchestrationV2ThreadTranscript } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 import * as DateTime from "effect/DateTime";
 import {
   portableConversation,
