@@ -77,20 +77,20 @@ export function renderThreadExportMarkdown(bundle: T3ThreadExport): string {
 export function limitThreadExport(bundle: T3ThreadExport): T3ThreadExport {
   const conversation = [...bundle.conversation];
   let size = new TextEncoder().encode(JSON.stringify(bundle)).length;
-  let removed = false;
-  while (size >= 9_900_000 && conversation.length > 0) {
-    const item = conversation.shift();
+  let removed = 0;
+  while (size >= 9_900_000 && removed < conversation.length) {
+    const item = conversation[removed++];
     size -= new TextEncoder().encode(JSON.stringify(item)).length;
-    removed = true;
   }
-  if (removed)
-    conversation.unshift({
+  const kept = conversation.slice(removed);
+  if (removed > 0)
+    kept.unshift({
       role: "plan",
       text: "Earlier conversation omitted to keep this export below 10 MB.",
       timestamp: bundle.createdAt,
       attachments: [],
     });
-  return { ...bundle, conversation };
+  return { ...bundle, conversation: kept };
 }
 
 export function portableImportThreadId(bundle: Pick<T3ThreadExport, "threadId" | "source">) {

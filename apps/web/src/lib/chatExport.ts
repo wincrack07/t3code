@@ -34,10 +34,9 @@ export async function downloadChat(ref: ScopedThreadRef, format: "md" | "json") 
   const bundle = await loadChatExport(ref);
   const basename = threadExportPath(bundle).split("/").at(-1) ?? "chat";
   downloadFile(
-    new Blob(
-      [format === "md" ? renderThreadExportMarkdown(bundle) : JSON.stringify(bundle, null, 2)],
-      { type: format === "md" ? "text/markdown" : "application/json" },
-    ),
+    new Blob([format === "md" ? renderThreadExportMarkdown(bundle) : JSON.stringify(bundle)], {
+      type: format === "md" ? "text/markdown" : "application/json",
+    }),
     `${basename}.${format === "md" ? "md" : "t3thread.json"}`,
   );
 }
@@ -66,7 +65,7 @@ export async function downloadAllChats(
       const bundle = await loadChatExport({ environmentId, threadId });
       const path = threadExportPath(bundle);
       zip.file(`${path}.md`, renderThreadExportMarkdown(bundle));
-      zip.file(`${path}.t3thread.json`, JSON.stringify(bundle, null, 2));
+      zip.file(`${path}.t3thread.json`, JSON.stringify(bundle));
       const folder = path.slice(0, path.lastIndexOf("/"));
       const rows = folders.get(folder) ?? [];
       rows.push({ bundle, filename: path.slice(path.lastIndexOf("/") + 1) });
@@ -105,12 +104,15 @@ export async function readChatImports(files: FileList): Promise<T3ThreadExport[]
       for (const entry of Object.values(zip.files)) {
         if (entry.dir || !entry.name.endsWith(".t3thread.json")) continue;
         const raw = await entry.async("string");
-        bytes += raw.length;
-        if (bytes > 100_000_000 || raw.length > 10_000_000)
+        const size = new TextEncoder().encode(raw).length;
+        bytes += size;
+        if (bytes > 100_000_000 || size > 10_000_000)
           throw new Error("Import exceeds the 100 MB batch or 10 MB thread limit.");
         bundles.push(decodeBundle(JSON.parse(raw)));
       }
     } else {
+      bytes += file.size;
+      if (bytes > 100_000_000) throw new Error("Import exceeds the 100 MB batch limit.");
       if (file.size > 10_000_000) throw new Error("Thread bundles must be smaller than 10 MB.");
       bundles.push(decodeBundle(JSON.parse(await file.text())));
     }
