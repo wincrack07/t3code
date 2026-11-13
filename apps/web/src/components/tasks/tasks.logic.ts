@@ -1024,13 +1024,11 @@ const TASK_BATCH_REFUSALS: Record<TaskBatchFailureReason, string> = {
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
 
-const mostCommon = (values: ReadonlyArray<string>) => {
+/** The value most of the batch shares; with no majority, nothing stands out. */
+const majority = (values: ReadonlyArray<string>) => {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-  return [...counts.entries()].reduce<[string, number] | null>(
-    (best, item) => (best === null || item[1] > best[1] ? item : best),
-    null,
-  )?.[0];
+  return [...counts.entries()].find(([, count]) => count * 2 > values.length)?.[0];
 };
 
 /**
@@ -1101,8 +1099,8 @@ export function taskBatchSummary(
   const runnable = all.filter((task) => task.blocked === null);
   const models = new Set(runnable.map((task) => task.model));
   const access = new Set(runnable.map((task) => task.access));
-  const commonModel = mostCommon(runnable.map((task) => task.model));
-  const commonAccess = mostCommon(runnable.map((task) => task.access));
+  const commonModel = majority(runnable.map((task) => task.model));
+  const commonAccess = majority(runnable.map((task) => task.access));
   const machines = [...rows.keys()];
   const headline = [
     plural(all.length, "task"),
@@ -1123,8 +1121,10 @@ export function taskBatchSummary(
         capChange: row.cap,
         tasks: row.tasks.map((task) => ({
           ...task,
-          modelDiffers: task.blocked === null && models.size > 1 && task.model !== commonModel,
-          accessDiffers: task.blocked === null && access.size > 1 && task.access !== commonAccess,
+          modelDiffers:
+            task.blocked === null && commonModel !== undefined && task.model !== commonModel,
+          accessDiffers:
+            task.blocked === null && commonAccess !== undefined && task.access !== commonAccess,
         })),
       }))
       .toSorted((left, right) => left.machine.localeCompare(right.machine)),

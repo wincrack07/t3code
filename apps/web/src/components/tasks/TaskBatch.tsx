@@ -238,11 +238,11 @@ function TaskBatchConfirm({
                 {row.capChange ? (
                   <p className="pb-1 text-xs text-muted-foreground">{row.capChange}</p>
                 ) : null}
-                <ul className="flex flex-col">
+                <ul className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
                   {tasks.map((item) => (
                     <li
                       key={item.key}
-                      className="grid h-8 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
+                      className="col-span-full grid h-8 min-w-0 grid-cols-subgrid items-center text-sm"
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate">{item.title}</span>
@@ -277,7 +277,7 @@ function TaskBatchConfirm({
                       >
                         {item.access}
                       </span>
-                      <span className="hidden w-16 text-xs text-muted-foreground sm:block">
+                      <span className="hidden text-xs text-muted-foreground sm:block">
                         {item.workspace}
                       </span>
                     </li>

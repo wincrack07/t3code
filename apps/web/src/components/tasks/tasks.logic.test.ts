@@ -846,6 +846,7 @@ describe("batch", () => {
               source: { environmentId: mac, taskId: "m3" },
               launch: launch("opus", undefined, "approval-required"),
             },
+            { source: { environmentId: mac, taskId: "m4" }, launch: launch("sonnet") },
           ],
         },
       },
@@ -861,7 +862,11 @@ describe("batch", () => {
         ],
       },
     ];
-    const withThird = [...entries, { ...entries[0]!, key: "m3", task: task("m3", "1") }];
+    const withThird = [
+      ...entries,
+      { ...entries[0]!, key: "m3", task: task("m3", "1") },
+      { ...entries[0]!, key: "m4", task: task("m4", "1") },
+    ];
     const summary = taskBatchSummary(
       mixed,
       withThird,
@@ -869,9 +874,9 @@ describe("batch", () => {
       labelSet,
     );
     expect(summary.headline).toBe(
-      "3 tasks · 2 models · 2 access modes · 2 machines · 1 will not run",
+      "4 tasks · 2 models · 2 access modes · 2 machines · 1 will not run",
     );
-    expect(summary.runnable).toBe(2);
+    expect(summary.runnable).toBe(3);
     const mac_ = summary.rows.find((row) => row.environmentId === mac)!;
     expect(mac_.tasks[0]).toMatchObject({
       model: "Auto",
@@ -886,7 +891,21 @@ describe("batch", () => {
     ).toEqual([
       [false, false],
       [true, true],
+      [false, false],
     ]);
+    // A tie has no majority, so no single task stands out.
+    const tie = taskBatchSummary(
+      [
+        {
+          ...mixed[0]!,
+          input: { ...mixed[0]!.input, entries: mixed[0]!.input.entries.slice(0, 2) },
+        },
+      ],
+      withThird,
+      { distribute: false, environmentId: null },
+      labelSet,
+    );
+    expect(tie.rows[0]!.tasks.some((t) => t.modelDiffers || t.accessDiffers)).toBe(false);
   });
 
   it("shows a task's newest live queue entry, refusals while it waits, and sums every batch", () => {
