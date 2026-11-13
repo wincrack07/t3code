@@ -489,6 +489,13 @@ export function createSavedTaskCommands<R, E>(
             currentEffectiveConcurrency: number | null;
             effectiveConcurrency: number;
             input: TaskBatchStartInput;
+            /** Tasks that resolved to Auto routing; the batch would refuse them, so they stay out. */
+            unresolved: Array<
+              TaskBatchStartInput["entries"][number] & {
+                failureReason: "unresolved-model";
+                reason: string;
+              }
+            >;
           }
         >();
         for (const source of input.sources) {
@@ -593,14 +600,9 @@ export function createSavedTaskCommands<R, E>(
             fallback: input.launch,
             ...(input.overrides === undefined ? {} : { overrides: input.overrides }),
           };
-          if (
+          const unresolved =
             entry.launch.modelSelection.model === AUTO_MODEL ||
-            entry.launch.modelSelection.routing === "auto"
-          )
-            return yield* new SavedTaskLaunchError({
-              detail:
-                "Choose a concrete model for batch runs so it can be confirmed before starting.",
-            });
+            entry.launch.modelSelection.routing === "auto";
           groups.set(key, {
             environmentId: target.environmentId,
             currentEffectiveConcurrency:
@@ -622,8 +624,20 @@ export function createSavedTaskCommands<R, E>(
                 ),
               projectId: target.projectId,
               ...(input.concurrency === undefined ? {} : { concurrency: input.concurrency }),
-              entries: [...(previous?.input.entries ?? []), entry],
+              entries: [...(previous?.input.entries ?? []), ...(unresolved ? [] : [entry])],
             },
+            unresolved: [
+              ...(previous?.unresolved ?? []),
+              ...(unresolved
+                ? [
+                    {
+                      ...entry,
+                      failureReason: "unresolved-model" as const,
+                      reason: "Auto routing picks a model at start, so it cannot be confirmed now.",
+                    },
+                  ]
+                : []),
+            ],
           });
         }
         return [...groups.values()];

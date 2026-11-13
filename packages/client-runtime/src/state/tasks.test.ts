@@ -465,6 +465,24 @@ it.effect("retries the link without sending a second turn after the home environ
           expect(entry.destination).toEqual(home);
         }
       }
+      taskSettings = {
+        defaultModelSelection: { ...batchInput.launch.modelSelection, routing: "auto" },
+      };
+      const auto = yield* Effect.promise(() =>
+        commands.prepareBatch.run(registry, {
+          ...batchInput,
+          sources: [{ home, taskId: "task" }],
+          target: home,
+          distribute: false,
+        }),
+      );
+      expect(auto._tag).toBe("Success");
+      if (auto._tag === "Success") {
+        expect(auto.value[0]!.input.entries).toEqual([]);
+        expect(auto.value[0]!.unresolved.map((entry) => entry.failureReason)).toEqual([
+          "unresolved-model",
+        ]);
+      }
       expect(batchStarts).toBe(1);
       expect(launches).toBe(2);
     } finally {
