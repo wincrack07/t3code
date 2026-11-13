@@ -1,0 +1,21 @@
+{
+  "name": "@t3tools/chat-hub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "effect-tsgo tsrs --noEmit",
+    "test": "vp test run --config ../../vite.config.ts --dir .",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260604.1",
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:",
+    "wrangler": "4.87.0"
+  }
+}

@@ -1,0 +1,24 @@
+name = "t3code-chat-hub"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://app.t3.codes"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "t3code-chat-hub"
+database_id = "a764d6b3-7228-4910-b651-db73ffd31313"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "t3code-chat-hub"
+
+[[durable_objects.bindings]]
+name = "THREADS"
+class_name = "ThreadCoordinator"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ThreadCoordinator"]
