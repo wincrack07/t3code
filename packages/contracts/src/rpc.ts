@@ -17,7 +17,7 @@ import {
   ChatHubQuery,
   ChatHubLookup,
   ChatHubSyncError,
-} from "./chatHubSync.ts";
+} from "./chatHub.ts";
 import { ChatHubList, ChatHubThread, ChatHubEnvironments } from "./chatHub.ts";
 import { KeepAwakeAuthorize, KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";

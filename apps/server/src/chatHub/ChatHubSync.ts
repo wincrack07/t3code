@@ -5,14 +5,14 @@ import {
   ChatHubConfigure,
   ChatHubQuery,
   ChatHubLookup,
-} from "@t3tools/contracts/chat-hub-sync";
+} from "@t3tools/contracts/chat-hub";
 import {
   ChatHubList,
   ChatHubThread,
   ChatHubEnvironments,
   ChatHubStored,
 } from "@t3tools/contracts/chat-hub";
-import { renderThreadExportMarkdown } from "@t3tools/shared/threadExport";
+import { chatHubPayload } from "./chatHubPayload.ts";
 import * as DateTime from "effect/DateTime";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -129,14 +129,9 @@ const make = Effect.gen(function* () {
               Math.max(Date.parse(row.updated_at), Date.parse(exported.meta.updatedAt)),
             ),
           );
-          const bundle = { ...exported.bundle, updatedAt };
           const response = yield* request(
             `threads/${encodeURIComponent(exported.meta.environmentId)}/${encodeURIComponent(row.thread_id)}`,
-            {
-              meta: { ...exported.meta, updatedAt },
-              bundle,
-              markdown: renderThreadExportMarkdown(bundle),
-            },
+            chatHubPayload(exported, updatedAt),
           );
           yield* response.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(ChatHubStored)));
           const at = DateTime.formatIso(yield* DateTime.now);

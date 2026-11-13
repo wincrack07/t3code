@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentId } from "@t3tools/contracts";
-import type { ChatHubStatus } from "@t3tools/contracts/chat-hub-sync";
+import type { ChatHubStatus } from "@t3tools/contracts/chat-hub";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useConnectedEnvironmentIds, readEnvironment } from "../../state/environments";
