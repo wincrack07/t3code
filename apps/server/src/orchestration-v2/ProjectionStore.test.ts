@@ -7275,66 +7275,30 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     }),
   );
 
-  it.effect("counts history inherited by fork shells, but not by side chats", () =>
-    Effect.gen(function* () {
-      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
-      const now = yield* DateTime.now;
-      const projectId = ProjectId.make("project:projection-imported-fork-shell");
-      const sourceThreadId = ThreadId.make("thread:projection-imported-fork-shell:source");
-      const targetThreadId = ThreadId.make("thread:projection-imported-fork-shell:target");
-      const sideChatThreadId = ThreadId.make("thread:projection-imported-fork-shell:side-chat");
-      const sourceRunId = RunId.make("run:projection-imported-fork-shell:source");
-      const rootNodeId = NodeId.make("node:projection-imported-fork-shell:source");
+  it.effect.each(["v1_import", "portable_import"] as const)(
+    "counts $ history inherited by fork shells, but not by side chats",
+    (historyOrigin) =>
+      Effect.gen(function* () {
+        const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+        const now = yield* DateTime.now;
+        const projectId = ProjectId.make("project:projection-imported-fork-shell");
+        const sourceThreadId = ThreadId.make("thread:projection-imported-fork-shell:source");
+        const targetThreadId = ThreadId.make("thread:projection-imported-fork-shell:target");
+        const sideChatThreadId = ThreadId.make("thread:projection-imported-fork-shell:side-chat");
+        const sourceRunId = RunId.make("run:projection-imported-fork-shell:source");
+        const rootNodeId = NodeId.make("node:projection-imported-fork-shell:source");
 
-      yield* projectionStore.apply({
-        id: EventId.make("event:projection-imported-fork-shell:source-thread"),
-        type: "thread.created",
-        threadId: sourceThreadId,
-        occurredAt: now,
-        payload: {
-          createdBy: "system",
-          creationSource: "server",
-          id: sourceThreadId,
-          projectId,
-          title: "Imported fork source",
-          providerInstanceId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-          activeProviderThreadId: null,
-          historyOrigin: "v1_import",
-          lineage: {
-            parentThreadId: null,
-            relationshipToParent: null,
-            rootThreadId: sourceThreadId,
-          },
-          forkedFrom: null,
-          createdAt: now,
-          updatedAt: now,
-          archivedAt: null,
-          settledOverride: null,
-          settledAt: null,
-          lastVisitedAt: null,
-          deletedAt: null,
-        },
-      });
-      for (const [threadId, sideChat] of [
-        [targetThreadId, false],
-        [sideChatThreadId, true],
-      ] as const) {
         yield* projectionStore.apply({
-          id: EventId.make(`event:projection-imported-fork-shell:created:${threadId}`),
+          id: EventId.make("event:projection-imported-fork-shell:source-thread"),
           type: "thread.created",
-          threadId,
+          threadId: sourceThreadId,
           occurredAt: now,
           payload: {
-            createdBy: "user",
-            creationSource: "web",
-            id: threadId,
+            createdBy: "system",
+            creationSource: "server",
+            id: sourceThreadId,
             projectId,
-            title: "Imported fork target",
+            title: "Imported fork source",
             providerInstanceId,
             modelSelection,
             runtimeMode: "full-access",
@@ -7342,17 +7306,13 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
             branch: null,
             worktreePath: null,
             activeProviderThreadId: null,
+            historyOrigin,
             lineage: {
-              parentThreadId: sourceThreadId,
-              relationshipToParent: "fork",
+              parentThreadId: null,
+              relationshipToParent: null,
               rootThreadId: sourceThreadId,
-              sideChat,
             },
-            forkedFrom: {
-              type: "run",
-              threadId: sourceThreadId,
-              runId: sourceRunId,
-            },
+            forkedFrom: null,
             createdAt: now,
             updatedAt: now,
             archivedAt: null,
@@ -7362,86 +7322,128 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
             deletedAt: null,
           },
         });
-      }
-      yield* projectionStore.apply({
-        id: EventId.make("event:projection-imported-fork-shell:source-run"),
-        type: "run.created",
-        threadId: sourceThreadId,
-        runId: sourceRunId,
-        nodeId: rootNodeId,
-        driver,
-        occurredAt: now,
-        payload: {
-          id: sourceRunId,
+        for (const [threadId, sideChat] of [
+          [targetThreadId, false],
+          [sideChatThreadId, true],
+        ] as const) {
+          yield* projectionStore.apply({
+            id: EventId.make(`event:projection-imported-fork-shell:created:${threadId}`),
+            type: "thread.created",
+            threadId,
+            occurredAt: now,
+            payload: {
+              createdBy: "user",
+              creationSource: "web",
+              id: threadId,
+              projectId,
+              title: "Imported fork target",
+              providerInstanceId,
+              modelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: null,
+              activeProviderThreadId: null,
+              lineage: {
+                parentThreadId: sourceThreadId,
+                relationshipToParent: "fork",
+                rootThreadId: sourceThreadId,
+                sideChat,
+              },
+              forkedFrom: {
+                type: "run",
+                threadId: sourceThreadId,
+                runId: sourceRunId,
+              },
+              createdAt: now,
+              updatedAt: now,
+              archivedAt: null,
+              settledOverride: null,
+              settledAt: null,
+              lastVisitedAt: null,
+              deletedAt: null,
+            },
+          });
+        }
+        yield* projectionStore.apply({
+          id: EventId.make("event:projection-imported-fork-shell:source-run"),
+          type: "run.created",
           threadId: sourceThreadId,
-          ordinal: 1,
-          providerInstanceId,
-          modelSelection,
-          providerThreadId: null,
-          userMessageId: MessageId.make("message:projection-imported-fork-shell:run"),
-          rootNodeId,
-          activeAttemptId: null,
-          status: "completed",
-          requestedAt: now,
-          startedAt: now,
-          completedAt: now,
-          checkpointId: null,
-          contextHandoffId: null,
-        },
-      });
-
-      const applyAssistantItem = (suffix: string, runId: RunId | null, ordinal: number) =>
-        projectionStore.apply({
-          id: EventId.make(`event:projection-imported-fork-shell:item:${suffix}`),
-          type: "turn-item.updated",
-          threadId: sourceThreadId,
-          ...(runId === null ? {} : { runId }),
+          runId: sourceRunId,
+          nodeId: rootNodeId,
+          driver,
           occurredAt: now,
           payload: {
-            id: TurnItemId.make(`turn-item:projection-imported-fork-shell:${suffix}`),
+            id: sourceRunId,
             threadId: sourceThreadId,
-            runId,
-            nodeId: null,
+            ordinal: 1,
+            providerInstanceId,
+            modelSelection,
             providerThreadId: null,
-            providerTurnId: null,
-            nativeItemRef: null,
-            parentItemId: null,
-            ordinal,
+            userMessageId: MessageId.make("message:projection-imported-fork-shell:run"),
+            rootNodeId,
+            activeAttemptId: null,
             status: "completed",
-            title: null,
+            requestedAt: now,
             startedAt: now,
             completedAt: now,
-            updatedAt: now,
-            type: "assistant_message",
-            messageId: MessageId.make(`message:projection-imported-fork-shell:${suffix}`),
-            text: suffix,
-            streaming: false,
+            checkpointId: null,
+            contextHandoffId: null,
           },
         });
 
-      yield* applyAssistantItem("imported-one", null, 1);
-      yield* applyAssistantItem("imported-two", null, 2);
-      yield* applyAssistantItem("native-run", sourceRunId, 3);
+        const applyAssistantItem = (suffix: string, runId: RunId | null, ordinal: number) =>
+          projectionStore.apply({
+            id: EventId.make(`event:projection-imported-fork-shell:item:${suffix}`),
+            type: "turn-item.updated",
+            threadId: sourceThreadId,
+            ...(runId === null ? {} : { runId }),
+            occurredAt: now,
+            payload: {
+              id: TurnItemId.make(`turn-item:projection-imported-fork-shell:${suffix}`),
+              threadId: sourceThreadId,
+              runId,
+              nodeId: null,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal,
+              status: "completed",
+              title: null,
+              startedAt: now,
+              completedAt: now,
+              updatedAt: now,
+              type: "assistant_message",
+              messageId: MessageId.make(`message:projection-imported-fork-shell:${suffix}`),
+              text: suffix,
+              streaming: false,
+            },
+          });
 
-      const shell = yield* projectionStore.getShellSnapshot();
-      const targetShell = shell.threads.find((thread) => thread.id === targetThreadId);
-      const targetProjection = yield* projectionStore.getThreadProjection(targetThreadId);
+        yield* applyAssistantItem("imported-one", null, 1);
+        yield* applyAssistantItem("imported-two", null, 2);
+        yield* applyAssistantItem("native-run", sourceRunId, 3);
 
-      assert.isDefined(targetShell);
-      assert.equal(targetShell.itemCount, 0);
-      assert.equal(targetShell.visibleItemCount, 4);
-      assert.equal(targetProjection.visibleTurnItems.length, 4);
+        const shell = yield* projectionStore.getShellSnapshot();
+        const targetShell = shell.threads.find((thread) => thread.id === targetThreadId);
+        const targetProjection = yield* projectionStore.getThreadProjection(targetThreadId);
 
-      const sideChatShell = shell.threads.find((thread) => thread.id === sideChatThreadId);
-      assert.equal(sideChatShell?.visibleItemCount, 0);
-      const sideChatProjection = yield* projectionStore.getThreadProjection(sideChatThreadId);
-      assert.deepEqual(sideChatProjection.visibleTurnItems, []);
-      const sideChatTimeline = yield* projectionStore.getTimelinePage(sideChatThreadId, {
-        limit: 20,
-        view: "activity",
-      });
-      assert.equal(sideChatTimeline.totalItems, 0);
-    }),
+        assert.isDefined(targetShell);
+        assert.equal(targetShell.itemCount, 0);
+        assert.equal(targetShell.visibleItemCount, 4);
+        assert.equal(targetProjection.visibleTurnItems.length, 4);
+
+        const sideChatShell = shell.threads.find((thread) => thread.id === sideChatThreadId);
+        assert.equal(sideChatShell?.visibleItemCount, 0);
+        const sideChatProjection = yield* projectionStore.getThreadProjection(sideChatThreadId);
+        assert.deepEqual(sideChatProjection.visibleTurnItems, []);
+        const sideChatTimeline = yield* projectionStore.getTimelinePage(sideChatThreadId, {
+          limit: 20,
+          view: "activity",
+        });
+        assert.equal(sideChatTimeline.totalItems, 0);
+      }),
   );
 
   it.effect("removes rolled back runs from the active visible projection", () =>

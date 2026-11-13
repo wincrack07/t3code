@@ -54,6 +54,13 @@ describe("thread workflows", () => {
     expect(
       threadSupportsProviderHandoff({
         ...projection,
+        thread: { ...projection.thread, historyOrigin: "portable_import" },
+        providerThreads: [],
+      }),
+    ).toBe(true);
+    expect(
+      threadSupportsProviderHandoff({
+        ...projection,
         runs: [{ ...projection.runs[0]!, status: "running" }],
       }),
     ).toBe(false);
