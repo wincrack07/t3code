@@ -30,7 +30,7 @@ export function resolveFilesystemReadAccess(input: {
   readonly session: SessionGrantInput | null;
   readonly sessionError: string | null;
 }) {
-  if (input.sessionError !== null) {
+  if (input.sessionError !== null && input.session === null) {
     return { canReadFiles: false, isPending: false, error: input.sessionError };
   }
   if (input.session === null) {
