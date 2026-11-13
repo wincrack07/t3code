@@ -29,6 +29,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.projectsTaskAttachments]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsTaskBatchStart]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsTaskBatchCancel]: AuthOrchestrationOperateScope,
+  [WS_METHODS.chatHubConfigure]: AuthSettingsWriteScope,
+  [WS_METHODS.chatHubSyncNow]: AuthSettingsWriteScope,
   [WS_METHODS.keepAwakeAuthorize]: AuthSettingsWriteScope,
   [WS_METHODS.keepAwakeChange]: AuthSettingsWriteScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,

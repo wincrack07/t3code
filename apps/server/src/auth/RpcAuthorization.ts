@@ -39,6 +39,10 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 
 export const RPC_REQUIRED_SCOPES = {
   ...CLIENT_GUARDED_RPC_SCOPES,
+  [WS_METHODS.chatHubStatus]: AuthOrchestrationReadScope,
+  [WS_METHODS.chatHubList]: AuthOrchestrationReadScope,
+  [WS_METHODS.chatHubGet]: AuthOrchestrationReadScope,
+  [WS_METHODS.chatHubEnvironments]: AuthOrchestrationReadScope,
   [WS_METHODS.keepAwakeSubscribe]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,

@@ -1776,6 +1776,30 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId }) => environmentId,
       },
     }),
+    chatHubStatus: createEnvironmentRpcCommand(runtime, {
+      label: "chat-hub:status",
+      tag: WS_METHODS.chatHubStatus,
+    }),
+    chatHubConfigure: createEnvironmentRpcCommand(runtime, {
+      label: "chat-hub:configure",
+      tag: WS_METHODS.chatHubConfigure,
+    }),
+    chatHubSyncNow: createEnvironmentRpcCommand(runtime, {
+      label: "chat-hub:syncNow",
+      tag: WS_METHODS.chatHubSyncNow,
+    }),
+    chatHubList: createEnvironmentRpcCommand(runtime, {
+      label: "chat-hub:list",
+      tag: WS_METHODS.chatHubList,
+    }),
+    chatHubGet: createEnvironmentRpcCommand(runtime, {
+      label: "chat-hub:get",
+      tag: WS_METHODS.chatHubGet,
+    }),
+    chatHubEnvironments: createEnvironmentRpcCommand(runtime, {
+      label: "chat-hub:environments",
+      tag: WS_METHODS.chatHubEnvironments,
+    }),
     checkOtlpEndpoint: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:check-otlp-endpoint",
       tag: WS_METHODS.serverCheckOtlpEndpoint,

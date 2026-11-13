@@ -1,3 +1,4 @@
+import * as ChatHubSync from "./chatHub/ChatHubSync.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as KeepAwakeRuntime from "./keepAwake/runtime.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
@@ -662,6 +663,10 @@ const layerServerRestart = Layer.effect(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
+  ChatHubSync.worker.pipe(
+    Layer.provideMerge(ChatHubSync.layer),
+    Layer.provide(ServerSecretStore.layer),
+  ),
   layerSystemMonitor,
   AgentAwarenessRelay.layer,
   HeldHooksWaker.layer,
