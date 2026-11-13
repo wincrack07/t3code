@@ -82,7 +82,11 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
                 if (AsyncResult.isSuccess(result)) {
                   setStatus(result.value);
                   setToken("");
-                  setMessage("Saved. Backfill starts automatically.");
+                  setMessage(
+                    result.value.enabled && result.value.configured
+                      ? "Saved. Pending chats sync automatically."
+                      : "Saved. Automatic sync is off.",
+                  );
                 } else setMessage("Could not save hub settings.");
               })
               .finally(() => setBusy(false));
