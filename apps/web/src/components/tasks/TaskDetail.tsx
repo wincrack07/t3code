@@ -116,6 +116,7 @@ export function TaskDetail({
   const projectId = home.id;
   const compact = density === "compact";
   const { allowed, update, attempt } = useSavedPrompts(environmentId, projectId);
+  const addMany = useAtomCommand(projectEnvironment.tasks.addMany);
   const labelOf = useEnvironmentLabel();
   const threads = taskThreadRefs(task, environmentId);
   const pendingLink = pendingTaskLink(
@@ -279,25 +280,21 @@ export function TaskDetail({
         candidate.home.environmentId === environmentId &&
         candidate.home.id === projectId,
     ) ?? null;
-  // New tasks are stored first, so a reorder keeps subtasks in the order they were written.
-  const addSubtasks = async (titles: ReadonlyArray<string>) => {
-    const existing = taskSubtasks(group, entry).map((child) => child.task.id);
-    const added: string[] = [];
-    for (const text of titles) {
-      const id = randomUUID();
-      const ok = await update({
-        kind: "add",
-        id,
-        text,
-        parentTaskId: task.id,
-        ...(task.priority ? { priority: task.priority } : {}),
-      });
-      if (!ok) break;
-      added.push(id);
-    }
-    if (added.length > 0) await update({ kind: "reorder", ids: [...existing, ...added] });
-    return added.length === titles.length;
-  };
+  // One write, after the existing subtasks, in the order they were written.
+  const addSubtasks = async (titles: ReadonlyArray<string>) =>
+    (
+      await addMany({
+        home: scopeProjectRef(environmentId, projectId),
+        commandId: CommandId.make(randomUUID()),
+        position: "end",
+        tasks: titles.map((text) => ({
+          id: randomUUID(),
+          text,
+          parentTaskId: task.id,
+          ...(task.priority ? { priority: task.priority } : {}),
+        })),
+      })
+    )._tag === "Success";
   const startThread = async (
     send: boolean,
     target: EnvironmentProject = taskRunProject(entry, group),

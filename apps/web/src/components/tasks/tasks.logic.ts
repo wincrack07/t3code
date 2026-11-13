@@ -23,10 +23,15 @@ import {
   type SavedPromptStatus,
   type ScopedThreadRef,
   taskAttachmentKey,
+  type ModelSelection,
+  type RuntimeMode,
   type TaskBatchEntry,
   type TaskReviewSnapshot,
 } from "@t3tools/contracts";
+import { taskBatchEffectiveConcurrency } from "@t3tools/shared/savedTasks";
 import { buildNewThreadLink, PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
+
+import { runtimeModeConfig } from "../chat/runtimeModeConfig";
 
 export const TASK_STATUSES = [
   "open",
@@ -942,69 +947,192 @@ export function nextTaskSelection(
   return next;
 }
 
+/** The detail's Run with section, linked from tasks a batch cannot confirm. */
+export const TASK_RUN_WITH_ANCHOR = "task-run-with";
+
 export const TASK_BATCH_MAX_CONCURRENCY = 4;
 export const TASK_BATCH_DEFAULT_CONCURRENCY = 2;
 
+type TaskBatchFailureReason = NonNullable<TaskBatchEntry["failureReason"]>;
+
+export interface TaskBatchPlanEntry {
+  readonly source: { readonly environmentId: EnvironmentId; readonly taskId: string };
+  readonly launch: {
+    readonly modelSelection: ModelSelection;
+    readonly runtimeMode: RuntimeMode;
+    readonly threadEnvMode?: "local" | "worktree" | undefined;
+  };
+}
+
+/** One destination project's prepared batch, as `prepareBatch` returns it. */
 export interface TaskBatchPlanGroup {
   readonly environmentId: EnvironmentId;
+  /** The machine's cap now, or null when no queue snapshot says. */
+  readonly currentEffectiveConcurrency: number | null;
+  readonly effectiveConcurrency: number;
   readonly input: {
     readonly projectId: string;
     readonly concurrency?: number | undefined;
-    readonly entries: ReadonlyArray<{
-      readonly source: { readonly environmentId: EnvironmentId; readonly taskId: string };
-    }>;
+    readonly entries: ReadonlyArray<TaskBatchPlanEntry>;
   };
+  readonly unresolved: ReadonlyArray<
+    TaskBatchPlanEntry & { readonly failureReason: TaskBatchFailureReason }
+  >;
+}
+
+export interface TaskBatchSummaryTask {
+  readonly key: string;
+  readonly title: string;
+  /** Why this task runs on its own machine whatever was chosen. */
+  readonly pinned: string | null;
+  /** Null when the task will run; otherwise why it will not. */
+  readonly blocked: string | null;
+  readonly model: string;
+  readonly effort: string;
+  readonly access: string;
+  readonly workspace: string;
+  /** This task runs with a different model or access than most of the batch. */
+  readonly modelDiffers: boolean;
+  readonly accessDiffers: boolean;
 }
 
 export interface TaskBatchSummaryRow {
   readonly environmentId: EnvironmentId;
   readonly machine: string;
-  readonly tasks: ReadonlyArray<{
-    readonly key: string;
-    readonly title: string;
-    /** Why this task runs on its own machine whatever was chosen. */
-    readonly pinned: string | null;
-  }>;
+  readonly tasks: ReadonlyArray<TaskBatchSummaryTask>;
+  /** Set only when this batch changes how many tasks the machine runs at once. */
+  readonly capChange: string | null;
 }
 
-/** Where each prepared task runs, grouped by machine, naming tasks held to their home. */
+export interface TaskBatchSummary {
+  readonly rows: ReadonlyArray<TaskBatchSummaryRow>;
+  readonly runnable: number;
+  /** "3 tasks · 2 models · Full access · 2 machines" */
+  readonly headline: string;
+}
+
+const TASK_BATCH_REFUSALS: Record<TaskBatchFailureReason, string> = {
+  "settings-changed": "Its run settings changed after the batch was confirmed.",
+  "task-changed": "The task was edited after the batch was confirmed.",
+  "source-deleted": "The task was deleted before it started.",
+  "source-unverifiable":
+    "The machine could not check the task with its home machine. Check the link between them.",
+  "unresolved-model":
+    "Auto routing picks a model when it starts, so it cannot be confirmed. Choose a model in Run with.",
+};
+
+const plural = (count: number, one: string, many = `${one}s`) =>
+  `${count} ${count === 1 ? one : many}`;
+
+const mostCommon = (values: ReadonlyArray<string>) => {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].reduce<[string, number] | null>(
+    (best, item) => (best === null || item[1] > best[1] ? item : best),
+    null,
+  )?.[0];
+};
+
+/**
+ * Exactly what each prepared task runs with, grouped by machine, with the tasks that will not
+ * run and a headline that calls out mixed models, access and machines.
+ */
 export function taskBatchSummary(
   groups: ReadonlyArray<TaskBatchPlanGroup>,
   entries: ReadonlyArray<TaskEntry>,
   choice: { readonly distribute: boolean; readonly environmentId: EnvironmentId | null },
-  labelOf: (environmentId: EnvironmentId) => string,
-): TaskBatchSummaryRow[] {
+  labels: {
+    readonly machine: (environmentId: EnvironmentId) => string;
+    readonly model: (selection: ModelSelection) => string;
+  },
+): TaskBatchSummary {
   const byTask = new Map(
     entries.map((entry) => [`${entry.home.environmentId}:${entry.task.id}`, entry] as const),
   );
-  const rows = new Map<EnvironmentId, TaskBatchSummaryRow["tasks"][number][]>();
+  const describe = (
+    group: TaskBatchPlanGroup,
+    item: TaskBatchPlanEntry,
+    blocked: TaskBatchFailureReason | null,
+  ) => {
+    const entry = byTask.get(`${item.source.environmentId}:${item.source.taskId}`);
+    if (!entry) return null;
+    const stored = (entry.task.attachments ?? []).some((a) => a.kind === "stored");
+    const movedAway =
+      choice.distribute ||
+      (choice.environmentId !== null && choice.environmentId !== entry.home.environmentId);
+    const effort = item.launch.modelSelection.options?.find((option) => option.id === "effort");
+    return {
+      key: entry.key,
+      title: taskTitle(entry.task),
+      pinned:
+        stored && movedAway && group.environmentId === entry.home.environmentId
+          ? `Stays on ${labels.machine(entry.home.environmentId)} because its attachments are stored there.`
+          : null,
+      blocked: blocked === null ? null : TASK_BATCH_REFUSALS[blocked],
+      model: blocked === "unresolved-model" ? "Auto" : labels.model(item.launch.modelSelection),
+      effort: effort === undefined ? "provider default" : String(effort.value),
+      access: runtimeModeConfig[item.launch.runtimeMode].label,
+      workspace: item.launch.threadEnvMode === "worktree" ? "Worktree" : "Local",
+    };
+  };
+  const rows = new Map<
+    EnvironmentId,
+    { tasks: Omit<TaskBatchSummaryTask, "modelDiffers" | "accessDiffers">[]; cap: string | null }
+  >();
   for (const group of groups) {
+    const row = rows.get(group.environmentId) ?? { tasks: [], cap: null };
     for (const item of group.input.entries) {
-      const entry = byTask.get(`${item.source.environmentId}:${item.source.taskId}`);
-      if (!entry) continue;
-      const stored = (entry.task.attachments ?? []).some((a) => a.kind === "stored");
-      const movedAway =
-        choice.distribute ||
-        (choice.environmentId !== null && choice.environmentId !== entry.home.environmentId);
-      rows.set(group.environmentId, [
-        ...(rows.get(group.environmentId) ?? []),
-        {
-          key: entry.key,
-          title: taskTitle(entry.task),
-          pinned:
-            stored && movedAway && group.environmentId === entry.home.environmentId
-              ? `Has attachments stored on ${labelOf(entry.home.environmentId)}`
-              : null,
-        },
-      ]);
+      const task = describe(group, item, null);
+      if (task) row.tasks.push(task);
     }
+    for (const item of group.unresolved) {
+      const task = describe(group, item, item.failureReason);
+      if (task) row.tasks.push(task);
+    }
+    if (
+      group.input.entries.length > 0 &&
+      group.currentEffectiveConcurrency !== null &&
+      group.currentEffectiveConcurrency !== group.effectiveConcurrency
+    )
+      row.cap = `${labels.machine(group.environmentId)} runs ${group.currentEffectiveConcurrency} at a time; this batch changes it to ${group.effectiveConcurrency}.`;
+    rows.set(group.environmentId, row);
   }
-  return [...rows.entries()]
-    .map(([environmentId, tasks]) => ({ environmentId, machine: labelOf(environmentId), tasks }))
-    .toSorted((left, right) => left.machine.localeCompare(right.machine));
+  const all = [...rows.values()].flatMap((row) => row.tasks);
+  const runnable = all.filter((task) => task.blocked === null);
+  const models = new Set(runnable.map((task) => task.model));
+  const access = new Set(runnable.map((task) => task.access));
+  const commonModel = mostCommon(runnable.map((task) => task.model));
+  const commonAccess = mostCommon(runnable.map((task) => task.access));
+  const machines = [...rows.keys()];
+  const headline = [
+    plural(all.length, "task"),
+    models.size > 1 ? plural(models.size, "model") : [...models][0],
+    access.size > 1 ? plural(access.size, "access mode") : [...access][0],
+    machines.length > 1 ? plural(machines.length, "machine") : null,
+    all.length > runnable.length ? `${all.length - runnable.length} will not run` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return {
+    runnable: runnable.length,
+    headline,
+    rows: [...rows.entries()]
+      .map(([environmentId, row]) => ({
+        environmentId,
+        machine: labels.machine(environmentId),
+        capChange: row.cap,
+        tasks: row.tasks.map((task) => ({
+          ...task,
+          modelDiffers: task.blocked === null && models.size > 1 && task.model !== commonModel,
+          accessDiffers: task.blocked === null && access.size > 1 && task.access !== commonAccess,
+        })),
+      }))
+      .toSorted((left, right) => left.machine.localeCompare(right.machine)),
+  };
 }
 
-export type TaskQueueState = TaskBatchEntry["state"];
+/** "refused" is a cancelled entry the machine would not start, with a reason to show. */
+export type TaskQueueState = TaskBatchEntry["state"] | "refused";
 
 export interface TaskQueueView {
   readonly state: TaskQueueState;
@@ -1013,33 +1141,48 @@ export interface TaskQueueView {
   readonly target: { readonly environmentId: EnvironmentId; readonly projectId: string };
   readonly batchId: string;
   readonly entryId: string;
+  /** How many the destination machine runs at once now, so a retry keeps it. */
+  readonly cap: number;
 }
+
+type TaskQueueItem = {
+  readonly target: { readonly environmentId: EnvironmentId; readonly projectId: string };
+  readonly batchId: string;
+  readonly createdAt: string;
+  readonly cap: number;
+  readonly entry: Pick<TaskBatchEntry, "id" | "state" | "reason" | "failureReason">;
+  readonly position: number | null;
+};
 
 /**
  * A task's place in the newest batch that holds it, while that place still matters: settled
- * and cancelled entries hand over to the task's own status.
+ * and user-cancelled entries hand over to the task's own status, and a refusal shows only
+ * while the task is still waiting to run.
  */
 export function taskQueueView(
-  items: ReadonlyArray<{
-    readonly target: { readonly environmentId: EnvironmentId; readonly projectId: string };
-    readonly batchId: string;
-    readonly createdAt: string;
-    readonly entry: Pick<TaskBatchEntry, "id" | "state" | "reason">;
-    readonly position: number | null;
-  }>,
+  items: ReadonlyArray<TaskQueueItem>,
+  status: SavedPromptStatus,
 ): TaskQueueView | null {
   const latest = items
     .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))
     .at(-1);
-  if (!latest || latest.entry.state === "settled" || latest.entry.state === "cancelled")
+  if (!latest || latest.entry.state === "settled") return null;
+  const refusal = latest.entry.state === "cancelled" ? latest.entry.failureReason : undefined;
+  if (latest.entry.state === "cancelled" && (refusal === undefined || status !== "open"))
     return null;
   return {
-    state: latest.entry.state,
+    state: refusal === undefined ? latest.entry.state : "refused",
     position: latest.position,
-    reason: latest.entry.reason ?? null,
+    reason:
+      refusal === undefined
+        ? (latest.entry.reason ?? null)
+        : refusal === "source-unverifiable" && latest.entry.reason
+          ? latest.entry.reason
+          : TASK_BATCH_REFUSALS[refusal],
     target: latest.target,
     batchId: latest.batchId,
     entryId: latest.entry.id,
+    cap: latest.cap,
   };
 }
 
@@ -1054,11 +1197,33 @@ export interface TaskQueueTotals {
     readonly projectId: string;
     readonly batchId: string;
   }>;
+  /** The shared cap of each machine with unfinished work. */
+  readonly caps: ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly cap: number }>;
+  /** Tasks the machine refused to start that are still waiting to run. */
+  readonly refused: ReadonlyArray<{ readonly entry: TaskEntry; readonly queue: TaskQueueView }>;
+}
+
+const unfinished = (state: TaskBatchEntry["state"]) =>
+  state === "queued" || state === "starting" || state === "running";
+
+/** The cap a machine's newest unfinished batch set, across every project it holds. */
+function machineCap(projects: ReadonlyArray<EnvironmentProject>, environmentId: EnvironmentId) {
+  const batches = projects
+    .filter((project) => project.environmentId === environmentId)
+    .flatMap((project) => project.taskBatches ?? []);
+  const active = batches.filter((batch) => batch.entries.some((entry) => unfinished(entry.state)));
+  return (
+    active.find((batch) => batch.effectiveConcurrency !== undefined)?.effectiveConcurrency ??
+    (active.length > 0 ? taskBatchEffectiveConcurrency(batches) : null)
+  );
 }
 
 /** Every batch a loaded project holds, summed for the queue bar. */
-export function taskQueueTotals(projects: ReadonlyArray<EnvironmentProject>): TaskQueueTotals {
-  const count = (state: TaskQueueState) =>
+export function taskQueueTotals(
+  projects: ReadonlyArray<EnvironmentProject>,
+  tasks: ReadonlyArray<TaskEntry>,
+): TaskQueueTotals {
+  const count = (state: TaskBatchEntry["state"]) =>
     projects.reduce(
       (total, project) =>
         total +
@@ -1081,6 +1246,16 @@ export function taskQueueTotals(projects: ReadonlyArray<EnvironmentProject>): Ta
           batchId: batch.id,
         })),
     ),
+    caps: [...new Set(projects.map((project) => project.environmentId))].flatMap(
+      (environmentId) => {
+        const cap = machineCap(projects, environmentId);
+        return cap === null ? [] : [{ environmentId, cap }];
+      },
+    ),
+    refused: tasks.flatMap((entry) => {
+      const queue = taskQueueView(taskQueueItems(entry, projects), entry.status);
+      return queue?.state === "refused" ? [{ entry, queue }] : [];
+    }),
   };
 }
 
@@ -1088,7 +1263,7 @@ export function taskQueueTotals(projects: ReadonlyArray<EnvironmentProject>): Ta
 export function taskQueueItems(
   entry: Pick<TaskEntry, "task" | "home">,
   projects: ReadonlyArray<EnvironmentProject>,
-) {
+): TaskQueueItem[] {
   const all = projects
     .flatMap((project) =>
       (project.taskBatches ?? []).flatMap((batch) =>
@@ -1096,6 +1271,7 @@ export function taskQueueItems(
           target: { environmentId: project.environmentId, projectId: project.id as string },
           batchId: batch.id as string,
           createdAt: batch.createdAt,
+          concurrency: batch.concurrency,
           entry: item,
         })),
       ),
@@ -1108,8 +1284,9 @@ export function taskQueueItems(
         item.entry.source.projectId === entry.home.id &&
         item.entry.source.taskId === entry.task.id,
     )
-    .map((item) => ({
+    .map(({ concurrency, ...item }) => ({
       ...item,
+      cap: machineCap(projects, item.target.environmentId) ?? concurrency,
       position:
         item.entry.state !== "queued"
           ? null
@@ -1119,6 +1296,6 @@ export function taskQueueItems(
                   other.target.environmentId === item.target.environmentId &&
                   other.entry.state === "queued",
               )
-              .indexOf(item) + 1,
+              .findIndex((other) => other.entry === item.entry) + 1,
     }));
 }
