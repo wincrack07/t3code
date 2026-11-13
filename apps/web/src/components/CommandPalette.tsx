@@ -1896,6 +1896,17 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:all-chats",
+    searchTerms: ["all chats", "hub", "machines", "search"],
+    title: "Search all chats",
+    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/all-chats" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:tasks",
     searchTerms: ["tasks", "saved", "prompts", "todo"],
     title: "Open tasks",

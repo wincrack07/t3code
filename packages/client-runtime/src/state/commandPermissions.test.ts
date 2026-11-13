@@ -196,6 +196,8 @@ describe("command permissions", () => {
     { method: WS_METHODS.machineCleanupCancel, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.machineCleanupSubscribe, scope: AuthEnvironmentMaintainScope },
     { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
+    { method: WS_METHODS.chatHubConfigure, scope: AuthSettingsWriteScope },
+    { method: WS_METHODS.chatHubSyncNow, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.keepAwakeChange, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.keepAwakeAuthorize, scope: AuthSettingsWriteScope },
     { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },

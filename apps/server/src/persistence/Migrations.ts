@@ -84,6 +84,7 @@ import Migration0078 from "./Migrations/078_DropOrchestrationEventCorrelationInd
 import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
 import Migration0083 from "./Migrations/083_ProjectSavedPrompts.ts";
 import Migration0084 from "./Migrations/084_SavedPromptTasks.ts";
+import Migration0086 from "./Migrations/086_ChatHubSync.ts";
 import Migration0085 from "./Migrations/085_ProjectTaskBatches.ts";
 import Migration0080 from "./Migrations/080_ScheduledTaskThreadMode.ts";
 import Migration0081 from "./Migrations/081_ProjectionMessageSearchText.ts";
@@ -176,6 +177,7 @@ const migrationEntries = [
   [83, "ProjectSavedPrompts", Migration0083],
   [84, "SavedPromptTasks", Migration0084],
   [85, "ProjectTaskBatches", Migration0085],
+  [86, "ChatHubSync", Migration0086],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

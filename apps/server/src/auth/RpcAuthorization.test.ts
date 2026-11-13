@@ -38,6 +38,15 @@ describe("RPC authorization scopes", () => {
   });
 
   it("requires settings permission to change keep-awake sessions", () => {
+    for (const method of [
+      WS_METHODS.chatHubStatus,
+      WS_METHODS.chatHubList,
+      WS_METHODS.chatHubGet,
+      WS_METHODS.chatHubEnvironments,
+    ])
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+    for (const method of [WS_METHODS.chatHubConfigure, WS_METHODS.chatHubSyncNow])
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthSettingsWriteScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeAuthorize)).toBe(AuthSettingsWriteScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeChange)).toBe(AuthSettingsWriteScope);
     expect(requiredScopeForRpcMethod(WS_METHODS.keepAwakeSubscribe)).toBe(

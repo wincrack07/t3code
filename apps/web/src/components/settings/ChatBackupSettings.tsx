@@ -1,3 +1,4 @@
+import { ChatHubSettings } from "./ChatHubSettings";
 import { ChatImportSettings } from "./ChatImportSettings";
 import { useState } from "react";
 import { Button } from "../ui/button";
@@ -37,6 +38,7 @@ export function ChatBackupSettings() {
         </Button>
       </div>
       <ChatImportSettings />
+      <ChatHubSettings />
       <p role="status" className="text-sm text-muted-foreground">
         {status}
       </p>

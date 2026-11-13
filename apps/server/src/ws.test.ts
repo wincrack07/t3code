@@ -1,3 +1,4 @@
+import * as ChatHubSync from "./chatHub/ChatHubSync.ts";
 import * as TaskBatchService from "./project/TaskBatchService.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
@@ -1040,6 +1041,7 @@ it.effect.each([
             () => Effect.void,
             { secretReferences: true },
           ).pipe(
+            Layer.provide(Layer.mock(ChatHubSync.ChatHubSync)({})),
             Layer.provide(Layer.mock(Decisions.Decisions)({})),
             Layer.provide(configRpcServices),
           ),
@@ -1288,6 +1290,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
           () => Effect.void,
           { secretReferences: true },
         ).pipe(
+          Layer.provide(Layer.mock(ChatHubSync.ChatHubSync)({})),
           Layer.provide(Layer.mock(Decisions.Decisions)({})),
           Layer.provide(configRpcServices),
         ),
@@ -1537,7 +1540,7 @@ it.effect("a missing thread worktree gets its project's skills in the cwd snapsh
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
           { secretReferences: true },
-        ).pipe(Layer.provide(services)),
+        ).pipe(Layer.provide(Layer.mock(ChatHubSync.ChatHubSync)({})), Layer.provide(services)),
       ),
     );
 
@@ -1625,7 +1628,9 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
           () => Effect.void,
           { secretReferences: true },
         ).pipe(
+          Layer.provide(Layer.mock(ChatHubSync.ChatHubSync)({})),
           Layer.provide(Layer.mock(Decisions.Decisions)({})),
+          Layer.provide(Layer.mock(ChatHubSync.ChatHubSync)({})),
           Layer.provide(services),
           Layer.merge(RpcAuthorization.layer([AuthSourceControlWriteScope])),
         ),
@@ -2037,6 +2042,7 @@ it.effect("ACP session RPCs list a thread missing its history and repair it on i
           () => Effect.void,
           { secretReferences: true },
         ).pipe(
+          Layer.provide(Layer.mock(ChatHubSync.ChatHubSync)({})),
           Layer.provide(services),
           Layer.merge(
             RpcAuthorization.layer([AuthOrchestrationReadScope, AuthOrchestrationOperateScope]),

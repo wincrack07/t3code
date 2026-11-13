@@ -11,6 +11,14 @@ import {
   MachineCleanupError,
 } from "./machineCleanup.ts";
 import { DecisionInput, DecisionResult } from "./decisions.ts";
+import {
+  ChatHubStatus,
+  ChatHubConfigure,
+  ChatHubQuery,
+  ChatHubLookup,
+  ChatHubSyncError,
+} from "./chatHubSync.ts";
+import { ChatHubList, ChatHubThread, ChatHubEnvironments } from "./chatHub.ts";
 import { KeepAwakeAuthorize, KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";
 import {
@@ -549,6 +557,12 @@ export const WS_METHODS = {
   deviceAction: "device.action",
 
   serverProbe: "server.probe",
+  chatHubStatus: "chatHub.status",
+  chatHubConfigure: "chatHub.configure",
+  chatHubSyncNow: "chatHub.syncNow",
+  chatHubList: "chatHub.list",
+  chatHubGet: "chatHub.get",
+  chatHubEnvironments: "chatHub.environments",
   keepAwakeAuthorize: "keepAwake.authorize",
   keepAwakeChange: "keepAwake.change",
   keepAwakeSubscribe: "keepAwake.subscribe",
@@ -2278,6 +2292,37 @@ const WsSubscribeMachineMonitorRpc = Rpc.make(WS_METHODS.subscribeMachineMonitor
   stream: true,
 });
 
+const WsChatHubStatus = Rpc.make(WS_METHODS.chatHubStatus, {
+  payload: Schema.Struct({}),
+  success: ChatHubStatus,
+  error: Schema.Union([ChatHubSyncError, EnvironmentAuthorizationError]),
+});
+const WsChatHubConfigure = Rpc.make(WS_METHODS.chatHubConfigure, {
+  payload: ChatHubConfigure,
+  success: ChatHubStatus,
+  error: Schema.Union([ChatHubSyncError, EnvironmentAuthorizationError]),
+});
+const WsChatHubSyncNow = Rpc.make(WS_METHODS.chatHubSyncNow, {
+  payload: Schema.Struct({}),
+  success: ChatHubStatus,
+  error: Schema.Union([ChatHubSyncError, EnvironmentAuthorizationError]),
+});
+const WsChatHubList = Rpc.make(WS_METHODS.chatHubList, {
+  payload: ChatHubQuery,
+  success: ChatHubList,
+  error: Schema.Union([ChatHubSyncError, EnvironmentAuthorizationError]),
+});
+const WsChatHubGet = Rpc.make(WS_METHODS.chatHubGet, {
+  payload: ChatHubLookup,
+  success: Schema.Struct({ ...ChatHubThread.fields, markdown: Schema.String }),
+  error: Schema.Union([ChatHubSyncError, EnvironmentAuthorizationError]),
+});
+const WsChatHubEnvironments = Rpc.make(WS_METHODS.chatHubEnvironments, {
+  payload: Schema.Struct({}),
+  success: ChatHubEnvironments,
+  error: Schema.Union([ChatHubSyncError, EnvironmentAuthorizationError]),
+});
+
 const WsKeepAwakeChange = Rpc.make(WS_METHODS.keepAwakeChange, {
   payload: KeepAwakeChange,
   success: KeepAwakeStatus,
@@ -2297,6 +2342,12 @@ const WsKeepAwakeAuthorize = Rpc.make(WS_METHODS.keepAwakeAuthorize, {
 });
 export const WsRpcGroup = RpcGroup.make(
   WsKeepAwakeAuthorize,
+  WsChatHubStatus,
+  WsChatHubConfigure,
+  WsChatHubSyncNow,
+  WsChatHubList,
+  WsChatHubGet,
+  WsChatHubEnvironments,
   WsKeepAwakeChange,
   WsKeepAwakeSubscribe,
   WsSubscribeMachineMonitorRpc,

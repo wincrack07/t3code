@@ -323,6 +323,14 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
   const secondaryActions = [
     {
+      label: "All chats",
+      icon: <LayoutGridIcon />,
+      onClick: () => {
+        closeMobileSidebar();
+        void navigate({ to: "/all-chats" });
+      },
+    },
+    {
       label: "Tasks",
       icon: <ListTodoIcon />,
       count: openTasks,

@@ -1,3 +1,4 @@
+import * as ChatHubSync from "./chatHub/ChatHubSync.ts";
 import * as TaskBatchService from "./project/TaskBatchService.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
@@ -1452,6 +1453,7 @@ export const layerWsRpc = (
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+      const chatHub = yield* ChatHubSync.ChatHubSync;
       const keepAwake = yield* KeepAwake.KeepAwake;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
@@ -2629,6 +2631,12 @@ export const layerWsRpc = (
             maxFiles: config.traceMaxFiles,
           }),
         [WS_METHODS.serverGetProcessDiagnostics]: (_input) => processDiagnostics.read,
+        [WS_METHODS.chatHubStatus]: () => chatHub.status,
+        [WS_METHODS.chatHubConfigure]: (input) => chatHub.configure(input),
+        [WS_METHODS.chatHubSyncNow]: () => chatHub.syncNow,
+        [WS_METHODS.chatHubList]: (input) => chatHub.list(input),
+        [WS_METHODS.chatHubGet]: (input) => chatHub.get(input),
+        [WS_METHODS.chatHubEnvironments]: () => chatHub.environments,
         [WS_METHODS.keepAwakeAuthorize]: (input) => keepAwake.authorizeLid(input.action),
         [WS_METHODS.keepAwakeChange]: (input) => keepAwake.change(input),
         [WS_METHODS.keepAwakeSubscribe]: () => keepAwake.changes,

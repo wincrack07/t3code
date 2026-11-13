@@ -19,6 +19,10 @@
       "types": "./src/relay.ts",
       "import": "./src/relay.ts"
     },
+    "./chat-hub-sync": {
+      "types": "./src/chatHubSync.ts",
+      "import": "./src/chatHubSync.ts"
+    },
     "./chat-hub": {
       "types": "./src/chatHub.ts",
       "import": "./src/chatHub.ts"
