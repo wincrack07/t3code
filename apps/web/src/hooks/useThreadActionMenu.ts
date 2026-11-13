@@ -1,3 +1,4 @@
+import { downloadChat } from "../lib/chatExport";
 import { openThreadInSplit, threadSplitMenuState } from "../threadColumnsStore";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -209,6 +210,12 @@ export function useThreadActionMenu(input: {
             params: buildThreadRouteParams(openThreadInSplit(threadRef)),
           });
           return;
+        case "export-md":
+        case "export-json":
+          void downloadChat(threadRef, action === "export-md" ? "md" : "json").catch((error) =>
+            failureToast("Export failed", error),
+          );
+          break;
         case "find":
           onFind?.(threadRef);
           return;
