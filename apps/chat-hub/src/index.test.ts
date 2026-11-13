@@ -212,6 +212,11 @@ it("accepts percent-encoded T3 ids with colons and rejects ids outside the id al
   ).toBe(200);
   expect((await s.call(`/threads/mac/${encodeURIComponent(realId)}`)).status).toBe(200);
   expect((await s.call("/threads/mac/bad%20id", "PUT", input("bad id"))).status).toBe(404);
+  const nestedId = `thread:provider:${"run%253Athread%25253Adelegated-task".repeat(20)}`;
+  const nestedPath = `/threads/mac/${encodeURIComponent(nestedId)}`;
+  expect((await s.call(nestedPath, "PUT", input(nestedId))).status).toBe(200);
+  expect((await s.call(nestedPath)).status).toBe(200);
+  expect([...s.objects.keys()].every((key) => key.length <= 1024)).toBe(true);
 });
 
 it("rejects mismatched ids, invalid bodies/dates and both declared and streamed oversized bodies", async () => {

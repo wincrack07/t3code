@@ -105,7 +105,7 @@ function decode<S extends Schema.Top>(schema: S, value: unknown): S["Type"] {
   }
 }
 function threadIds(url: URL) {
-  const match = /^\/v1\/threads\/([^/]{1,1024})\/([^/]{1,1024})$/.exec(url.pathname);
+  const match = /^\/v1\/threads\/([^/]{1,4096})\/([^/]{1,4096})$/.exec(url.pathname);
   if (!match) return null;
   try {
     const ids = [decodeURIComponent(match[1]!), decodeURIComponent(match[2]!)] as const;
@@ -113,6 +113,18 @@ function threadIds(url: URL) {
   } catch {
     return null;
   }
+}
+
+// R2 keys cap at 1024 bytes; long ids (nested subagent threads) use a hashed key instead.
+async function objectKey(environmentId: string, threadId: string) {
+  const plain = `threads/${encodeURIComponent(environmentId)}/${encodeURIComponent(threadId)}`;
+  if (plain.length <= 900) return plain;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`${environmentId}\n${threadId}`),
+  );
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `threads/h/${hex}`;
 }
 
 // D1 and R2 have no shared transaction; serialize each thread across Worker instances.
@@ -138,7 +150,7 @@ async function threadRequest(request: Request, env: Env) {
   const ids = threadIds(url);
   if (!ids) return fail(404, "not_found", "Thread route not found");
   const [environmentId, threadId] = ids;
-  const key = `threads/${encodeURIComponent(environmentId)}/${encodeURIComponent(threadId)}`;
+  const key = await objectKey(environmentId, threadId);
   const row = await env.DB.prepare(
     "SELECT id, meta, updated_at FROM threads WHERE environment_id = ? AND thread_id = ?",
   )
