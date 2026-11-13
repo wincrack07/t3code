@@ -513,9 +513,28 @@ it.effect("freezes enqueued briefs and cancels deleted queued tasks", () => {
     const batches = yield* TaskBatchService.TaskBatchService;
     const projects = yield* ProjectService.ProjectService;
     const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
-    const input = yield* seed("frozen", 3, 1);
+    const input = yield* seed("frozen", 4, 1);
     yield* batches.start(input);
+    const enqueued = yield* read(input);
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("legacy-queue"),
+      taskBatches: [
+        {
+          ...enqueued,
+          entries: enqueued.entries.map((entry, index) =>
+            index === 3 ? { ...entry, destination: undefined } : entry,
+          ),
+        },
+      ],
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("post-enqueue-default"),
+      defaultModelSelection: { ...modelSelection, model: "later-paid" },
+    });
     yield* worker.drain();
+    assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "test");
     yield* projects.update({
       projectId: input.projectId,
       commandId: CommandId.make("edit-queued"),
@@ -531,6 +550,8 @@ it.effect("freezes enqueued briefs and cancels deleted queued tasks", () => {
     assert.strictEqual(state.entries[1]?.brief?.text, "frozen-1");
     assert.strictEqual(state.entries[2]?.state, "cancelled");
     assert.strictEqual(state.entries[2]?.failureReason, "source-deleted");
+    assert.strictEqual(state.entries[3]?.state, "cancelled");
+    assert.strictEqual(state.entries[3]?.failureReason, "settings-changed");
   }).pipe(Effect.provide(fixture.layer));
 });
 

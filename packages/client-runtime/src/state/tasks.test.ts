@@ -453,7 +453,7 @@ it.effect("retries the link without sending a second turn after the home environ
             sources: [{ home, taskId: "task" }],
             target: home,
             distribute: false,
-            overrides: scenario.overrides,
+            ...(scenario.overrides === undefined ? {} : { overrides: scenario.overrides }),
           }),
         );
         expect(result._tag).toBe("Success");

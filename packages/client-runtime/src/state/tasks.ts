@@ -486,7 +486,7 @@ export function createSavedTaskCommands<R, E>(
           string,
           {
             environmentId: EnvironmentId;
-            currentEffectiveConcurrency: number;
+            currentEffectiveConcurrency: number | null;
             effectiveConcurrency: number;
             input: TaskBatchStartInput;
           }
@@ -603,11 +603,16 @@ export function createSavedTaskCommands<R, E>(
             });
           groups.set(key, {
             environmentId: target.environmentId,
-            currentEffectiveConcurrency: taskBatchEffectiveConcurrency(
+            currentEffectiveConcurrency:
               input.targets
                 .filter((ref) => ref.environmentId === target.environmentId)
-                .flatMap((ref) => registry.get(projectAtom(ref))?.taskBatches ?? []),
-            ),
+                .flatMap((ref) => registry.get(projectAtom(ref))?.taskBatches ?? [])
+                .find(
+                  (batch) =>
+                    batch.entries.some((entry) =>
+                      ["queued", "starting", "running"].includes(entry.state),
+                    ) && batch.effectiveConcurrency !== undefined,
+                )?.effectiveConcurrency ?? null,
             effectiveConcurrency: input.concurrency ?? 2,
             input: {
               commandId:
