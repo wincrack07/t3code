@@ -1,11 +1,18 @@
 import * as DateTime from "effect/DateTime";
 import type {
   OrchestrationV2ThreadProjection,
+  ModelSelection,
+  TaskBatchStartInput,
+  TaskRunSettings,
+  ProjectTaskBatch,
+  ThreadEnvMode,
+  RuntimeMode,
   RunId,
   TaskReviewSnapshot,
   ProjectSavedPrompt,
   OrchestrationV2ThreadLaunchInput,
 } from "@t3tools/contracts";
+import { stableStringify } from "./relaySigning.ts";
 import { serializeComposerFileLink } from "./composerTrigger.ts";
 export function savedTaskDraftContent(task: ProjectSavedPrompt) {
   const references = (task.attachments ?? []).flatMap((item) =>
@@ -134,4 +141,71 @@ export function savedTaskLaunchSettings(
           ? { type: "worktree" as const, baseRef: "HEAD" }
           : fallback.workspaceStrategy),
   };
+}
+
+export function resolveTaskBatchLaunch(
+  task: Pick<ProjectSavedPrompt, "runSettings">,
+  project: {
+    defaultModelSelection?: ModelSelection | null | undefined;
+    defaultThreadEnvMode?: ThreadEnvMode | null | undefined;
+    defaultRuntimeMode?: RuntimeMode | undefined;
+  },
+  fallback: TaskBatchStartInput["entries"][number]["launch"],
+  overrides?: TaskRunSettings,
+) {
+  return {
+    modelSelection:
+      overrides?.defaultModelSelection ??
+      task.runSettings?.defaultModelSelection ??
+      project.defaultModelSelection ??
+      fallback.modelSelection,
+    runtimeMode:
+      overrides?.runtimeMode ??
+      task.runSettings?.runtimeMode ??
+      project.defaultRuntimeMode ??
+      fallback.runtimeMode,
+    interactionMode:
+      overrides?.interactionMode ?? task.runSettings?.interactionMode ?? fallback.interactionMode,
+    threadEnvMode:
+      overrides?.threadEnvMode ??
+      task.runSettings?.threadEnvMode ??
+      project.defaultThreadEnvMode ??
+      fallback.threadEnvMode ??
+      "local",
+    baseRef: fallback.baseRef ?? "HEAD",
+  };
+}
+
+export function taskBatchEffectiveConcurrency(batches: ReadonlyArray<ProjectTaskBatch>) {
+  // The latest unfinished batch sets the machine cap; lowering it never interrupts running work.
+  const latest = batches
+    .filter((batch) =>
+      batch.entries.some((entry) => ["queued", "starting", "running"].includes(entry.state)),
+    )
+    .reduce<ProjectTaskBatch | undefined>(
+      (latest, batch) =>
+        !latest ||
+        (batch.startSequence ?? 0) > (latest.startSequence ?? 0) ||
+        ((batch.startSequence ?? 0) === (latest.startSequence ?? 0) &&
+          batch.createdAt >= latest.createdAt)
+          ? batch
+          : latest,
+      undefined,
+    );
+  return Math.min(4, latest?.concurrency ?? 2);
+}
+
+export function taskBatchBriefKey(task: ProjectSavedPrompt) {
+  return stableStringify({
+    text: task.text,
+    title: task.title ?? null,
+    attachments: task.attachments ?? [],
+    acceptanceCriteria: task.acceptanceCriteria ?? [],
+    runSettings: task.runSettings ?? null,
+    status: task.status ?? (task.completedAt === null ? "open" : "done"),
+    priority: task.priority ?? null,
+    when: task.when ?? null,
+    tags: task.tags ?? [],
+    parentTaskId: task.parentTaskId ?? null,
+  });
 }

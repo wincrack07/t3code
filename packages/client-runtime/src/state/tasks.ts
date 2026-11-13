@@ -5,14 +5,18 @@ import * as SecureRandom from "effect/crypto/SecureRandom";
 import { startThreadTurn, type StartThreadTurnInput } from "../operations/commands.ts";
 import {
   savedTaskDraftContent,
+  resolveTaskBatchLaunch,
+  taskBatchEffectiveConcurrency,
   taskChildCounts,
   savedTaskLaunchSettings,
   taskReviewSnapshot,
 } from "@t3tools/shared/savedTasks";
 import {
   CommandId,
+  AUTO_MODEL,
   type TaskBatchStartInput,
   type TaskRunSettings,
+  type SavedPromptAction,
   MessageId,
   type OrchestrationV2ThreadProjection,
   TaskAttachmentsHomeOnlyError,
@@ -129,6 +133,7 @@ export function createSavedTaskCommands<R, E>(
       ...savedTaskDraftContent(task),
       target: targetRef,
       runSettings: task.runSettings,
+      projectDefaults: snapshot.projectDefaults,
       task,
     };
   });
@@ -363,14 +368,48 @@ export function createSavedTaskCommands<R, E>(
   });
   const quickCreate = createRuntimeCommand(runtime, {
     label: "environment-data:tasks:quick-create",
-    execute: (input: { home: ScopedProjectRef; commandId: CommandId; text: string }, registry) =>
+    execute: (
+      input: {
+        home: ScopedProjectRef;
+        commandId: CommandId;
+        text: string;
+        position?: "start" | "end";
+      },
+      registry,
+    ) =>
       runInEnvironment(
         input.home.environmentId,
         requestGuarded(WS_METHODS.projectsMutate, {
           type: "project.update",
           projectId: input.home.projectId,
           commandId: input.commandId,
-          savedPrompt: { kind: "add", id: String(input.commandId), text: input.text },
+          savedPrompt: {
+            kind: "add",
+            id: String(input.commandId),
+            text: input.text,
+            position: input.position,
+          },
+        }),
+      ).pipe(withCommandPermissions(runtime, registry)),
+  });
+  const addMany = createRuntimeCommand(runtime, {
+    label: "environment-data:tasks:add-many",
+    execute: (
+      input: {
+        home: ScopedProjectRef;
+        commandId: CommandId;
+        tasks: Extract<SavedPromptAction, { kind: "add-many" }>["tasks"];
+        position?: "start" | "end";
+      },
+      registry,
+    ) =>
+      runInEnvironment(
+        input.home.environmentId,
+        requestGuarded(WS_METHODS.projectsMutate, {
+          type: "project.update",
+          projectId: input.home.projectId,
+          commandId: input.commandId,
+          savedPrompt: { kind: "add-many", tasks: input.tasks, position: input.position },
         }),
       ).pipe(withCommandPermissions(runtime, registry)),
   });
@@ -445,7 +484,19 @@ export function createSavedTaskCommands<R, E>(
           );
         const groups = new Map<
           string,
-          { environmentId: EnvironmentId; input: TaskBatchStartInput }
+          {
+            environmentId: EnvironmentId;
+            currentEffectiveConcurrency: number | null;
+            effectiveConcurrency: number;
+            input: TaskBatchStartInput;
+            /** Tasks that resolved to Auto routing; the batch would refuse them, so they stay out. */
+            unresolved: Array<
+              TaskBatchStartInput["entries"][number] & {
+                failureReason: "unresolved-model";
+                reason: string;
+              }
+            >;
+          }
         >();
         for (const source of input.sources) {
           const draft = yield* draftFor({ source, target: source.home }, registry);
@@ -539,11 +590,32 @@ export function createSavedTaskCommands<R, E>(
           const entry: TaskBatchStartInput["entries"][number] = {
             source: { ...source.home, taskId: source.taskId },
             brief: draft.task,
-            launch: input.launch,
+            destination: target,
+            launch: resolveTaskBatchLaunch(
+              draft.task,
+              draft.projectDefaults ?? home,
+              input.launch,
+              input.overrides,
+            ),
+            fallback: input.launch,
             ...(input.overrides === undefined ? {} : { overrides: input.overrides }),
           };
+          const unresolved =
+            entry.launch.modelSelection.model === AUTO_MODEL ||
+            entry.launch.modelSelection.routing === "auto";
           groups.set(key, {
             environmentId: target.environmentId,
+            currentEffectiveConcurrency:
+              input.targets
+                .filter((ref) => ref.environmentId === target.environmentId)
+                .flatMap((ref) => registry.get(projectAtom(ref))?.taskBatches ?? [])
+                .find(
+                  (batch) =>
+                    batch.entries.some((entry) =>
+                      ["queued", "starting", "running"].includes(entry.state),
+                    ) && batch.effectiveConcurrency !== undefined,
+                )?.effectiveConcurrency ?? null,
+            effectiveConcurrency: input.concurrency ?? 2,
             input: {
               commandId:
                 previous?.input.commandId ??
@@ -552,8 +624,20 @@ export function createSavedTaskCommands<R, E>(
                 ),
               projectId: target.projectId,
               ...(input.concurrency === undefined ? {} : { concurrency: input.concurrency }),
-              entries: [...(previous?.input.entries ?? []), entry],
+              entries: [...(previous?.input.entries ?? []), ...(unresolved ? [] : [entry])],
             },
+            unresolved: [
+              ...(previous?.unresolved ?? []),
+              ...(unresolved
+                ? [
+                    {
+                      ...entry,
+                      failureReason: "unresolved-model" as const,
+                      reason: "Auto routing picks a model at start, so it cannot be confirmed now.",
+                    },
+                  ]
+                : []),
+            ],
           });
         }
         return [...groups.values()];
@@ -570,6 +654,7 @@ export function createSavedTaskCommands<R, E>(
               batch.entries.map((entry) => ({
                 target,
                 batchId: batch.id,
+                effectiveConcurrency: batch.effectiveConcurrency,
                 createdAt: batch.createdAt,
                 entry,
               })),
@@ -585,6 +670,13 @@ export function createSavedTaskCommands<R, E>(
           )
           .map((value) => ({
             ...value,
+            effectiveConcurrency:
+              value.effectiveConcurrency ??
+              taskBatchEffectiveConcurrency(
+                input.targets
+                  .filter((target) => target.environmentId === value.target.environmentId)
+                  .flatMap((target) => get(projectAtom(target))?.taskBatches ?? []),
+              ),
             position:
               value.entry.state !== "queued"
                 ? null
@@ -680,6 +772,7 @@ export function createSavedTaskCommands<R, E>(
     childCountsAtom,
     reconcileReview: { ...reconcileReview, permissionAtom: permissions.permissionAtom },
     requestChanges: { ...requestChanges, permissionAtom: permissions.permissionAtom },
+    addMany: { ...addMany, permissionAtom: permissions.permissionAtom },
     quickCreate: { ...quickCreate, permissionAtom: permissions.permissionAtom },
     launch: { ...launch, permissionAtom: permissions.permissionAtom },
     retryLink: { ...retryLink, permissionAtom: permissions.permissionAtom },

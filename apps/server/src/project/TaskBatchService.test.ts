@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  OrchestratorMcpFailure,
   EnvironmentId,
   EventId,
   ProjectId,
@@ -31,6 +32,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as TaskReviewService from "./TaskReviewService.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as TaskBatchService from "./TaskBatchService.ts";
 
 const home = EnvironmentId.make("home");
@@ -44,7 +46,17 @@ const persistence = Layer.mergeAll(
   EffectOutbox.layer,
 ).pipe(
   Layer.provideMerge(Sqlite.layerMemory),
-  Layer.provide(ServerSettings.layerTest()),
+  Layer.provide(
+    ServerSettings.layerTest({
+      defaultRuntimeMode: "full-access",
+      projectSettingsOverrides: {
+        [ProjectId.make("folded")]: {
+          defaultModelSelection: { ...modelSelection, model: "folded-free" },
+          defaultThreadEnvMode: "worktree",
+        },
+      },
+    }),
+  ),
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "task-batch-test-" })),
   Layer.provide(
     Layer.mock(WorkspacePaths.WorkspacePaths)({ normalizeWorkspaceRoot: Effect.succeed }),
@@ -72,6 +84,9 @@ const persistence = Layer.mergeAll(
 function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {}) {
   const accepted = new Set<CommandId>();
   const attempts: CommandId[] = [];
+  const launchInputs: Parameters<
+    ThreadLaunchService.ThreadLaunchService["Service"]["launch"]
+  >[0][] = [];
   let crashed = false;
   const launches = Layer.effect(
     ThreadLaunchService.ThreadLaunchService,
@@ -84,6 +99,7 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
         retryPreparation: () => Effect.die("Unused fixture preparation"),
         launch: Effect.fn("TaskBatchTest.launch")(function* (input) {
           attempts.push(input.commandId);
+          launchInputs.push(input);
           const threadId = input.threadId;
           const messageId = input.initialMessage?.messageId;
           if (!threadId || !messageId) return yield* Effect.die("Batch launch ids are required");
@@ -173,6 +189,31 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
   const services = Layer.mergeAll(TaskBatchService.layer, TaskReviewService.layer).pipe(
     Layer.provideMerge(launches),
     Layer.provideMerge(
+      Layer.effect(
+        PeerMcpClient.PeerMcpClient,
+        Effect.gen(function* () {
+          const projects = yield* ProjectService.ProjectService;
+          return PeerMcpClient.PeerMcpClient.of({
+            call: (input) =>
+              Effect.gen(function* () {
+                if (input.environmentId === EnvironmentId.make("unavailable"))
+                  return yield* new OrchestratorMcpFailure({
+                    code: "orchestration_error",
+                    message: "Unavailable fixture",
+                  });
+                const project = Option.getOrThrow(
+                  yield* projects
+                    .getById(ProjectId.make(String(input.arguments.projectId)))
+                    .pipe(Effect.orDie),
+                );
+                assert.strictEqual(input.tool, "t3_project_read");
+                return project as typeof input.success.Type;
+              }),
+          });
+        }),
+      ).pipe(Layer.provide(persistence)),
+    ),
+    Layer.provideMerge(
       Layer.merge(
         NodeCrypto.layer,
         Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
@@ -209,7 +250,12 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
       };
     }),
   ).pipe(Layer.provideMerge(services));
-  return { layer: EffectWorker.layer.pipe(Layer.provideMerge(executor)), accepted, attempts };
+  return {
+    layer: EffectWorker.layer.pipe(Layer.provideMerge(executor)),
+    accepted,
+    attempts,
+    launchInputs,
+  };
 }
 const seed = Effect.fn("TaskBatchTest.seed")(function* (
   name: string,
@@ -404,11 +450,171 @@ it.effect(
       );
       yield* batches.start(second);
       yield* worker.drain();
-      assert.strictEqual(fixture.accepted.size, 2);
+      assert.strictEqual(fixture.accepted.size, 4);
       assert.strictEqual(
         (yield* read(second)).entries.filter((entry) => entry.state === "queued").length,
-        3,
+        1,
       );
+      assert.strictEqual((yield* read(first)).effectiveConcurrency, 4);
+      const third = yield* seed("third", 1, 1);
+      yield* batches.start(third);
+      yield* worker.drain();
+      assert.strictEqual(fixture.accepted.size, 4);
+      assert.strictEqual((yield* read(first)).effectiveConcurrency, 1);
+      yield* batches.cancel({
+        projectId: third.projectId,
+        batchId: third.commandId,
+        commandId: CommandId.make("cancel-latest"),
+      });
+      yield* worker.drain();
+      assert.strictEqual((yield* read(first)).effectiveConcurrency, 4);
     }).pipe(Effect.provide(fixture.layer));
   },
 );
+
+it.effect("refuses changed task settings and changed briefs at enqueue", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const projects = yield* ProjectService.ProjectService;
+    const original = yield* seed("stale", 3);
+    const input = {
+      ...original,
+      entries: original.entries.map((entry, index) =>
+        index === 1 ? { ...entry, overrides: { defaultModelSelection: modelSelection } } : entry,
+      ),
+    };
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("change-default"),
+      defaultModelSelection: { ...modelSelection, model: "unexpected-paid" },
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("change-brief"),
+      savedPrompt: { kind: "edit", id: "stale-1", text: "Edited before enqueue" },
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("delete-before-start"),
+      savedPrompt: { kind: "delete", id: "stale-2" },
+    });
+    const result = yield* batches.start(input);
+    assert.strictEqual(result.entries[0]?.state, "cancelled");
+    assert.strictEqual(result.entries[0]?.failureReason, "settings-changed");
+    assert.strictEqual(result.entries[1]?.failureReason, "task-changed");
+    assert.strictEqual(result.entries[2]?.failureReason, "source-deleted");
+    assert.strictEqual(fixture.accepted.size, 0);
+  }).pipe(Effect.provide(fixture.layer));
+});
+it.effect("freezes enqueued briefs and cancels deleted queued tasks", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const projects = yield* ProjectService.ProjectService;
+    const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+    const input = yield* seed("frozen", 4, 1);
+    yield* batches.start(input);
+    const enqueued = yield* read(input);
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("legacy-queue"),
+      taskBatches: [
+        {
+          ...enqueued,
+          entries: enqueued.entries.map((entry, index) =>
+            index === 3 ? { ...entry, destination: undefined } : entry,
+          ),
+        },
+      ],
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("post-enqueue-default"),
+      defaultModelSelection: { ...modelSelection, model: "later-paid" },
+    });
+    yield* worker.drain();
+    assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "test");
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("edit-queued"),
+      savedPrompt: { kind: "edit", id: "frozen-1", text: "Changed later" },
+    });
+    yield* projects.update({
+      projectId: input.projectId,
+      commandId: CommandId.make("delete-queued"),
+      savedPrompt: { kind: "delete", id: "frozen-2" },
+    });
+    yield* worker.drain();
+    const state = yield* read(input);
+    assert.strictEqual(state.entries[1]?.brief?.text, "frozen-1");
+    assert.strictEqual(state.entries[2]?.state, "cancelled");
+    assert.strictEqual(state.entries[2]?.failureReason, "source-deleted");
+    assert.strictEqual(state.entries[3]?.state, "cancelled");
+    assert.strictEqual(state.entries[3]?.failureReason, "settings-changed");
+  }).pipe(Effect.provide(fixture.layer));
+});
+
+it.effect("validates linked sources and refuses unavailable peers", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const input = yield* seed("linked", 2, 1);
+    const remote = {
+      ...input,
+      entries: input.entries.map((entry, index) => ({
+        ...entry,
+        source: {
+          ...entry.source,
+          environmentId: EnvironmentId.make(index === 0 ? "linked-peer" : "unavailable"),
+        },
+      })),
+    };
+    const result = yield* batches.start(remote);
+    assert.strictEqual(result.entries[0]?.state, "queued");
+    assert.strictEqual(result.entries[1]?.failureReason, "source-unverifiable");
+    yield* batches.pump();
+    assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "test");
+    assert.strictEqual(fixture.accepted.size, 1);
+  }).pipe(Effect.provide(fixture.layer));
+});
+
+it.effect("honors folded project settings and requires a concrete prepared model", () => {
+  const fixture = harness();
+  return Effect.gen(function* () {
+    const batches = yield* TaskBatchService.TaskBatchService;
+    const input = yield* seed("folded", 1);
+    const entry = input.entries[0]!;
+    const prepared = {
+      ...input,
+      entries: [
+        {
+          ...entry,
+          fallback: entry.launch,
+          launch: {
+            ...entry.launch,
+            modelSelection: { ...modelSelection, model: "folded-free" },
+            threadEnvMode: "worktree" as const,
+          },
+        },
+      ],
+    };
+    const queued = yield* batches.start(prepared);
+    assert.strictEqual(queued.entries[0]?.state, "queued");
+    yield* batches.pump();
+    assert.strictEqual(fixture.launchInputs[0]?.modelSelection.model, "folded-free");
+    assert.deepStrictEqual(fixture.launchInputs[0]?.workspaceStrategy, {
+      type: "worktree",
+      baseRef: "HEAD",
+    });
+    const auto = yield* seed("auto", 1);
+    const refused = yield* batches.start({
+      ...auto,
+      entries: auto.entries.map((entry) => ({
+        ...entry,
+        launch: { ...entry.launch, modelSelection: { ...modelSelection, model: "t3:auto" } },
+      })),
+    });
+    assert.strictEqual(refused.entries[0]?.failureReason, "unresolved-model");
+  }).pipe(Effect.provide(fixture.layer));
+});

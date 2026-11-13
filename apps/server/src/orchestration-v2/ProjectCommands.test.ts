@@ -115,6 +115,38 @@ describe("planProjectCommand", () => {
       )._tag,
       "ProjectCommandInvariantError",
     );
+    const appended = payloadOf(update({ kind: "add", id: "two", text: "Second", position: "end" }))
+      .savedPrompts as ProjectSavedPrompt[];
+    assert.deepStrictEqual(
+      appended.map((item) => item.id),
+      ["one", "two"],
+    );
+    const children = payloadOf(
+      update({
+        kind: "add-many",
+        position: "end",
+        tasks: [
+          { id: "a", text: "First child", parentTaskId: "one" },
+          { id: "b", text: "Second child", parentTaskId: "one" },
+        ],
+      }),
+    ).savedPrompts as ProjectSavedPrompt[];
+    assert.deepStrictEqual(
+      children.map((item) => item.id),
+      ["one", "a", "b"],
+    );
+    assert.strictEqual(
+      failureOf(
+        update({
+          kind: "add-many",
+          tasks: [
+            { id: "a", text: "First" },
+            { id: "a", text: "Duplicate" },
+          ],
+        }),
+      )._tag,
+      "ProjectCommandInvariantError",
+    );
     const inbox = payloadOf(
       update({
         kind: "edit",

@@ -1,6 +1,9 @@
+import { stableStringify } from "@t3tools/shared/relaySigning";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import {
   CommandId,
+  Project,
+  AUTO_MODEL,
   MessageId,
   ThreadId,
   TaskBatchError,
@@ -12,7 +15,9 @@ import {
 } from "@t3tools/contracts";
 import {
   savedTaskDraftContent,
-  savedTaskLaunchSettings,
+  resolveTaskBatchLaunch,
+  taskBatchEffectiveConcurrency,
+  taskBatchBriefKey,
   taskReviewSnapshot,
 } from "@t3tools/shared/savedTasks";
 import * as Context from "effect/Context";
@@ -26,6 +31,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as ProjectService from "./ProjectService.ts";
 
 export class TaskBatchService extends Context.Service<
@@ -43,8 +49,11 @@ const isUnfinished = (entry: TaskBatchEntry) =>
 const isBatchStart = Schema.is(TaskBatchStartInput);
 const isBatchCancel = Schema.is(TaskBatchCancelInput);
 const isBatchError = Schema.is(TaskBatchError);
+const sourceProjectKey = (source: TaskBatchEntry["source"]) =>
+  JSON.stringify([source.environmentId, source.projectId]);
 const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
+  const peers = yield* PeerMcpClient.PeerMcpClient;
   const store = yield* ProjectStore.ProjectStoreV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const launches = yield* ThreadLaunchService.ThreadLaunchService;
@@ -87,6 +96,44 @@ const make = Effect.gen(function* () {
         ),
       ),
   );
+  const readSource = Effect.fn("TaskBatchService.readSource")(function* (
+    source: TaskBatchEntry["source"],
+  ) {
+    if (source.environmentId === environmentId)
+      return {
+        project: Option.getOrUndefined(yield* projects.getById(source.projectId)),
+        verified: true,
+      };
+    const result = yield* peers
+      .call({
+        environmentId: source.environmentId,
+        tool: "t3_project_read",
+        arguments: { projectId: source.projectId },
+        limits: { runtimeMode: "full-access", interactionMode: "default" },
+        success: Project,
+      })
+      .pipe(Effect.timeout("10 seconds"), Effect.result);
+    return result._tag === "Success"
+      ? { project: result.success, verified: result.success.taskDefaults !== undefined }
+      : { project: undefined, verified: false };
+  });
+  const readSources = Effect.fn("TaskBatchService.readSources")(function* (
+    entries: ReadonlyArray<Pick<TaskBatchEntry, "source">>,
+  ) {
+    const sources = [
+      ...new Map(entries.map(({ source }) => [sourceProjectKey(source), source])).values(),
+    ];
+    return new Map(
+      yield* Effect.forEach(
+        sources,
+        (source) =>
+          readSource(source).pipe(
+            Effect.map((result) => [sourceProjectKey(source), result] as const),
+          ),
+        { concurrency: 1 },
+      ),
+    );
+  });
   const start: TaskBatchService["Service"]["start"] = Effect.fn("TaskBatchService.start")(
     function* (input) {
       if (!isBatchStart(input))
@@ -152,9 +199,52 @@ const make = Effect.gen(function* () {
           reason: "capacity",
           projectId: input.projectId,
         });
+      const sources = yield* readSources(input.entries);
+      const failures = input.entries.map((entry) => {
+        if (
+          entry.destination !== undefined &&
+          (entry.destination.environmentId !== environmentId ||
+            entry.destination.projectId !== input.projectId)
+        )
+          return "settings-changed" as const;
+        const sourceResult = sources.get(sourceProjectKey(entry.source))!;
+        if (!sourceResult.verified) return "source-unverifiable" as const;
+        const source = sourceResult.project;
+        const task =
+          source?.deletedAt === null
+            ? source.savedPrompts?.find(
+                (task) => task.id === entry.source.taskId && task.deletedAt === undefined,
+              )
+            : undefined;
+        if (!task || !source) return "source-deleted" as const;
+        const resolved = resolveTaskBatchLaunch(
+          task,
+          source.taskDefaults ?? source,
+          entry.fallback ?? entry.launch,
+          entry.overrides,
+        );
+        const prepared = resolveTaskBatchLaunch({}, {}, entry.launch);
+        if (
+          prepared.modelSelection.model === AUTO_MODEL ||
+          prepared.modelSelection.routing === "auto"
+        )
+          return "unresolved-model" as const;
+        if (stableStringify(resolved) !== stableStringify(prepared))
+          return "settings-changed" as const;
+        if (taskBatchBriefKey(task) !== taskBatchBriefKey(entry.brief))
+          return "task-changed" as const;
+        return undefined;
+      });
       const batch: ProjectTaskBatch = {
         id: input.commandId,
         concurrency: input.concurrency ?? 2,
+        startSequence:
+          Math.max(
+            0,
+            ...allRows
+              .flatMap((row) => row.taskBatches ?? [])
+              .map((batch) => batch.startSequence ?? 0),
+          ) + 1,
         createdAt: DateTime.formatIso(yield* DateTime.now),
         entries: input.entries.map((entry, index) => {
           const commandId = CommandId.make(`${input.commandId}:task:${index}`);
@@ -163,6 +253,7 @@ const make = Effect.gen(function* () {
             title: savedTaskDraftContent(entry.brief).title,
             commandId,
             source: entry.source,
+            destination: { environmentId, projectId: input.projectId },
             expectedThreadId: entry.brief.latestThreadId ?? null,
             expectedUserMessageId: entry.brief.latestUserMessageId ?? null,
             brief: {
@@ -177,9 +268,19 @@ const make = Effect.gen(function* () {
             },
             launch: entry.launch,
             overrides: entry.overrides,
+            fallback: entry.fallback,
             threadId: ThreadId.make(`task-batch:${commandId}`),
             userMessageId: MessageId.make(`${commandId}:message`),
-            state: "queued",
+            state: failures[index] === undefined ? "queued" : "cancelled",
+            ...(failures[index] === undefined
+              ? {}
+              : {
+                  failureReason: failures[index],
+                  reason:
+                    failures[index] === "source-unverifiable"
+                      ? "The destination could not verify the source task. Check its link to the source environment and update both servers."
+                      : "The prepared entry could not be validated. Prepare the batch again.",
+                }),
           };
         }),
       };
@@ -202,9 +303,13 @@ const make = Effect.gen(function* () {
           reason: "capacity",
           projectId: input.projectId,
         });
+      const effectiveConcurrency = taskBatchEffectiveConcurrency([
+        ...allRows.flatMap((row) => row.taskBatches ?? []),
+        batch,
+      ]);
       const stored = yield* save(
         input.projectId,
-        [...active, batch, ...retained],
+        [...active, { ...batch, effectiveConcurrency }, ...retained],
         CommandId.make(`${input.commandId}:batch-enqueue`),
       );
       const recorded = stored.taskBatches?.find((item) => item.id === input.commandId);
@@ -280,12 +385,52 @@ const make = Effect.gen(function* () {
   const pump: TaskBatchService["Service"]["pump"] = Effect.fn("TaskBatchService.pump")(
     function* () {
       let rows = yield* store.list({ pendingTaskBatchesOnly: true });
+      const sources = yield* readSources(
+        rows
+          .flatMap((row) => row.taskBatches ?? [])
+          .flatMap((batch) => batch.entries)
+          .filter((entry) => entry.state === "queued"),
+      );
       for (const row of rows) {
         let changed = false;
         const batches: ProjectTaskBatch[] = [];
         for (const batch of row.taskBatches ?? []) {
           const entries: TaskBatchEntry[] = [];
           for (const entry of batch.entries) {
+            // Older queues never confirmed per-task settings, so they must be prepared again.
+            if (entry.state === "queued" && entry.destination === undefined) {
+              entries.push({
+                ...entry,
+                brief: undefined,
+                state: "cancelled",
+                failureReason: "settings-changed",
+                reason: "Prepare this older queued task again to confirm its launch settings.",
+              });
+              changed = true;
+              continue;
+            }
+            if (entry.state === "queued") {
+              const sourceResult = sources.get(sourceProjectKey(entry.source))!;
+              const source = sourceResult.project;
+              if (
+                !sourceResult.verified ||
+                !source ||
+                source.deletedAt !== null ||
+                !source.savedPrompts?.some(
+                  (task) => task.id === entry.source.taskId && task.deletedAt === undefined,
+                )
+              ) {
+                entries.push({
+                  ...entry,
+                  brief: undefined,
+                  state: "cancelled",
+                  failureReason: sourceResult.verified ? "source-deleted" : "source-unverifiable",
+                  reason: "The source task could not be verified.",
+                });
+                changed = true;
+                continue;
+              }
+            }
             if (entry.state !== "running") {
               entries.push(entry);
               continue;
@@ -340,7 +485,19 @@ const make = Effect.gen(function* () {
           (row.taskBatches ?? []).map((batch) => ({ row, batch })),
         );
         const unfinished = batches.filter(({ batch }) => batch.entries.some(isUnfinished));
-        const limit = Math.min(4, ...unfinished.map(({ batch }) => batch.concurrency));
+        const limit = taskBatchEffectiveConcurrency(unfinished.map(({ batch }) => batch));
+        for (const row of rows) {
+          if (
+            (row.taskBatches ?? []).some(
+              (batch) => batch.entries.some(isUnfinished) && batch.effectiveConcurrency !== limit,
+            )
+          )
+            yield* save(
+              row.projectId,
+              row.taskBatches!.map((batch) => ({ ...batch, effectiveConcurrency: limit })),
+              CommandId.make(`task-batch:cap:${yield* random.uuidV4()}`),
+            );
+        }
         const occupied = unfinished
           .flatMap(({ batch }) => batch.entries)
           .filter((entry) => entry.state === "running" || entry.state === "starting").length;
@@ -365,15 +522,20 @@ const make = Effect.gen(function* () {
               ? item
               : {
                   ...item,
+                  effectiveConcurrency: limit,
                   entries: item.entries.map((candidate) =>
                     candidate.id === entry.id ? value : candidate,
                   ),
                 },
           );
-        if (entry.state === "queued" && entry.source.environmentId === environmentId) {
-          const source = Option.getOrUndefined(yield* store.get(entry.source.projectId));
+        if (entry.state === "queued") {
+          const sourceResult = yield* readSource(entry.source);
+          const source = sourceResult.project;
           if (
-            !source?.savedPrompts?.some(
+            !sourceResult.verified ||
+            !source ||
+            source.deletedAt !== null ||
+            !source.savedPrompts?.some(
               (task) => task.id === entry.source.taskId && task.deletedAt === undefined,
             )
           ) {
@@ -382,8 +544,9 @@ const make = Effect.gen(function* () {
               replace({
                 ...entry,
                 brief: undefined,
-                state: "failed-to-start",
-                reason: "The source task is no longer available.",
+                state: "cancelled",
+                failureReason: sourceResult.verified ? "source-deleted" : "source-unverifiable",
+                reason: "The source task could not be verified.",
               }),
               CommandId.make(`${entry.commandId}:source-unavailable`),
             );
@@ -409,32 +572,20 @@ const make = Effect.gen(function* () {
           continue;
         }
         const draft = savedTaskDraftContent(entry.brief);
+        const launch =
+          entry.destination === undefined
+            ? resolveTaskBatchLaunch(entry.brief, {}, entry.launch, entry.overrides)
+            : entry.launch;
         const base = {
-          modelSelection: entry.launch.modelSelection,
-          runtimeMode: entry.launch.runtimeMode,
-          interactionMode: entry.launch.interactionMode,
+          modelSelection: launch.modelSelection,
+          runtimeMode: launch.runtimeMode,
+          interactionMode: launch.interactionMode,
           workspaceStrategy:
-            entry.launch.threadEnvMode === "worktree"
-              ? { type: "worktree" as const, baseRef: entry.launch.baseRef ?? "HEAD" }
+            launch.threadEnvMode === "worktree"
+              ? { type: "worktree" as const, baseRef: launch.baseRef ?? "HEAD" }
               : { type: "root" as const },
         };
-        const settings = savedTaskLaunchSettings(
-          entry.brief,
-          base,
-          entry.overrides === undefined
-            ? undefined
-            : {
-                modelSelection: entry.overrides.defaultModelSelection,
-                runtimeMode: entry.overrides.runtimeMode,
-                interactionMode: entry.overrides.interactionMode,
-                workspaceStrategy:
-                  entry.overrides.threadEnvMode === undefined
-                    ? undefined
-                    : entry.overrides.threadEnvMode === "worktree"
-                      ? { type: "worktree", baseRef: entry.launch.baseRef ?? "HEAD" }
-                      : { type: "root" },
-              },
-        );
+        const settings = base;
         const result = yield* launches
           .launch({
             createdBy: "user",
@@ -444,7 +595,9 @@ const make = Effect.gen(function* () {
             projectId: row.projectId,
             title: draft.title,
             ...settings,
-            taskOverrides: { modelSelection: settings.modelSelection },
+            ...(entry.destination === undefined
+              ? { taskOverrides: { modelSelection: settings.modelSelection } }
+              : { useProjectDefaultModel: false }),
             initialMessage: { ...draft, messageId: entry.userMessageId },
           })
           .pipe(Effect.result);

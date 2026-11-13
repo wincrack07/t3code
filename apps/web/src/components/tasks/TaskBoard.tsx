@@ -8,13 +8,15 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { CommandId, type SavedPromptStatus } from "@t3tools/contracts";
-import type { ReactNode } from "react";
+import { ChevronsRightIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
 import { cn, randomUUID } from "../../lib/utils";
 import { projectEnvironment } from "../../state/projects";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { TaskAttachmentCount } from "./TaskAttachments";
 import {
   TASK_THREAD_STATE_LABELS,
@@ -46,9 +48,12 @@ export function TaskBoard({
   selectedKey,
   onSelect,
   selection,
+  besideDetail = false,
 }: {
   board: Record<SavedPromptStatus, TaskRow[]>;
   showProject: boolean;
+  /** A task's detail shares the width, so columns tighten and Done folds to a rail. */
+  besideDetail?: boolean;
   selectedKey: string | null;
   onSelect: (key: string) => void;
   selection: TaskSelection;
@@ -56,6 +61,7 @@ export function TaskBoard({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const entries = TASK_STATUSES.flatMap((status) => board[status].map((row) => row.entry));
   const updateTask = useAtomCommand(projectEnvironment.savedPromptUpdate);
+  const [doneOpen, setDoneOpen] = useState(false);
   // A drop writes to the task's own machine, like every other task edit.
   const onDragEnd = (event: DragEndEvent) => {
     const entry = entries.find((candidate) => candidate.key === event.active.id);
@@ -76,9 +82,21 @@ export function TaskBoard({
   };
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:flex-row md:overflow-x-auto md:overflow-y-hidden">
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-x-auto md:overflow-y-hidden",
+          besideDetail ? "gap-2 p-2" : "gap-3 p-3",
+        )}
+      >
         {TASK_STATUSES.map((status) => (
-          <BoardColumn key={status} status={status} count={board[status].length}>
+          <BoardColumn
+            key={status}
+            status={status}
+            count={board[status].length}
+            narrow={besideDetail}
+            folded={besideDetail && status === "done" && !doneOpen}
+            onFold={status === "done" && besideDetail ? setDoneOpen : undefined}
+          >
             {board[status].map(({ entry, group }) => (
               <TaskCard
                 key={entry.key}
@@ -101,29 +119,69 @@ export function TaskBoard({
 function BoardColumn({
   status,
   count,
+  narrow,
+  folded,
+  onFold,
   children,
 }: {
   status: SavedPromptStatus;
   count: number;
+  narrow: boolean;
+  folded: boolean;
+  onFold: ((open: boolean) => void) | undefined;
   children: ReactNode;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: status });
+  const label = TASK_STATUS_LABELS[status];
+  if (folded)
+    return (
+      <section
+        ref={setNodeRef}
+        aria-label={label}
+        className={cn(
+          "flex shrink-0 rounded-lg border bg-card md:min-h-0 md:w-10",
+          isOver ? "border-ring" : "border-border",
+        )}
+      >
+        <button
+          type="button"
+          aria-label={`Show ${label} (${count})`}
+          aria-expanded={false}
+          className="flex h-10 w-full items-center gap-2 px-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:h-auto md:flex-col md:px-0 md:py-3"
+          onClick={() => onFold?.(true)}
+        >
+          <Badge variant="secondary" size="sm">
+            {count}
+          </Badge>
+          <span className="md:[writing-mode:vertical-rl]">{label}</span>
+        </button>
+      </section>
+    );
   return (
     <section
       ref={setNodeRef}
-      aria-label={TASK_STATUS_LABELS[status]}
+      aria-label={label}
       className={cn(
-        "flex shrink-0 flex-col rounded-lg border bg-card md:min-h-0 md:min-w-52 md:max-w-96 md:flex-1 md:basis-0",
+        "flex shrink-0 flex-col rounded-lg border bg-card md:min-h-0 md:max-w-96 md:flex-1 md:basis-0",
+        narrow ? "md:min-w-44" : "md:min-w-52",
         isOver ? "border-ring" : "border-border",
       )}
     >
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-          {TASK_STATUS_LABELS[status]}
-        </h2>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{label}</h2>
         <Badge variant="secondary" size="sm">
           {count}
         </Badge>
+        {onFold ? (
+          <Button
+            size="icon-micro"
+            variant="ghost-muted"
+            aria-label={`Fold ${label}`}
+            onClick={() => onFold(false)}
+          >
+            <ChevronsRightIcon />
+          </Button>
+        ) : null}
       </header>
       <div className="flex flex-col gap-2 p-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {count === 0 ? (
@@ -220,7 +278,7 @@ function TaskCard({
       <div className="relative z-1 flex min-w-0 items-center gap-1.5">
         <TaskPriorityChip priority={taskPriority(entry.task)} />
         {projectLabel !== null ? (
-          <Badge variant="outline" size="sm" className="min-w-0 max-w-36">
+          <Badge variant="outline" size="sm" className="min-w-0 max-w-36 shrink">
             <span className="truncate">{projectLabel}</span>
           </Badge>
         ) : null}

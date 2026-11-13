@@ -7,6 +7,7 @@ import {
   MessageId,
   RunId,
   type TaskBatchStartInput,
+  type TaskAttachmentListResult,
   type ProjectTaskBatch,
   type ProjectMutation,
   EnvironmentId,
@@ -49,6 +50,7 @@ it.effect("retries the link without sending a second turn after the home environ
     };
     let taskAttachments: ProjectTaskAttachment[] = [];
     let taskSettings: TaskRunSettings | undefined;
+    let projectDefaults: TaskAttachmentListResult["projectDefaults"];
     let launches = 0;
     let links = 0;
     let batchStarts = 0;
@@ -74,6 +76,7 @@ it.effect("retries the link without sending a second turn after the home environ
             },
             [WS_METHODS.projectsTaskAttachments]: (input: { taskId: string }) =>
               Effect.succeed({
+                projectDefaults,
                 task: {
                   id: input.taskId,
                   createdAt: "2026-01-01T00:00:00Z",
@@ -166,10 +169,16 @@ it.effect("retries the link without sending a second turn after the home environ
         repositoryIdentity: { canonicalKey: "github.com/acme/app" },
         savedPrompts: [{ id: "task", text: "Stale cached prompt", attachments: taskAttachments }],
       } as unknown as EnvironmentProject);
+    const otherHome = { ...home, projectId: ProjectId.make("other-home") };
+    const otherHomeAtom = makeProjectAtom(otherHome);
     const homeAtom = makeProjectAtom(home);
     const targetAtom = makeProjectAtom(target);
     const projectAtom = (ref: typeof home) =>
-      ref.environmentId === home.environmentId ? homeAtom : targetAtom;
+      ref.projectId === otherHome.projectId
+        ? otherHomeAtom
+        : ref.environmentId === home.environmentId
+          ? homeAtom
+          : targetAtom;
     const commands = createSavedTaskCommands(runtime, projectAtom);
     const registry = AtomRegistry.make();
     try {
@@ -269,7 +278,7 @@ it.effect("retries the link without sending a second turn after the home environ
         commandId: CommandId.make("batch"),
         sources: [
           { home, taskId: "task" },
-          { home, taskId: "task2" },
+          { home: otherHome, taskId: "task2" },
         ],
         targets: [home, target],
         distribute: true,
@@ -282,6 +291,23 @@ it.effect("retries the link without sending a second turn after the home environ
           interactionMode: "default" as const,
         },
       };
+      taskSettings = undefined;
+      registry.set(homeAtom, {
+        ...registry.get(homeAtom),
+        defaultModelSelection: {
+          instanceId: batchInput.launch.modelSelection.instanceId,
+          model: "home-free",
+        },
+        defaultThreadEnvMode: "worktree",
+      });
+      registry.set(otherHomeAtom, {
+        ...registry.get(otherHomeAtom),
+        defaultModelSelection: {
+          instanceId: batchInput.launch.modelSelection.instanceId,
+          model: "other-free",
+        },
+        defaultThreadEnvMode: "local",
+      });
       const distributed = yield* Effect.promise(() =>
         commands.prepareBatch.run(registry, batchInput),
       );
@@ -291,6 +317,17 @@ it.effect("retries the link without sending a second turn after the home environ
           home.environmentId,
           target.environmentId,
         ]);
+      if (distributed._tag === "Success") {
+        for (const group of distributed.value)
+          for (const entry of group.input.entries) {
+            expect(entry.launch.modelSelection.model).toBe(
+              entry.source.projectId === home.projectId ? "home-free" : "other-free",
+            );
+            expect(entry.launch.threadEnvMode).toBe(
+              entry.source.projectId === home.projectId ? "worktree" : "local",
+            );
+          }
+      }
       expect(batchStarts).toBe(0);
       const prepared = yield* Effect.promise(() =>
         commands.prepareBatch.run(registry, { ...batchInput, target, distribute: false }),
@@ -305,7 +342,10 @@ it.effect("retries the link without sending a second turn after the home environ
       registry.set(targetAtom, { ...registry.get(targetAtom), taskBatches: [queued.value] });
       expect(
         registry.get(
-          commands.batchQueueAtom({ source: { home, taskId: "task2" }, targets: [home, target] }),
+          commands.batchQueueAtom({
+            source: { home: otherHome, taskId: "task2" },
+            targets: [home, target],
+          }),
         )[0]?.position,
       ).toBe(2);
       const settled: ProjectTaskBatch = {
@@ -359,6 +399,90 @@ it.effect("retries the link without sending a second turn after the home environ
       expect(pinned._tag).toBe("Success");
       if (pinned._tag === "Success")
         expect(pinned.value[0]?.environmentId).toBe(home.environmentId);
+      taskAttachments = [];
+      projectDefaults = {
+        defaultModelSelection: { ...batchInput.launch.modelSelection, model: "folded-free" },
+        defaultThreadEnvMode: "worktree",
+        defaultRuntimeMode: "approval-required",
+      };
+      const saved: TaskRunSettings = {
+        defaultModelSelection: {
+          ...batchInput.launch.modelSelection,
+          model: "saved",
+          options: [{ id: "effort", value: "low" }],
+        },
+        runtimeMode: "auto-accept-edits",
+        threadEnvMode: "local",
+      };
+      const overrides: TaskRunSettings = {
+        defaultModelSelection: {
+          ...batchInput.launch.modelSelection,
+          model: "override",
+          options: [{ id: "effort", value: "high" }],
+        },
+        runtimeMode: "full-access",
+        threadEnvMode: "worktree",
+      };
+      for (const scenario of [
+        {
+          settings: undefined,
+          overrides: undefined,
+          model: projectDefaults.defaultModelSelection,
+          runtimeMode: "approval-required",
+          mode: "worktree",
+        },
+        {
+          settings: saved,
+          overrides: undefined,
+          model: saved.defaultModelSelection,
+          runtimeMode: "auto-accept-edits",
+          mode: "local",
+        },
+        {
+          settings: saved,
+          overrides,
+          model: overrides.defaultModelSelection,
+          runtimeMode: "full-access",
+          mode: "worktree",
+        },
+      ]) {
+        taskSettings = scenario.settings;
+        const result = yield* Effect.promise(() =>
+          commands.prepareBatch.run(registry, {
+            ...batchInput,
+            sources: [{ home, taskId: "task" }],
+            target: home,
+            distribute: false,
+            ...(scenario.overrides === undefined ? {} : { overrides: scenario.overrides }),
+          }),
+        );
+        expect(result._tag).toBe("Success");
+        if (result._tag === "Success") {
+          const entry = result.value[0]!.input.entries[0]!;
+          expect(entry.launch.modelSelection).toEqual(scenario.model);
+          expect(entry.launch.runtimeMode).toBe(scenario.runtimeMode);
+          expect(entry.launch.threadEnvMode).toBe(scenario.mode);
+          expect(entry.destination).toEqual(home);
+        }
+      }
+      taskSettings = {
+        defaultModelSelection: { ...batchInput.launch.modelSelection, routing: "auto" },
+      };
+      const auto = yield* Effect.promise(() =>
+        commands.prepareBatch.run(registry, {
+          ...batchInput,
+          sources: [{ home, taskId: "task" }],
+          target: home,
+          distribute: false,
+        }),
+      );
+      expect(auto._tag).toBe("Success");
+      if (auto._tag === "Success") {
+        expect(auto.value[0]!.input.entries).toEqual([]);
+        expect(auto.value[0]!.unresolved.map((entry) => entry.failureReason)).toEqual([
+          "unresolved-model",
+        ]);
+      }
       expect(batchStarts).toBe(1);
       expect(launches).toBe(2);
     } finally {

@@ -1,4 +1,5 @@
 import {
+  type ProjectSavedPrompt,
   SavedPromptAction,
   ProjectTaskBatches,
   type ProjectTaskBatch,
@@ -215,39 +216,63 @@ export function planProjectCommand(input: {
         const exists = savedPrompts.some(
           (item) => item.id === ("id" in action ? action.id : undefined),
         );
-        if (action.kind === "add") {
-          const deleted = savedPrompts.find(
-            (item) => item.id === action.id && item.deletedAt !== undefined,
-          );
-          if (exists && deleted === undefined)
-            return invariant("A saved prompt with this id already exists.");
-          if (savedPrompts.filter((item) => item.deletedAt === undefined).length >= 100)
-            return invariant("Clear saved prompts before adding more (100 maximum).");
-          if (deleted !== undefined) {
-            const { deletedAt: _deletedAt, ...restored } = deleted;
-            savedPrompts = savedPrompts.map((item) => (item.id === action.id ? restored : item));
-          } else
-            savedPrompts = [
-              {
-                id: action.id,
-                text: action.text,
-                title: action.title ?? null,
-                ...(action.runSettings === undefined ? {} : { runSettings: action.runSettings }),
-                ...(action.parentTaskId === undefined ? {} : { parentTaskId: action.parentTaskId }),
-                ...(action.acceptanceCriteria === undefined
-                  ? {}
-                  : { acceptanceCriteria: action.acceptanceCriteria }),
-                ...(action.priority === undefined ? {} : { priority: action.priority }),
-                ...(action.when === undefined ? {} : { when: action.when }),
-                ...(action.tags === undefined
-                  ? {}
-                  : { tags: [...new Set(action.tags.map((tag) => tag.trim().toLowerCase()))] }),
-                status: action.status ?? "open",
+        if (action.kind === "add" || action.kind === "add-many") {
+          const tasks = action.kind === "add" ? [action] : action.tasks;
+          if (new Set(tasks.map((task) => task.id)).size !== tasks.length)
+            return invariant("New tasks require unique ids.");
+          const added: ProjectSavedPrompt[] = [];
+          for (const task of tasks) {
+            const existing = savedPrompts.find((item) => item.id === task.id);
+            if (existing?.deletedAt === undefined && existing !== undefined)
+              return invariant("A saved prompt with this id already exists.");
+            if (existing !== undefined) {
+              const { deletedAt: _deletedAt, ...restored } = existing;
+              added.push(restored);
+            } else {
+              const {
+                id,
+                text,
+                title,
+                runSettings,
+                parentTaskId,
+                acceptanceCriteria,
+                priority,
+                when,
+                tags,
+                status,
+              } = task;
+              added.push({
+                id,
+                text,
+                title: title ?? null,
+                runSettings,
+                parentTaskId,
+                acceptanceCriteria,
+                priority,
+                when,
+                tags:
+                  tags === undefined
+                    ? undefined
+                    : [...new Set(tags.map((tag) => tag.trim().toLowerCase()))],
+                status: status ?? "open",
                 createdAt: occurredAt,
-                completedAt: action.status === "done" ? occurredAt : null,
-              },
-              ...savedPrompts,
-            ];
+                completedAt: status === "done" ? occurredAt : null,
+              });
+            }
+          }
+          const remaining = savedPrompts.filter(
+            (item) => !added.some((task) => task.id === item.id),
+          );
+          if (remaining.filter((item) => item.deletedAt === undefined).length + added.length > 100)
+            return invariant("Clear saved prompts before adding more (100 maximum).");
+          savedPrompts =
+            action.kind === "add" &&
+            action.position === undefined &&
+            savedPrompts.some((item) => item.id === action.id)
+              ? savedPrompts.map((item) => (item.id === action.id ? added[0]! : item))
+              : action.position === "end"
+                ? [...remaining, ...added]
+                : [...added, ...remaining];
         } else if (action.kind === "reorder") {
           if (
             new Set(action.ids).size !== action.ids.length ||

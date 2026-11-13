@@ -313,8 +313,12 @@ const TaskBatchLaunchSettings = Schema.Struct({
 const TaskBatchSubmission = Schema.Struct({
   source: TaskBatchSource,
   brief: ProjectSavedPrompt,
+  destination: Schema.optional(
+    Schema.Struct({ environmentId: EnvironmentId, projectId: ProjectId }),
+  ),
   launch: TaskBatchLaunchSettings,
   overrides: Schema.optional(TaskRunSettings),
+  fallback: Schema.optional(TaskBatchLaunchSettings),
 });
 export const TaskBatchEntry = Schema.Struct({
   expectedThreadId: Schema.optional(Schema.NullOr(ThreadId)),
@@ -335,6 +339,15 @@ export const TaskBatchEntry = Schema.Struct({
     "cancelled",
     "failed-to-start",
   ]),
+  failureReason: Schema.optional(
+    Schema.Literals([
+      "settings-changed",
+      "task-changed",
+      "source-deleted",
+      "source-unverifiable",
+      "unresolved-model",
+    ]),
+  ),
   reason: Schema.optional(Schema.String.check(Schema.isMaxLength(1000))),
   snapshot: Schema.optional(TaskReviewSnapshot),
 });
@@ -342,6 +355,8 @@ export type TaskBatchEntry = typeof TaskBatchEntry.Type;
 export const ProjectTaskBatch = Schema.Struct({
   id: CommandId,
   concurrency: PositiveInt.check(Schema.isLessThanOrEqualTo(4)),
+  startSequence: Schema.optional(PositiveInt),
+  effectiveConcurrency: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(4))),
   createdAt: IsoDateTime,
   entries: Schema.Array(TaskBatchEntry).check(Schema.isMaxLength(100)),
 });
@@ -392,11 +407,27 @@ export class TaskBatchError extends Schema.TaggedError<TaskBatchError>()("TaskBa
   }
 }
 
+const TaskProjectDefaults = Schema.Struct({
+  defaultModelSelection: Schema.NullOr(ModelSelection),
+  defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
+  defaultRuntimeMode: RuntimeMode,
+});
 export const TaskAttachmentListResult = Schema.Struct({
+  projectDefaults: Schema.optional(TaskProjectDefaults),
   task: Schema.optional(ProjectSavedPrompt),
   attachments: Schema.Array(TaskAttachmentMetadata),
 });
 export type TaskAttachmentListResult = typeof TaskAttachmentListResult.Type;
+
+const TaskAddFields = {
+  id: TrimmedNonEmptyString,
+  text: ProjectSavedPrompt.fields.text,
+  title: Schema.optional(SavedPromptTitle),
+  status: Schema.optional(SavedPromptStatus),
+  ...TaskInboxFields,
+  ...TaskBriefFields,
+};
+const TaskAddPosition = Schema.optional(Schema.Literals(["start", "end"]));
 
 export const SavedPromptAction = Schema.Union([
   Schema.Struct({
@@ -420,13 +451,17 @@ export const SavedPromptAction = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal("add"),
-    id: TrimmedNonEmptyString,
-    text: ProjectSavedPrompt.fields.text,
+    ...TaskAddFields,
     attachments: Schema.optional(TaskAttachmentInputs),
-    title: Schema.optional(SavedPromptTitle),
-    status: Schema.optional(SavedPromptStatus),
-    ...TaskInboxFields,
-    ...TaskBriefFields,
+    position: TaskAddPosition,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("add-many"),
+    tasks: Schema.Array(Schema.Struct(TaskAddFields)).check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(100),
+    ),
+    position: TaskAddPosition,
   }),
   Schema.Struct({
     kind: Schema.Literal("edit"),
@@ -468,6 +503,7 @@ export const SavedPromptAction = Schema.Union([
 export type SavedPromptAction = typeof SavedPromptAction.Type;
 
 export const Project = Schema.Struct({
+  taskDefaults: Schema.optional(TaskProjectDefaults),
   id: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,

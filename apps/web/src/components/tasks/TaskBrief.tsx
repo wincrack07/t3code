@@ -59,6 +59,7 @@ import { TaskPriorityChip } from "./TaskFields";
 import {
   editTaskCriteria,
   TASK_CRITERIA_MAX_COUNT,
+  TASK_RUN_WITH_ANCHOR,
   TASK_CRITERION_MAX_LENGTH,
   TASK_STATUS_LABELS,
   taskAttempts,
@@ -74,18 +75,20 @@ import {
 import { useEnvironmentLabel } from "./useTaskProjects";
 
 function BriefSection({
+  id,
   title,
   detail,
   action,
   children,
 }: {
+  id?: string;
   title: string;
   detail?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section aria-label={title} className="flex min-w-0 flex-col gap-1">
+    <section id={id} aria-label={title} className="flex min-w-0 flex-col gap-1 scroll-mt-2">
       <header className="flex h-7 min-w-0 items-center gap-2 px-1">
         <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
         {detail ? (
@@ -380,6 +383,7 @@ export function TaskRunWith({
   const PermissionIcon = runtimeModeConfig[runtimeMode].icon;
   return (
     <BriefSection
+      id={TASK_RUN_WITH_ANCHOR}
       title="Run with"
       detail={saved === null ? "Project default" : null}
       action={

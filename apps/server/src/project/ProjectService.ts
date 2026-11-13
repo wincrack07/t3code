@@ -25,6 +25,7 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as ServerConfig from "../config.ts";
 import {
@@ -248,7 +249,28 @@ export const make = Effect.gen(function* () {
       row.deletedAt === null
         ? yield* projectEnrichment.getAvailable(row.workspaceRoot)
         : yield* projectEnrichment.peek(row.workspaceRoot);
-    return toProject(row, enrichment);
+    const settings = resolveProjectSettings(
+      yield* serverSettings.getSettings.pipe(
+        Effect.mapError(
+          (cause) =>
+            new ProjectOperationError({
+              operation: "read-project",
+              projectId: row.projectId,
+              cause,
+            }),
+        ),
+      ),
+      row.projectId,
+      row,
+    ).settings;
+    return {
+      ...toProject(row, enrichment),
+      taskDefaults: {
+        defaultModelSelection: settings.defaultModelSelection,
+        defaultThreadEnvMode: settings.defaultThreadEnvMode,
+        defaultRuntimeMode: settings.defaultRuntimeMode,
+      },
+    };
   });
 
   const readRow = (projectId: ProjectId, options?: { readonly includeDeleted?: boolean }) =>
@@ -769,7 +791,21 @@ export const make = Effect.gen(function* () {
         }),
       { concurrency: 1 },
     );
-    return { attachments, ...(input.includePrompt === true ? { task } : {}) };
+    if (input.includePrompt !== true) return { attachments };
+    const settings = resolveProjectSettings(
+      yield* serverSettings.getSettings.pipe(Effect.mapError(taskAttachmentFailure)),
+      input.projectId,
+      Option.getOrThrow(row),
+    ).settings;
+    return {
+      attachments,
+      task,
+      projectDefaults: {
+        defaultModelSelection: settings.defaultModelSelection,
+        defaultThreadEnvMode: settings.defaultThreadEnvMode,
+        defaultRuntimeMode: settings.defaultRuntimeMode,
+      },
+    };
   });
 
   return ProjectService.of({

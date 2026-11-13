@@ -1,5 +1,7 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
+  ProviderInstanceId,
+  type RuntimeMode,
   ChatAttachmentId,
   EnvironmentId,
   ProjectId,
@@ -734,65 +736,211 @@ describe("batch", () => {
   const entries = groups[0]!.tasks;
   const labels: Record<string, string> = { mac: "Mac", "vps-a": "Alpha" };
   const label = (environmentId: EnvironmentId) => labels[environmentId] ?? environmentId;
+  const model = (slug: string, effort?: string) => ({
+    instanceId: ProviderInstanceId.make("claude"),
+    model: slug,
+    ...(effort ? { options: [{ id: "effort", value: effort }] } : {}),
+  });
+  const launch = (slug: string, effort?: string, runtimeMode: RuntimeMode = "full-access") => ({
+    modelSelection: model(slug, effort),
+    runtimeMode,
+    threadEnvMode: "worktree" as const,
+  });
   const plan = [
     {
       environmentId: vpsA,
+      currentEffectiveConcurrency: 1,
+      effectiveConcurrency: 2,
       input: {
         projectId: "orbit-vps-a",
-        entries: [{ source: { environmentId: mac, taskId: "m1" } }],
+        entries: [{ source: { environmentId: mac, taskId: "m1" }, launch: launch("opus", "high") }],
       },
+      unresolved: [],
     },
     {
       environmentId: mac,
+      currentEffectiveConcurrency: 2,
+      effectiveConcurrency: 2,
       input: {
         projectId: "orbit-mac",
-        entries: [{ source: { environmentId: mac, taskId: "m2" } }],
+        entries: [
+          {
+            source: { environmentId: mac, taskId: "m2" },
+            launch: { ...launch("opus"), threadEnvMode: undefined },
+          },
+        ],
       },
+      unresolved: [],
     },
   ];
+  const labelSet = { machine: label, model: (selection: { model: string }) => selection.model };
 
-  it("summarises where each task runs and why one stays on its own machine", () => {
-    expect(
-      taskBatchSummary(plan, entries, { distribute: true, environmentId: null }, label),
-    ).toEqual([
+  it("lists what each task runs with by machine, and why one stays on its own machine", () => {
+    const summary = taskBatchSummary(
+      plan,
+      entries,
+      { distribute: true, environmentId: null },
+      labelSet,
+    );
+    expect(summary.headline).toBe("2 tasks · opus · Full access · 2 machines");
+    expect(summary.runnable).toBe(2);
+    expect(summary.rows).toEqual([
       {
         environmentId: vpsA,
         machine: "Alpha",
-        tasks: [{ key: entries[0]!.key, title: "Prompt m1", pinned: null }],
+        capChange: "Alpha runs 1 at a time; this batch changes it to 2.",
+        tasks: [
+          {
+            key: entries[0]!.key,
+            title: "Prompt m1",
+            pinned: null,
+            blocked: null,
+            model: "opus",
+            effort: "high",
+            access: "Full access",
+            workspace: "Worktree",
+            modelDiffers: false,
+            accessDiffers: false,
+          },
+        ],
       },
       {
         environmentId: mac,
         machine: "Mac",
+        capChange: null,
         tasks: [
-          { key: entries[1]!.key, title: "Prompt m2", pinned: "Has attachments stored on Mac" },
+          {
+            key: entries[1]!.key,
+            title: "Prompt m2",
+            pinned: "Stays on Mac because its attachments are stored there.",
+            blocked: null,
+            model: "opus",
+            effort: "provider default",
+            access: "Full access",
+            workspace: "Local",
+            modelDiffers: false,
+            accessDiffers: false,
+          },
         ],
       },
     ]);
     // Running everything on the task's own machine pins nothing.
-    const home = taskBatchSummary(plan, entries, { distribute: false, environmentId: mac }, label);
-    expect(home.flatMap((row) => row.tasks.map((t) => t.pinned))).toEqual([null, null]);
+    const home = taskBatchSummary(
+      plan,
+      entries,
+      { distribute: false, environmentId: mac },
+      labelSet,
+    );
+    expect(home.rows.flatMap((row) => row.tasks.map((t) => t.pinned))).toEqual([null, null]);
   });
 
-  it("shows a task's newest live queue entry and sums every batch", () => {
+  it("calls out mixed models and access, and counts only tasks that will run", () => {
+    const mixed = [
+      {
+        ...plan[0]!,
+        input: {
+          ...plan[0]!.input,
+          entries: [
+            { source: { environmentId: mac, taskId: "m1" }, launch: launch("sonnet") },
+            {
+              source: { environmentId: mac, taskId: "m3" },
+              launch: launch("opus", undefined, "approval-required"),
+            },
+            { source: { environmentId: mac, taskId: "m4" }, launch: launch("sonnet") },
+          ],
+        },
+      },
+      {
+        ...plan[1]!,
+        input: { ...plan[1]!.input, entries: [] },
+        unresolved: [
+          {
+            source: { environmentId: mac, taskId: "m2" },
+            launch: launch("t3:auto"),
+            failureReason: "unresolved-model" as const,
+          },
+        ],
+      },
+    ];
+    const withThird = [
+      ...entries,
+      { ...entries[0]!, key: "m3", task: task("m3", "1") },
+      { ...entries[0]!, key: "m4", task: task("m4", "1") },
+    ];
+    const summary = taskBatchSummary(
+      mixed,
+      withThird,
+      { distribute: false, environmentId: null },
+      labelSet,
+    );
+    expect(summary.headline).toBe(
+      "4 tasks · 2 models · 2 access modes · 2 machines · 1 will not run",
+    );
+    expect(summary.runnable).toBe(3);
+    const mac_ = summary.rows.find((row) => row.environmentId === mac)!;
+    expect(mac_.tasks[0]).toMatchObject({
+      model: "Auto",
+      blocked: expect.stringContaining("Run with"),
+    });
+    // A machine with nothing to run does not change its cap.
+    expect(mac_.capChange).toBeNull();
+    expect(
+      summary.rows
+        .find((row) => row.environmentId === vpsA)!
+        .tasks.map((t) => [t.modelDiffers, t.accessDiffers]),
+    ).toEqual([
+      [false, false],
+      [true, true],
+      [false, false],
+    ]);
+    // A tie has no majority, so no single task stands out.
+    const tie = taskBatchSummary(
+      [
+        {
+          ...mixed[0]!,
+          input: { ...mixed[0]!.input, entries: mixed[0]!.input.entries.slice(0, 2) },
+        },
+      ],
+      withThird,
+      { distribute: false, environmentId: null },
+      labelSet,
+    );
+    expect(tie.rows[0]!.tasks.some((t) => t.modelDiffers || t.accessDiffers)).toBe(false);
+  });
+
+  it("shows a task's newest live queue entry, refusals while it waits, and sums every batch", () => {
     const target = { environmentId: mac, projectId: "orbit-mac" };
     const item = (state: string, createdAt: string, position: number | null = null) => ({
       target,
       batchId: `b-${createdAt}`,
       createdAt,
+      cap: 2,
       entry: {
         id: `e-${createdAt}`,
         state,
-        reason: state === "failed-to-start" ? "No model" : undefined,
+        reason: state === "failed-to-start" ? "No model" : "Prepare the batch again.",
+        ...(state === "cancelled" ? { failureReason: "task-changed" } : {}),
       } as never,
       position,
     });
-    expect(taskQueueView([])).toBeNull();
-    expect(taskQueueView([item("failed-to-start", "1"), item("queued", "2", 3)])).toMatchObject({
-      state: "queued",
-      position: 3,
+    expect(taskQueueView([], "open")).toBeNull();
+    expect(
+      taskQueueView([item("failed-to-start", "1"), item("queued", "2", 3)], "open"),
+    ).toMatchObject({ state: "queued", position: 3 });
+    expect(taskQueueView([item("queued", "1", 1), item("settled", "2")], "open")).toBeNull();
+    expect(taskQueueView([item("failed-to-start", "1")], "open")?.reason).toBe("No model");
+    expect(taskQueueView([item("cancelled", "1")], "open")).toMatchObject({
+      state: "refused",
+      reason: "The task was edited after the batch was confirmed.",
     });
-    expect(taskQueueView([item("queued", "1", 1), item("settled", "2")])).toBeNull();
-    expect(taskQueueView([item("failed-to-start", "1")])?.reason).toBe("No model");
+    // Cancelled by the person, or the task moved on: nothing to show.
+    expect(
+      taskQueueView(
+        [{ ...item("cancelled", "1"), entry: { id: "e", state: "cancelled" } }],
+        "open",
+      ),
+    ).toBeNull();
+    expect(taskQueueView([item("cancelled", "1")], "in-progress")).toBeNull();
 
     const withBatches = {
       ...project(mac, "orbit", []),
@@ -800,6 +948,7 @@ describe("batch", () => {
         {
           id: "b1",
           concurrency: 2,
+          effectiveConcurrency: 3,
           createdAt: "1",
           entries: [{ state: "running" }, { state: "queued" }, { state: "queued" }],
         },
@@ -837,13 +986,37 @@ describe("batch", () => {
       ["running", null],
       ["queued", 2],
     ]);
-    expect(taskQueueView(forTask("x"))?.position).toBe(1);
-    expect(taskQueueTotals([withBatches])).toEqual({
+    expect(taskQueueView(forTask("x"), "open")).toMatchObject({ position: 1, cap: 2 });
+    expect(taskQueueTotals([withBatches], [])).toEqual({
       queued: 2,
       starting: 0,
       running: 1,
       failed: 1,
       cancellable: [{ environmentId: mac, projectId: withBatches.id, batchId: "b1" }],
+      caps: [{ environmentId: mac, cap: 3 }],
+      refused: [],
     });
+    const refusedTask = { home: withBatches, task: task("z", "1"), status: "open" as const };
+    const refusedBatch = {
+      ...withBatches,
+      taskBatches: [
+        {
+          id: "b3",
+          concurrency: 2,
+          createdAt: "3",
+          entries: [
+            {
+              id: "e9",
+              state: "cancelled",
+              failureReason: "source-deleted",
+              source: queuedTask("z"),
+            },
+          ],
+        },
+      ],
+    } as unknown as EnvironmentProject;
+    expect(
+      taskQueueTotals([refusedBatch], [refusedTask as never]).refused.map((r) => r.queue.reason),
+    ).toEqual(["The task was deleted before it started."]);
   });
 });

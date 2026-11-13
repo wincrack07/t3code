@@ -1,3 +1,5 @@
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
+import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as TaskBatchService from "../project/TaskBatchService.ts";
 import * as TaskReviewService from "../project/TaskReviewService.ts";
 import * as WorktreeBranchSync from "./WorktreeBranchSync.ts";
@@ -287,6 +289,7 @@ const layerThreadLaunchProvided = ThreadLaunchService.layer.pipe(
   ),
 );
 const layerTaskBatchProvided = TaskBatchService.layer.pipe(
+  Layer.provide(PeerMcpClient.layer.pipe(Layer.provide(PeerLinks.layer))),
   Layer.provide(
     Layer.mergeAll(
       layerProjectService,
