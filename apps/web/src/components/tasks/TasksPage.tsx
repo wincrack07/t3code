@@ -231,6 +231,7 @@ export function TasksPage({
                   selection={selection}
                   showProject={projectKey === null}
                   selectedKey={selected?.entry.key ?? null}
+                  besideDetail={showingDetail}
                   onSelect={(key) => go({ ...search, task: key })}
                 />
               )
@@ -258,7 +259,9 @@ export function TasksPage({
           </section>
           <main
             className={cn(
-              "min-h-0 min-w-0 flex-1 flex-col md:w-[30rem] md:flex-none md:border-l md:border-border",
+              // Beside the board the detail is narrower, so all four columns keep their minimum.
+              "min-h-0 min-w-0 flex-1 flex-col md:flex-none md:border-l md:border-border",
+              board ? "md:w-[26rem]" : "md:w-[30rem]",
               showingDetail ? "flex" : "hidden",
             )}
           >
