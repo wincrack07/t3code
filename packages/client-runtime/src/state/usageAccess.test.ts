@@ -26,15 +26,18 @@ describe("resolveUsageAccess", () => {
     },
   );
 
-  it("preserves a known grant so disconnected usage can retain its cached summary", () => {
-    expect(
-      resolveUsageAccess({
-        connectionPhase: "offline",
-        session: { authenticated: true, scopes: [AuthDiagnosticsReadScope] },
-        hasSessionError: false,
-      }),
-    ).toEqual({ canReadDiagnostics: true, isPending: false, error: null });
-  });
+  it.each([false, true])(
+    "preserves a known grant even if the refresh failed: %s",
+    (hasSessionError) => {
+      expect(
+        resolveUsageAccess({
+          connectionPhase: "offline",
+          session: { authenticated: true, scopes: [AuthDiagnosticsReadScope] },
+          hasSessionError,
+        }),
+      ).toEqual({ canReadDiagnostics: true, isPending: false, error: null });
+    },
+  );
 
   it("distinguishes a failed check from a resolved grant without diagnostics access", () => {
     const denied = resolveUsageAccess({

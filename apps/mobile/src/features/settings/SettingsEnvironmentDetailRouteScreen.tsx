@@ -86,8 +86,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
   const release = releaseCheckValue(releaseCheck);
 
   const connected = environment?.isEnabled === true && environment.connectionState === "connected";
-  const allowed =
-    !AsyncResult.isFailure(sessionResult) && canMaintainEnvironment(session, connected);
+  const allowed = canMaintainEnvironment(session, connected);
   const running = updateState.status === "running";
   const providerBusy =
     config?.providers.some(
