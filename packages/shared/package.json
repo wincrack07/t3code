@@ -562,6 +562,10 @@
     "./savedTasks": {
       "types": "./src/savedTasks.ts",
       "default": "./src/savedTasks.ts"
+    },
+    "./threadExport": {
+      "types": "./src/threadExport.ts",
+      "import": "./src/threadExport.ts"
     }
   },
   "scripts": {

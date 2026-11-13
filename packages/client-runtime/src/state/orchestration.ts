@@ -33,7 +33,11 @@ import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
 import * as ManagedRelayDpopSigner from "../relay/managedRelay.ts";
 import { EnvironmentRpcUnavailableError, request } from "../rpc/client.ts";
 import type { EnvironmentShellState } from "./shell.ts";
-import { fetchEnvironmentThreadTranscript } from "./threadTranscriptHttp.ts";
+import {
+  fetchEnvironmentThreadTranscript,
+  fetchEnvironmentThreadExport,
+  fetchEnvironmentThreadExportIndex,
+} from "./threadTranscriptHttp.ts";
 
 export function createOrchestrationEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | HttpClient.HttpClient | R, E>,
@@ -136,6 +140,50 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
         return yield* fetchEnvironmentThreadTranscript({
           prepared: prepared.value,
           threadId: input.threadId,
+          signer: yield* Effect.serviceOption(ManagedRelayDpopSigner.ManagedRelayDpopSigner),
+          remoteAuthorization: yield* Effect.serviceOption(
+            RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization,
+          ),
+        });
+      }),
+    }),
+    threadExport: createEnvironmentCommand(runtime, {
+      label: "environment-data:orchestration:thread-export",
+      execute: Effect.fn("orchestration.execute")(function* (input: {
+        readonly threadId: ThreadId;
+      }) {
+        const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+        const prepared = yield* SubscriptionRef.get(supervisor.prepared);
+        if (Option.isNone(prepared)) {
+          return yield* new EnvironmentRpcUnavailableError({
+            environmentId: supervisor.target.environmentId,
+            message: "The source environment is not connected.",
+          });
+        }
+        return yield* fetchEnvironmentThreadExport({
+          prepared: prepared.value,
+          threadId: input.threadId,
+          signer: yield* Effect.serviceOption(ManagedRelayDpopSigner.ManagedRelayDpopSigner),
+          remoteAuthorization: yield* Effect.serviceOption(
+            RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization,
+          ),
+        });
+      }),
+    }),
+    threadExportIndex: createEnvironmentCommand(runtime, {
+      label: "environment-data:orchestration:thread-export-index",
+      execute: Effect.fn("orchestration.execute")(function* (_input: Record<string, never>) {
+        const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+        const prepared = yield* SubscriptionRef.get(supervisor.prepared);
+        if (Option.isNone(prepared)) {
+          return yield* new EnvironmentRpcUnavailableError({
+            environmentId: supervisor.target.environmentId,
+            message: "The source environment is not connected.",
+          });
+        }
+        return yield* fetchEnvironmentThreadExportIndex({
+          prepared: prepared.value,
+
           signer: yield* Effect.serviceOption(ManagedRelayDpopSigner.ManagedRelayDpopSigner),
           remoteAuthorization: yield* Effect.serviceOption(
             RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization,
