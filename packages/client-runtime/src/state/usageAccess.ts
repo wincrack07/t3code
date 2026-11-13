@@ -11,7 +11,7 @@ export function resolveUsageAccess(input: {
   readonly session: SessionGrantInput | null;
   readonly hasSessionError: boolean;
 }) {
-  if (input.hasSessionError) {
+  if (input.hasSessionError && input.session === null) {
     return {
       canReadDiagnostics: false,
       isPending: false,

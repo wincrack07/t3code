@@ -47,15 +47,13 @@ const priceTargetsAtom = Atom.make((get): readonly UsagePriceTarget[] =>
     const session = get(environmentSession.sessionStateAtom(environmentId));
     const sessionData = AsyncResult.getOrElse(session, () => null);
     const access =
-      session._tag === "Failure"
-        ? "denied"
-        : sessionData === null
-          ? session.waiting
-            ? "pending"
-            : "denied"
-          : sessionGrantsScope(sessionData, AuthSettingsWriteScope)
-            ? "granted"
-            : "denied";
+      sessionData === null
+        ? session.waiting
+          ? "pending"
+          : "denied"
+        : sessionGrantsScope(sessionData, AuthSettingsWriteScope)
+          ? "granted"
+          : "denied";
     return {
       environmentId,
       label: environment.entry.target.label,

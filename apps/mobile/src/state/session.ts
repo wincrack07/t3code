@@ -22,7 +22,7 @@ export function sessionHasScope(
   scope: AuthEnvironmentScope,
 ): boolean {
   const session = AsyncResult.getOrElse(result, () => null);
-  return result._tag !== "Failure" && session !== null && sessionGrantsScope(session, scope);
+  return session !== null && sessionGrantsScope(session, scope);
 }
 
 export function useEnvironmentScope(

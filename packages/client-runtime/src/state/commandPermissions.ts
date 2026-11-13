@@ -27,11 +27,7 @@ function makeCommandPermissions<R, E>(
         if (scopes.length === 0) return true;
         const result = get(sessions.sessionStateAtom(environmentId));
         const session = AsyncResult.getOrElse(result, () => null);
-        return (
-          result._tag !== "Failure" &&
-          session !== null &&
-          scopes.every((scope) => sessionGrantsScope(session, scope))
-        );
+        return session !== null && scopes.every((scope) => sessionGrantsScope(session, scope));
       }),
     ),
   );
@@ -49,15 +45,22 @@ function makeCommandPermissions<R, E>(
       return Effect.scoped(
         Effect.gen(function* () {
           yield* AtomRegistry.mount(registry, atom);
-          const session = yield* AtomRegistry.getResult(registry, atom, {
-            suspendOnWaiting: false,
-          }).pipe(
-            Effect.timeoutOption(6_000),
-            Effect.orElseSucceed(() => Option.none<AuthSessionState>()),
-          );
-          const missing = scopes.find(
-            (scope) => Option.isNone(session) || !sessionGrantsScope(session.value, scope),
-          );
+          // A failed refresh does not revoke the last confirmed session grants.
+          const cached = AsyncResult.value(registry.get(atom));
+          const session = Option.isSome(cached)
+            ? cached
+            : yield* AtomRegistry.getResult(registry, atom, {
+                suspendOnWaiting: false,
+              }).pipe(
+                Effect.timeoutOption(6_000),
+                Effect.orElseSucceed(() => Option.none<AuthSessionState>()),
+              );
+          if (Option.isNone(session))
+            return yield* new EnvironmentAuthorizationError({
+              ...authScopeRequiredResponse(scopes[0]!),
+              message: "Could not verify this connection's permissions. Try again.",
+            });
+          const missing = scopes.find((scope) => !sessionGrantsScope(session.value, scope));
           if (missing !== undefined)
             return yield* new EnvironmentAuthorizationError({
               ...authScopeRequiredResponse(missing),

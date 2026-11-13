@@ -39,7 +39,7 @@ export function sessionHasScope(
   scope: AuthEnvironmentScope,
 ): boolean {
   const session = AsyncResult.getOrElse(result, () => null);
-  return result._tag !== "Failure" && session !== null && sessionGrantsScope(session, scope);
+  return session !== null && sessionGrantsScope(session, scope);
 }
 
 const environmentsWithScopeAtom = Atom.family((key: string) => {

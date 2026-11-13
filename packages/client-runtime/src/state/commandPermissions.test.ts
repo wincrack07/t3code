@@ -29,6 +29,7 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { EnvironmentRegistry } from "../connection/registry.ts";
@@ -279,14 +280,15 @@ describe("command permissions", () => {
     ),
   );
   it.effect(
-    "denies failed and unauthenticated sessions, but accepts a cached refreshing grant",
+    "denies unknown and revoked sessions, but accepts cached grants during refresh failures",
     () =>
       Effect.scoped(
         Effect.gen(function* () {
           const registry = yield* setup;
           registry.set(sessions(env), AsyncResult.failure(Cause.fail("offline")));
-          expect((yield* permissions.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
-            "EnvironmentAuthorizationError",
+          expect(registry.get(permissions.permissionAtom(env))).toBe(false);
+          expect((yield* permissions.authorize(registry, env).pipe(Effect.flip)).message).toBe(
+            "Could not verify this connection's permissions. Try again.",
           );
           registry.set(
             sessions(env),
@@ -296,9 +298,66 @@ describe("command permissions", () => {
             "EnvironmentAuthorizationError",
           );
           registry.set(sessions(env), AsyncResult.waiting(AsyncResult.success(grant(true))));
+          expect(registry.get(permissions.permissionAtom(env))).toBe(true);
+          yield* permissions.authorize(registry, env);
+          registry.set(
+            sessions(env),
+            AsyncResult.failure(Cause.fail("offline"), {
+              previousSuccess: Option.some(AsyncResult.success(grant(true))),
+            }),
+          );
+          expect(registry.get(permissions.permissionAtom(env))).toBe(true);
+          yield* permissions.authorize(registry, env);
+          registry.set(sessions(env), AsyncResult.success(grant(false)));
+          expect(registry.get(permissions.permissionAtom(env))).toBe(false);
+          expect((yield* permissions.authorize(registry, env).pipe(Effect.flip)).message).toBe(
+            `This connection requires ${AuthOrchestrationOperateScope}.`,
+          );
+          registry.set(
+            sessions(env),
+            AsyncResult.failure(Cause.fail("offline"), {
+              previousSuccess: Option.some(AsyncResult.success(grant(false))),
+            }),
+          );
+          expect(registry.get(permissions.permissionAtom(env))).toBe(false);
+          expect(
+            (yield* permissions.authorize(registry, env).pipe(Effect.flip)).requiredScope,
+          ).toBe(AuthOrchestrationOperateScope);
+        }),
+      ),
+  );
+  it.effect.each([false, true])(
+    "uses the last grant after a failed refresh (waiting: %s)",
+    (waiting) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const registry = yield* setup;
+          registry.set(
+            sessions(env),
+            AsyncResult.failure(Cause.fail("offline"), {
+              previousSuccess: Option.some(AsyncResult.success(grant(true))),
+              waiting,
+            }),
+          );
+          expect(registry.get(permissions.permissionAtom(env))).toBe(true);
           yield* permissions.authorize(registry, env);
         }),
       ),
+  );
+  it.effect("reports an unavailable session when its initial load times out", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const fiber = yield* permissions
+          .authorize(registry, env)
+          .pipe(Effect.flip, Effect.forkChild);
+        yield* TestClock.adjust(6_000);
+        expect((yield* Fiber.join(fiber)).message).toBe(
+          "Could not verify this connection's permissions. Try again.",
+        );
+        expect(registry.get(permissions.permissionAtom(env))).toBe(false);
+      }),
+    ),
   );
   it("rechecks permission after waiting in a serial command lane", async () => {
     const registry = AtomRegistry.make();
