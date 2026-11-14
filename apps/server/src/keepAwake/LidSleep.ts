@@ -64,14 +64,8 @@ const make = Effect.gen(function* () {
   const recordError = (error: LidSleepError) =>
     SubscriptionRef.update(state, (s) => ({ ...s, error: error.message }));
   const read = host.run("/usr/bin/pmset", ["-g"]).pipe(
-    Effect.flatMap((output) => {
-      const value = /\bSleepDisabled\s+([01])\b/.exec(output)?.[1];
-      return value === undefined
-        ? Effect.fail(
-            new LidSleepError({ operation: "read SleepDisabled", cause: "Missing SleepDisabled" }),
-          )
-        : Effect.succeed(value === "1");
-    }),
+    // macOS lists SleepDisabled only while it is on, so a missing line means off.
+    Effect.map((output) => /\bSleepDisabled\s+1\b/.test(output)),
   );
   const set = (enabled: boolean) =>
     host.run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-a", "disablesleep", enabled ? "1" : "0"]);

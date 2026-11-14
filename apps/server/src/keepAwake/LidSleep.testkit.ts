@@ -14,7 +14,11 @@ export const fixture = Effect.fn("TestLidSleep.fixture")(function* (
   const calls = yield* Ref.make<ReadonlyArray<readonly [string, ReadonlyArray<string>]>>([]);
   const run = Effect.fn("TestLidSleep.run")(function* (file: string, args: ReadonlyArray<string>) {
     yield* Ref.update(calls, (all) => [...all, [file, args] as const]);
-    if (file === "/usr/bin/pmset") return ` SleepDisabled ${+(yield* Ref.get(value))}\n`;
+    // Like macOS, `pmset -g` lists SleepDisabled only while it is on.
+    if (file === "/usr/bin/pmset")
+      return (yield* Ref.get(value))
+        ? "System-wide power settings:\n SleepDisabled\t\t1\nCurrently in use:\n standby 1\n"
+        : "Currently in use:\n standby 1\n";
     if (args.includes("-l"))
       return (yield* Ref.get(allowed))
         ? "(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0"
