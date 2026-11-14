@@ -313,7 +313,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
   const handleMonitorClick = () => {
     closeMobileSidebar();
-    void navigate({ to: "/settings/monitor" });
+    void navigate({ to: "/settings/fork/monitor" });
   };
 
   const handleBackClick = () => {

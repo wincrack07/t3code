@@ -17,7 +17,12 @@ import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
-import { SETTINGS_PICKER_TRIGGER_CLASSNAME, SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  SETTINGS_PICKER_TRIGGER_CLASSNAME,
+  SettingResetButton,
+  SettingsRow,
+  SettingsSection,
+} from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import {
   useScopedSettings,
@@ -37,6 +42,7 @@ export function PromptPolishSettings() {
 
 function PromptPolishEditor({ initial }: { initial: Settings }) {
   const [settings, setSettings] = useState(initial);
+  const dirty = JSON.stringify(settings) !== JSON.stringify(initial);
   const update = useUpdateScopedSettings();
   const writable = useScopedSettingsWriteAllowed();
   const updateRule = (index: number, patch: Partial<Settings["rules"][number]>) =>
@@ -46,30 +52,20 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
     }));
 
   return (
-    <SettingsSection
-      {...searchableSetting("prompt-polish")}
-      headerAction={
-        <Button size="sm" disabled={!writable} onClick={() => update({ promptPolish: settings })}>
-          Save
-        </Button>
-      }
-    >
+    <SettingsSection {...searchableSetting("prompt-polish")}>
       <PolishModelRow
         selection={settings.modelSelection ?? null}
         onChange={(modelSelection) => setSettings({ ...settings, modelSelection })}
       />
       <SettingsRow
-        title="Base prompt"
-        description="Tells the model how to rewrite your draft when you polish it."
-        control={
+        title="Instruction"
+        description="How the model rewrites your draft."
+        resetAction={
           settings.basePrompt !== DEFAULT_PROMPT_POLISH_BASE ? (
-            <Button
-              size="sm"
-              variant="ghost-muted"
+            <SettingResetButton
+              label="polish instruction"
               onClick={() => setSettings({ ...settings, basePrompt: DEFAULT_PROMPT_POLISH_BASE })}
-            >
-              Reset to default
-            </Button>
+            />
           ) : null
         }
       >
@@ -85,17 +81,17 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
       </SettingsRow>
       <SettingsRow
         title="Rules"
-        description="Added after the instruction. Turn one off to skip it without deleting it."
+        description="Added after the instruction. Turn a rule off to skip it."
       >
         {settings.rules.length > 0 ? (
-          <div className="mt-3 min-w-0 max-w-2xl space-y-4 pb-3.5">
+          <div className="mt-3 min-w-0 max-w-2xl space-y-3">
             {settings.rules.map((rule, index) => (
               <div
                 // oxlint-disable-next-line react/no-array-index-key -- Controlled rows have no state tied to their position.
                 key={index}
                 role="group"
                 aria-label={`Rule ${index + 1}`}
-                className="space-y-2 rounded-lg border border-border/60 p-3"
+                className="space-y-2 rounded-lg border border-border p-3"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Switch
@@ -114,7 +110,7 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
                     />
                   </div>
                   <Button
-                    size="icon-micro"
+                    size="icon-sm"
                     variant="ghost-destructive"
                     aria-label={`Remove ${rule.name || `rule ${index + 1}`}`}
                     onClick={() =>
@@ -124,7 +120,7 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
                       })
                     }
                   >
-                    <XIcon className="size-3" />
+                    <XIcon />
                   </Button>
                 </div>
                 <Textarea
@@ -139,10 +135,10 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
             ))}
           </div>
         ) : null}
-        <div className="pb-3.5">
+        <div className="pt-2 pb-2">
           <Button
-            size="sm"
-            variant="outline"
+            size="compact"
+            variant="ghost-muted"
             disabled={settings.rules.length >= MAX_RULES}
             onClick={() =>
               setSettings({
@@ -156,6 +152,25 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
           </Button>
         </div>
       </SettingsRow>
+      {dirty ? (
+        <SettingsRow
+          title="Unsaved changes"
+          control={
+            <>
+              <Button size="sm" variant="outline" onClick={() => setSettings(initial)}>
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                disabled={!writable}
+                onClick={() => update({ promptPolish: settings })}
+              >
+                Save
+              </Button>
+            </>
+          }
+        />
+      ) : null}
     </SettingsSection>
   );
 }
@@ -192,7 +207,7 @@ function PolishModelRow({
       serverScoped
       settingKeys={["promptPolish"]}
       title="Model"
-      description="Same as text generation unless you choose a separate model. Unavailable models fall back to text generation."
+      description="Uses the text generation model unless you turn on a separate one."
       control={
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           {selection ? (
@@ -225,7 +240,7 @@ function PolishModelRow({
               ) : null}
             </>
           ) : (
-            <span className="text-sm text-muted-foreground">Same as text generation</span>
+            <span className="text-sm text-muted-foreground">Text generation model</span>
           )}
           <Switch
             aria-label="Use a separate Polish model"

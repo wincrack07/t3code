@@ -15,12 +15,12 @@ import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
+import * as Fork from "./fork/forkSettings";
 
 export type SettingsPath =
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
-  | "/settings/monitor"
   | "/settings/voice"
   | "/settings/appearance"
   | "/settings/chat"
@@ -32,7 +32,6 @@ export type SettingsPath =
   | "/settings/browser"
   | "/settings/devices"
   | "/settings/scheduled-tasks"
-  | "/settings/pr-reviews"
   | "/settings/source-control"
   | "/settings/worktrees"
   | "/settings/connections"
@@ -41,7 +40,8 @@ export type SettingsPath =
   | "/settings/maintenance"
   | "/settings/labs"
   | "/settings/about"
-  | "/settings/archived";
+  | "/settings/archived"
+  | Fork.ForkSettingsPath;
 
 export type SettingsSearchScope =
   | "environment"
@@ -95,8 +95,8 @@ export interface SettingsSearchAvailability {
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
+  ...Fork.FORK_SETTINGS_SECTION_LABELS,
   "/settings/diagnostics": msg("Diagnostics"),
-  "/settings/monitor": msg("Machine monitor"),
   "/settings/projects": msg("Projects"),
   "/settings/general": msg("General"),
   "/settings/appearance": msg("Appearance"),
@@ -109,7 +109,6 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/browser": msg("Browser"),
   "/settings/devices": msg("Devices"),
   "/settings/scheduled-tasks": msg("Scheduled tasks"),
-  "/settings/pr-reviews": msg("PR reviews"),
   "/settings/source-control": msg("Source control"),
   "/settings/worktrees": msg("Worktrees"),
   "/settings/connections": msg("Environments"),
@@ -149,7 +148,6 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/browser",
       "/settings/devices",
       "/settings/scheduled-tasks",
-      "/settings/pr-reviews",
     ],
   },
   {
@@ -164,16 +162,11 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       ...(isSecretsFeatureEnabled ? (["/settings/secrets"] as const) : []),
     ],
   },
+  Fork.FORK_SETTINGS_NAV_GROUP,
   {
     heading: msg("More"),
     headingHidden: true,
-    paths: [
-      "/settings/monitor",
-      "/settings/maintenance",
-      "/settings/labs",
-      "/settings/about",
-      "/settings/archived",
-    ],
+    paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
   },
 ];
 
@@ -239,24 +232,7 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
   .join(" ");
 
 export const SETTINGS_SEARCH_ITEMS = [
-  {
-    id: "decisions",
-    title: "Decisions",
-    to: "/settings/labs",
-    searchTerms: ["routing custom OpenAI compatible source model"],
-  },
-  {
-    id: "peer-link-mesh",
-    title: "Link my environments",
-    to: "/settings/connections",
-    searchTerms: ["peer mesh link all renew unlink"],
-  },
-  {
-    id: "pr-reviews",
-    title: "PR reviews",
-    to: "/settings/pr-reviews",
-    searchTerms: ["pull request reviewer GitHub identity triggers instructions"],
-  },
+  ...Fork.FORK_SETTINGS_SEARCH_ITEMS,
   {
     id: "finder-integration",
     title: "Finder integration",
@@ -827,42 +803,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
   },
   {
-    id: "prompt-completion-next",
-    title: "Suggest a reply when the input is empty",
-    to: "/settings/chat",
-    scope: "environment",
-    searchTerms: ["prompt suggestions next reply autocomplete ghost text tab"],
-  },
-  {
-    id: "prompt-completion-inline",
-    title: "Complete while typing",
-    to: "/settings/chat",
-    scope: "environment",
-    searchTerms: ["prompt suggestions autocomplete inline completion ghost text tab"],
-  },
-  {
-    id: "prompt-completion-delay",
-    title: "Pause before suggesting",
-    to: "/settings/chat",
-    scope: "environment",
-    searchTerms: ["prompt suggestions autocomplete delay debounce wait"],
-  },
-  {
-    id: "prompt-completion-model",
-    title: "Suggestion model",
-    to: "/settings/chat",
-    scope: "environment",
-    searchTerms: ["prompt suggestions autocomplete model provider cheap fast"],
-  },
-  {
-    id: "saved-prompts",
-    title: "Saved prompts",
-    to: "/settings/chat",
-    searchTerms: ["prompt library templates snippets presets reusable slash menu insert"],
-    environmentOnly: true,
-    scope: "environment-defaults",
-  },
-  {
     id: "send-shortcut",
     title: "Send shortcut",
     to: "/settings/chat",
@@ -890,15 +830,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
     searchTerms: [
       "resume running active interrupted work restart reboot machine crash desktop update automatically",
-    ],
-  },
-  {
-    id: "keep-awake",
-    title: "Keep awake",
-    to: "/settings/maintenance",
-    scope: "environment-defaults",
-    searchTerms: [
-      "sleep inhibit amphetamine caffeine agents duration display lid menu bar tray stats CPU memory disk network",
     ],
   },
   {
@@ -985,12 +916,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["generated thread titles source control content default provider"],
   },
   {
-    id: "prompt-polish",
-    title: "Polish prompt",
-    to: "/settings/threads",
-    searchTerms: ["rewrite composer draft prompt instruction custom rules"],
-  },
-  {
     id: "thread-title-instructions",
     title: "Thread title instructions",
     to: "/settings/threads",
@@ -1043,21 +968,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "telemetry-export",
     scope: "environment",
     searchTerms: ["OTel OTLP telemetry export endpoints logs traces metrics Grafana"],
-  },
-  {
-    id: "machine-monitor",
-    title: "Machine monitor",
-    to: "/settings/monitor",
-    targetId: "machine-monitor",
-    scope: "environment",
-    searchTerms: ["system cpu ram memory disk storage network processes load health"],
-  },
-  {
-    id: "show-system-monitor",
-    title: "Show machine health in the sidebar",
-    to: "/settings/monitor",
-    targetId: "system-monitor",
-    searchTerms: ["system monitor sidebar footer indicator"],
   },
   {
     id: "diagnostics",
@@ -1533,8 +1443,8 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
+  ...Fork.FORK_SETTINGS_CATEGORY_SCOPES,
   "/settings/diagnostics": "environment",
-  "/settings/monitor": "environment",
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/voice": null,
@@ -1553,7 +1463,6 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/access": "connections",
   "/settings/secrets": null,
   "/settings/scheduled-tasks": null,
-  "/settings/pr-reviews": null,
   "/settings/maintenance": null,
   "/settings/labs": null,
   "/settings/about": null,
@@ -1581,6 +1490,8 @@ const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
 
 /** Where an old settings link now lives. Its anchor finds the page its row moved to. */
 export function movedSettingsPath(pathname: string, hash: string): SettingsPath | null {
+  const forkMoved = Fork.forkMovedSettingsPath(pathname, hash);
+  if (forkMoved) return forkMoved;
   if (!SPLIT_SETTINGS_PATHS.has(pathname)) return null;
   const items: readonly SettingsSearchItem[] = SETTINGS_SEARCH_ITEMS;
   const anchored = hash

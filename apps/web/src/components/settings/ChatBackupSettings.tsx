@@ -1,4 +1,3 @@
-import { ChatHubSettings } from "./ChatHubSettings";
 import { ChatImportSettings } from "./ChatImportSettings";
 import { useState } from "react";
 import { Button } from "../ui/button";
@@ -42,9 +41,6 @@ export function ChatBackupSettings() {
         }
       />
       <ChatImportSettings />
-      <div className="px-3 py-3 sm:px-4">
-        <ChatHubSettings />
-      </div>
     </SettingsSection>
   );
 }

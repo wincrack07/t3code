@@ -364,7 +364,7 @@ function SidebarControl({ showSidebar }: { readonly showSidebar: boolean }) {
       if (action === "sidebar.toggle") toggleSidebar();
       if (action === "machine-monitor.open") {
         void window.desktopBridge?.getHostEnvironmentId?.().then((machine) => {
-          if (machine) void router.navigate({ to: "/settings/monitor", search: { machine } });
+          if (machine) void router.navigate({ to: "/settings/fork/monitor", search: { machine } });
         });
       }
     });

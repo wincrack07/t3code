@@ -1,4 +1,3 @@
-import { DecisionsSettingsSection } from "./DecisionsSettingsSection";
 import { useAuth } from "@clerk/react";
 import { Link } from "@tanstack/react-router";
 import { managedCapabilityDenial } from "@t3tools/contracts";
@@ -27,7 +26,6 @@ export function LabsSettingsPanel() {
         <SimlockHostsRow />
         <FastWorktreeCheckoutRow />
       </SettingsSection>
-      <DecisionsSettingsSection />
     </SettingsPageContainer>
   );
 }

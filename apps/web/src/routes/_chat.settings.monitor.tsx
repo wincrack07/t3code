@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { SystemMonitorSettingsPanel } from "../components/systemMonitor/SystemMonitorPage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_chat/settings/monitor")({
-  component: SystemMonitorSettingsPanel,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/fork/monitor", search: true, hash: true, replace: true });
+  },
 });
