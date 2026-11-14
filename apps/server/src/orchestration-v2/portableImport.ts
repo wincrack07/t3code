@@ -7,6 +7,10 @@ import {
   type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+
+import type * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.ts";
 
 export function portableImportRecords(threadId: ThreadId, bundle: T3ThreadExport) {
   const entries = [
@@ -69,3 +73,18 @@ export function portableImportRecords(threadId: ThreadId, bundle: T3ThreadExport
     return { message, item };
   });
 }
+
+export const exportedRepository = Effect.fnUntraced(function* (
+  workspaceRoot: string | undefined,
+  enrichment: Option.Option<ProjectEnrichmentService.ProjectEnrichmentService["Service"]>,
+) {
+  if (workspaceRoot === undefined || Option.isNone(enrichment)) return {};
+  const identity = yield* enrichment.value.readRepositoryIdentity(workspaceRoot);
+  if (identity === null) return {};
+  return {
+    repository: {
+      canonicalKey: identity.canonicalKey,
+      ...(identity.displayName === undefined ? {} : { displayName: identity.displayName }),
+    },
+  };
+});

@@ -1,5 +1,9 @@
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
-import type { T3ThreadExportResult, T3ThreadExport } from "@t3tools/contracts";
+import type {
+  T3ThreadExportResult,
+  T3ThreadExport,
+  T3ThreadImportResult,
+} from "@t3tools/contracts";
 import {
   portableConversation,
   limitThreadExport,
@@ -78,6 +82,8 @@ import { projectTurnItemForDetail } from "./WireProjection.ts";
 import * as LegacyV1ThreadImporter from "./legacy/LegacyV1ThreadImporter.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { ThreadWorktreeRestore } from "../workspace/restoreMissingWorktree.ts";
+import * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.ts";
+import { exportedRepository } from "./portableImport.ts";
 
 export type ThreadManagementSendMode = "auto" | "queue" | "steer" | "restart";
 
@@ -422,7 +428,10 @@ export interface ThreadManagementServiceShape {
     readonly bundle: T3ThreadExport;
     readonly projectId: ProjectId;
     readonly modelSelection: import("@t3tools/contracts").ModelSelection;
-  }) => ReturnType<ThreadManagementServiceShape["dispatch"]>;
+  }) => Effect.Effect<
+    T3ThreadImportResult,
+    Orchestrator.OrchestratorV2Error | ThreadManagementProviderInstanceDisabledError
+  >;
   readonly exportThreadIds: () => Effect.Effect<
     ReadonlyArray<ThreadId>,
     Orchestrator.OrchestratorV2Error
@@ -753,6 +762,10 @@ const make = Effect.gen(function* () {
       project: {
         title: projects[0]?.title ?? "No project",
         workspacePath: projects[0]?.workspaceRoot ?? "",
+        ...(yield* exportedRepository(
+          projects[0]?.workspaceRoot,
+          yield* Effect.serviceOption(ProjectEnrichmentService.ProjectEnrichmentService),
+        )),
       },
       provider: thread.providerInstanceId,
       model: thread.modelSelection.model,
@@ -1747,7 +1760,8 @@ const make = Effect.gen(function* () {
     dispatch,
     importThread: Effect.fn("threadManagement.importThread")(function* (input) {
       const threadId = portableImportThreadId(input.bundle);
-      return yield* dispatch({
+      const existing = yield* orchestrator.getThreadShell(threadId);
+      const result = yield* dispatch({
         type: "thread.create",
         commandId: CommandId.make(`import:${yield* randomUuidV4}`),
         threadId,
@@ -1762,6 +1776,12 @@ const make = Effect.gen(function* () {
         creationSource: "web",
         importedChat: input.bundle,
       });
+      return existing?.historyOrigin === "portable_import"
+        ? {
+            sequence: result.sequence,
+            existing: { projectId: existing.projectId, deleted: existing.deletedAt !== null },
+          }
+        : { sequence: result.sequence };
     }),
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
       function (threadId, cursor, throughEntryId, conversationOnly, workMode) {

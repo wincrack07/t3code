@@ -1,4 +1,4 @@
-import { T3ThreadExport } from "./threadExport.ts";
+import { T3ThreadExport, T3ThreadImportResult } from "./threadExport.ts";
 import { DecisionResult } from "./decisions.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
@@ -4615,7 +4615,7 @@ export const OrchestrationV2RpcSchemas = {
       projectId: ProjectId,
       modelSelection: ModelSelection,
     }),
-    output: OrchestrationV2DispatchCommandResult,
+    output: T3ThreadImportResult,
   },
   dispatchCommand: {
     input: OrchestrationV2Command,

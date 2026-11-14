@@ -98,3 +98,69 @@ export function portableImportThreadId(bundle: Pick<T3ThreadExport, "threadId" |
     `import-${Hex.encode(sha256(new TextEncoder().encode(JSON.stringify([bundle.source.environmentId, bundle.threadId]))))}`,
   );
 }
+
+export interface ImportProjectCandidate {
+  readonly id: string;
+  readonly title: string;
+  readonly workspaceRoot: string;
+  readonly updatedAt: string;
+  readonly repositoryIdentity?: { readonly canonicalKey: string } | null | undefined;
+}
+
+export type ImportProjectRule = "repository" | "path" | "title";
+
+const sameTitle = (a: string, b: string) => {
+  const left = a.trim().toLowerCase();
+  return left !== "" && left === b.trim().toLowerCase();
+};
+
+/** Repository, then workspace path, then title; null means the user's picked destination. */
+export function matchImportProject<P extends ImportProjectCandidate>(
+  source: T3ThreadExport["project"],
+  candidates: ReadonlyArray<P>,
+): { readonly project: P; readonly rule: ImportProjectRule } | null {
+  const key = source.repository?.canonicalKey.trim().toLowerCase();
+  const rules: ReadonlyArray<readonly [ImportProjectRule, (project: P) => boolean]> = [
+    [
+      "repository",
+      (project) => !!key && project.repositoryIdentity?.canonicalKey.trim().toLowerCase() === key,
+    ],
+    [
+      "path",
+      (project) => source.workspacePath !== "" && project.workspaceRoot === source.workspacePath,
+    ],
+    ["title", (project) => sameTitle(source.title, project.title)],
+  ];
+  for (const [rule, matches] of rules) {
+    const found = candidates.filter(matches);
+    if (found.length === 0) continue;
+    const project = found.reduce((best, next) =>
+      (Number(sameTitle(source.title, next.title)) - Number(sameTitle(source.title, best.title)) ||
+        next.updatedAt.localeCompare(best.updatedAt)) > 0
+        ? next
+        : best,
+    );
+    return { project, rule };
+  }
+  return null;
+}
+
+export type ImportPlacement = "imported" | "present" | "move";
+
+/**
+ * Only a chat still sitting in the picked fallback moves: one the user moved elsewhere stays put.
+ */
+export function importPlacement(input: {
+  readonly existing?: { readonly projectId: string; readonly deleted: boolean } | undefined;
+  readonly fallbackProjectId: string;
+  readonly matchedProjectId: string | null;
+}): ImportPlacement {
+  const { existing, fallbackProjectId, matchedProjectId } = input;
+  if (existing === undefined) return "imported";
+  return !existing.deleted &&
+    existing.projectId === fallbackProjectId &&
+    matchedProjectId !== null &&
+    matchedProjectId !== fallbackProjectId
+    ? "move"
+    : "present";
+}

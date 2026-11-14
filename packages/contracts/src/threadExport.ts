@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { NonNegativeInt, ProjectId } from "./baseSchemas.ts";
 
 const Timestamp = Schema.String.check(
   Schema.makeFilter(
@@ -15,7 +16,14 @@ export const T3ThreadExport = Schema.Struct({
   createdAt: Timestamp,
   updatedAt: Timestamp,
   source: Schema.Struct({ environmentId: Metadata, label: Metadata }),
-  project: Schema.Struct({ title: Metadata, workspacePath: Metadata }),
+  project: Schema.Struct({
+    title: Metadata,
+    workspacePath: Metadata,
+    // Paths differ across machines; the repository is what identifies a project. Optional for older files.
+    repository: Schema.optional(
+      Schema.Struct({ canonicalKey: Metadata, displayName: Schema.optional(Metadata) }),
+    ),
+  }),
   provider: Metadata,
   model: Metadata,
   conversation: Schema.Array(
@@ -48,3 +56,10 @@ export const T3ThreadExportResult = Schema.Struct({
   }),
 });
 export type T3ThreadExportResult = typeof T3ThreadExportResult.Type;
+
+export const T3ThreadImportResult = Schema.Struct({
+  sequence: NonNegativeInt,
+  // Set when this chat was imported before; older servers omit it.
+  existing: Schema.optional(Schema.Struct({ projectId: ProjectId, deleted: Schema.Boolean })),
+});
+export type T3ThreadImportResult = typeof T3ThreadImportResult.Type;
