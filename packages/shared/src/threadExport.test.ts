@@ -10,6 +10,7 @@ import {
   safeBackupName,
   limitThreadExport,
   matchImportProject,
+  importBackupFingerprint,
   importPlacement,
   planImportProjects,
 } from "./threadExport.ts";
@@ -288,4 +289,14 @@ it.each([
   expect(
     importPlacement({ existing, fallbackProjectId: "fallback", matchedProjectId: matched }),
   ).toBe(expected);
+});
+
+it("identifies the same backup no matter the file order", () => {
+  const chat = (threadId: string) => ({
+    threadId,
+    source: { environmentId: "mac", label: "Mac" },
+  });
+  const first = importBackupFingerprint([chat("a"), chat("b")]);
+  expect(importBackupFingerprint([chat("b"), chat("a")])).toBe(first);
+  expect(importBackupFingerprint([chat("a")])).not.toBe(first);
 });

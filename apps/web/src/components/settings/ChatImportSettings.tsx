@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
+import { useSyncExternalStore } from "react";
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentId, ModelSelection, ProjectId, T3ThreadExport } from "@t3tools/contracts";
 import { getCloneDestinationPath } from "@t3tools/client-runtime/operations/projects";
@@ -11,18 +12,6 @@ import {
   portableImportThreadId,
 } from "@t3tools/shared/threadExport";
 import { Button } from "../ui/button";
-import { Checkbox } from "../ui/checkbox";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "../ui/dialog";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SettingsRow } from "./settingsLayout";
 import { useProjects, useServerConfigs } from "../../state/entities";
@@ -37,55 +26,90 @@ import { projectEnvironment } from "../../state/projects";
 import { threadEnvironment } from "../../state/threads";
 import { readChatImports } from "../../lib/chatExport";
 import { newProjectId } from "../../lib/utils";
-import { isWindowsAbsolutePath } from "@t3tools/shared/path";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
-import { WorkspaceFolderPicker } from "../WorkspaceFolderPicker";
-
-const NEW_PROJECT = "new";
-interface ImportReview {
-  readonly environmentId: EnvironmentId;
-  readonly bundles: ReadonlyArray<T3ThreadExport>;
-  readonly destinations: Readonly<Record<string, string>>;
-  readonly baseDirectory: string;
-  readonly moveExisting: boolean;
-}
+import { ChatImportWizard } from "./ChatImportWizard";
+import {
+  chatIncluded,
+  discardImportSession,
+  foldersReady,
+  getImportSession,
+  getImportStatus,
+  importChats,
+  importFileLabel,
+  importProgressLabel,
+  markChatsDone,
+  mergeDestinations,
+  NEW_PROJECT,
+  openImportSession,
+  patchImportSession,
+  remainingChats,
+  requestStopImport,
+  resumeImportSession,
+  closeImportSession,
+  savedImportFileLabel,
+  subscribeImportSession,
+  takeStopImport,
+  type ImportDraft,
+} from "./ChatImportSettings.logic";
 
 export function ChatImportSettings() {
   const connected = useConnectedEnvironmentIds();
   const projects = useProjects().filter(
-    (p) => connected.includes(p.environmentId) && !p.archivedAt,
+    (project) => connected.includes(project.environmentId) && !project.archivedAt,
   );
   const configs = useServerConfigs();
   const providers = useEnvironmentProviders();
+  const session = useSyncExternalStore(subscribeImportSession, getImportSession, () => null);
+  const status = useSyncExternalStore(subscribeImportSession, getImportStatus, () => "");
   const [target, setTarget] = useState("");
-  const environmentId = connected.find((id) => id === target) ?? connected[0] ?? null;
-  const [review, setReview] = useState<ImportReview | null>(null);
-  const destinationId = review?.environmentId ?? environmentId;
-  const candidates = projects.filter((p) => p.environmentId === destinationId);
-  const groups = planImportProjects(review?.bundles ?? [], candidates);
+  const [reading, setReading] = useState(false);
+  const environmentId =
+    connected.find((id) => id === (session?.environmentId ?? target)) ?? connected[0] ?? null;
+  const destinationId = session?.environmentId ?? environmentId;
+  const candidates = projects.filter((project) => project.environmentId === destinationId);
+  const groups = planImportProjects(session?.bundles ?? [], candidates);
+  const chats = importChats(session?.bundles ?? []);
   const allowed = useAtomValue(orchestrationEnvironment.importThread.permissionAtom(destinationId));
   const canCreate = useAtomValue(projectEnvironment.create.permissionAtom(destinationId));
   const canMove = useAtomValue(threadEnvironment.moveToProject.permissionAtom(destinationId));
   const runImport = useAtomCommand(orchestrationEnvironment.importThread, { reportFailure: false });
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
   const runMove = useAtomCommand(threadEnvironment.moveToProject, { reportFailure: false });
-  const [status, setStatus] = useState("");
-  const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const createsProjects = groups.some((group) => review?.destinations[group.key] === NEW_PROJECT);
+  const savedLabel = session ? null : savedImportFileLabel();
+  const left = session ? remainingChats(chats, session.draft).length : 0;
+  const rowStatus =
+    session && !session.open
+      ? session.status || `${session.fileLabel} · ${left} chats left. Continue when you want.`
+      : session
+        ? ""
+        : status ||
+          (savedLabel
+            ? `${savedLabel} is saved on this browser. Choose that same backup to continue.`
+            : "");
 
-  const importChats = async (plan: ImportReview) => {
-    const base = plan.baseDirectory.trim();
-    if (
-      createsProjects &&
-      !base.startsWith("/") &&
-      !base.startsWith("~/") &&
-      !isWindowsAbsolutePath(base)
-    ) {
-      throw new Error(
-        "Choose a full folder path on the destination environment, such as ~/Projects.",
-      );
-    }
+  const retarget = (next: EnvironmentId) => {
+    const current = getImportSession();
+    if (!current || current.busy) return;
+    const nextCandidates = projects.filter((project) => project.environmentId === next);
+    patchImportSession({
+      environmentId: next,
+      draft: {
+        ...current.draft,
+        destinations: mergeDestinations(
+          planImportProjects(current.bundles, nextCandidates),
+          current.draft.destinations,
+          new Set(nextCandidates.map((project) => project.id)),
+        ),
+      },
+    });
+  };
+
+  const importSelected = async (plan: {
+    readonly bundles: readonly T3ThreadExport[];
+    readonly environmentId: EnvironmentId;
+    readonly draft: ImportDraft;
+  }) => {
     const config = configs.get(plan.environmentId);
     if (!config) throw new Error("The destination environment is unavailable.");
     const defaultModel =
@@ -97,16 +121,31 @@ export function ChatImportSettings() {
       );
     if (!defaultModel)
       throw new Error("Configure a provider on the destination environment first.");
+    const known = projects.filter((project) => project.environmentId === plan.environmentId);
+    const planGroups = planImportProjects(plan.bundles, known);
+    const refs = importChats(plan.bundles);
+    let draft = plan.draft;
+    if (!foldersReady(draft, planGroups, refs, new Set(known.map((project) => project.id))))
+      throw new Error(
+        "Choose a full folder path on the destination environment, such as ~/Projects.",
+      );
+    const pending = remainingChats(refs, draft);
+    const needed = new Set(pending.map((chat) => chat.projectKey));
     const destinations = new Map<string, { id: ProjectId; model: ModelSelection }>();
-    for (const group of groups) {
-      const chosen = plan.destinations[group.key];
+    for (const group of planGroups) {
+      if (takeStopImport()) throw new Error("Stopped. Your progress is saved.");
+      if (!needed.has(group.key)) continue;
+      const chosen = draft.destinations[group.key];
       if (chosen === NEW_PROJECT) {
-        const workspaceRoot = getCloneDestinationPath(plan.baseDirectory.trim(), group.folderName);
-        const existing = findProjectByPath(candidates, workspaceRoot);
-        if (existing)
-          throw new Error(
-            `${workspaceRoot} is already registered as ${existing.title}. Choose that project explicitly or select another base folder.`,
-          );
+        const workspaceRoot = getCloneDestinationPath(draft.baseDirectory.trim(), group.folderName);
+        const existing = findProjectByPath(known, workspaceRoot);
+        if (existing) {
+          destinations.set(group.key, {
+            id: existing.id,
+            model: existing.defaultModelSelection ?? defaultModel,
+          });
+          continue;
+        }
         const id = newProjectId();
         const result = await createProject({
           environmentId: plan.environmentId,
@@ -119,11 +158,13 @@ export function ChatImportSettings() {
           },
         });
         if (!AsyncResult.isSuccess(result))
-          throw new Error(`Could not add ${workspaceRoot}. No chats were imported.`);
+          throw new Error(
+            `Could not add ${workspaceRoot}. No chats from this attempt were imported.`,
+          );
         destinations.set(group.key, { id, model: defaultModel });
       } else {
-        const project = candidates.find((p) => p.id === chosen);
-        if (!project) throw new Error(`Choose a destination for ${group.source.title}.`);
+        const project = known.find((item) => item.id === chosen);
+        if (!project) throw new Error(`Choose a folder for ${group.source.title}.`);
         destinations.set(group.key, {
           id: project.id,
           model: project.defaultModelSelection ?? defaultModel,
@@ -131,57 +172,74 @@ export function ChatImportSettings() {
       }
     }
     const counts = { imported: 0, present: 0, moved: 0 };
-    const progress = () =>
-      [
-        `Imported ${counts.imported}`,
-        counts.present > 0 && `${counts.present} already present`,
-        counts.moved > 0 && `${counts.moved} moved to their project`,
-      ]
-        .filter(Boolean)
-        .join(" · ");
     for (const bundle of plan.bundles) {
-      const destination = destinations.get(importProjectKey(bundle.project));
-      if (!destination) throw new Error("A project destination is missing.");
+      if (takeStopImport()) throw new Error("Stopped. Your progress is saved.");
+      const id = portableImportThreadId(bundle);
+      const key = importProjectKey(bundle.project);
+      if (draft.doneChats.has(id) || !chatIncluded(draft, key, id)) continue;
+      const destination = destinations.get(key);
+      if (!destination) throw new Error(`Choose a folder for ${bundle.project.title}.`);
       const result = await runImport({
         environmentId: plan.environmentId,
         input: { bundle, projectId: destination.id, modelSelection: destination.model },
       });
-      if (!AsyncResult.isSuccess(result)) throw new Error(`Import stopped. ${progress()} so far.`);
+      if (!AsyncResult.isSuccess(result))
+        throw new Error(`Import stopped. ${importProgressLabel(counts)} so far.`);
       const placement = importPlacement({
         existing: result.value.existing,
         fallbackProjectId: result.value.existing?.projectId ?? destination.id,
-        matchedProjectId: plan.moveExisting ? destination.id : null,
+        matchedProjectId: draft.moveExisting ? destination.id : null,
       });
       if (placement === "imported") counts.imported++;
       else if (placement === "move") {
         const moved = await runMove({
           environmentId: plan.environmentId,
           input: {
-            threadId: result.value.threadId ?? portableImportThreadId(bundle),
+            threadId: result.value.threadId ?? id,
             projectId: destination.id,
           },
         });
         if (!AsyncResult.isSuccess(moved))
-          throw new Error(`Could not move ${bundle.title}. ${progress()} so far.`);
+          throw new Error(`Could not move ${bundle.title}. ${importProgressLabel(counts)} so far.`);
         counts.moved++;
       } else counts.present++;
-      setStatus(`${progress()} of ${plan.bundles.length}`);
+      draft = markChatsDone(draft, [id]);
+      const label = importProgressLabel(counts);
+      if (remainingChats(refs, draft).length === 0) {
+        discardImportSession(label);
+        return;
+      }
+      patchImportSession({
+        draft,
+        status: `${label} of ${pending.length}`,
+      });
     }
-    setStatus(progress());
-    setReview(null);
+    if (takeStopImport()) throw new Error("Stopped. Your progress is saved.");
+    const label = importProgressLabel(counts);
+    patchImportSession({
+      draft,
+      busy: false,
+      open: true,
+      status: `${label}. You can continue later.`,
+    });
   };
 
   return (
     <SettingsRow
       title="Import chats"
-      description="Restore each source project separately. Review destinations before importing; workspace files are not copied."
-      status={status ? <span role="status">{status}</span> : null}
+      description="Choose which chats to restore and the folder for each source project. A backup you leave unfinished stays here until you continue or discard it."
+      status={rowStatus ? <span role="status">{rowStatus}</span> : null}
       control={
         <>
           <Select
             value={environmentId ?? ""}
-            onValueChange={(value) => setTarget(value ?? "")}
-            disabled={busy || connected.length === 0}
+            onValueChange={(value) => {
+              const next = connected.find((id) => id === value);
+              if (!next) return;
+              setTarget(next);
+              retarget(next);
+            }}
+            disabled={reading || session?.busy === true || connected.length === 0}
           >
             <SelectTrigger size="sm" aria-label="Import environment">
               <SelectValue>
@@ -201,11 +259,26 @@ export function ChatImportSettings() {
           <Button
             size="sm"
             variant="outline"
-            disabled={busy || !environmentId || !allowed}
+            disabled={reading || session?.busy === true || !environmentId || !allowed}
             onClick={() => input.current?.click()}
           >
             Import chats…
           </Button>
+          {session && !session.open ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={session.busy}
+              onClick={resumeImportSession}
+            >
+              Continue{left > 0 ? ` (${left})` : ""}
+            </Button>
+          ) : null}
+          {session && !session.busy ? (
+            <Button size="sm" variant="ghost" onClick={() => discardImportSession()}>
+              Discard
+            </Button>
+          ) : null}
           <input
             ref={input}
             type="file"
@@ -214,191 +287,68 @@ export function ChatImportSettings() {
             className="hidden"
             onChange={(event) => {
               const files = event.target.files;
-              if (!files || !environmentId) return;
-              setBusy(true);
-              setStatus("Reading chats…");
+              if (!files || !environmentId || getImportSession()?.busy) return;
+              const names = [...files].map((file) => file.name);
+              const chosenEnvironment = environmentId;
+              setReading(true);
               void readChatImports(files)
                 .then((bundles) => {
-                  const plan = planImportProjects(bundles, candidates);
-                  setReview({
-                    environmentId,
+                  const known = projects.filter(
+                    (project) => project.environmentId === chosenEnvironment,
+                  );
+                  openImportSession({
                     bundles,
-                    moveExisting: false,
+                    fileLabel: importFileLabel(names),
+                    environmentId: chosenEnvironment,
+                    groups: planImportProjects(bundles, known),
+                    knownProjectIds: new Set(known.map((project) => project.id)),
                     baseDirectory:
-                      configs.get(environmentId)?.settings.addProjectBaseDirectory ?? "",
-                    destinations: Object.fromEntries(
-                      plan.map((group) => [group.key, group.project?.id ?? NEW_PROJECT]),
-                    ),
+                      configs.get(chosenEnvironment)?.settings.addProjectBaseDirectory ?? "",
                   });
-                  setStatus("");
                 })
-                .catch(() => setStatus("Could not read these files."))
+                .catch(() => {
+                  const current = getImportSession();
+                  if (current)
+                    patchImportSession({ status: "Could not read these files.", busy: false });
+                  else discardImportSession("Could not read these files.");
+                })
                 .finally(() => {
-                  setBusy(false);
+                  setReading(false);
                   if (input.current) input.current.value = "";
                 });
             }}
           />
-          <Dialog
-            open={review !== null}
-            onOpenChange={(open) => {
-              if (!open && !busy) setReview(null);
-            }}
-          >
-            <DialogPopup className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Import chats</DialogTitle>
-                <DialogDescription>
-                  {review?.bundles.length ?? 0} chats across {groups.length} projects on{" "}
-                  {destinationId
-                    ? (readEnvironment(destinationId)?.label ?? destinationId)
-                    : "this environment"}
-                  . Chat history is restored; repositories and source files are not copied.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogPanel>
-                {createsProjects && review ? (
-                  <div className="mb-4 space-y-2">
-                    <Label htmlFor="chat-import-base-folder">Projects folder</Label>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Input
-                        id="chat-import-base-folder"
-                        value={review.baseDirectory}
-                        placeholder="~/Projects"
-                        disabled={busy}
-                        onChange={(event) =>
-                          setReview(
-                            (current) =>
-                              current && { ...current, baseDirectory: event.target.value },
-                          )
-                        }
-                      />
-                      <WorkspaceFolderPicker
-                        environmentId={review.environmentId}
-                        value={review.baseDirectory}
-                        disabled={busy}
-                        onChange={(baseDirectory) =>
-                          setReview((current) => current && { ...current, baseDirectory })
-                        }
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Each missing project gets a folder inside this directory. Existing folders are
-                      kept.
-                    </p>
-                  </div>
-                ) : null}
-                <div className="divide-y divide-border">
-                  {groups.map((group) => (
-                    <div key={group.key} className="grid min-w-0 gap-3 py-4 sm:grid-cols-2">
-                      <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-medium">
-                          {group.source.title} · {group.count} chats
-                        </p>
-                        <p className="break-all text-xs text-muted-foreground">
-                          {group.source.repository?.canonicalKey ?? group.source.workspacePath}
-                        </p>
-                      </div>
-                      <div className="min-w-0 space-y-2">
-                        <Select
-                          value={review?.destinations[group.key] ?? NEW_PROJECT}
-                          disabled={busy}
-                          onValueChange={(value) => {
-                            if (value)
-                              setReview(
-                                (current) =>
-                                  current && {
-                                    ...current,
-                                    destinations: { ...current.destinations, [group.key]: value },
-                                  },
-                              );
-                          }}
-                        >
-                          <SelectTrigger
-                            size="sm"
-                            aria-label={`Destination for ${group.source.title}`}
-                          >
-                            <SelectValue>
-                              {review?.destinations[group.key] === NEW_PROJECT
-                                ? "Separate project folder"
-                                : (candidates.find((p) => p.id === review?.destinations[group.key])
-                                    ?.title ?? "Choose a project")}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectItem value={NEW_PROJECT}>Separate project folder</SelectItem>
-                            {candidates.map((project) => (
-                              <SelectItem key={project.id} value={project.id}>
-                                {project.title}
-                              </SelectItem>
-                            ))}
-                          </SelectPopup>
-                        </Select>
-                        {review?.destinations[group.key] === NEW_PROJECT ? (
-                          <p className="break-all text-xs text-muted-foreground">
-                            {review.baseDirectory.trim()
-                              ? getCloneDestinationPath(
-                                  review.baseDirectory.trim(),
-                                  group.folderName,
-                                )
-                              : group.folderName}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <label className="mt-4 flex items-start gap-2 text-sm">
-                  <Checkbox
-                    checked={review?.moveExisting ?? false}
-                    disabled={busy || !canMove}
-                    onCheckedChange={(checked) =>
-                      setReview(
-                        (current) => current && { ...current, moveExisting: Boolean(checked) },
-                      )
-                    }
-                  />
-                  Move existing imported chats to these projects
-                </label>
-                {createsProjects && !canCreate ? (
-                  <p role="alert" className="mt-3 text-sm text-muted-foreground">
-                    This connection cannot create projects. Choose existing destinations or use a
-                    connection with project permissions.
-                  </p>
-                ) : null}
-                {status ? (
-                  <p role="status" className="mt-3 text-sm text-muted-foreground">
-                    {status}
-                  </p>
-                ) : null}
-              </DialogPanel>
-              <DialogFooter variant="bare">
-                <Button variant="outline" disabled={busy} onClick={() => setReview(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  disabled={
-                    busy ||
-                    !allowed ||
-                    (createsProjects && (!canCreate || !review?.baseDirectory.trim())) ||
-                    (review?.moveExisting && !canMove)
-                  }
-                  onClick={() => {
-                    if (!review) return;
-                    setBusy(true);
-                    setStatus("Importing chats…");
-                    void importChats(review)
-                      .catch((error: unknown) =>
-                        setStatus(error instanceof Error ? error.message : "Import failed."),
-                      )
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  {busy ? "Importing…" : "Import chats"}
-                </Button>
-              </DialogFooter>
-            </DialogPopup>
-          </Dialog>
+          {session?.open ? (
+            <ChatImportWizard
+              key={session.fingerprint}
+              session={session}
+              groups={groups}
+              chats={chats}
+              candidates={candidates}
+              canCreate={canCreate}
+              canMove={canMove}
+              allowed={allowed}
+              onDraft={(draft) => patchImportSession({ draft, status: "" })}
+              onClose={closeImportSession}
+              onStop={requestStopImport}
+              onImport={() => {
+                const current = getImportSession();
+                if (!current || current.busy) return;
+                // Let the click finish before the button becomes Stop.
+                void Promise.resolve()
+                  .then(() => {
+                    patchImportSession({ busy: true, status: "Importing chats…", open: true });
+                    return importSelected(getImportSession() ?? current);
+                  })
+                  .catch((error: unknown) => {
+                    patchImportSession({
+                      busy: false,
+                      status: error instanceof Error ? error.message : "Import failed.",
+                    });
+                  });
+              }}
+            />
+          ) : null}
         </>
       }
     />

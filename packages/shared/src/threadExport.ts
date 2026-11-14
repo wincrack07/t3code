@@ -99,6 +99,14 @@ export function portableImportThreadId(bundle: Pick<T3ThreadExport, "threadId" |
   );
 }
 
+/** Stable identity for a backup, so a later visit can restore its choices. */
+export function importBackupFingerprint(
+  bundles: readonly Pick<T3ThreadExport, "threadId" | "source">[],
+): string {
+  const ids = bundles.map((bundle) => `${bundle.source.environmentId}\0${bundle.threadId}`).sort();
+  return Hex.encode(sha256(new TextEncoder().encode(ids.join("\n"))));
+}
+
 export interface ImportProjectCandidate {
   readonly id: string;
   readonly title: string;

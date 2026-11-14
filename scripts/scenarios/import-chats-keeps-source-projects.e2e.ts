@@ -39,11 +39,14 @@ test(
     await app.screenshot("import-projects");
     const review = screen.getByRole("dialog", "Import chats");
     await expect(review).toBeVisible();
+    await expect(review.getByText("Source project · /original/ERP · 1 chat")).toBeVisible();
+    await review.getByRole("button", "Next", { exact: true }).tap();
     await screen.getByLabel("Projects folder").fill(`${temporary}/restored`);
     await expect(screen.getByText(`${temporary}/restored/ERP`, { exact: true })).toBeVisible();
     await expect(screen.getByText(`${temporary}/restored/Website`, { exact: true })).toBeVisible();
+    await review.getByRole("button", "Next", { exact: true }).tap();
     await review.getByRole("button", "Import chats", { exact: true }).tap();
-    await expect(screen.getByText("Imported 2", { exact: true })).toBeVisible();
+    await expect(screen.getByText("Imported 2", { exact: true })).toBeVisible({ timeout: 60_000 });
     await app.screenshot("import-complete");
   },
 );
