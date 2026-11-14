@@ -1,7 +1,7 @@
 import { parse } from "yaml";
 import { OrchestrationV2ThreadTranscript } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import * as DateTime from "effect/DateTime";
 import {
   portableConversation,
@@ -9,6 +9,8 @@ import {
   threadExportPath,
   safeBackupName,
   limitThreadExport,
+  matchImportProject,
+  importPlacement,
 } from "./threadExport.ts";
 
 const decodeTranscript = Schema.decodeUnknownSync(
@@ -111,4 +113,129 @@ it("exports messages and plans without tool payloads or attachment bytes", () =>
   expect(new TextEncoder().encode(JSON.stringify(limited)).length).toBeLessThan(10_000_000);
   expect(limited.conversation[0]?.text).toContain("omitted");
   expect(limited.conversation.at(-1)?.text).toBe("Hello\nworld");
+});
+
+describe("matchImportProject", () => {
+  const erpKey = "github.com/xyz-solutions-tech/xyz-erp";
+  const project = (
+    id: string,
+    title: string,
+    workspaceRoot: string,
+    canonicalKey: string | null,
+    updatedAt = "2026-01-01T00:00:00Z",
+  ) => ({
+    id,
+    title,
+    workspaceRoot,
+    updatedAt,
+    repositoryIdentity: canonicalKey === null ? null : { canonicalKey },
+  });
+  const linux = [
+    project("erp", "xyz-erp", "/home/t3/code/xyz-erp", erpKey),
+    project("web", "Website", "/home/t3/code/site", "github.com/xyz/site"),
+    project("scratch", "No project", "/home/t3/.t3/scratch", null),
+  ];
+  it.each([
+    {
+      name: "Mac path, same repository",
+      source: {
+        title: "XYZ ERP",
+        workspacePath: "/Users/julio/xyz-erp",
+        repository: { canonicalKey: erpKey },
+      },
+      candidates: linux,
+      expected: ["erp", "repository"],
+    },
+    {
+      name: "same workspace path without repository",
+      source: { title: "Renamed", workspacePath: "/home/t3/code/site" },
+      candidates: linux,
+      expected: ["web", "path"],
+    },
+    {
+      name: "old export without repository falls back to title",
+      source: { title: "  website ", workspacePath: "/Users/julio/site" },
+      candidates: linux,
+      expected: ["web", "title"],
+    },
+    {
+      name: "no-project chats go to the scratch project by title",
+      source: { title: "No project", workspacePath: "" },
+      candidates: linux,
+      expected: ["scratch", "title"],
+    },
+    {
+      name: "nothing matches",
+      source: {
+        title: "Unknown",
+        workspacePath: "/Users/julio/unknown",
+        repository: { canonicalKey: "github.com/other/repo" },
+      },
+      candidates: linux,
+      expected: null,
+    },
+    {
+      name: "two repository matches prefer the matching title",
+      source: {
+        title: "xyz-erp",
+        workspacePath: "/Users/j/erp",
+        repository: { canonicalKey: erpKey },
+      },
+      candidates: [
+        project("worktree", "erp-hotfix", "/home/t3/wt/erp", erpKey, "2026-06-01T00:00:00Z"),
+        project("erp", "xyz-erp", "/home/t3/code/xyz-erp", erpKey),
+      ],
+      expected: ["erp", "repository"],
+    },
+    {
+      name: "two repository matches without a title match prefer the most recent",
+      source: { title: "ERP", workspacePath: "/Users/j/erp", repository: { canonicalKey: erpKey } },
+      candidates: [
+        project("old", "erp-a", "/home/t3/a", erpKey, "2026-01-01T00:00:00Z"),
+        project("new", "erp-b", "/home/t3/b", erpKey, "2026-06-01T00:00:00Z"),
+      ],
+      expected: ["new", "repository"],
+    },
+  ])("$name", ({ source, candidates, expected }) => {
+    const match = matchImportProject(source, candidates);
+    expect(match === null ? null : [match.project.id, match.rule]).toEqual(expected);
+  });
+});
+
+it.each([
+  { name: "new chat", existing: undefined, matched: "erp", expected: "imported" },
+  {
+    name: "misplaced in fallback",
+    existing: { projectId: "fallback", deleted: false },
+    matched: "erp",
+    expected: "move",
+  },
+  {
+    name: "moved elsewhere by the user",
+    existing: { projectId: "web", deleted: false },
+    matched: "erp",
+    expected: "present",
+  },
+  {
+    name: "already in its project",
+    existing: { projectId: "erp", deleted: false },
+    matched: "erp",
+    expected: "present",
+  },
+  {
+    name: "no better project",
+    existing: { projectId: "fallback", deleted: false },
+    matched: null,
+    expected: "present",
+  },
+  {
+    name: "deleted import",
+    existing: { projectId: "fallback", deleted: true },
+    matched: "erp",
+    expected: "present",
+  },
+] as const)("importPlacement: $name", ({ existing, matched, expected }) => {
+  expect(
+    importPlacement({ existing, fallbackProjectId: "fallback", matchedProjectId: matched }),
+  ).toBe(expected);
 });

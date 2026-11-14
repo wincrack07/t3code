@@ -2385,6 +2385,12 @@ it.effect("imports portable history once and prepares its continuation handoff",
     yield* orchestrator.dispatch({ ...command, commandId: CommandId.make("portable-again") });
     const snapshot = yield* orchestrator.getThreadSnapshot(threadId);
     assert.equal(snapshot.projection.thread.historyOrigin, "portable_import");
+    // Re-imports read this shell to report where the earlier import sits.
+    const shell = yield* orchestrator.getThreadShell(threadId);
+    assert.deepEqual(
+      [shell?.historyOrigin, shell?.projectId],
+      ["portable_import", command.projectId],
+    );
     assert.equal(snapshot.projection.messages.length, 3);
     assert.equal(snapshot.projection.messages[1]?.text, "Remember the blue door");
     assert.isTrue(
