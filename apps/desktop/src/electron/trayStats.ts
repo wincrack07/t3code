@@ -1,21 +1,20 @@
 import { formatMachineBytes } from "@t3tools/client-runtime/state/machine-monitor";
 import type { MachineSample, TrayStatsSettings } from "@t3tools/contracts";
 
-function number(value: number | null, width: number, decimals = 0, maximum = 100) {
-  return (
-    value === null || !Number.isFinite(value)
-      ? "n/a"
-      : Math.min(maximum, Math.max(0, value)).toFixed(decimals)
-  ).padStart(width, "\u2007");
+function number(value: number | null, decimals = 0, maximum = 100) {
+  return value === null || !Number.isFinite(value)
+    ? "n/a"
+    : Math.min(maximum, Math.max(0, value)).toFixed(decimals);
 }
 
+// macOS draws padding spaces wider than digits in the menu bar, so rates keep four real
+// characters below 100 MB/s instead of being padded to a fixed width.
 export function trayRate(bytes: number | null) {
-  if (bytes === null || !Number.isFinite(bytes)) return "\u2007n/a";
+  if (bytes === null || !Number.isFinite(bytes)) return "n/a";
   const mb = Math.max(0, bytes) / 1_000_000;
-  if (mb >= 999.5) return "999+";
-  const decimal = mb.toFixed(mb < 1 ? 2 : 1);
-  // A punctuation space preserves the decimal point's width when rates become integers.
-  return Number(decimal) >= 100 ? `${mb.toFixed(0)}\u2008` : decimal.padStart(4, "\u2007");
+  if (Number(mb.toFixed(2)) < 10) return mb.toFixed(2);
+  if (Number(mb.toFixed(1)) < 100) return mb.toFixed(1);
+  return mb >= 999.5 ? "999+" : mb.toFixed(0);
 }
 
 function percent(used: number | null, total: number | null) {
@@ -28,12 +27,12 @@ export function trayStatsTitle(settings: TrayStatsSettings, sample?: MachineSamp
     settings.network
       ? `↓${trayRate(sample?.networkDown ?? null)} ↑${trayRate(sample?.networkUp ?? null)} MB/s`
       : null,
-    settings.cpu ? `CPU ${number(sample?.cpu ?? null, 3)}%` : null,
+    settings.cpu ? `CPU ${number(sample?.cpu ?? null)}%` : null,
     settings.memory
-      ? `RAM ${number(sample ? percent(sample.memoryUsed, sample.memoryTotal) : null, 3)}%`
+      ? `RAM ${number(sample ? percent(sample.memoryUsed, sample.memoryTotal) : null)}%`
       : null,
     settings.disk
-      ? `Disk ${number(sample ? percent(sample.diskFree, sample.diskTotal) : null, 3)}% free`
+      ? `Disk ${number(sample ? percent(sample.diskFree, sample.diskTotal) : null)}% free`
       : null,
   ]
     .filter((part) => part !== null)

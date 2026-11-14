@@ -2,44 +2,39 @@ import { expect, it } from "@effect/vitest";
 import { DEFAULT_TRAY_STATS, type MachineSample } from "@t3tools/contracts";
 import { changedTitle, trayRate, trayStatsTitle, trayStatsRows } from "./trayStats.ts";
 
-it("formats decimal megabytes, thresholds, rounding and bounded fixed width", () => {
+it("formats rates with four real characters below 100 MB/s and no padding", () => {
   expect(
-    [null, 0, 23000, 99999, 100000, 999000, 1e6, 12.45e6, 99.95e6, 100e6, 999e6, 1e20].map(
+    [null, 0, 23000, 99999, 100000, 999000, 1e6, 9.996e6, 12.45e6, 99.95e6, 100e6, 999e6, 1e20].map(
       trayRate,
     ),
   ).toEqual([
-    "\u2007n/a",
+    "n/a",
     "0.00",
     "0.02",
     "0.10",
     "0.10",
     "1.00",
-    "\u20071.0",
+    "1.00",
+    "10.0",
     "12.4",
-    "100\u2008",
-    "100\u2008",
-    "999\u2008",
+    "100",
+    "100",
+    "999",
     "999+",
   ]);
-  expect(trayRate(12560000)).toBe("12.6");
   expect(trayRate(-100)).toBe("0.00");
-  expect(trayRate(Infinity)).toBe("\u2007n/a");
-  for (const value of [0, 0.01, 0.77, 0.999, 1, 9.9, 12.4, 99.9, 99.95, 100, 999]) {
-    const rate = trayRate(value * 1e6);
-    expect(rate.match(/[0-9\u2007]/g)).toHaveLength(3);
-    expect(rate.match(/[.\u2008]/g)).toHaveLength(1);
-    expect(Array.from(rate)).toHaveLength(4);
-    expect(rate).not.toContain(" ");
+  for (const value of [0, 0.01, 0.77, 0.999, 1, 9.9, 9.999, 12.4, 99.9]) {
+    expect(trayRate(value * 1e6)).toMatch(/^[0-9.]{4}$/);
   }
 });
 
 it("composes only enabled fields and restores the legacy title when all are off", () => {
-  expect(trayStatsTitle(DEFAULT_TRAY_STATS)).toBe("↓\u2007n/a ↑\u2007n/a MB/s · CPU n/a%");
+  expect(trayStatsTitle(DEFAULT_TRAY_STATS)).toBe("↓n/a ↑n/a MB/s · CPU n/a%");
   expect(trayStatsTitle({ ...DEFAULT_TRAY_STATS, enabled: false })).toBe("");
   expect(trayStatsTitle({ ...DEFAULT_TRAY_STATS, network: false })).toBe("CPU n/a%");
   expect(trayStatsTitle({ ...DEFAULT_TRAY_STATS, network: false, cpu: false })).toBe("");
   expect(trayStatsTitle({ ...DEFAULT_TRAY_STATS, memory: true, disk: true })).toBe(
-    "↓\u2007n/a ↑\u2007n/a MB/s · CPU n/a% · RAM n/a% · Disk n/a% free",
+    "↓n/a ↑n/a MB/s · CPU n/a% · RAM n/a% · Disk n/a% free",
   );
 });
 
@@ -73,17 +68,9 @@ it("rounds percentages and presents complete menu readings", () => {
     uptime: 1,
   };
   expect(trayStatsTitle({ ...DEFAULT_TRAY_STATS, memory: true, disk: true }, sample)).toBe(
-    "↓12.4 ↑0.80 MB/s · CPU \u200724% · RAM \u200781% · Disk \u200725% free",
+    "↓12.4 ↑0.80 MB/s · CPU 24% · RAM 81% · Disk 25% free",
   );
-  expect(trayStatsTitle(DEFAULT_TRAY_STATS, { ...sample, cpu: 0 }).length).toBe(
-    trayStatsTitle(DEFAULT_TRAY_STATS, { ...sample, cpu: 100, networkDown: 1e30 }).length,
-  );
-  for (const cpu of [0, 9, 10, 29, 99, 100]) {
-    const title = trayStatsTitle(DEFAULT_TRAY_STATS, { ...sample, cpu });
-    const digits = /CPU ([0-9\u2007]+)%/.exec(title)?.[1];
-    expect(digits).toHaveLength(3);
-    expect(digits).not.toContain(" ");
-  }
+  expect(trayStatsTitle(DEFAULT_TRAY_STATS, sample)).not.toMatch(/[\u2007\u2008]/);
   expect(trayStatsRows({ ...sample, networkDown: 23_000, networkUp: 1.4e6 }).at(-1)).toBe(
     "Network: ↓ 23 KB/s / ↑ 1.4 MB/s",
   );
