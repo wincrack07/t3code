@@ -1,3 +1,4 @@
+import { FORK_SETTINGS_DEVICE_ONLY_PATHS } from "./fork/forkSettings";
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 import { fileBasename } from "@t3tools/shared/path";
 import { useLocation } from "@tanstack/react-router";
@@ -57,6 +58,7 @@ export const SETTINGS_DEVICE_ONLY_PATHS: ReadonlySet<string> = new Set([
   // Access picks its environment on the page itself.
   "/settings/access",
   "/settings/about",
+  ...FORK_SETTINGS_DEVICE_ONLY_PATHS,
 ]);
 
 interface SettingsScopeMenuProps {

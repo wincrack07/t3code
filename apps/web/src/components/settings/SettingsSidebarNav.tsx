@@ -10,7 +10,6 @@ import {
 import {
   ArchiveIcon,
   FlaskConicalIcon,
-  GaugeIcon,
   BotIcon,
   createLucideIcon,
   CalendarClockIcon,
@@ -34,7 +33,7 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react";
-import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
+import { FORK_SETTINGS_SECTION_ICONS } from "./fork/forkSettingsIcons";
 import { resolveEventKeys } from "@t3tools/shared/keybindings";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { T, useGT, useMessages } from "gt-react";
@@ -104,17 +103,16 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/browser": GlobeIcon,
   "/settings/devices": SmartphoneIcon,
   "/settings/scheduled-tasks": CalendarClockIcon,
-  "/settings/pr-reviews": PullRequestGlyph.pullRequest,
   "/settings/source-control": GitBranchIcon,
   "/settings/worktrees": FolderTreeIcon,
   "/settings/connections": ServerIcon,
   "/settings/access": ShieldCheckIcon,
   "/settings/secrets": KeyRoundIcon,
   "/settings/maintenance": WrenchIcon,
-  "/settings/monitor": GaugeIcon,
   "/settings/labs": FlaskConicalIcon,
   "/settings/about": InfoIcon,
   "/settings/archived": ArchiveIcon,
+  ...FORK_SETTINGS_SECTION_ICONS,
 };
 
 // Detail pages without a nav entry highlight the page that links to them.

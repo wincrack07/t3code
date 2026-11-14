@@ -1943,7 +1943,7 @@ function OpenCommandPaletteDialog(props: {
     searchTerms: ["cpu", "ram", "memory", "network", "storage", "processes", "monitor"],
     icon: <GaugeIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
-      await navigate({ to: "/settings/monitor" });
+      await navigate({ to: "/settings/fork/monitor" });
     },
   });
 

@@ -1,9 +1,5 @@
-import { ChatBackupSettings } from "./ChatBackupSettings";
-import { MachineCleanupSettings } from "./MachineCleanupSettings";
 import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
 import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
-import { PromptPolishSettings } from "./PromptPolishSettings";
-import { KeepAwakeControl } from "../KeepAwakeControl";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -72,7 +68,6 @@ import { scopedIdleCompaction } from "./scopedSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
-import { SavedPromptsRow } from "./SavedPromptsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
@@ -117,10 +112,8 @@ import {
   SettingResetButton,
   SettingsPageContainer,
   SettingsRow,
-  SettingsSearchTarget,
   SettingsSection,
 } from "./settingsLayout";
-import { PromptSuggestionsSettings } from "./PromptSuggestionsSettings";
 import { searchableSetting, type SettingsSearchItemId } from "./settingsSearch";
 import { nativeLanguageName, SYSTEM_LANGUAGE } from "@t3tools/client-runtime/locales";
 import { SUPPORTED_LOCALES } from "../../i18n/locales";
@@ -823,7 +816,6 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <ChatBackupSettings />
       <SettingsSection id="notifications" title={gt("Notifications")}>
         <NotificationSettings />
         <SettingsRow
@@ -1187,7 +1179,6 @@ export function ChatSettingsPanel() {
   ] as const;
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
-  const { scope } = useSettingsScope();
 
   return (
     <SettingsPageContainer>
@@ -1292,14 +1283,6 @@ export function ChatSettingsPanel() {
           />
         </AdvancedSettings>
       </SettingsSection>
-
-      {scope.kind === "project" || scope.kind === "checkout" ? null : (
-        <SettingsSection id="saved-prompts-section" title="Saved prompts">
-          <SavedPromptsRow />
-        </SettingsSection>
-      )}
-
-      {scope.kind === "project" || scope.kind === "checkout" ? null : <PromptSuggestionsSettings />}
 
       <SettingsSection id="follow-ups" title="Follow-ups">
         <SettingsRow
@@ -2181,7 +2164,6 @@ export function ThreadsSettingsPanel() {
           />
         </AdvancedSettings>
       </SettingsSection>
-      {!isProjectScope && <PromptPolishSettings />}
     </SettingsPageContainer>
   );
 }
@@ -2267,7 +2249,6 @@ export function MaintenanceSettingsPanel() {
 
       <SettingsSection id="background" title="Background activity">
         <BackgroundActivitySettingsRow />
-        <KeepAwakeSettings />
         <SettingsRow
           serverScoped
           settingKeys={["keepAwakeWhileAgentsWork"]}
@@ -2300,7 +2281,6 @@ export function MaintenanceSettingsPanel() {
       </SettingsSection>
 
       <StorageCleanupSections />
-      <MachineCleanupSettings />
 
       <SettingsSection id="diagnostics-section" title="Diagnostics">
         <SettingsRow
@@ -2412,20 +2392,5 @@ export function AboutSettingsPanel() {
         />
       </SettingsSection>
     </SettingsPageContainer>
-  );
-}
-
-function KeepAwakeSettings() {
-  const { environment } = useSettingsScope();
-  return environment ? (
-    // KeepAwakeControl renders its own title, so this takes a row's padding instead of a SettingsRow.
-    <SettingsSearchTarget {...searchableSetting("keep-awake")} className="px-3 py-3 sm:px-4">
-      <KeepAwakeControl environmentId={environment.environmentId} settings />
-    </SettingsSearchTarget>
-  ) : (
-    <SettingsRow
-      {...searchableSetting("keep-awake")}
-      description="Select one environment to change its keep awake defaults."
-    />
   );
 }

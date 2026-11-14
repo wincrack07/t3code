@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { PrReviewsSettings } from "../components/settings/PrReviewsSettings";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_chat/settings/pr-reviews")({
-  component: PrReviewsSettings,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/fork/pr-reviews", search: true, hash: true, replace: true });
+  },
 });
