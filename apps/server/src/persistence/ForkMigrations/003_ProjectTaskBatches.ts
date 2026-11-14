@@ -5,5 +5,10 @@ import { addColumnIfMissing } from "./schema.ts";
 
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  yield* addColumnIfMissing(sql, "projection_projects", "task_batches_json", "TEXT NOT NULL DEFAULT '[]'");
+  yield* addColumnIfMissing(
+    sql,
+    "projection_projects",
+    "task_batches_json",
+    "TEXT NOT NULL DEFAULT '[]'",
+  );
 });

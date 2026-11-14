@@ -8,7 +8,9 @@ export const addColumnIfMissing = Effect.fn("ForkMigrations.addColumnIfMissing")
   column: string,
   definition: string,
 ) {
-  const columns = yield* sql<{ readonly name: string }>`SELECT name FROM pragma_table_info(${table})`;
+  const columns = yield* sql<{
+    readonly name: string;
+  }>`SELECT name FROM pragma_table_info(${table})`;
   if (columns.some((row) => row.name === column)) return false;
   yield* sql.unsafe(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   return true;

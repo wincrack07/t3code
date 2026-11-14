@@ -5,7 +5,8 @@ import {
   Maximize2Icon,
   Minimize2Icon,
 } from "lucide-react";
-import { memo, type ReactNode, useCallback, useLayoutEffect, useRef } from "react";
+import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
+import { useStableCallback } from "~/hooks/useStableCallback";
 
 import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
@@ -215,10 +216,10 @@ export function WorkspaceTitlebarControls(props: {
 }) {
   const { rightPanelOpen, maximized } = props;
   const controlsRef = useRef<HTMLDivElement | null>(null);
-  const setControlsRef = useCallback((node: HTMLDivElement | null) => {
+  const setControlsRef = useStableCallback((node: HTMLDivElement | null) => {
     controlsRef.current = node;
     return reserveTitlebarControls(node);
-  }, []);
+  });
   const previous = useRef({ rightPanelOpen, maximized });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the toggle's slide before the commit that swapped it in paints; the animation is cancelled on change or unmount.
   useLayoutEffect(() => {

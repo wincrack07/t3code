@@ -60,7 +60,7 @@ const legacyRowsInUpstreamLedger = Effect.fn("ForkMigrations.legacyRows")(functi
 
 /** Moves fork rows that older fork builds wrote into effect_sql_migrations to the fork ledger, so
  * upstream migrations with those ids run and an upstream build accepts the database. */
-export const reclaimLegacyForkMigrations = Effect.fn("ForkMigrations.reclaimLegacy")(function* () {
+const reclaimLegacyForkMigrations = Effect.fn("ForkMigrations.reclaimLegacy")(function* () {
   const legacy = yield* legacyRowsInUpstreamLedger();
   if (legacy.length === 0) return [];
   const sql = yield* SqlClient.SqlClient;
@@ -78,7 +78,9 @@ export const reclaimLegacyForkMigrations = Effect.fn("ForkMigrations.reclaimLega
     ),
   );
   yield* Effect.log("Moved fork migrations out of the upstream migration history").pipe(
-    Effect.annotateLogs({ migrations: legacy.map(({ upstreamId, name }) => `${upstreamId}_${name}`) }),
+    Effect.annotateLogs({
+      migrations: legacy.map(({ upstreamId, name }) => `${upstreamId}_${name}`),
+    }),
   );
   return legacy.map(({ forkId, name }) => [forkId, name] as const);
 });
@@ -104,7 +106,9 @@ export const runAllMigrations = Effect.fn("ForkMigrations.runAll")(function* (
   if (options.toMigrationInclusive !== undefined) return upstream;
   const fork = yield* run({
     loader: Migrator.fromRecord(
-      Object.fromEntries(forkMigrationEntries.map(([id, name, migration]) => [`${id}_${name}`, migration])),
+      Object.fromEntries(
+        forkMigrationEntries.map(([id, name, migration]) => [`${id}_${name}`, migration]),
+      ),
     ),
     table: FORK_MIGRATIONS_TABLE,
   });

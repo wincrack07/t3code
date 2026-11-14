@@ -1,4 +1,4 @@
-import { LoaderCircleIcon, WandSparklesIcon } from "lucide-react";
+import { LoaderCircleIcon, WandIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -24,7 +24,7 @@ export function ComposerPolishButton(props: {
             onPointerDown={(event) => event.preventDefault()}
             onClick={props.onPolish}
           >
-            {props.running ? <LoaderCircleIcon className="animate-spin" /> : <WandSparklesIcon />}
+            {props.running ? <LoaderCircleIcon className="animate-spin" /> : <WandIcon />}
           </Button>
         }
       />
