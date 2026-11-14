@@ -311,7 +311,9 @@ function RepositoryRow({
           </div>
           <Select
             value={repo.projectId}
-            onValueChange={(projectId) => projectId && onChange({ projectId: projectId as ProjectId })}
+            onValueChange={(projectId) =>
+              projectId && onChange({ projectId: projectId as ProjectId })
+            }
           >
             <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Project">
               <SelectValue />
@@ -769,7 +771,11 @@ export function PrReviewsSettings() {
                       })
                     }
                   >
-                    <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Author provider">
+                    <SelectTrigger
+                      size="sm"
+                      className="w-full sm:w-40"
+                      aria-label="Author provider"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectPopup alignItemWithTrigger={false}>
@@ -867,7 +873,10 @@ export function PrReviewsSettings() {
               }
             />
             {state.history.length === 0 ? (
-              <SettingsRow title="No reviews yet" description="Reviews this environment runs show up here." />
+              <SettingsRow
+                title="No reviews yet"
+                description="Reviews this environment runs show up here."
+              />
             ) : null}
             {state.history.map((record) => (
               <HistoryRow

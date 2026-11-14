@@ -26,7 +26,10 @@ export function ForkMachineSettings() {
           />
         </SettingsSection>
       )}
-      <SettingsSearchTarget {...searchableSetting("machine-cleanup")} className="flex flex-col gap-8">
+      <SettingsSearchTarget
+        {...searchableSetting("machine-cleanup")}
+        className="flex flex-col gap-8"
+      >
         <MachineCleanupSettings />
       </SettingsSearchTarget>
     </SettingsPageContainer>
@@ -39,7 +42,10 @@ function KeepAwakeSections({ environmentId }: { environmentId: EnvironmentId }) 
     <>
       <SettingsSection {...searchableSetting("keep-awake")}>
         {!status ? (
-          <SettingsRow title={error ? "Keep awake is unavailable" : "Connecting…"} description={error} />
+          <SettingsRow
+            title={error ? "Keep awake is unavailable" : "Connecting…"}
+            description={error}
+          />
         ) : !status.supported ? (
           <SettingsRow
             title="Not supported"

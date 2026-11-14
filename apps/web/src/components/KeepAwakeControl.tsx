@@ -165,7 +165,8 @@ export function KeepAwakeForm({
     status.active || status.mode === "agents" ? status.mode : "off";
   const mode = pending ?? running;
   const options = status.options;
-  const updateOptions = (patch: Partial<typeof options>) => send({ options: { ...options, ...patch } });
+  const updateOptions = (patch: Partial<typeof options>) =>
+    send({ options: { ...options, ...patch } });
   const choose = (value: KeepAwakeSession["mode"]) => {
     setUntilError(false);
     if (value === "duration" || value === "until") setPending(value);

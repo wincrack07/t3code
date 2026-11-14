@@ -299,7 +299,11 @@ export function AllChatsPage() {
                 </div>
                 <label className="flex min-h-8 items-center justify-between gap-2 text-sm text-muted-foreground">
                   Include archived
-                  <Switch size="sm" checked={archived} onCheckedChange={(checked) => setArchived(checked)} />
+                  <Switch
+                    size="sm"
+                    checked={archived}
+                    onCheckedChange={(checked) => setArchived(checked)}
+                  />
                 </label>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
@@ -369,7 +373,8 @@ export function AllChatsPage() {
                       <h2 className="truncate text-base font-medium">{detail.meta.title}</h2>
                       <p className="truncate text-xs text-muted-foreground">
                         {detail.meta.environmentLabel} · {detail.meta.projectTitle} ·{" "}
-                        {detail.meta.model} · updated {formatRelativeTimeLabel(detail.meta.updatedAt)}
+                        {detail.meta.model} · updated{" "}
+                        {formatRelativeTimeLabel(detail.meta.updatedAt)}
                       </p>
                     </div>
                   </div>
@@ -430,7 +435,7 @@ export function AllChatsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <div className="scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto px-4 py-4">
                   <div className="mx-auto max-w-3xl">
                     <ChatMarkdown text={detail.markdown} cwd={undefined} />
                   </div>

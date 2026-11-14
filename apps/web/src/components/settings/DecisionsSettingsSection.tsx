@@ -157,7 +157,9 @@ function ruleSummary(rule: DecisionRule): string {
   const targets = Object.values(rule.choose).filter((value) => value?.length).length;
   return [
     rule.action === "decide" ? "Decide and stop" : "Restrict options",
-    conditions === 0 ? "every prompt" : `${conditions} ${conditions === 1 ? "condition" : "conditions"}`,
+    conditions === 0
+      ? "every prompt"
+      : `${conditions} ${conditions === 1 ? "condition" : "conditions"}`,
     targets === 0 ? "no target set" : `${targets} ${targets === 1 ? "target" : "targets"}`,
   ].join(" · ");
 }
@@ -608,7 +610,10 @@ export function DecisionsSettingsSection() {
                         { value: "decide", label: "Decide and stop" },
                       ]}
                       onChange={(action) =>
-                        saveRule({ ...editing, action: action === "decide" ? "decide" : "restrict" })
+                        saveRule({
+                          ...editing,
+                          action: action === "decide" ? "decide" : "restrict",
+                        })
                       }
                     />
                   </Field>
@@ -685,7 +690,9 @@ export function DecisionsSettingsSection() {
                       emptyLabel="Any type"
                       value={editing.choose.drivers ?? []}
                       choices={authorOptions}
-                      onChange={(drivers) => setChoose(editing, { drivers: listOrUndefined(drivers) })}
+                      onChange={(drivers) =>
+                        setChoose(editing, { drivers: listOrUndefined(drivers) })
+                      }
                     />
                   </Field>
                   <Field label="Model">
@@ -703,7 +710,9 @@ export function DecisionsSettingsSection() {
                       emptyLabel="Any effort"
                       value={editing.choose.efforts ?? []}
                       choices={editingOptions.efforts}
-                      onChange={(efforts) => setChoose(editing, { efforts: listOrUndefined(efforts) })}
+                      onChange={(efforts) =>
+                        setChoose(editing, { efforts: listOrUndefined(efforts) })
+                      }
                     />
                   </Field>
                   <Field label="Environment">

@@ -256,7 +256,7 @@ export function KeepAwakeSettingsFields({
             }
           >
             {lid && (!localDesktop || !lid.nativeAuthorization) ? (
-              <Collapsible className="pb-3">
+              <Collapsible className="mb-3">
                 <CollapsibleTrigger
                   render={<Button size="xs" variant="ghost-muted" className="group -ms-2" />}
                 >
