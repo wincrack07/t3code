@@ -85,15 +85,11 @@ const reclaimLegacyForkMigrations = Effect.fn("ForkMigrations.reclaimLegacy")(fu
   return legacy.map(({ forkId, name }) => [forkId, name] as const);
 });
 
+/** Whether startup changes anything a running server relies on: upstream migrations or moving
+ * legacy rows. Fork migrations only add fork tables and columns, so they need no ownership. */
 export const hasPendingForkMigrations = Effect.fn("ForkMigrations.hasPending")(function* () {
   if ((yield* legacyRowsInUpstreamLedger()).length > 0) return true;
-  if (yield* hasPendingMigrations()) return true;
-  if (!(yield* tableExists(FORK_MIGRATIONS_TABLE))) return true;
-  const sql = yield* SqlClient.SqlClient;
-  const [row] = yield* sql<{
-    readonly id: number | null;
-  }>`SELECT MAX(migration_id) AS id FROM ${sql(FORK_MIGRATIONS_TABLE)}`;
-  return (row?.id ?? 0) < Math.max(...forkMigrationEntries.map(([id]) => id));
+  return yield* hasPendingMigrations();
 });
 
 /** Upstream migrations, then the fork's. A partial run (`toMigrationInclusive`) is an upstream test

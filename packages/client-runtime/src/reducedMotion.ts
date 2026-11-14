@@ -18,7 +18,8 @@ export function resolveReducedMotion(
 }
 
 function systemPrefersReducedMotion(): boolean {
-  return globalThis.matchMedia?.(REDUCED_MOTION_QUERY).matches ?? false;
+  // `window` first: it is the same object in browsers, and tests stub it rather than globalThis.
+  return (globalThis.window ?? globalThis).matchMedia?.(REDUCED_MOTION_QUERY).matches ?? false;
 }
 
 export function prefersReducedMotion(): boolean {

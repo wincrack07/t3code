@@ -455,9 +455,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   return withStopButton(
     <>
       {children}
-      {hasSendableContent || showResume || isRunning || isSendBusy || isEditingQueuedMessage
-        ? submit
-        : null}
+      {submit}
     </>,
   );
 });

@@ -464,7 +464,7 @@ it.effect("never sends a link's token to an address that stops answering as that
       yield* Ref.set(b.descriptor, descriptorOf("environment-impostor", "Impostor"));
       yield* Ref.set(b.bearers, []);
       const failed = yield* probe(a).pipe(Effect.flip);
-      expect(failed.message).toContain("answered as a different environment");
+      expect(failed.message).toContain("answered as another environment");
       expect(yield* Ref.get(b.bearers)).toEqual([]);
       expect((yield* a.links.list).map((link) => link.status)).toEqual(["unreachable"]);
     }),

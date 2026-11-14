@@ -258,7 +258,8 @@ export function withSidebarProjectColors(
   return groups.map((group) => ({
     ...group,
     sidebarColor:
-      configs.get(group.environmentId)?.settings.projectSettingsOverrides[group.id]?.sidebarColor ??
+      configs.get(group.environmentId)?.settings?.projectSettingsOverrides?.[group.id]
+        ?.sidebarColor ??
       projectFolderColor(
         folders,
         folders.find((folder) => folder.projectKeys.includes(group.projectKey))?.id,
