@@ -7,6 +7,10 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useConnectedEnvironmentIds, readEnvironment } from "../../state/environments";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Switch } from "../ui/switch";
+import { SettingsRow, SettingsSearchTarget, SettingsSection } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 
 type Status = typeof ChatHubStatus.Type;
 function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId }) {
@@ -40,96 +44,126 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
       clearInterval(interval);
     };
   }, [environmentId, read]);
+  const locked = !allowed || busy;
+  const statusLine = status
+    ? [
+        status.enabled ? "Sync on" : "Sync off",
+        `${status.pendingCount} pending`,
+        `last synced ${status.lastSuccess ?? "never"}`,
+        ...(status.lastError ? [status.lastError] : []),
+      ].join(" · ")
+    : "Loading…";
   return (
-    <fieldset disabled={!allowed || busy} className="space-y-3 rounded border p-3">
-      <legend>{readEnvironment(environmentId)?.label ?? environmentId}</legend>
-      <label className="block text-sm">
-        Hub URL{" "}
-        <input
-          aria-label="Hub URL"
-          className="w-full rounded border bg-background p-2"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://your-hub.workers.dev"
-        />
-      </label>
-      <label className="block text-sm">
-        Write token{" "}
-        <input
-          aria-label="Write token"
-          type="password"
-          autoComplete="new-password"
-          className="w-full rounded border bg-background p-2"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder={
-            status?.configured
-              ? "Configured (leave blank to keep)"
-              : "Paste this machine's write token"
-          }
-        />
-      </label>
-      <label className="flex gap-2 text-sm">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        Enable automatic sync
-      </label>
-      <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            setBusy(true);
-            void save({ environmentId, input: { url, enabled, ...(token ? { token } : {}) } })
-              .then((result) => {
-                if (AsyncResult.isSuccess(result)) {
-                  setStatus(result.value);
-                  setToken("");
-                  setMessage(
-                    result.value.enabled && result.value.configured
-                      ? "Saved. Pending chats sync automatically."
-                      : "Saved. Automatic sync is off.",
-                  );
-                } else setMessage("Could not save hub settings.");
-              })
-              .finally(() => setBusy(false));
-          }}
-        >
-          Save hub settings
-        </Button>
-        <Button
-          variant="outline"
-          disabled={!status?.configured || !status.enabled}
-          onClick={() => {
-            void sync({ environmentId, input: {} }).then((result) => {
-              if (AsyncResult.isSuccess(result)) {
-                setStatus(result.value);
-                setMessage("Sync queued; uploads start within ten seconds.");
-              } else setMessage("Could not queue sync.");
-            });
-          }}
-        >
-          Sync now
-        </Button>
-      </div>
-      <p role="status" className="text-sm text-muted-foreground">
-        {status
-          ? `${status.enabled ? "Enabled" : "Disabled"} · ${status.pendingCount} pending · Last success: ${status.lastSuccess ?? "never"}`
-          : "Loading hub status…"}
-        {status?.lastError ? ` · ${status.lastError}` : ""} {message}
-      </p>
-    </fieldset>
+    <SettingsSection title={`Chat hub · ${readEnvironment(environmentId)?.label ?? environmentId}`}>
+      <SettingsRow
+        title="Hub URL"
+        description="The Worker that stores chats from all your machines."
+        control={
+          <Input
+            size="sm"
+            className="w-full sm:w-64"
+            aria-label="Hub URL"
+            value={url}
+            disabled={locked}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://your-hub.workers.dev"
+          />
+        }
+      />
+      <SettingsRow
+        title="Write token"
+        description="Stays on this machine."
+        control={
+          <Input
+            size="sm"
+            className="w-full sm:w-64"
+            aria-label="Write token"
+            type="password"
+            autoComplete="new-password"
+            value={token}
+            disabled={locked}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder={status?.configured ? "Saved. Leave blank to keep" : "Paste the token"}
+          />
+        }
+      />
+      <SettingsRow
+        title="Sync automatically"
+        description="Uploads this machine's chats. The hub can read them; they aren't end-to-end encrypted."
+        control={
+          <Switch
+            aria-label="Enable automatic sync"
+            checked={enabled}
+            disabled={locked}
+            onCheckedChange={(checked) => setEnabled(checked)}
+          />
+        }
+      />
+      <SettingsRow
+        title="Status"
+        description={statusLine}
+        status={message ? <span role="status">{message}</span> : undefined}
+        control={
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={locked || !status?.configured || !status.enabled}
+              onClick={() => {
+                void sync({ environmentId, input: {} }).then((result) => {
+                  if (AsyncResult.isSuccess(result)) {
+                    setStatus(result.value);
+                    setMessage("Sync queued. Uploads start within ten seconds.");
+                  } else setMessage("Could not queue sync.");
+                });
+              }}
+            >
+              Sync now
+            </Button>
+            <Button
+              size="sm"
+              disabled={locked}
+              onClick={() => {
+                setBusy(true);
+                void save({ environmentId, input: { url, enabled, ...(token ? { token } : {}) } })
+                  .then((result) => {
+                    if (AsyncResult.isSuccess(result)) {
+                      setStatus(result.value);
+                      setToken("");
+                      setMessage(
+                        result.value.enabled && result.value.configured
+                          ? "Saved. Pending chats sync automatically."
+                          : "Saved. Automatic sync is off.",
+                      );
+                    } else setMessage("Could not save hub settings.");
+                  })
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Save
+            </Button>
+          </>
+        }
+      />
+    </SettingsSection>
   );
 }
 export function ChatHubSettings() {
   const connected = useConnectedEnvironmentIds();
   return (
-    <div className="space-y-3">
-      <h3 className="font-medium">Chat hub</h3>
-      <p className="text-sm text-muted-foreground">
-        Each machine uploads its own chats. Tokens stay on that server. Cloudflare can read stored
-        chats; v1 is not end-to-end encrypted.
-      </p>
-      {connected.map((environmentId) => (
-        <MachineHubSettings key={environmentId} environmentId={environmentId} />
-      ))}
-    </div>
+    <SettingsSearchTarget {...searchableSetting("chat-hub")} className="flex flex-col gap-8">
+      {connected.length === 0 ? (
+        <SettingsSection title="Chat hub">
+          <SettingsRow
+            title="No environments connected"
+            description="Connect an environment to sync its chats to your hub."
+          />
+        </SettingsSection>
+      ) : (
+        connected.map((environmentId) => (
+          <MachineHubSettings key={environmentId} environmentId={environmentId} />
+        ))
+      )}
+    </SettingsSearchTarget>
   );
 }

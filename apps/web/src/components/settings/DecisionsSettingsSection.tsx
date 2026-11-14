@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   ProjectId,
@@ -6,7 +6,7 @@ import {
   type DecisionRule,
   type DecisionSettings,
 } from "@t3tools/contracts";
-import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "lucide-react";
 import { createModelSelection } from "@t3tools/shared/model";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import { providerInstanceEntriesFor } from "../../providerInstances";
@@ -16,8 +16,23 @@ import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { Button } from "../ui/button";
-import { Checkbox } from "../ui/checkbox";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
+import { Menu, MenuCheckboxItem, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import {
+  Select,
+  SelectButton,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Switch } from "../ui/switch";
@@ -35,7 +50,7 @@ const SOURCES: Option[] = [
   { value: "provider", label: "Configured provider" },
   { value: "jev", label: "Jev (TypeSafe)" },
   { value: "openai", label: "OpenAI API" },
-  { value: "custom", label: "Custom (OpenAI-compatible)" },
+  { value: "custom", label: "OpenAI-compatible API" },
 ];
 const ROLES = ["implementation", "research", "review", "design", "test", "general"] as const;
 const options = (values: readonly string[]): Option[] =>
@@ -59,14 +74,14 @@ function Picker({
         if (next !== null) onChange(next);
       }}
     >
-      <SelectTrigger size="sm" className="w-full sm:w-64" aria-label={label}>
+      <SelectTrigger size="sm" className="w-full sm:w-56" aria-label={label}>
         <SelectValue>
           {() => choices.find((choice) => choice.value === value)?.label ?? "Unavailable"}
         </SelectValue>
       </SelectTrigger>
       <SelectPopup align="end" alignItemWithTrigger={false}>
         {choices.map((choice) => (
-          <SelectItem key={choice.value} value={choice.value}>
+          <SelectItem hideIndicator key={choice.value} value={choice.value}>
             {choice.label}
           </SelectItem>
         ))}
@@ -75,43 +90,76 @@ function Picker({
   );
 }
 
-function Checklist({
+/** A select-style menu of checkboxes. Nothing checked means no limit. */
+function MultiPicker({
   label,
   value,
   choices,
+  emptyLabel,
   onChange,
 }: {
   label: string;
   value: readonly string[];
   choices: readonly Option[];
+  emptyLabel: string;
   onChange: (value: string[]) => void;
 }) {
-  const missing = value.filter((id) => !choices.some((choice) => choice.value === id));
+  const all = [
+    ...choices,
+    ...value
+      .filter((id) => !choices.some((choice) => choice.value === id))
+      .map((id) => ({ value: id, label: `Unavailable (${id})` })),
+  ];
+  const summary =
+    value.length === 0
+      ? emptyLabel
+      : value.length === 1
+        ? (all.find((choice) => choice.value === value[0])?.label ?? value[0])
+        : `${value.length} selected`;
   return (
-    <fieldset
-      aria-label={label}
-      className="max-h-56 min-w-0 overflow-y-auto sm:w-64 @min-[32rem]/settings-row:-my-1.5"
-    >
-      {choices.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No options available.</p>
-      ) : null}
-      {[...choices, ...missing.map((id) => ({ value: id, label: `Unavailable (${id})` }))].map(
-        (choice) => (
-          <label key={choice.value} className="flex min-h-8 items-center gap-2 py-1 text-sm">
-            <Checkbox
-              checked={value.includes(choice.value)}
-              onCheckedChange={(checked) =>
-                onChange(
-                  checked ? [...value, choice.value] : value.filter((id) => id !== choice.value),
-                )
-              }
-            />
-            <span className="min-w-0 break-words">{choice.label}</span>
-          </label>
-        ),
-      )}
-    </fieldset>
+    <Menu>
+      <MenuTrigger
+        render={<SelectButton size="sm" className="w-full sm:w-56" aria-label={label} />}
+      >
+        {summary}
+      </MenuTrigger>
+      <MenuPopup align="end">
+        {all.length === 0 ? <MenuItem disabled>No options</MenuItem> : null}
+        {all.map((choice) => (
+          <MenuCheckboxItem
+            key={choice.value}
+            checked={value.includes(choice.value)}
+            onCheckedChange={(checked) =>
+              onChange(
+                checked ? [...value, choice.value] : value.filter((id) => id !== choice.value),
+              )
+            }
+          >
+            {choice.label}
+          </MenuCheckboxItem>
+        ))}
+      </MenuPopup>
+    </Menu>
   );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <span className="text-sm text-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function ruleSummary(rule: DecisionRule): string {
+  const conditions = Object.values(rule.when).filter((value) => value?.length).length;
+  const targets = Object.values(rule.choose).filter((value) => value?.length).length;
+  return [
+    rule.action === "decide" ? "Decide and stop" : "Restrict options",
+    conditions === 0 ? "every prompt" : `${conditions} ${conditions === 1 ? "condition" : "conditions"}`,
+    targets === 0 ? "no target set" : `${targets} ${targets === 1 ? "target" : "targets"}`,
+  ].join(" · ");
 }
 
 export function DecisionsSettingsSection() {
@@ -169,6 +217,8 @@ export function DecisionsSettingsSection() {
   const [result, setResult] = useState("");
   const [connection, setConnection] = useState("");
   const [testing, setTesting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = config.rules.find((rule) => rule.id === editingId) ?? null;
   const save = (patch: Partial<DecisionSettings>) => update({ decisions: { ...config, ...patch } });
   const nextRuleId = `rule-${config.rules.reduce((next, rule) => Math.max(next, Number(rule.id.replace("rule-", "")) || 0), 0) + 1}`;
   const custom = config.source === "custom";
@@ -177,8 +227,47 @@ export function DecisionsSettingsSection() {
   const selection = config.modelSelection;
   const saveRule = (rule: DecisionRule) =>
     save({ rules: config.rules.map((entry) => (entry.id === rule.id ? rule : entry)) });
+  const ruleOptions = (rule: DecisionRule) => {
+    const ruleEntries = entries.filter(
+      (entry) =>
+        !rule.choose.providerInstanceIds?.length ||
+        rule.choose.providerInstanceIds.includes(entry.instanceId),
+    );
+    const models = [
+      ...new Map(
+        ruleEntries.flatMap((entry) =>
+          (modelOptions.get(entry.instanceId) ?? entry.models).map(
+            (model) => [model.slug, { value: model.slug, label: model.name }] as const,
+          ),
+        ),
+      ).values(),
+    ];
+    const efforts = options(
+      ruleEntries.flatMap((entry) =>
+        entry.models
+          .filter((model) => !rule.choose.models?.length || rule.choose.models.includes(model.slug))
+          .flatMap(
+            (model) =>
+              model.capabilities?.optionDescriptors?.flatMap((descriptor) =>
+                descriptor.type === "select" &&
+                (descriptor.role === "reasoning" || descriptor.id === "reasoningEffort")
+                  ? descriptor.options.map((option) => option.id)
+                  : [],
+              ) ?? [],
+          ),
+      ),
+    );
+    return { models, efforts };
+  };
+  const setWhen = (rule: DecisionRule, patch: Partial<DecisionRule["when"]>) =>
+    saveRule({ ...rule, when: { ...rule.when, ...patch } });
+  const setChoose = (rule: DecisionRule, patch: Partial<DecisionRule["choose"]>) =>
+    saveRule({ ...rule, choose: { ...rule.choose, ...patch } });
+  const listOrUndefined = <T,>(values: readonly T[]) => (values.length ? [...values] : undefined);
+  const editingOptions = editing ? ruleOptions(editing) : null;
+
   return (
-    <div className="space-y-6" inert={!writable}>
+    <div className="flex flex-col gap-8" inert={!writable}>
       <SettingsSection id="decisions" title="Decisions">
         <SettingsRow
           serverScoped
@@ -197,7 +286,7 @@ export function DecisionsSettingsSection() {
           serverScoped
           settingKeys={["decisions"]}
           title="Decision source"
-          description="The model that picks where a prompt runs."
+          description="Which model picks where a prompt runs."
           control={
             <Picker
               label="Decision source"
@@ -220,7 +309,7 @@ export function DecisionsSettingsSection() {
         {config.source === "provider" ? (
           <SettingsRow
             title="Decision model"
-            description="Automatic uses the first available provider's fast text model."
+            description="Automatic uses the first available provider's fast model."
             control={
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {selection ? (
@@ -270,12 +359,12 @@ export function DecisionsSettingsSection() {
             {custom ? (
               <SettingsRow
                 title="Base URL"
-                description="Include the API prefix, such as /v1. Use HTTPS, or HTTP on loopback or a tailnet."
+                description="Include the API prefix, such as /v1. HTTP works only on loopback or a tailnet."
                 control={
                   <Input
                     key={`${environmentId}-url`}
                     size="sm"
-                    className="w-full sm:w-64"
+                    className="w-full sm:w-56"
                     aria-label="Custom base URL"
                     placeholder="https://example.com/v1"
                     defaultValue={config.customBaseUrl ?? ""}
@@ -286,11 +375,12 @@ export function DecisionsSettingsSection() {
             ) : null}
             <SettingsRow
               title="Model name"
+              description="The model ID the API expects."
               control={
                 <Input
                   key={`${environmentId}-${config.source}-model`}
                   size="sm"
-                  className="w-full sm:w-64"
+                  className="w-full sm:w-56"
                   aria-label="Decision API model"
                   defaultValue={
                     config.source === "jev"
@@ -318,7 +408,7 @@ export function DecisionsSettingsSection() {
                 <Input
                   key={`${environmentId}-${config.source}-key`}
                   size="sm"
-                  className="w-full sm:w-64"
+                  className="w-full sm:w-56"
                   type="password"
                   autoComplete="off"
                   aria-label="Decision API key"
@@ -337,7 +427,7 @@ export function DecisionsSettingsSection() {
             />
             <SettingsRow
               title="Test connection"
-              description={`Tests the saved settings on ${environment?.label ?? "the selected environment"}.`}
+              description={`Uses the saved settings on ${environment?.label ?? "the selected environment"}.`}
               status={connection || undefined}
               control={
                 <Button
@@ -363,14 +453,14 @@ export function DecisionsSettingsSection() {
           </>
         )}
       </SettingsSection>
-      <SettingsSection title="Routing options">
+      <SettingsSection title="Limits">
         <SettingsRow
-          controlAlign="start"
-          title="Allowed environments"
-          description="Leave all unchecked to allow every environment."
+          title="Environments"
+          description="Where Auto may run a prompt."
           control={
-            <Checklist
+            <MultiPicker
               label="Allowed environments"
+              emptyLabel="All environments"
               value={config.allowedEnvironmentIds ?? []}
               choices={environmentOptions}
               onChange={(value) => save({ allowedEnvironmentIds: value.length ? value : null })}
@@ -378,12 +468,12 @@ export function DecisionsSettingsSection() {
           }
         />
         <SettingsRow
-          controlAlign="start"
-          title="Allowed providers"
-          description="Leave all unchecked to allow every provider instance."
+          title="Providers"
+          description="Which provider instances Auto may pick."
           control={
-            <Checklist
+            <MultiPicker
               label="Allowed provider instances"
+              emptyLabel="All providers"
               value={config.allowedProviderInstanceIds ?? []}
               choices={providerOptions}
               onChange={(value) =>
@@ -393,37 +483,11 @@ export function DecisionsSettingsSection() {
           }
         />
       </SettingsSection>
-      <SettingsSection
-        title="Rules"
-        headerAction={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              save({
-                rules: [
-                  ...config.rules,
-                  {
-                    id: nextRuleId,
-                    name: "New rule",
-                    enabled: true,
-                    when: {},
-                    choose: {},
-                    action: "restrict",
-                  },
-                ],
-              })
-            }
-          >
-            <PlusIcon />
-            Add rule
-          </Button>
-        }
-      >
+      <SettingsSection title="Rules">
         {config.rules.length === 0 ? (
           <SettingsRow
-            title="No routing rules"
-            description="Rules run top to bottom. Restrict narrows the options; decide picks the first remaining option and stops."
+            title="No rules yet"
+            description="Rules run top to bottom. Restrict narrows the options. Decide picks the first remaining option and stops."
           />
         ) : (
           config.rules.map((rule, index) => {
@@ -432,50 +496,27 @@ export function DecisionsSettingsSection() {
               [rules[index], rules[index + offset]] = [rules[index + offset]!, rules[index]!];
               save({ rules });
             };
-            const ruleEntries = entries.filter(
-              (entry) =>
-                !rule.choose.providerInstanceIds?.length ||
-                rule.choose.providerInstanceIds.includes(entry.instanceId),
-            );
-            const models = [
-              ...new Map(
-                ruleEntries.flatMap((entry) =>
-                  (modelOptions.get(entry.instanceId) ?? entry.models).map(
-                    (model) => [model.slug, { value: model.slug, label: model.name }] as const,
-                  ),
-                ),
-              ).values(),
-            ];
-            const efforts = options(
-              ruleEntries.flatMap((entry) =>
-                entry.models
-                  .filter(
-                    (model) =>
-                      !rule.choose.models?.length || rule.choose.models.includes(model.slug),
-                  )
-                  .flatMap(
-                    (model) =>
-                      model.capabilities?.optionDescriptors?.flatMap((descriptor) =>
-                        descriptor.type === "select" &&
-                        (descriptor.role === "reasoning" || descriptor.id === "reasoningEffort")
-                          ? descriptor.options.map((option) => option.id)
-                          : [],
-                      ) ?? [],
-                  ),
-              ),
-            );
             return (
               <SettingsRow
                 key={rule.id}
                 title={rule.name}
+                description={ruleSummary(rule)}
                 control={
-                  <>
+                  <div className="flex items-center gap-1">
                     <Switch
                       size="sm"
                       aria-label={`Enable ${rule.name}`}
                       checked={rule.enabled}
                       onCheckedChange={(enabled) => saveRule({ ...rule, enabled })}
                     />
+                    <Button
+                      size="icon-sm"
+                      variant="ghost-muted"
+                      aria-label={`Edit ${rule.name}`}
+                      onClick={() => setEditingId(rule.id)}
+                    >
+                      <PencilIcon />
+                    </Button>
                     <Button
                       size="icon-sm"
                       variant="ghost-muted"
@@ -504,240 +545,187 @@ export function DecisionsSettingsSection() {
                     >
                       <XIcon />
                     </Button>
-                  </>
-                }
-              >
-                <details className="mt-3 pb-3">
-                  <summary className="cursor-pointer text-sm text-muted-foreground">
-                    Edit conditions and target
-                  </summary>
-                  <div className="mt-3 space-y-3">
-                    <SettingsRow
-                      title="Rule name"
-                      control={
-                        <Input
-                          size="sm"
-                          className="w-full sm:w-64"
-                          aria-label="Rule name"
-                          defaultValue={rule.name}
-                          onBlur={(event) => saveRule({ ...rule, name: event.target.value })}
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Project"
-                      description="All projects when none are selected."
-                      control={
-                        <Checklist
-                          label="Rule projects"
-                          value={rule.when.projectIds ?? []}
-                          choices={projectOptions}
-                          onChange={(projectIds) =>
-                            saveRule({
-                              ...rule,
-                              when: {
-                                ...rule.when,
-                                projectIds: projectIds.length ? projectIds : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Kind of work"
-                      control={
-                        <Checklist
-                          label="Kind of work"
-                          value={rule.when.roles ?? []}
-                          choices={options(ROLES)}
-                          onChange={(values) =>
-                            saveRule({
-                              ...rule,
-                              when: {
-                                ...rule.when,
-                                roles: values.length
-                                  ? ROLES.filter((role) => values.includes(role))
-                                  : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Author provider"
-                      control={
-                        <Checklist
-                          label="Author provider"
-                          value={rule.when.authorDrivers ?? []}
-                          choices={authorOptions}
-                          onChange={(authorDrivers) =>
-                            saveRule({
-                              ...rule,
-                              when: {
-                                ...rule.when,
-                                authorDrivers: authorDrivers.length ? authorDrivers : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Author instance"
-                      control={
-                        <Checklist
-                          label="Author instance"
-                          value={rule.when.authorInstanceIds ?? []}
-                          choices={providerOptions}
-                          onChange={(authorInstanceIds) =>
-                            saveRule({
-                              ...rule,
-                              when: {
-                                ...rule.when,
-                                authorInstanceIds: authorInstanceIds.length
-                                  ? authorInstanceIds
-                                  : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      title="Action"
-                      control={
-                        <Picker
-                          label="Rule action"
-                          value={rule.action}
-                          choices={[
-                            { value: "restrict", label: "Restrict options" },
-                            { value: "decide", label: "Decide and stop" },
-                          ]}
-                          onChange={(action) =>
-                            saveRule({
-                              ...rule,
-                              action: action === "decide" ? "decide" : "restrict",
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Provider instance"
-                      control={
-                        <Checklist
-                          label="Rule provider instances"
-                          value={rule.choose.providerInstanceIds ?? []}
-                          choices={providerOptions}
-                          onChange={(providerInstanceIds) =>
-                            saveRule({
-                              ...rule,
-                              choose: {
-                                ...rule.choose,
-                                providerInstanceIds: providerInstanceIds.length
-                                  ? providerInstanceIds
-                                  : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Provider type"
-                      control={
-                        <Checklist
-                          label="Rule provider types"
-                          value={rule.choose.drivers ?? []}
-                          choices={authorOptions}
-                          onChange={(drivers) =>
-                            saveRule({
-                              ...rule,
-                              choose: {
-                                ...rule.choose,
-                                drivers: drivers.length ? drivers : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Model"
-                      control={
-                        <Checklist
-                          label="Rule models"
-                          value={rule.choose.models ?? []}
-                          choices={models}
-                          onChange={(models) =>
-                            saveRule({
-                              ...rule,
-                              choose: {
-                                ...rule.choose,
-                                models: models.length ? models : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Effort"
-                      description="All efforts when none are selected."
-                      control={
-                        <Checklist
-                          label="Rule efforts"
-                          value={rule.choose.efforts ?? []}
-                          choices={efforts}
-                          onChange={(efforts) =>
-                            saveRule({
-                              ...rule,
-                              choose: {
-                                ...rule.choose,
-                                efforts: efforts.length ? efforts : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      controlAlign="start"
-                      title="Environment"
-                      control={
-                        <Checklist
-                          label="Rule environments"
-                          value={rule.choose.environmentIds ?? []}
-                          choices={environmentOptions}
-                          onChange={(environmentIds) =>
-                            saveRule({
-                              ...rule,
-                              choose: {
-                                ...rule.choose,
-                                environmentIds: environmentIds.length ? environmentIds : undefined,
-                              },
-                            })
-                          }
-                        />
-                      }
-                    />
                   </div>
-                </details>
-              </SettingsRow>
+                }
+              />
             );
           })
         )}
+        <div className="px-3 py-2 sm:px-4">
+          <Button
+            size="compact"
+            variant="ghost-muted"
+            onClick={() => {
+              save({
+                rules: [
+                  ...config.rules,
+                  {
+                    id: nextRuleId,
+                    name: "New rule",
+                    enabled: true,
+                    when: {},
+                    choose: {},
+                    action: "restrict",
+                  },
+                ],
+              });
+              setEditingId(nextRuleId);
+            }}
+          >
+            <PlusIcon />
+            Add rule
+          </Button>
+        </div>
       </SettingsSection>
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(open) => (open ? undefined : setEditingId(null))}
+      >
+        <DialogPopup className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit rule</DialogTitle>
+          </DialogHeader>
+          {editing && editingOptions ? (
+            <DialogPanel>
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-3">
+                  <Field label="Name">
+                    <Input
+                      key={editing.id}
+                      size="sm"
+                      className="w-full sm:w-56"
+                      aria-label="Rule name"
+                      defaultValue={editing.name}
+                      onBlur={(event) => saveRule({ ...editing, name: event.target.value })}
+                    />
+                  </Field>
+                  <Field label="Action">
+                    <Picker
+                      label="Rule action"
+                      value={editing.action}
+                      choices={[
+                        { value: "restrict", label: "Restrict options" },
+                        { value: "decide", label: "Decide and stop" },
+                      ]}
+                      onChange={(action) =>
+                        saveRule({ ...editing, action: action === "decide" ? "decide" : "restrict" })
+                      }
+                    />
+                  </Field>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <h3 className="text-sm font-medium text-muted-foreground">When</h3>
+                  <Field label="Project">
+                    <MultiPicker
+                      label="Rule projects"
+                      emptyLabel="Any project"
+                      value={editing.when.projectIds ?? []}
+                      choices={projectOptions}
+                      onChange={(projectIds) =>
+                        setWhen(editing, {
+                          projectIds: listOrUndefined(projectIds),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Kind of work">
+                    <MultiPicker
+                      label="Kind of work"
+                      emptyLabel="Any kind"
+                      value={editing.when.roles ?? []}
+                      choices={options(ROLES)}
+                      onChange={(values) =>
+                        setWhen(editing, {
+                          roles: listOrUndefined(ROLES.filter((role) => values.includes(role))),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Author provider">
+                    <MultiPicker
+                      label="Author provider"
+                      emptyLabel="Any provider"
+                      value={editing.when.authorDrivers ?? []}
+                      choices={authorOptions}
+                      onChange={(authorDrivers) =>
+                        setWhen(editing, { authorDrivers: listOrUndefined(authorDrivers) })
+                      }
+                    />
+                  </Field>
+                  <Field label="Author instance">
+                    <MultiPicker
+                      label="Author instance"
+                      emptyLabel="Any instance"
+                      value={editing.when.authorInstanceIds ?? []}
+                      choices={providerOptions}
+                      onChange={(authorInstanceIds) =>
+                        setWhen(editing, { authorInstanceIds: listOrUndefined(authorInstanceIds) })
+                      }
+                    />
+                  </Field>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <h3 className="text-sm font-medium text-muted-foreground">Choose</h3>
+                  <Field label="Provider instance">
+                    <MultiPicker
+                      label="Rule provider instances"
+                      emptyLabel="Any instance"
+                      value={editing.choose.providerInstanceIds ?? []}
+                      choices={providerOptions}
+                      onChange={(providerInstanceIds) =>
+                        setChoose(editing, {
+                          providerInstanceIds: listOrUndefined(providerInstanceIds),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Provider type">
+                    <MultiPicker
+                      label="Rule provider types"
+                      emptyLabel="Any type"
+                      value={editing.choose.drivers ?? []}
+                      choices={authorOptions}
+                      onChange={(drivers) => setChoose(editing, { drivers: listOrUndefined(drivers) })}
+                    />
+                  </Field>
+                  <Field label="Model">
+                    <MultiPicker
+                      label="Rule models"
+                      emptyLabel="Any model"
+                      value={editing.choose.models ?? []}
+                      choices={editingOptions.models}
+                      onChange={(models) => setChoose(editing, { models: listOrUndefined(models) })}
+                    />
+                  </Field>
+                  <Field label="Effort">
+                    <MultiPicker
+                      label="Rule efforts"
+                      emptyLabel="Any effort"
+                      value={editing.choose.efforts ?? []}
+                      choices={editingOptions.efforts}
+                      onChange={(efforts) => setChoose(editing, { efforts: listOrUndefined(efforts) })}
+                    />
+                  </Field>
+                  <Field label="Environment">
+                    <MultiPicker
+                      label="Rule environments"
+                      emptyLabel="Any environment"
+                      value={editing.choose.environmentIds ?? []}
+                      choices={environmentOptions}
+                      onChange={(environmentIds) =>
+                        setChoose(editing, { environmentIds: listOrUndefined(environmentIds) })
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+            </DialogPanel>
+          ) : null}
+          <DialogFooter variant="bare">
+            <Button onClick={() => setEditingId(null)}>Done</Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
       <SettingsSection title="Test a prompt">
         <SettingsRow
           title="Project"
@@ -752,13 +740,13 @@ export function DecisionsSettingsSection() {
         />
         <SettingsRow
           title="Prompt"
-          description="See the chosen option and reason without starting a turn."
+          description="Shows what Auto would pick and why, without starting a turn."
         >
-          <div className="mt-3 space-y-3 pb-3.5">
+          <div className="mt-3 flex max-w-2xl flex-col items-start gap-3 pb-3.5">
             <Textarea
               size="sm"
               aria-label="Test a prompt"
-              placeholder="Prompt"
+              placeholder="Fix the flaky login test"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
             />
@@ -794,7 +782,7 @@ export function DecisionsSettingsSection() {
             {result ? (
               <p
                 role="status"
-                className="whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-3 text-sm text-muted-foreground"
+                className="w-full whitespace-pre-wrap break-words rounded-lg bg-muted p-3 text-sm text-muted-foreground"
               >
                 {result}
               </p>

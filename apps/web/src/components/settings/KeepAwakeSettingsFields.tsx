@@ -4,31 +4,92 @@ import {
   type KeepAwakeDefaults,
   type KeepAwakeStatus,
 } from "@t3tools/contracts";
+import { ChevronDownIcon } from "lucide-react";
 import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
-import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   NumberField,
-  NumberFieldGroup,
-  NumberFieldInput,
-  NumberFieldIncrement,
   NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
 } from "../ui/number-field";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Switch } from "../ui/switch";
 import { SettingsRow } from "./settingsLayout";
 
+export const KEEP_AWAKE_MODES = [
+  ["off", "Off"],
+  ["agents", "While agents work"],
+  ["duration", "For a duration"],
+  ["until", "Until a time"],
+  ["indefinite", "Indefinitely"],
+] as const;
+
+/** Quarter-hour times, plus `current` when it falls between them. */
+export function keepAwakeTimeOptions(current: string): string[] {
+  const times = Array.from(
+    { length: 96 },
+    (_, slot) =>
+      `${String(Math.floor(slot / 4)).padStart(2, "0")}:${String((slot % 4) * 15).padStart(2, "0")}`,
+  );
+  return times.includes(current) ? times : [...times, current].toSorted();
+}
+
+interface KeepAwakeFieldsProps {
+  status: KeepAwakeStatus;
+  disabled: boolean;
+  send: (input: KeepAwakeChange) => void;
+  authorize: (action: "install" | "remove" | "refresh") => void;
+  localDesktop: boolean;
+}
+
+function NumberControl({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onCommit: (value: number) => void;
+}) {
+  return (
+    <div className="w-full sm:w-36">
+      <NumberField
+        size="sm"
+        min={min}
+        max={max}
+        key={value}
+        defaultValue={value}
+        disabled={disabled}
+        onValueCommitted={(next) => {
+          if (next !== null) onCommit(next);
+        }}
+      >
+        <NumberFieldGroup>
+          <NumberFieldDecrement />
+          <NumberFieldInput aria-label={label} />
+          <NumberFieldIncrement />
+        </NumberFieldGroup>
+      </NumberField>
+    </div>
+  );
+}
+
+/** The defaults an environment applies when it starts, as Settings rows. */
 export function KeepAwakeSettingsFields({
   status,
   disabled,
   send,
   authorize,
   localDesktop,
-}: {
-  status: KeepAwakeStatus;
-  disabled: boolean;
-  send: (input: KeepAwakeChange) => void;
-  authorize: (action: "install" | "remove" | "refresh") => void;
-  localDesktop: boolean;
-}) {
+}: KeepAwakeFieldsProps) {
   const defaults = status.defaults;
   const options = status.options;
   const save = (patch: Partial<KeepAwakeDefaults>) => send({ defaults: { ...defaults, ...patch } });
@@ -37,16 +98,14 @@ export function KeepAwakeSettingsFields({
     send({ defaults: { ...defaults, options: next }, options: next });
   };
   const lid = status.lid;
-  const stats = defaults.trayStats ?? DEFAULT_TRAY_STATS;
-  const [hour = "18", minute = "00"] = defaults.untilTime.split(":");
   const authorization =
     lid?.error ??
     (lid?.active ? "Active" : lid?.authorized ? "Authorized" : "Authorization required");
   return (
-    <div>
+    <>
       <SettingsRow
         title="Default session"
-        description="When this environment starts"
+        description="Starts when this environment starts."
         control={
           <Select
             value={defaults.mode}
@@ -54,20 +113,17 @@ export function KeepAwakeSettingsFields({
               if (mode) save({ mode: mode as KeepAwakeDefaults["mode"] });
             }}
           >
-            <SelectTrigger size="sm" disabled={disabled} aria-label="Default keep-awake session">
+            <SelectTrigger
+              size="sm"
+              className="w-full sm:w-48"
+              disabled={disabled}
+              aria-label="Default keep-awake session"
+            >
               <SelectValue />
             </SelectTrigger>
-            <SelectPopup>
-              {(
-                [
-                  ["off", "Off"],
-                  ["agents", "While agents are working"],
-                  ["duration", "For a duration"],
-                  ["until", "Until a specific time"],
-                  ["indefinite", "Indefinitely"],
-                ] as const
-              ).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {KEEP_AWAKE_MODES.map(([value, label]) => (
+                <SelectItem hideIndicator key={value} value={value}>
                   {label}
                 </SelectItem>
               ))}
@@ -78,77 +134,52 @@ export function KeepAwakeSettingsFields({
       {defaults.mode === "duration" ? (
         <SettingsRow
           title="Duration"
-          description="Minutes"
+          description="In minutes."
           control={
-            <div className="w-36">
-              <NumberField
-                size="sm"
-                min={1}
-                max={10080}
-                key={defaults.durationMinutes}
-                defaultValue={defaults.durationMinutes}
-                disabled={disabled}
-                onValueCommitted={(value) => {
-                  if (value !== null) save({ durationMinutes: value });
-                }}
-              >
-                <NumberFieldGroup>
-                  <NumberFieldDecrement />
-                  <NumberFieldInput aria-label="Default duration in minutes" />
-                  <NumberFieldIncrement />
-                </NumberFieldGroup>
-              </NumberField>
-            </div>
+            <NumberControl
+              label="Default duration in minutes"
+              value={defaults.durationMinutes}
+              min={1}
+              max={10080}
+              disabled={disabled}
+              onCommit={(durationMinutes) => save({ durationMinutes })}
+            />
           }
         />
       ) : null}
       {defaults.mode === "until" ? (
         <SettingsRow
           title="End time"
-          description="The next occurrence in this machine’s local time"
+          description="The next time it comes round, in this machine's time zone."
           control={
-            <div className="flex items-center gap-2">
-              <Select
-                value={hour}
-                onValueChange={(value) => {
-                  if (value) save({ untilTime: `${value}:${minute}` });
-                }}
+            <Select
+              value={defaults.untilTime}
+              onValueChange={(untilTime) => {
+                if (untilTime) save({ untilTime });
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full sm:w-48"
+                disabled={disabled}
+                aria-label="Default end time"
               >
-                <SelectTrigger size="sm" disabled={disabled} aria-label="Default end hour">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <SelectItem key={h} value={String(h).padStart(2, "0")}>
-                      {String(h).padStart(2, "0")}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <span>:</span>
-              <Select
-                value={minute}
-                onValueChange={(value) => {
-                  if (value) save({ untilTime: `${hour}:${value}` });
-                }}
-              >
-                <SelectTrigger size="sm" disabled={disabled} aria-label="Default end minute">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  {Array.from({ length: 60 }, (_, m) => (
-                    <SelectItem key={m} value={String(m).padStart(2, "0")}>
-                      {String(m).padStart(2, "0")}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </div>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {keepAwakeTimeOptions(defaults.untilTime).map((time) => (
+                  <SelectItem hideIndicator key={time} value={time}>
+                    {time}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           }
         />
       ) : null}
       <SettingsRow
         title="Allow display sleep"
+        description="Keep the machine awake but let the screen turn off."
         control={
           <Switch
             disabled={disabled}
@@ -172,27 +203,16 @@ export function KeepAwakeSettingsFields({
       {options.batteryCutoff !== null ? (
         <SettingsRow
           title="Battery threshold"
-          description="Stop at or below this percentage"
+          description="Stops at or below this percentage."
           control={
-            <div className="w-36">
-              <NumberField
-                size="sm"
-                min={1}
-                max={100}
-                key={options.batteryCutoff}
-                defaultValue={options.batteryCutoff}
-                disabled={disabled}
-                onValueCommitted={(value) => {
-                  if (value !== null) updateOptions({ batteryCutoff: value });
-                }}
-              >
-                <NumberFieldGroup>
-                  <NumberFieldDecrement />
-                  <NumberFieldInput aria-label="Default battery threshold percent" />
-                  <NumberFieldIncrement />
-                </NumberFieldGroup>
-              </NumberField>
-            </div>
+            <NumberControl
+              label="Default battery threshold percent"
+              value={options.batteryCutoff}
+              min={1}
+              max={100}
+              disabled={disabled}
+              onCommit={(batteryCutoff) => updateOptions({ batteryCutoff })}
+            />
           }
         />
       ) : null}
@@ -200,7 +220,7 @@ export function KeepAwakeSettingsFields({
         <>
           <SettingsRow
             title="Keep awake with lid closed"
-            description="A closed laptop stays warm and drains battery; Stop on low battery still applies."
+            description="A closed laptop stays warm and uses battery. Stop on low battery still applies."
             control={
               <Switch
                 disabled={disabled || (!lid?.authorized && !options.lidClosed)}
@@ -211,7 +231,7 @@ export function KeepAwakeSettingsFields({
             }
           />
           <SettingsRow
-            title="Lid-closed authorization"
+            title="Lid-closed permission"
             description={authorization}
             control={
               localDesktop && lid?.nativeAuthorization ? (
@@ -236,21 +256,52 @@ export function KeepAwakeSettingsFields({
             }
           >
             {lid && (!localDesktop || !lid.nativeAuthorization) ? (
-              <details className="mt-3 text-xs">
-                <summary>Run on this Mac</summary>
-                <div className="mt-2 space-y-2">
-                  <p>Authorize</p>
-                  <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2">
-                    {lid.installCommand}
-                  </pre>
-                  <p>Remove authorization after ending lid-closed sessions</p>
-                  <pre className="overflow-auto rounded-md bg-muted p-2">{lid.removeCommand}</pre>
-                </div>
-              </details>
+              <Collapsible className="pb-3">
+                <CollapsibleTrigger
+                  render={<Button size="xs" variant="ghost-muted" className="group -ms-2" />}
+                >
+                  Commands to run on this Mac
+                  <ChevronDownIcon className="transition-transform group-data-panel-open:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsiblePanel>
+                  <div className="flex max-w-2xl flex-col gap-2 pt-2 text-xs text-muted-foreground">
+                    <p>Authorize</p>
+                    <pre className="max-h-32 overflow-auto rounded-lg bg-muted p-3 font-mono text-foreground">
+                      {lid.installCommand}
+                    </pre>
+                    <p>Remove, after ending lid-closed sessions</p>
+                    <pre className="overflow-auto rounded-lg bg-muted p-3 font-mono text-foreground">
+                      {lid.removeCommand}
+                    </pre>
+                  </div>
+                </CollapsiblePanel>
+              </Collapsible>
             ) : null}
           </SettingsRow>
         </>
       ) : null}
+    </>
+  );
+}
+
+const TRAY_STATS = [
+  ["network", "Network speed"],
+  ["cpu", "CPU"],
+  ["memory", "Memory"],
+  ["disk", "Disk"],
+] as const;
+
+/** Which stats the desktop app shows beside its menu bar icon. */
+export function KeepAwakeTrayStatsFields({
+  status,
+  disabled,
+  send,
+}: Pick<KeepAwakeFieldsProps, "status" | "disabled" | "send">) {
+  const defaults = status.defaults;
+  const stats = defaults.trayStats ?? DEFAULT_TRAY_STATS;
+  const save = (trayStats: typeof stats) => send({ defaults: { ...defaults, trayStats } });
+  return (
+    <>
       <SettingsRow
         title="Show stats in the menu bar"
         control={
@@ -258,19 +309,12 @@ export function KeepAwakeSettingsFields({
             disabled={disabled}
             aria-label="Show stats in the menu bar"
             checked={stats.enabled}
-            onCheckedChange={(enabled) => save({ trayStats: { ...stats, enabled } })}
+            onCheckedChange={(enabled) => save({ ...stats, enabled })}
           />
         }
       />
       {stats.enabled
-        ? (
-            [
-              ["network", "Network speed"],
-              ["cpu", "CPU"],
-              ["memory", "Memory"],
-              ["disk", "Disk"],
-            ] as const
-          ).map(([key, label]) => (
+        ? TRAY_STATS.map(([key, label]) => (
             <SettingsRow
               key={key}
               title={label}
@@ -279,12 +323,12 @@ export function KeepAwakeSettingsFields({
                   disabled={disabled}
                   aria-label={label}
                   checked={stats[key]}
-                  onCheckedChange={(checked) => save({ trayStats: { ...stats, [key]: checked } })}
+                  onCheckedChange={(checked) => save({ ...stats, [key]: checked })}
                 />
               }
             />
           ))
         : null}
-    </div>
+    </>
   );
 }

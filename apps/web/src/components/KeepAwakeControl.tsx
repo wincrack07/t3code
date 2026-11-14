@@ -2,11 +2,11 @@ import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
   KeepAwakeChange,
-  KeepAwakeDefaults,
   KeepAwakeSession,
   KeepAwakeStatus,
 } from "@t3tools/contracts";
-import { CoffeeIcon, SlashIcon } from "lucide-react";
+import { ChevronDownIcon, CoffeeIcon, SlashIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { isElectron } from "../env";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
@@ -15,7 +15,7 @@ import { serverEnvironment } from "../state/server";
 import { useAtomCommand } from "../state/use-atom-command";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
-import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "./ui/select";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import {
   NumberField,
   NumberFieldGroup,
@@ -23,9 +23,9 @@ import {
   NumberFieldIncrement,
   NumberFieldDecrement,
 } from "./ui/number-field";
-import { KeepAwakeSettingsFields } from "./settings/KeepAwakeSettingsFields";
+import { KEEP_AWAKE_MODES, keepAwakeTimeOptions } from "./settings/KeepAwakeSettingsFields";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./ui/collapsible";
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
-import { Radio, RadioGroup } from "./ui/radio-group";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 
 function keepAwakeLabel(status: KeepAwakeStatus) {
@@ -37,13 +37,8 @@ function keepAwakeLabel(status: KeepAwakeStatus) {
     : "Awake indefinitely";
 }
 
-export function KeepAwakeControl({
-  environmentId: provided,
-  settings = false,
-}: {
-  environmentId?: EnvironmentId;
-  settings?: boolean;
-}) {
+/** Keep-awake state and actions for one environment, shared by the popover and Settings. */
+export function useKeepAwake(provided?: EnvironmentId) {
   const primary = usePrimaryEnvironmentId();
   const environmentId = provided ?? primary;
   const environment = useEnvironment(environmentId);
@@ -52,43 +47,33 @@ export function KeepAwakeControl({
     isElectron &&
     (target?._tag === "PrimaryConnectionTarget" ||
       (target?._tag === "BearerConnectionTarget" && target.connectionId.startsWith("platform:")));
-  const authorize = useAtomCommand(serverEnvironment.authorizeKeepAwakeLid);
+  const authorizeCommand = useAtomCommand(serverEnvironment.authorizeKeepAwakeLid);
   const authorizeAllowed = useAtomValue(
     serverEnvironment.authorizeKeepAwakeLid.permissionAtom(environmentId),
   );
-  const authorizeLid = (action: "install" | "remove" | "refresh") => {
-    if (environmentId) void authorize({ environmentId, input: { action } });
-  };
   const query = useEnvironmentQuery(
     environmentId ? serverEnvironment.keepAwake({ environmentId, input: {} }) : null,
   );
   const allowed = useAtomValue(serverEnvironment.changeKeepAwake.permissionAtom(environmentId));
   const change = useAtomCommand(serverEnvironment.changeKeepAwake);
-  const status = query.data;
-  const send = (input: KeepAwakeChange) => {
-    if (environmentId) void change({ environmentId, input });
+  return {
+    environmentId,
+    status: query.data,
+    error: query.error,
+    disabled: !allowed,
+    localDesktop: localDesktop && authorizeAllowed,
+    send: (input: KeepAwakeChange) => {
+      if (environmentId) void change({ environmentId, input });
+    },
+    authorize: (action: "install" | "remove" | "refresh") => {
+      if (environmentId) void authorizeCommand({ environmentId, input: { action } });
+    },
   };
-  if (settings)
-    return (
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium">Keep awake</h3>
-        {status && !status.supported ? (
-          <p className="text-sm text-muted-foreground">
-            Keep awake is not supported on this machine.
-          </p>
-        ) : status ? (
-          <KeepAwakeSettingsFields
-            status={status}
-            disabled={!allowed}
-            send={send}
-            authorize={authorizeLid}
-            localDesktop={localDesktop && authorizeAllowed}
-          />
-        ) : (
-          <p>{query.error ?? "Connecting…"}</p>
-        )}
-      </section>
-    );
+}
+
+export function KeepAwakeControl({ environmentId: provided }: { environmentId?: EnvironmentId }) {
+  const { environmentId, status, error, disabled, localDesktop, send, authorize } =
+    useKeepAwake(provided);
   if (status && !status.supported) {
     return (
       <Tooltip>
@@ -126,21 +111,18 @@ export function KeepAwakeControl({
           </span>
         </TooltipTrigger>
         <PopoverPopup width="md" side="top">
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium">Keep awake</h3>
-            {status ? (
-              <KeepAwakeForm
-                key={environmentId}
-                status={status}
-                disabled={!allowed}
-                send={send}
-                authorize={authorizeLid}
-                localDesktop={localDesktop && authorizeAllowed}
-              />
-            ) : (
-              <p>{query.error ?? "Connecting…"}</p>
-            )}
-          </div>
+          {status ? (
+            <KeepAwakeForm
+              key={environmentId}
+              status={status}
+              disabled={disabled}
+              send={send}
+              authorize={authorize}
+              localDesktop={localDesktop}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">{error ?? "Connecting…"}</p>
+          )}
         </PopoverPopup>
       </Popover>
       <TooltipPopup>{label}</TooltipPopup>
@@ -148,134 +130,127 @@ export function KeepAwakeControl({
   );
 }
 
-const modes = [
-  ["off", "Off"],
-  ["agents", "While agents are working"],
-  ["duration", "For a duration"],
-  ["until", "Until a specific time"],
-  ["indefinite", "Indefinitely"],
-] as const;
+function FormRow({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex min-h-8 items-center justify-between gap-4">
+      <span className="min-w-0 text-sm">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** Off, agents and indefinite apply at once; a duration or an end time waits for Start. */
+type PendingMode = Extract<KeepAwakeSession["mode"], "duration" | "until">;
 
 export function KeepAwakeForm({
   status,
   disabled,
   send,
-  settings = false,
   authorize,
   localDesktop,
 }: {
   status: KeepAwakeStatus;
   disabled: boolean;
   send: (input: KeepAwakeChange) => void;
-  settings?: boolean;
   authorize: (action: "install" | "remove" | "refresh") => void;
   localDesktop: boolean;
 }) {
-  const [mode, setMode] = useState<KeepAwakeSession["mode"]>(
-    settings ? status.defaults.mode : status.mode,
-  );
+  const [pending, setPending] = useState<PendingMode | null>(null);
   const [minutes, setMinutes] = useState(status.defaults.durationMinutes);
-  const [untilError, setUntilError] = useState(false);
   const [day, setDay] = useState("today");
-  const [hour, setHour] = useState(String(Number(status.defaults.untilTime.split(":")[0])));
-  const [minute, setMinute] = useState(status.defaults.untilTime.split(":")[1] ?? "00");
-  const options = settings ? status.defaults.options : status.options;
-  const saveDefaults = (patch: Partial<KeepAwakeDefaults>) =>
-    send({ defaults: { ...status.defaults, ...patch } });
-  const updateOptions = (patch: Partial<typeof options>) => {
-    const next = { ...options, ...patch };
-    if (settings) saveDefaults({ options: next });
-    else send({ options: next });
-  };
+  const [time, setTime] = useState(status.defaults.untilTime);
+  const [untilError, setUntilError] = useState(false);
+  // The picker shows what is running unless a timed session is being set up.
+  const running: KeepAwakeSession["mode"] =
+    status.active || status.mode === "agents" ? status.mode : "off";
+  const mode = pending ?? running;
+  const options = status.options;
+  const updateOptions = (patch: Partial<typeof options>) => send({ options: { ...options, ...patch } });
   const choose = (value: KeepAwakeSession["mode"]) => {
-    setMode(value);
-    if (settings) saveDefaults({ mode: value });
-    else if (value !== "duration" && value !== "until") send({ session: { mode: value } });
+    setUntilError(false);
+    if (value === "duration" || value === "until") setPending(value);
+    else {
+      setPending(null);
+      send({ session: { mode: value } });
+    }
   };
   const start = () => {
-    if (mode === "duration") send({ session: { mode, minutes } });
-    else if (mode === "until") {
+    if (pending === "duration") {
+      send({ session: { mode: "duration", minutes } });
+      setPending(null);
+    } else if (pending === "until") {
+      const [hour = "0", minute = "0"] = time.split(":");
       const date = new Date();
       date.setHours(Number(hour), Number(minute), 0, 0);
       if (day === "tomorrow") date.setDate(date.getDate() + 1);
       const valid = date.getTime() > Date.now();
       setUntilError(!valid);
-      if (valid) send({ session: { mode, endsAt: date.getTime() } });
+      if (valid) {
+        send({ session: { mode: "until", endsAt: date.getTime() } });
+        setPending(null);
+      }
     }
   };
   const lid = status.lid;
   const locked = disabled || !status.supported;
   return (
-    <div className="space-y-4 text-sm">
-      <p role="status" className="font-medium">
-        {keepAwakeLabel(status)}
-      </p>
-      {status.reason ? (
-        <p role="alert" className="text-xs text-muted-foreground">
-          {status.reason}
+    <div className="flex flex-col gap-4 text-sm">
+      <div className="flex flex-col gap-1">
+        <h3 className="font-medium">Keep awake</h3>
+        <p role="status" className="text-xs text-muted-foreground">
+          {pending ? "Off until you start" : keepAwakeLabel(status)}
         </p>
-      ) : null}
-      <section className="space-y-3" aria-label={settings ? "Default session" : "Session"}>
-        {settings ? <p className="text-xs text-muted-foreground">Default session</p> : null}
-        <RadioGroup
-          value={mode}
-          disabled={locked}
-          onValueChange={(value) => choose(value as KeepAwakeSession["mode"])}
-        >
-          {modes.map(([value, label]) => (
-            <label key={value} className="flex min-h-8 items-center gap-3">
-              <Radio value={value} />
-              {label}
-            </label>
-          ))}
-        </RadioGroup>
-        {mode === "duration" ? (
-          <div className="space-y-3 border-t border-border pt-3">
-            <div className="flex gap-2">
-              {[60, 240].map((value) => (
-                <Button
-                  key={value}
-                  variant={minutes === value ? "secondary" : "outline"}
-                  size="sm"
-                  disabled={locked}
-                  onClick={() => {
-                    setMinutes(value);
-                    if (settings) saveDefaults({ durationMinutes: value });
-                  }}
-                >
-                  {value / 60} {value === 60 ? "hour" : "hours"}
-                </Button>
-              ))}
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span>Minutes</span>
-              <div className="w-36">
-                <NumberField
-                  size="sm"
-                  min={1}
-                  max={10080}
-                  value={minutes}
-                  disabled={locked}
-                  onValueChange={(value) => {
-                    if (value !== null) {
-                      setMinutes(value);
-                      if (settings) saveDefaults({ durationMinutes: value });
-                    }
-                  }}
-                >
-                  <NumberFieldGroup>
-                    <NumberFieldDecrement />
-                    <NumberFieldInput aria-label="Duration in minutes" />
-                    <NumberFieldIncrement />
-                  </NumberFieldGroup>
-                </NumberField>
-              </div>
-            </div>
-          </div>
+        {status.reason ? (
+          <p role="alert" className="text-xs text-muted-foreground">
+            {status.reason}
+          </p>
         ) : null}
-        {mode === "until" ? (
-          <div className="space-y-3 border-t border-border pt-3">
-            {!settings ? (
+      </div>
+      <section className="flex flex-col gap-2" aria-label="Session">
+        <FormRow label="Session">
+          <Select
+            value={mode}
+            onValueChange={(value) => {
+              if (value) choose(value as KeepAwakeSession["mode"]);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-44" disabled={locked} aria-label="Session">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {KEEP_AWAKE_MODES.map(([value, label]) => (
+                <SelectItem hideIndicator key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </FormRow>
+        {pending === "duration" ? (
+          <FormRow label="Minutes">
+            <div className="w-44">
+              <NumberField
+                size="sm"
+                min={1}
+                max={10080}
+                value={minutes}
+                disabled={locked}
+                onValueChange={(value) => {
+                  if (value !== null) setMinutes(value);
+                }}
+              >
+                <NumberFieldGroup>
+                  <NumberFieldDecrement />
+                  <NumberFieldInput aria-label="Duration in minutes" />
+                  <NumberFieldIncrement />
+                </NumberFieldGroup>
+              </NumberField>
+            </div>
+          </FormRow>
+        ) : null}
+        {pending === "until" ? (
+          <FormRow label="Until">
+            <div className="flex w-44 gap-2">
               <Select
                 value={day}
                 onValueChange={(value) => {
@@ -285,94 +260,70 @@ export function KeepAwakeForm({
                   }
                 }}
               >
-                <SelectTrigger size="sm" aria-label="End day">
+                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="End day">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="tomorrow">Tomorrow</SelectItem>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value="today">
+                    Today
+                  </SelectItem>
+                  <SelectItem hideIndicator value="tomorrow">
+                    Tomorrow
+                  </SelectItem>
                 </SelectPopup>
               </Select>
-            ) : null}
-            <div className="flex items-center gap-2">
-              <span className="flex-1">{settings ? "End time" : "Until"}</span>
               <Select
-                value={hour}
+                value={time}
                 onValueChange={(value) => {
                   if (value) {
+                    setTime(value);
                     setUntilError(false);
-                    setHour(value);
-                    if (settings)
-                      saveDefaults({ untilTime: `${value.padStart(2, "0")}:${minute}` });
                   }
                 }}
               >
-                <SelectTrigger size="sm" aria-label="End hour">
+                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="End time">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectPopup>
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {String(h).padStart(2, "0")}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <span>:</span>
-              <Select
-                value={minute}
-                onValueChange={(value) => {
-                  if (value) {
-                    setUntilError(false);
-                    setMinute(value);
-                    if (settings) saveDefaults({ untilTime: `${hour.padStart(2, "0")}:${value}` });
-                  }
-                }}
-              >
-                <SelectTrigger size="sm" aria-label="End minute">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  {Array.from({ length: 60 }, (_, m) => (
-                    <SelectItem key={m} value={String(m).padStart(2, "0")}>
-                      {String(m).padStart(2, "0")}
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  {keepAwakeTimeOptions(time).map((option) => (
+                    <SelectItem hideIndicator key={option} value={option}>
+                      {option}
                     </SelectItem>
                   ))}
                 </SelectPopup>
               </Select>
             </div>
-          </div>
+          </FormRow>
         ) : null}
-        {!settings && mode === "until" && untilError ? (
-          <p className="text-xs text-muted-foreground">Choose a later time or Tomorrow</p>
+        {untilError ? (
+          <p className="text-xs text-muted-foreground">Choose a later time or tomorrow</p>
         ) : null}
-        {!settings && (mode === "duration" || mode === "until") ? (
-          <Button size="sm" disabled={locked} onClick={start}>
+        {pending ? (
+          <Button size="sm" className="self-end" disabled={locked} onClick={start}>
             Start session
           </Button>
         ) : null}
       </section>
-      <section className="space-y-3 border-t border-border pt-4" aria-label="Options">
-        <label className="flex min-h-8 items-center justify-between gap-4">
-          <span>Allow display sleep</span>
+      <section className="flex flex-col gap-2 border-t border-border pt-4" aria-label="Options">
+        <FormRow label="Allow display sleep">
           <Switch
             disabled={disabled}
+            aria-label="Allow display sleep"
             checked={options.allowDisplaySleep}
             onCheckedChange={(checked) => updateOptions({ allowDisplaySleep: checked })}
           />
-        </label>
-        <label className="flex min-h-8 items-center justify-between gap-4">
-          <span>Stop on low battery</span>
+        </FormRow>
+        <FormRow label="Stop on low battery">
           <Switch
             disabled={disabled}
+            aria-label="Stop on low battery"
             checked={options.batteryCutoff !== null}
             onCheckedChange={(checked) => updateOptions({ batteryCutoff: checked ? 20 : null })}
           />
-        </label>
+        </FormRow>
         {options.batteryCutoff !== null ? (
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-muted-foreground">Below (%)</span>
-            <div className="w-36">
+          <FormRow label={<span className="text-muted-foreground">Stop at (%)</span>}>
+            <div className="w-44">
               <NumberField
                 key={options.batteryCutoff}
                 size="sm"
@@ -391,34 +342,34 @@ export function KeepAwakeForm({
                 </NumberFieldGroup>
               </NumberField>
             </div>
-          </div>
+          </FormRow>
         ) : null}
         {status.lidClosedSupported ? (
-          <div className="space-y-2">
-            <label className="flex min-h-8 items-center justify-between gap-4">
-              <span>Keep awake with lid closed</span>
+          <>
+            <FormRow label="Keep awake with lid closed">
               <Switch
                 disabled={disabled || (!lid?.authorized && !options.lidClosed)}
+                aria-label="Keep awake with lid closed"
                 checked={options.lidClosed}
                 onCheckedChange={(checked) => updateOptions({ lidClosed: checked })}
               />
-            </label>
-            <p className="text-xs text-muted-foreground">
-              A closed laptop stays warm and drains battery; Stop on low battery still applies.
-            </p>
+            </FormRow>
             {lid ? (
               <>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs text-muted-foreground">
-                    {lid.active
-                      ? "Active"
-                      : lid.authorized
-                        ? "Authorized"
-                        : "Authorization required"}
-                  </span>
+                <FormRow
+                  label={
+                    <span className="text-xs text-muted-foreground">
+                      {lid.active
+                        ? "Active"
+                        : lid.authorized
+                          ? "Authorized"
+                          : "Needs authorization"}
+                    </span>
+                  }
+                >
                   {localDesktop && lid.nativeAuthorization ? (
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="outline"
                       disabled={disabled}
                       onClick={() => authorize(lid.authorized ? "remove" : "install")}
@@ -427,7 +378,7 @@ export function KeepAwakeForm({
                     </Button>
                   ) : (
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="outline"
                       disabled={disabled}
                       onClick={() => authorize("refresh")}
@@ -435,21 +386,28 @@ export function KeepAwakeForm({
                       Check authorization
                     </Button>
                   )}
-                </div>
+                </FormRow>
                 {!localDesktop || !lid.nativeAuthorization ? (
-                  <details className="text-xs">
-                    <summary>Run on this Mac</summary>
-                    <div className="mt-2 space-y-2">
-                      <p>Authorize</p>
-                      <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 text-xs">
-                        {lid.installCommand}
-                      </pre>
-                      <p>Remove authorization after ending lid-closed sessions</p>
-                      <pre className="overflow-auto rounded-md bg-muted p-2 text-xs">
-                        {lid.removeCommand}
-                      </pre>
-                    </div>
-                  </details>
+                  <Collapsible>
+                    <CollapsibleTrigger
+                      render={<Button size="xs" variant="ghost-muted" className="group -ms-2" />}
+                    >
+                      Commands to run on this Mac
+                      <ChevronDownIcon className="transition-transform group-data-panel-open:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsiblePanel>
+                      <div className="flex flex-col gap-2 pt-2 text-xs text-muted-foreground">
+                        <p>Authorize</p>
+                        <pre className="max-h-32 overflow-auto rounded-lg bg-muted p-3 font-mono text-foreground">
+                          {lid.installCommand}
+                        </pre>
+                        <p>Remove, after ending lid-closed sessions</p>
+                        <pre className="overflow-auto rounded-lg bg-muted p-3 font-mono text-foreground">
+                          {lid.removeCommand}
+                        </pre>
+                      </div>
+                    </CollapsiblePanel>
+                  </Collapsible>
                 ) : null}
                 {lid.error ? (
                   <p role="alert" className="text-xs text-destructive">
@@ -458,7 +416,7 @@ export function KeepAwakeForm({
                 ) : null}
               </>
             ) : null}
-          </div>
+          </>
         ) : null}
       </section>
     </div>

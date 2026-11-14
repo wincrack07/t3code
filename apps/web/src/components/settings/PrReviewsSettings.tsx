@@ -149,7 +149,7 @@ function ReviewerPicker({
     model,
   );
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <ProviderModelPicker
         environmentId={environmentId}
         disabled={false}
@@ -174,12 +174,12 @@ function ReviewerPicker({
           value={effortOf(value)}
           onValueChange={(effort) => effort && onChange(withEffort(value, effort))}
         >
-          <SelectTrigger aria-label="Effort" size="sm">
+          <SelectTrigger aria-label="Effort" size="sm" className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
-          <SelectPopup>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
             {EFFORTS.map((effort) => (
-              <SelectItem key={effort} value={effort}>
+              <SelectItem hideIndicator key={effort} value={effort}>
                 {effort === "default" ? "Default effort" : effort}
               </SelectItem>
             ))}
@@ -260,6 +260,93 @@ function HistoryRow({
   );
 }
 
+function RepositoryRow({
+  repo,
+  projects,
+  canWrite,
+  onChange,
+  onRemove,
+}: {
+  readonly repo: PrReviewConfig["repositories"][number];
+  readonly projects: ReadonlyArray<{ readonly id: ProjectId; readonly title: string }>;
+  readonly canWrite: boolean;
+  readonly onChange: (patch: Partial<PrReviewConfig["repositories"][number]>) => void;
+  readonly onRemove: () => void;
+}) {
+  return (
+    <SettingsRow
+      title={repo.repository || "New repository"}
+      control={
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={repo.enabled}
+            disabled={!canWrite}
+            onCheckedChange={(enabled) => onChange({ enabled })}
+            aria-label={`Review ${repo.repository || "this repository"}`}
+          />
+          <Button
+            size="icon-sm"
+            variant="ghost-destructive"
+            aria-label="Remove repository"
+            disabled={!canWrite}
+            onClick={onRemove}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      }
+    >
+      <div className="mt-3 flex min-w-0 max-w-2xl flex-col gap-3 pb-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <Input
+              size="sm"
+              font="mono"
+              placeholder="owner/name"
+              aria-label="Repository"
+              value={repo.repository}
+              disabled={!canWrite}
+              onChange={(event) => onChange({ repository: event.target.value.trim() })}
+            />
+          </div>
+          <Select
+            value={repo.projectId}
+            onValueChange={(projectId) => projectId && onChange({ projectId: projectId as ProjectId })}
+          >
+            <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Project">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {projects.map((project) => (
+                <SelectItem hideIndicator key={project.id} value={project.id}>
+                  {project.title}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Switch
+            size="sm"
+            checked={repo.autoReview}
+            disabled={!canWrite}
+            onCheckedChange={(autoReview) => onChange({ autoReview })}
+          />
+          Review new pull requests automatically
+        </label>
+        <Textarea
+          size="sm"
+          aria-label="Repository review instructions"
+          placeholder="Instructions for this repository. Replaces the default instructions."
+          value={repo.instructions}
+          disabled={!canWrite}
+          onChange={(event) => onChange({ instructions: event.target.value })}
+        />
+      </div>
+    </SettingsRow>
+  );
+}
+
 export function PrReviewsSettings() {
   const { connectedEnvironments, environment } = useSettingsScope();
   const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
@@ -324,15 +411,7 @@ export function PrReviewsSettings() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection
-        id="pr-reviews"
-        title="Reviewer environment"
-        headerAction={
-          <Button size="sm" disabled={!dirty || saving || !canWrite} onClick={save}>
-            Save
-          </Button>
-        }
-      >
+      <SettingsSection id="pr-reviews" title="Reviewer">
         {connectedEnvironments.length > 1 ? (
           <SettingsRow
             title="Environment"
@@ -342,12 +421,12 @@ export function PrReviewsSettings() {
                 value={environmentId ?? ""}
                 onValueChange={(value) => value && setSelectedId(value as EnvironmentId)}
               >
-                <SelectTrigger size="sm" aria-label="Environment">
+                <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Environment">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectPopup>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
                   {connectedEnvironments.map((entry) => (
-                    <SelectItem key={entry.environmentId} value={entry.environmentId}>
+                    <SelectItem hideIndicator key={entry.environmentId} value={entry.environmentId}>
                       {entry.label}
                     </SelectItem>
                   ))}
@@ -362,7 +441,7 @@ export function PrReviewsSettings() {
           <>
             <SettingsRow
               title="Review pull requests from this environment"
-              description="Only environments with this on poll GitHub. With several, the lowest priority number reviews and the others take over if it does not claim the pull request in time."
+              description="Only environments with this on poll GitHub. With several, the lowest priority number reviews and the others step in if it doesn't claim the pull request in time."
               control={
                 <Switch
                   checked={config.enabled}
@@ -374,11 +453,11 @@ export function PrReviewsSettings() {
             />
             <SettingsRow
               title="Priority"
-              description="0 is the primary reviewer, 1 the first fallback, and so on."
+              description="0 is the main reviewer, 1 the first fallback, and so on."
               control={
                 <Input
                   size="sm"
-                  className="w-20"
+                  className="w-full sm:w-24"
                   type="number"
                   min={0}
                   value={config.priority}
@@ -391,11 +470,11 @@ export function PrReviewsSettings() {
             />
             <SettingsRow
               title="Claim grace"
-              description="Seconds each fallback waits before it takes over."
+              description="Seconds each fallback waits before it steps in."
               control={
                 <Input
                   size="sm"
-                  className="w-20"
+                  className="w-full sm:w-24"
                   type="number"
                   min={0}
                   value={config.claimGraceSeconds}
@@ -431,12 +510,16 @@ export function PrReviewsSettings() {
                     edit({ identity: { ...config.identity, mode } })
                   }
                 >
-                  <SelectTrigger size="sm" aria-label="Identity">
+                  <SelectTrigger size="sm" className="w-full sm:w-56" aria-label="Identity">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="github-app">GitHub App (bot account)</SelectItem>
-                    <SelectItem value="gh">This environment's gh login</SelectItem>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    <SelectItem hideIndicator value="github-app">
+                      GitHub App (bot account)
+                    </SelectItem>
+                    <SelectItem hideIndicator value="gh">
+                      This environment's gh login
+                    </SelectItem>
                   </SelectPopup>
                 </Select>
               }
@@ -447,7 +530,7 @@ export function PrReviewsSettings() {
                   title="Create the App"
                   description="Reviews come from the App's own bot account. It needs no webhook."
                 >
-                  <div className="mt-3 max-w-2xl space-y-3 pb-3.5 text-xs leading-normal text-muted-foreground">
+                  <div className="mt-3 flex max-w-2xl flex-col items-start gap-3 pb-3 text-xs leading-normal text-muted-foreground">
                     <ol className="list-decimal space-y-1 ps-4">
                       <li>
                         Create it with the button, or by hand under GitHub Settings → Developer
@@ -521,11 +604,11 @@ export function PrReviewsSettings() {
                   title="Private key"
                   description={
                     state.identity.hasPrivateKey
-                      ? "Stored in this environment's secret store. Paste a new key to replace it, or save empty to remove it."
-                      : "Paste the .pem file's contents. It is stored in this environment's secret store and never sent back."
+                      ? "Saved in this environment's secret store. Paste a new key to replace it, or remove it."
+                      : "Paste the .pem file. It's saved in this environment's secret store and never sent back."
                   }
                 >
-                  <div className="mt-3 max-w-2xl space-y-2 pb-3.5">
+                  <div className="mt-3 flex max-w-2xl flex-col items-start gap-2 pb-3">
                     <Textarea
                       size="sm"
                       aria-label="Private key"
@@ -534,13 +617,11 @@ export function PrReviewsSettings() {
                       disabled={!canWrite}
                       onChange={(event) => setPrivateKeyText(event.target.value)}
                     />
-                    <div>
-                      <Button size="sm" variant="outline" disabled={!canWrite} onClick={saveKey}>
-                        {privateKey.trim() === "" && state.identity.hasPrivateKey
-                          ? "Remove key"
-                          : "Store key"}
-                      </Button>
-                    </div>
+                    <Button size="sm" variant="outline" disabled={!canWrite} onClick={saveKey}>
+                      {privateKey.trim() === "" && state.identity.hasPrivateKey
+                        ? "Remove key"
+                        : "Store key"}
+                    </Button>
                   </div>
                 </SettingsRow>
               </>
@@ -576,7 +657,7 @@ export function PrReviewsSettings() {
             />
             <SettingsRow
               title="Allowed users"
-              description="GitHub logins, comma separated. Leave empty to allow collaborators with write access."
+              description="GitHub logins, comma separated. Empty allows collaborators with write access."
               control={
                 <Input
                   size="sm"
@@ -596,11 +677,39 @@ export function PrReviewsSettings() {
             />
           </SettingsSection>
 
-          <SettingsSection
-            title="Repositories"
-            headerAction={
+          <SettingsSection title="Repositories">
+            {config.repositories.length === 0 ? (
+              <SettingsRow
+                title="No repositories yet"
+                description="Add a GitHub repository and the project that holds its checkout."
+              />
+            ) : null}
+            {config.repositories.map((repo, index) => {
+              const replace = (patch: Partial<typeof repo>) =>
+                edit({
+                  repositories: config.repositories.map((entry, at) =>
+                    at === index ? { ...entry, ...patch } : entry,
+                  ),
+                });
+              return (
+                <RepositoryRow
+                  // oxlint-disable-next-line react/no-array-index-key -- Rows are controlled; a content key remounts the input on every keystroke.
+                  key={index}
+                  repo={repo}
+                  projects={projects}
+                  canWrite={canWrite}
+                  onChange={replace}
+                  onRemove={() =>
+                    edit({
+                      repositories: config.repositories.filter((_entry, at) => at !== index),
+                    })
+                  }
+                />
+              );
+            })}
+            <div className="px-3 py-2 sm:px-4">
               <Button
-                size="xs"
+                size="compact"
                 variant="ghost-muted"
                 disabled={!canWrite || projects.length === 0}
                 onClick={() =>
@@ -618,141 +727,16 @@ export function PrReviewsSettings() {
                   })
                 }
               >
-                <PlusIcon className="size-3" />
-                Add
+                <PlusIcon />
+                Add repository
               </Button>
-            }
-          >
-            {config.repositories.length === 0 ? (
-              <SettingsRow
-                title="No repositories"
-                description="Add the owner/name of a GitHub repository and the project that holds its checkout."
-              />
-            ) : null}
-            {config.repositories.map((repo, index) => {
-              const replace = (patch: Partial<typeof repo>) =>
-                edit({
-                  repositories: config.repositories.map((entry, at) =>
-                    at === index ? { ...entry, ...patch } : entry,
-                  ),
-                });
-              return (
-                <SettingsRow
-                  // oxlint-disable-next-line react/no-array-index-key -- Rows are controlled; a content key remounts the input on every keystroke.
-                  key={index}
-                  title={repo.repository || "New repository"}
-                  control={
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={repo.enabled}
-                        disabled={!canWrite}
-                        onCheckedChange={(enabled) => replace({ enabled })}
-                        aria-label={`Review ${repo.repository || "this repository"}`}
-                      />
-                      <Button
-                        size="icon-micro"
-                        variant="ghost-destructive"
-                        aria-label="Remove repository"
-                        disabled={!canWrite}
-                        onClick={() =>
-                          edit({
-                            repositories: config.repositories.filter((_entry, at) => at !== index),
-                          })
-                        }
-                      >
-                        <XIcon className="size-3" />
-                      </Button>
-                    </div>
-                  }
-                >
-                  <div className="mt-3 min-w-0 max-w-2xl space-y-2 pb-3.5">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <Input
-                          size="sm"
-                          font="mono"
-                          placeholder="owner/name"
-                          aria-label="Repository"
-                          value={repo.repository}
-                          disabled={!canWrite}
-                          onChange={(event) => replace({ repository: event.target.value.trim() })}
-                        />
-                      </div>
-                      <Select
-                        value={repo.projectId}
-                        onValueChange={(projectId) =>
-                          projectId && replace({ projectId: projectId as ProjectId })
-                        }
-                      >
-                        <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Project">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectPopup align="end" alignItemWithTrigger={false}>
-                          {projects.map((project) => (
-                            <SelectItem hideIndicator key={project.id} value={project.id}>
-                              {project.title}
-                            </SelectItem>
-                          ))}
-                        </SelectPopup>
-                      </Select>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Switch
-                        size="sm"
-                        checked={repo.autoReview}
-                        disabled={!canWrite}
-                        onCheckedChange={(autoReview) => replace({ autoReview })}
-                        aria-label="Auto-review"
-                      />
-                      <span>Review new pull requests automatically</span>
-                    </div>
-                    <Textarea
-                      size="sm"
-                      aria-label="Repository review instructions"
-                      placeholder="Instructions for this repository. Replaces the default instructions."
-                      value={repo.instructions}
-                      disabled={!canWrite}
-                      onChange={(event) => replace({ instructions: event.target.value })}
-                    />
-                  </div>
-                </SettingsRow>
-              );
-            })}
+            </div>
           </SettingsSection>
 
-          <SettingsSection
-            title="Reviewer rules"
-            headerAction={
-              <Button
-                size="xs"
-                variant="ghost-muted"
-                disabled={!canWrite}
-                onClick={() =>
-                  edit({
-                    rules: [
-                      ...config.rules,
-                      {
-                        authorProvider:
-                          AUTHOR_PROVIDERS.map(([value]) => value).find(
-                            (value) => !config.rules.some((rule) => rule.authorProvider === value),
-                          ) ?? "any",
-                        reviewer: config.defaultReviewer ?? {
-                          instanceId: ProviderInstanceId.make("claudeAgent"),
-                          model: "claude-opus-5-5",
-                        },
-                      },
-                    ],
-                  })
-                }
-              >
-                <PlusIcon className="size-3" />
-                Add rule
-              </Button>
-            }
-          >
+          <SettingsSection title="Reviewer rules">
             <SettingsRow
               title="How the author is found"
-              description="Read from the T3 thread that opened or pushed the pull request, otherwise from its Co-Authored-By trailers. The first matching rule picks the reviewer."
+              description="From the T3 thread that opened or pushed the pull request, otherwise from its Co-Authored-By trailers. The first matching rule picks the reviewer."
             />
             {config.rules.map((rule, index) => (
               <SettingsRow
@@ -760,7 +744,7 @@ export function PrReviewsSettings() {
                 title={`Rule ${index + 1}`}
                 control={
                   <Button
-                    size="icon-micro"
+                    size="icon-sm"
                     variant="ghost-destructive"
                     aria-label="Remove rule"
                     disabled={!canWrite}
@@ -768,11 +752,11 @@ export function PrReviewsSettings() {
                       edit({ rules: config.rules.filter((_entry, at) => at !== index) })
                     }
                   >
-                    <XIcon className="size-3" />
+                    <XIcon />
                   </Button>
                 }
               >
-                <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 pb-3.5 text-xs text-muted-foreground">
+                <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 pb-3 text-sm text-muted-foreground">
                   <span>Written by</span>
                   <Select
                     value={rule.authorProvider}
@@ -785,7 +769,7 @@ export function PrReviewsSettings() {
                       })
                     }
                   >
-                    <SelectTrigger size="sm" aria-label="Author provider">
+                    <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Author provider">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectPopup alignItemWithTrigger={false}>
@@ -812,9 +796,36 @@ export function PrReviewsSettings() {
                 </div>
               </SettingsRow>
             ))}
+            <div className="px-3 py-2 sm:px-4">
+              <Button
+                size="compact"
+                variant="ghost-muted"
+                disabled={!canWrite}
+                onClick={() =>
+                  edit({
+                    rules: [
+                      ...config.rules,
+                      {
+                        authorProvider:
+                          AUTHOR_PROVIDERS.map(([value]) => value).find(
+                            (value) => !config.rules.some((rule) => rule.authorProvider === value),
+                          ) ?? "any",
+                        reviewer: config.defaultReviewer ?? {
+                          instanceId: ProviderInstanceId.make("claudeAgent"),
+                          model: "claude-opus-5-5",
+                        },
+                      },
+                    ],
+                  })
+                }
+              >
+                <PlusIcon />
+                Add rule
+              </Button>
+            </div>
             <SettingsRow
               title="Otherwise"
-              description="Used when no rule matches. Unset uses the environment's default model."
+              description="When no rule matches. Unset uses the environment's default model."
               control={
                 <ReviewerPicker
                   environmentId={environmentId}
@@ -829,9 +840,9 @@ export function PrReviewsSettings() {
           <SettingsSection title="Review instructions">
             <SettingsRow
               title="Default instructions"
-              description="Leave empty for T3's default: verified defects only, no style nits."
+              description="Empty uses T3's default: verified defects only, no style nits."
             >
-              <div className="mt-3 max-w-2xl pb-3.5">
+              <div className="mt-3 max-w-2xl pb-3">
                 <Textarea
                   aria-label="Default review instructions"
                   value={config.instructions}
@@ -855,7 +866,9 @@ export function PrReviewsSettings() {
                       : "Off on this environment."
               }
             />
-            {state.history.length === 0 ? <SettingsRow title="No reviews yet" /> : null}
+            {state.history.length === 0 ? (
+              <SettingsRow title="No reviews yet" description="Reviews this environment runs show up here." />
+            ) : null}
             {state.history.map((record) => (
               <HistoryRow
                 key={record.id}
@@ -866,6 +879,19 @@ export function PrReviewsSettings() {
             ))}
           </SettingsSection>
         </>
+      ) : null}
+      {dirty ? (
+        <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-popover px-4 py-2 shadow-lg">
+          <span className="text-sm text-muted-foreground">Unsaved changes</span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={saving} onClick={() => setDraft(null)}>
+              Discard
+            </Button>
+            <Button size="sm" disabled={saving || !canWrite} onClick={save}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
       ) : null}
     </SettingsPageContainer>
   );
