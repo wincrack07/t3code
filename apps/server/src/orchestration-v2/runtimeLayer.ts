@@ -326,7 +326,9 @@ const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
 );
 const layerPrReviewBotProvided = PrReviewBotService.layer.pipe(
   Layer.provide(
-    Layer.mergeAll(layerThreadLaunchProvided, layerThreadManagementProvided, layerProjectService),
+    Layer.mergeAll(layerThreadLaunchProvided, layerThreadManagementProvided).pipe(
+      Layer.provideMerge(layerProjectService),
+    ),
   ),
 );
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(

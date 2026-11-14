@@ -12,7 +12,7 @@ import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
-import migration from "../persistence/Migrations/086_ChatHubSync.ts";
+import migration from "../persistence/ForkMigrations/004_ChatHubSync.ts";
 import * as ChatHubSync from "./ChatHubSync.ts";
 
 const setup = Effect.gen(function* () {

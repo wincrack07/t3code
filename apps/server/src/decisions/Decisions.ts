@@ -1,8 +1,12 @@
 import {
+  DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_TEXT_GENERATION_MODEL,
+  DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   AUTO_MODEL,
   ProviderInstanceId,
   ProjectId,
   type ModelSelection,
+  type ProviderDriverKind,
   type DecisionCandidate,
   type DecisionInput,
   type DecisionResult,
@@ -11,7 +15,6 @@ import {
 import { applyDecisionRules } from "@t3tools/shared/decisionRules";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
-import { defaultTextGenerationModel } from "@t3tools/shared/serverSettings";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -29,6 +32,12 @@ import { decisionCandidates } from "./candidates.ts";
 import { decisionPrompt, parseDecisionAnswer } from "./prompt.ts";
 import { requestJevDecision } from "./jev.ts";
 import { requestOpenAiDecision } from "./openai.ts";
+
+// Same fallback order as shared/serverSettings, which keeps it private.
+const defaultTextGenerationModel = (driver: ProviderDriverKind): string =>
+  DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER[driver] ??
+  DEFAULT_MODEL_BY_PROVIDER[driver] ??
+  DEFAULT_TEXT_GENERATION_MODEL;
 
 export class Decisions extends Context.Service<
   Decisions,

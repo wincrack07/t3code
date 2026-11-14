@@ -42,6 +42,7 @@ const provider = Schema.decodeSync(ServerProvider)({
 const project = Schema.decodeSync(ProjectStore.ProjectRow)({
   projectId: "app",
   title: "App",
+  hasCustomTitle: false,
   workspaceRoot: "/home/user/app",
   defaultModelSelection: null,
   defaultThreadEnvMode: null,

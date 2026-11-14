@@ -7,7 +7,6 @@ import type {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
   OrchestrationV2ThreadHistoryPage,
-  ProjectId,
 } from "@t3tools/contracts";
 import {
   latestExecutedRun,

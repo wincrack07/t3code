@@ -2854,6 +2854,7 @@ it("keeps Auto selected after a resolved turn", () => {
     threadModelSelection,
     projectModelSelection: null,
     settings: DEFAULT_UNIFIED_SETTINGS,
+    threadStarted: false,
   };
   expect(deriveEffectiveComposerModelState({ ...defaults, draft: null }).selectedModel).toBe(
     "t3:auto",

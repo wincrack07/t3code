@@ -217,6 +217,11 @@ export function persistState(state: UiState): void {
     return;
   }
   try {
+    const projectExpandedById = Object.fromEntries(
+      Object.entries(state.projectExpandedById).filter(
+        ([key]) => key !== LEGACY_PROJECT_EXPANSION_DEFAULT_KEY,
+      ),
+    );
     window.localStorage.setItem(
       windowStorageKey("t3code:ui-view-state"),
       JSON.stringify({
@@ -229,7 +234,7 @@ export function persistState(state: UiState): void {
     window.localStorage.setItem(
       PERSISTED_STATE_KEY,
       JSON.stringify({
-        projectExpandedById: state.projectExpandedById,
+        projectExpandedById,
         projectOrder: state.projectOrder,
         threadLastVisitedAtById: state.threadLastVisitedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,

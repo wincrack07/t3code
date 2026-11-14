@@ -151,7 +151,6 @@ const TailscaleStatusSelf = Schema.Struct({
 const TailscaleStatusJson = Schema.Struct({
   BackendState: Schema.optional(Schema.Unknown),
   Self: Schema.optional(TailscaleStatusSelf),
-  BackendState: Schema.optional(Schema.String),
   Peer: Schema.optional(Schema.Record(Schema.String, TailscaleStatusSelf)),
 });
 

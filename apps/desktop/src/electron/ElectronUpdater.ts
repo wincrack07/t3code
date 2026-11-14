@@ -104,7 +104,7 @@ export class ElectronUpdater extends Context.Service<
   }
 >()("@t3tools/desktop/electron/ElectronUpdater") {}
 
-const make = (autoUpdater: AutoUpdater | UnsignedMacUpdater) =>
+export const make = (autoUpdater: AutoUpdater | UnsignedMacUpdater) =>
   ElectronUpdater.of({
     installOnQuitOnly: autoUpdater instanceof UnsignedMacUpdater,
     setFeedURL: Effect.fn("ElectronUpdater.setFeedURL")(function (options) {
@@ -182,7 +182,8 @@ const make = (autoUpdater: AutoUpdater | UnsignedMacUpdater) =>
     }) {
       return Effect.suspend(() => {
         const channel = autoUpdater.channel;
-        if (autoUpdater instanceof AppImageUpdater) relaunchWithoutInheritedDescriptors(autoUpdater);
+        if (autoUpdater instanceof AppImageUpdater)
+          relaunchWithoutInheritedDescriptors(autoUpdater);
         return Effect.try({
           try: () => autoUpdater.quitAndInstall(isSilent, isForceRunAfter),
           catch: (cause) =>
