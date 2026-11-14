@@ -1,4 +1,6 @@
+import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { SubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -619,6 +621,7 @@ function FloatingStatusLabel(props: {
   return (
     <WorkingDuration
       key="working"
+      environmentId={props.status.environmentId}
       startedAt={props.status.startedAt}
       statusText={props.status.statusText}
       onLayout={props.onLayout}
@@ -663,18 +666,24 @@ function StatusLabelRow(props: {
 }
 
 function WorkingDuration(props: {
+  readonly environmentId: EnvironmentId;
   readonly startedAt: string;
   readonly statusText: string | undefined;
   readonly onLayout: (event: LayoutChangeEvent) => void;
 }) {
   return (
     <StatusLabelRow onLayout={props.onLayout}>
-      <WorkingTimer startedAt={props.startedAt} statusText={props.statusText} />
+      <WorkingTimer
+        environmentId={props.environmentId}
+        startedAt={props.startedAt}
+        statusText={props.statusText}
+      />
     </StatusLabelRow>
   );
 }
 
 function WorkingTimer(props: {
+  readonly environmentId: EnvironmentId;
   readonly startedAt: string;
   readonly statusText: string | undefined;
 }) {
@@ -685,7 +694,7 @@ function WorkingTimer(props: {
       numberOfLines={1}
       style={{ fontVariant: ["tabular-nums"], fontWeight: "500" }}
     >
-      Working {formatWorkingDuration(props.startedAt, nowMs)}
+      Working {formatWorkingDuration(props.startedAt, toServerClock(props.environmentId, nowMs))}
       {props.statusText ? ` · ${props.statusText}` : null}
     </SystemText>
   );

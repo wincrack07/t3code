@@ -31,81 +31,79 @@ import { PreviewStandardToolkit } from "./tools.ts";
 it.effect.each(["target", "url", "navigate"] as const)(
   "preview %s resolves loopback navigation in the environment",
   (entry) =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scope = yield* McpInvocationContext.McpInvocationContext;
-        const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
-        const connected = yield* Deferred.make<void>();
-        const tabId = PreviewTabId.make("opened-tab");
-        const target = {
-          kind: "environment-port" as const,
-          port: 3000,
-          protocol: "http" as const,
-          path: "/settings?tab=account#token=test",
-        };
-        const requests: PreviewAutomationRequest[] = [];
-        const status = {
-          available: true,
-          visible: false,
-          tabId,
-          url: "http://localhost:3000/settings?tab=account#token=test",
-          title: "Settings",
-          loading: false,
-        };
-        const events = yield* broker.connect({
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+      const connected = yield* Deferred.make<void>();
+      const tabId = PreviewTabId.make("opened-tab");
+      const target = {
+        kind: "environment-port" as const,
+        port: 3000,
+        protocol: "http" as const,
+        path: "/settings?tab=account#token=test",
+      };
+      const requests: PreviewAutomationRequest[] = [];
+      const status = {
+        available: true,
+        visible: false,
+        tabId,
+        url: "http://localhost:3000/settings?tab=account#token=test",
+        title: "Settings",
+        loading: false,
+      };
+      const events = yield* broker.connect({
+        clientId: SERVER_BROWSER_AUTOMATION_CLIENT_ID,
+        environmentId: scope.environmentId,
+      });
+      yield* Stream.runForEach(events, (event) => {
+        if (event.type === "connected") return Deferred.succeed(connected, undefined);
+        requests.push(event.request);
+        return broker.respond({
           clientId: SERVER_BROWSER_AUTOMATION_CLIENT_ID,
-          environmentId: scope.environmentId,
+          connectionId: event.connectionId,
+          requestId: event.request.requestId,
+          ok: true,
+          result: status,
         });
-        yield* Stream.runForEach(events, (event) => {
-          if (event.type === "connected") return Deferred.succeed(connected, undefined);
-          requests.push(event.request);
-          return broker.respond({
-            clientId: SERVER_BROWSER_AUTOMATION_CLIENT_ID,
-            connectionId: event.connectionId,
-            requestId: event.request.requestId,
-            ok: true,
-            result: status,
-          });
-        }).pipe(Effect.forkScoped);
-        yield* Deferred.await(connected);
-        const toolkit = yield* PreviewStandardToolkit.pipe(
-          Effect.provide(McpToolAccess.HandlersLayer.layer(layerStandard)),
-        );
-        const results = yield* toolkit
-          .handle(entry === "navigate" ? "preview_navigate" : "preview_open", {
-            url: "http://localhost:3000/settings?tab=account#token=test",
-            ...(entry === "target" ? { target } : {}),
-            ...(entry === "navigate" ? {} : { open: false, reuseExistingTab: false }),
-          })
-          .pipe(Stream.unwrap, Stream.runCollect);
-        expect(results.at(-1)?.result).toEqual(status);
-        expect(requests.map(({ operation, input }) => ({ operation, input }))).toEqual(
-          entry === "navigate"
-            ? [{ operation: "open", input: { url: status.url } }]
-            : [
-                {
-                  operation: "open",
-                  input: { url: status.url, open: false, show: false, reuseExistingTab: false },
-                },
-              ],
-        );
-      }).pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, {
-          environmentId: EnvironmentId.make("environment-1"),
-          requestNamespace: "provider-session-1",
-          thread: {
-            threadId: ThreadId.make("thread-1"),
-            providerSessionId: "provider-session-1",
-            providerInstanceId: ProviderInstanceId.make("codex"),
-          },
-          client: undefined,
-          capabilities: new Set(["preview"] as const),
-          issuedAt: 1,
-        }),
-        Effect.provide(
-          Layer.mergeAll(PreviewAutomationBroker.layer, liveThreadsLayer).pipe(
-            Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-          ),
+      }).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
+      const toolkit = yield* PreviewStandardToolkit.pipe(
+        Effect.provide(McpToolAccess.HandlersLayer.layer(layerStandard)),
+      );
+      const results = yield* toolkit
+        .handle(entry === "navigate" ? "preview_navigate" : "preview_open", {
+          url: "http://localhost:3000/settings?tab=account#token=test",
+          ...(entry === "target" ? { target } : {}),
+          ...(entry === "navigate" ? {} : { open: false, reuseExistingTab: false }),
+        })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(results.at(-1)?.result).toEqual(status);
+      expect(requests.map(({ operation, input }) => ({ operation, input }))).toEqual(
+        entry === "navigate"
+          ? [{ operation: "open", input: { url: status.url } }]
+          : [
+              {
+                operation: "open",
+                input: { url: status.url, open: false, show: false, reuseExistingTab: false },
+              },
+            ],
+      );
+    }).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, {
+        environmentId: EnvironmentId.make("environment-1"),
+        requestNamespace: "provider-session-1",
+        thread: {
+          threadId: ThreadId.make("thread-1"),
+          providerSessionId: "provider-session-1",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+        },
+        client: undefined,
+        capabilities: new Set(["preview"] as const),
+        issuedAt: 1,
+      }),
+      Effect.provide(
+        Layer.mergeAll(PreviewAutomationBroker.layer, liveThreadsLayer).pipe(
+          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
       ),
     ),

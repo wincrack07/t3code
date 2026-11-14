@@ -77,5 +77,5 @@ it.effect("answers only app windows' top frames", () =>
       secondAppSubframe: ["rejected", undefined],
       previewGuest: ["rejected", undefined],
     });
-  }).pipe(Effect.scoped),
+  }),
 );

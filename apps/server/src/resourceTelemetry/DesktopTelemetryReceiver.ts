@@ -195,6 +195,8 @@ export class DesktopTelemetryReceiver extends Context.Service<
     readonly setDiagnosticsDemand: (
       enabled: boolean,
     ) => Effect.Effect<void, DesktopTelemetryControlError>;
+    /** Tells the desktop parent that the server accepts requests, so it can skip readiness polling. */
+    readonly announceServerReady: Effect.Effect<void, DesktopTelemetryControlError>;
     readonly requestDesktopUpdate: (
       requestId: string,
       trackSwitch?: DesktopTrackSwitch,
@@ -738,6 +740,9 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
         ...(sample ? { sample } : {}),
       }),
     ),
+    announceServerReady: sendControlMessage({ version: 1, type: "serverReady" }).pipe(
+      Effect.withSpan("DesktopTelemetryReceiver.announceServerReady"),
+    ),
     requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(
       function (requestId, trackSwitch) {
         return sendControlMessage({
@@ -810,6 +815,7 @@ export const layerTest = (
       }),
       keepAwakeChanges: Stream.empty,
       reportKeepAwake: Effect.fn("DesktopTelemetryReceiver.reportKeepAwake")(() => Effect.void),
+      announceServerReady: Effect.void,
       requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(function () {
         return Effect.void;
       }),

@@ -7,9 +7,29 @@ import * as Scope from "effect/Scope";
 import * as FileSystem from "effect/FileSystem";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { UnsignedMacUpdater } from "./UnsignedMacUpdater.ts";
-import { autoUpdater as stockUpdater } from "electron-updater";
+import { AppImageUpdater, autoUpdater as stockUpdater } from "electron-updater";
 
 type AutoUpdater = typeof stockUpdater;
+type SpawnLog = (cmd: string, args?: Array<string>, ...rest: Array<unknown>) => Promise<boolean>;
+
+// Electron holds the AppImage runtime's keepalive pipe and some files without O_CLOEXEC; a
+// relaunched AppImage inherits them, so old runtimes and FUSE mounts never exit. bash (AppRun
+// already needs it; dash cannot close multi-digit fds) closes them before exec'ing the AppImage.
+// -p skips BASH_ENV and exported functions in the helper only; the AppImage still receives both.
+const CLOSE_INHERITED_FDS_THEN_EXEC =
+  'for fd in /proc/self/fd/*; do fd=${fd##*/}; case $fd in *[!0-9]*|[012]) ;; *) eval "exec $fd>&-" ;; esac; done; exec "$@"';
+
+const relaunchWithoutInheritedDescriptors = (updater: AppImageUpdater) => {
+  const spawnLog = (AppImageUpdater.prototype as unknown as { spawnLog: SpawnLog }).spawnLog;
+  (updater as unknown as { spawnLog: SpawnLog }).spawnLog = function (cmd, args = [], ...rest) {
+    return spawnLog.call(
+      this,
+      "bash",
+      ["-p", "-c", CLOSE_INHERITED_FDS_THEN_EXEC, cmd, cmd, ...args],
+      ...rest,
+    );
+  };
+};
 
 export type ElectronUpdaterFeedUrl = Parameters<AutoUpdater["setFeedURL"]>[0];
 
@@ -162,6 +182,7 @@ const make = (autoUpdater: AutoUpdater | UnsignedMacUpdater) =>
     }) {
       return Effect.suspend(() => {
         const channel = autoUpdater.channel;
+        if (autoUpdater instanceof AppImageUpdater) relaunchWithoutInheritedDescriptors(autoUpdater);
         return Effect.try({
           try: () => autoUpdater.quitAndInstall(isSilent, isForceRunAfter),
           catch: (cause) =>

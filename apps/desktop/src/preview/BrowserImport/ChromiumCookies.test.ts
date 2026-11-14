@@ -134,7 +134,7 @@ describe("readChromiumCookieDatabase", () => {
         const partitioned = yield* readChromiumCookieDatabase(filename, keys, "linux");
         expect(partitioned.cookies).toEqual([]);
         expect(partitioned.undecryptable).toBe(1);
-      }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+      }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect.each([14, 24])(
@@ -187,7 +187,7 @@ describe("readChromiumCookieDatabase", () => {
           { name: "blob-encrypted", value },
           { name: "empty", value: "" },
         ]);
-      }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+      }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("enforces domain binding only for schema 24 and newer", () =>
@@ -228,7 +228,7 @@ describe("readChromiumCookieDatabase", () => {
       ]);
       expect(result.undecryptable).toBe(2);
       expect(result.undecryptableHosts).toEqual(["wrong.example", "short.example"]);
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("decrypts mixed v10 and v11 cookies with their respective keys", () =>
@@ -274,7 +274,7 @@ describe("readChromiumCookieDatabase", () => {
       ]);
       expect(v10Only.undecryptable).toBe(1);
       expect(v10Only.undecryptableHosts).toEqual(["v11.example"]);
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("recovers records written with the empty-passphrase key", () =>
@@ -321,7 +321,7 @@ describe("readChromiumCookieDatabase", () => {
       const noV11 = yield* readChromiumCookieDatabase(filename, { cbcV10, cbcEmpty }, "linux");
       expect(noV11.cookies.map(({ name }) => name)).toEqual(["empty-v10"]);
       expect(noV11.undecryptableHosts).toEqual(["ev11.example"]);
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("treats unversioned encrypted values as legacy plaintext on macOS and Linux", () =>
@@ -356,7 +356,7 @@ describe("readChromiumCookieDatabase", () => {
       expect(mac.undecryptable).toBe(0);
       expect(linux.cookies[0]?.value).toBe("legacy cleartext");
       expect(linux.undecryptable).toBe(0);
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("reads a cookie database the browser has emptied as having no cookies", () =>
@@ -379,7 +379,7 @@ describe("readChromiumCookieDatabase", () => {
       );
 
       expect(result).toEqual({ cookies: [], undecryptable: 0, undecryptableHosts: [] });
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("skips partitioned cookies without breaking pre-CHIPS schemas", () =>
@@ -433,6 +433,6 @@ describe("readChromiumCookieDatabase", () => {
       expect(chips.cookies.map(({ name }) => name)).toEqual(["plain"]);
       expect(chips.undecryptable).toBe(1);
       expect(chips.undecryptableHosts).toEqual(["partitioned.example"]);
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
