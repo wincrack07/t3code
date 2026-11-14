@@ -11,6 +11,7 @@ import {
   limitThreadExport,
   matchImportProject,
   importPlacement,
+  planImportProjects,
 } from "./threadExport.ts";
 
 const decodeTranscript = Schema.decodeUnknownSync(
@@ -175,6 +176,16 @@ describe("matchImportProject", () => {
       expected: null,
     },
     {
+      name: "same title does not override a different known repository",
+      source: {
+        title: "Website",
+        workspacePath: "/Users/julio/site",
+        repository: { canonicalKey: "github.com/another/site" },
+      },
+      candidates: linux,
+      expected: null,
+    },
+    {
       name: "two repository matches prefer the matching title",
       source: {
         title: "xyz-erp",
@@ -200,6 +211,45 @@ describe("matchImportProject", () => {
     const match = matchImportProject(source, candidates);
     expect(match === null ? null : [match.project.id, match.rule]).toEqual(expected);
   });
+});
+
+it("keeps missing source projects separate when the destination only has an installer project", () => {
+  const temporary = {
+    id: "installer",
+    title: "T3 nightly update",
+    workspaceRoot: "/private/tmp/t3-nightly-update",
+    updatedAt: "2026-11-14T00:00:00Z",
+  };
+  const erp = { title: "ERP", workspacePath: "/home/user/erp" };
+  const site = { title: "Website", workspacePath: "/home/user/site" };
+  const plan = planImportProjects(
+    [{ project: erp }, { project: site }, { project: erp }],
+    [temporary],
+  );
+  expect(
+    plan.map(({ source, count, project }) => ({ title: source.title, count, project })),
+  ).toEqual([
+    { title: "ERP", count: 2, project: null },
+    { title: "Website", count: 1, project: null },
+  ]);
+  expect(planImportProjects([{ project: erp }], [])).toMatchObject([{ project: null }]);
+  expect(
+    planImportProjects([{ project: erp }], [{ ...temporary, id: "erp", title: "ERP" }]),
+  ).toMatchObject([{ project: { id: "erp" } }]);
+  expect(plan.map((group) => group.folderName)).toEqual(["ERP", "Website"]);
+  const collisions = planImportProjects(
+    [
+      { project: { title: "../ERP", workspacePath: "/a" } },
+      { project: { title: "../ERP", workspacePath: "/b" } },
+    ],
+    [],
+  );
+  expect(new Set(collisions.map((group) => group.folderName.toLowerCase())).size).toBe(2);
+  expect(
+    collisions.every(
+      (group) => !/[\\/]/.test(group.folderName) && !group.folderName.startsWith("."),
+    ),
+  ).toBe(true);
 });
 
 it.each([

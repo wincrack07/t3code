@@ -5,9 +5,14 @@ import {
   projectFolderOfProject,
   projectFolderPath,
   projectFolderTree,
+  projectFolderAncestors,
   type ProjectFolder,
 } from "../../projectFolders";
-import { deleteSidebarFolder, moveSidebarProjectToFolder } from "../sidebar/projectFolderActions";
+import {
+  deleteSidebarFolder,
+  moveSidebarProjectToFolder,
+  moveSidebarFolder,
+} from "../sidebar/projectFolderActions";
 import { ProjectFolderEditor } from "../sidebar/ProjectFolderEditor";
 import { ProjectGroupSuggestions } from "../sidebar/ProjectGroupSuggestions";
 import { ProjectFolderMenu } from "../sidebar/ProjectFolderMenu";
@@ -48,6 +53,45 @@ export function ProjectFoldersSettings() {
             <Button size="sm" variant="ghost" onClick={() => setEditor({ folder })}>
               Rename
             </Button>
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Move group ${folder.name}`}
+                    disabled={
+                      projectFolderAncestors(folders, folder.id).length === 0 &&
+                      folders.every(
+                        (candidate) =>
+                          candidate.id === folder.id ||
+                          projectFolderAncestors(folders, candidate.id).includes(folder.id),
+                      )
+                    }
+                  />
+                }
+              >
+                Move
+              </MenuTrigger>
+              <MenuPopup>
+                <ProjectFolderMenu
+                  folders={folders}
+                  currentFolderId={projectFolderAncestors(folders, folder.id)[0] ?? null}
+                  excludedFolderIds={
+                    new Set(
+                      folders
+                        .filter(
+                          (candidate) =>
+                            candidate.id === folder.id ||
+                            projectFolderAncestors(folders, candidate.id).includes(folder.id),
+                        )
+                        .map((candidate) => candidate.id),
+                    )
+                  }
+                  onMove={(parentId) => moveSidebarFolder(folder.id, { parentId })}
+                />
+              </MenuPopup>
+            </Menu>
             <Button size="sm" variant="ghost" onClick={() => deleteSidebarFolder(folder.id)}>
               Delete
             </Button>

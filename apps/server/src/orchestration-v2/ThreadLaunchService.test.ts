@@ -201,6 +201,7 @@ function makeHarness(options: HarnessOptions = {}) {
       create: () => Effect.die("unused"),
       bootstrap: () => Effect.die("unused"),
       update: options.updateProject ?? (() => Effect.die("unused")),
+      moveWorkspace: () => Effect.die("unused"),
       delete: () => Effect.die("unused"),
       listPage: () => Effect.die("unused"),
       getById: (id) =>

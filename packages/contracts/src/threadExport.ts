@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { NonNegativeInt, ProjectId } from "./baseSchemas.ts";
+import { NonNegativeInt, ProjectId, ThreadId } from "./baseSchemas.ts";
 
 const Timestamp = Schema.String.check(
   Schema.makeFilter(
@@ -59,6 +59,7 @@ export type T3ThreadExportResult = typeof T3ThreadExportResult.Type;
 
 export const T3ThreadImportResult = Schema.Struct({
   sequence: NonNegativeInt,
+  threadId: Schema.optional(ThreadId),
   // Set when this chat was imported before; older servers omit it.
   existing: Schema.optional(Schema.Struct({ projectId: ProjectId, deleted: Schema.Boolean })),
 });

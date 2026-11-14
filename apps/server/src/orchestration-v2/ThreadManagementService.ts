@@ -1759,8 +1759,15 @@ const make = Effect.gen(function* () {
     }),
     dispatch,
     importThread: Effect.fn("threadManagement.importThread")(function* (input) {
-      const threadId = portableImportThreadId(input.bundle);
-      const existing = yield* orchestrator.getThreadShell(threadId);
+      let threadId = portableImportThreadId(input.bundle);
+      let existing = yield* orchestrator.getThreadShell(threadId);
+      while (existing?.historyOrigin === "portable_import" && existing.deletedAt !== null) {
+        threadId = portableImportThreadId({
+          source: input.bundle.source,
+          threadId: `${threadId}:${DateTime.formatIso(existing.deletedAt)}`,
+        });
+        existing = yield* orchestrator.getThreadShell(threadId);
+      }
       const result = yield* dispatch({
         type: "thread.create",
         commandId: CommandId.make(`import:${yield* randomUuidV4}`),
@@ -1779,9 +1786,10 @@ const make = Effect.gen(function* () {
       return existing?.historyOrigin === "portable_import"
         ? {
             sequence: result.sequence,
+            threadId,
             existing: { projectId: existing.projectId, deleted: existing.deletedAt !== null },
           }
-        : { sequence: result.sequence };
+        : { sequence: result.sequence, threadId };
     }),
     getThreadHistoryPage: Effect.fn("ThreadManagementService.getThreadHistoryPage")(
       function (threadId, cursor, throughEntryId, conversationOnly, workMode) {

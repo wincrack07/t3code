@@ -16,10 +16,12 @@ import {
   type Project,
   ProjectId,
   ProviderInstanceId,
+  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
@@ -240,7 +242,228 @@ const waitForProject = Effect.fn("ProjectServiceTest.waitForProject")(function* 
   );
 });
 
+it.effect(
+  "refuses workspace moves while agents, background work or thread worktrees still own it",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const snapshot = yield* store.getShellSnapshot();
+      const fixture = yield* fs.makeTempDirectoryScoped({ prefix: "project-folder-busy-" });
+      const source = path.join(fixture, "demo");
+      const destinationParent = path.join(fixture, "destination");
+      yield* fs.makeDirectory(source);
+      yield* fs.makeDirectory(destinationParent);
+      const base = yield* ProjectService.make;
+      const projectId = ProjectId.make("busy-folder");
+      yield* base.create({
+        commandId: CommandId.make("busy:create"),
+        projectId,
+        title: "Demo",
+        workspaceRoot: source,
+      });
+      for (const [index, state] of [
+        { activeRunId: RunId.make("running"), worktreePath: null, pendingBackgroundTasks: [] },
+        { activeRunId: null, worktreePath: null, pendingBackgroundTasks: [], status: "queued" },
+        { activeRunId: null, worktreePath: null, pendingBackgroundTasks: [{ taskId: "busy" }] },
+        {
+          activeRunId: null,
+          worktreePath: path.join(source, "worktree"),
+          pendingBackgroundTasks: [],
+        },
+        { activeRunId: null, worktreePath: null, pendingBackgroundTasks: [] },
+      ].entries()) {
+        type ProviderContext = Effect.Success<ReturnType<typeof store.getThreadProviderContext>>;
+        const service = yield* ProjectService.make.pipe(
+          Effect.provideService(ProjectionStore.ProjectionStoreV2, {
+            ...store,
+            getShellSnapshot: () =>
+              Effect.succeed({
+                ...snapshot,
+                threads: [
+                  {
+                    id: ThreadId.make("busy"),
+                    ...state,
+                  } as unknown as (typeof snapshot.threads)[number],
+                ],
+                archivedThreads: [],
+              }),
+            getThreadProviderContext: () =>
+              Effect.succeed({
+                thread: {} as ProviderContext["thread"],
+                providerThreads: [],
+                providerSessions: [
+                  { status: "ready" } as ProviderContext["providerSessions"][number],
+                ],
+              }),
+          }),
+        );
+        const rejected = yield* service
+          .moveWorkspace({
+            commandId: CommandId.make(`busy:${index}`),
+            projectId,
+            destinationParent,
+          })
+          .pipe(Effect.flip);
+        assert.strictEqual(rejected._tag, "ProjectInvalidError");
+        if (rejected._tag === "ProjectInvalidError")
+          assert.match(rejected.detail, /agents|worktrees|provider sessions/);
+        assert.isTrue(yield* fs.exists(source));
+        assert.isFalse(yield* fs.exists(path.join(destinationParent, "demo")));
+      }
+      const renameFailure = yield* ProjectService.make.pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fs,
+          rename: () => Effect.die("simulated rename failure"),
+        }),
+      );
+      const failed = yield* renameFailure
+        .moveWorkspace({
+          commandId: CommandId.make("busy:rename-failure"),
+          projectId,
+          destinationParent,
+        })
+        .pipe(Effect.exit);
+      assert.isTrue(Exit.isFailure(failed));
+      assert.isTrue(yield* fs.exists(source));
+      assert.isFalse(yield* fs.exists(path.join(destinationParent, "demo")));
+    }).pipe(Effect.scoped, Effect.provide(layerProjectServiceDependencies)),
+);
+
 it.layer(layerTest)("ProjectService", (it) => {
+  it.effect(
+    "moves a workspace folder while retaining its project and rolls back rejected destinations",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const service = yield* ProjectService.ProjectService;
+        const fixture = yield* fs.makeTempDirectoryScoped({ prefix: "project-folder-move-" });
+        const source = path.join(fixture, "demo");
+        const destinationParent = path.join(fixture, "destination");
+        yield* fs.makeDirectory(path.join(source, "nested"), { recursive: true });
+        yield* fs.makeDirectory(destinationParent);
+        yield* fs.writeFileString(path.join(source, "nested", "keep.txt"), "keep this file");
+        const projectId = ProjectId.make("move-folder");
+        yield* service.create({
+          commandId: CommandId.make("move:create"),
+          projectId,
+          title: "Demo",
+          workspaceRoot: source,
+        });
+        yield* service.update({
+          commandId: CommandId.make("move:prompt"),
+          projectId,
+          savedPrompt: { kind: "add", id: "keep", text: "Keep my context" },
+        });
+        const moved = yield* service.moveWorkspace({
+          commandId: CommandId.make("move:1"),
+          projectId,
+          destinationParent,
+        });
+        assert.strictEqual(moved.workspaceRoot, path.join(destinationParent, "demo"));
+        assert.strictEqual(
+          yield* fs.readFileString(path.join(moved.workspaceRoot, "nested", "keep.txt")),
+          "keep this file",
+        );
+        assert.isFalse(yield* fs.exists(source));
+        assert.strictEqual(moved.savedPrompts?.[0]?.text, "Keep my context");
+        yield* fs.makeDirectory(source);
+        yield* fs.writeFileString(path.join(source, "untouched.txt"), "existing");
+        const collision = yield* service
+          .moveWorkspace({
+            commandId: CommandId.make("move:collision"),
+            projectId,
+            destinationParent: fixture,
+          })
+          .pipe(Effect.flip);
+        assert.strictEqual(collision._tag, "ProjectInvalidError");
+        assert.strictEqual(
+          yield* fs.readFileString(path.join(source, "untouched.txt")),
+          "existing",
+        );
+        assert.strictEqual(
+          Option.getOrThrow(yield* service.getById(projectId)).workspaceRoot,
+          moved.workspaceRoot,
+        );
+        const nested = yield* service
+          .moveWorkspace({
+            commandId: CommandId.make("move:inside"),
+            projectId,
+            destinationParent: path.join(moved.workspaceRoot, "nested"),
+          })
+          .pipe(Effect.flip);
+        assert.strictEqual(nested._tag, "ProjectInvalidError");
+        const safeParent = path.join(fixture, "more");
+        yield* fs.makeDirectory(safeParent);
+        yield* fs.writeFileString(
+          path.join(moved.workspaceRoot, ".git"),
+          "gitdir: /another/repository/worktrees/demo",
+        );
+        const linked = yield* service
+          .moveWorkspace({
+            commandId: CommandId.make("move:linked"),
+            projectId,
+            destinationParent: safeParent,
+          })
+          .pipe(Effect.flip);
+        assert.strictEqual(linked._tag, "ProjectInvalidError");
+        if (linked._tag === "ProjectInvalidError")
+          assert.include(linked.detail, "Linked worktrees");
+        yield* fs.remove(path.join(moved.workspaceRoot, ".git"));
+        const childId = ProjectId.make("move-child");
+        yield* service.create({
+          commandId: CommandId.make("move:create-child"),
+          projectId: childId,
+          title: "Nested",
+          workspaceRoot: path.join(moved.workspaceRoot, "nested"),
+        });
+        const child = yield* service
+          .moveWorkspace({
+            commandId: CommandId.make("move:nested-project"),
+            projectId,
+            destinationParent: safeParent,
+          })
+          .pipe(Effect.flip);
+        assert.strictEqual(child._tag, "ProjectInvalidError");
+        if (child._tag === "ProjectInvalidError")
+          assert.include(child.detail, "another registered project");
+        yield* service.delete({
+          commandId: CommandId.make("move:delete-child"),
+          projectId: childId,
+        });
+        const conflictParent = path.join(fixture, "conflict");
+        yield* fs.makeDirectory(conflictParent);
+        yield* service.create({
+          commandId: CommandId.make("move:create-conflict"),
+          projectId: ProjectId.make("move-owner"),
+          title: "Owner",
+          workspaceRoot: path.join(conflictParent, "demo"),
+        });
+        const rejected = yield* service
+          .moveWorkspace({
+            commandId: CommandId.make("move:metadata-conflict"),
+            projectId,
+            destinationParent: conflictParent,
+          })
+          .pipe(Effect.flip);
+        assert.strictEqual(rejected._tag, "ProjectConflictError");
+        assert.strictEqual(
+          yield* fs.readFileString(path.join(moved.workspaceRoot, "nested", "keep.txt")),
+          "keep this file",
+        );
+        assert.isFalse(yield* fs.exists(path.join(conflictParent, "demo")));
+        assert.strictEqual(
+          Option.getOrThrow(yield* service.getById(projectId)).workspaceRoot,
+          moved.workspaceRoot,
+        );
+        for (const id of [projectId, ProjectId.make("move-owner")]) {
+          yield* service.delete({ commandId: CommandId.make(`move:cleanup:${id}`), projectId: id });
+        }
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("persists project prompt actions and isolates projects", () =>
     Effect.gen(function* () {
       const service = yield* ProjectService.ProjectService;

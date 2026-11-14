@@ -274,6 +274,7 @@ import {
 } from "./orchestrationV2.ts";
 import {
   ProjectCreateNewInput,
+  ProjectMoveWorkspaceInput,
   ProjectCreateNewResult,
   ProjectCreateFromThreadInput,
   ProjectCreateFromThreadResult,
@@ -475,6 +476,7 @@ export const WS_METHODS = {
   projectsTaskBatchCancel: "projects.taskBatchCancel",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
+  projectsMoveWorkspace: "projects.moveWorkspace",
   projectsCreateFromThread: "projects.createFromThread",
 
   shellOpenInEditor: "shell.openInEditor",
@@ -1612,6 +1614,12 @@ const WsProjectsCreateNewRpc = Rpc.make(WS_METHODS.projectsCreateNew, {
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectsMoveWorkspaceRpc = Rpc.make(WS_METHODS.projectsMoveWorkspace, {
+  payload: ProjectMoveWorkspaceInput,
+  success: Project,
+  error: OrchestrationDispatchCommandError,
+});
+
 const WsProjectsCreateFromThreadRpc = Rpc.make(WS_METHODS.projectsCreateFromThread, {
   payload: ProjectCreateFromThreadInput,
   success: ProjectCreateFromThreadResult,
@@ -2533,6 +2541,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchEntriesRpc,
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
+  WsProjectsMoveWorkspaceRpc,
   WsProjectsCreateFromThreadRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,

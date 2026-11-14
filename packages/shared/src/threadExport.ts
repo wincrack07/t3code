@@ -109,12 +109,62 @@ export interface ImportProjectCandidate {
 
 export type ImportProjectRule = "repository" | "path" | "title";
 
+export function importProjectKey(project: T3ThreadExport["project"]): string {
+  return JSON.stringify([
+    project.repository?.canonicalKey.trim().toLowerCase() ?? project.workspacePath,
+    project.title.trim().toLowerCase(),
+  ]);
+}
+
+export function planImportProjects<P extends ImportProjectCandidate>(
+  bundles: ReadonlyArray<Pick<T3ThreadExport, "project">>,
+  candidates: ReadonlyArray<P>,
+) {
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      source: T3ThreadExport["project"];
+      count: number;
+      project: P | null;
+      folderName: string;
+    }
+  >();
+  for (const bundle of bundles) {
+    const key = importProjectKey(bundle.project);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count++;
+      continue;
+    }
+    groups.set(key, {
+      key,
+      source: bundle.project,
+      count: 1,
+      project: matchImportProject(bundle.project, candidates)?.project ?? null,
+      folderName: safeBackupName(bundle.project.title),
+    });
+  }
+  const names = new Map<string, number>();
+  for (const group of groups.values()) {
+    const name = group.folderName.toLowerCase();
+    names.set(name, (names.get(name) ?? 0) + 1);
+  }
+  for (const group of groups.values()) {
+    if ((names.get(group.folderName.toLowerCase()) ?? 0) > 1) {
+      const suffix = Hex.encode(sha256(new TextEncoder().encode(group.key))).slice(0, 8);
+      group.folderName = `${group.folderName}-${suffix}`;
+    }
+  }
+  return [...groups.values()];
+}
+
 const sameTitle = (a: string, b: string) => {
   const left = a.trim().toLowerCase();
   return left !== "" && left === b.trim().toLowerCase();
 };
 
-/** Repository, then workspace path, then title; null means the user's picked destination. */
+/** Repository, then workspace path, then title; known repository conflicts never match. */
 export function matchImportProject<P extends ImportProjectCandidate>(
   source: T3ThreadExport["project"],
   candidates: ReadonlyArray<P>,
@@ -132,7 +182,10 @@ export function matchImportProject<P extends ImportProjectCandidate>(
     ["title", (project) => sameTitle(source.title, project.title)],
   ];
   for (const [rule, matches] of rules) {
-    const found = candidates.filter(matches);
+    const found = candidates.filter((project) => {
+      const candidateKey = project.repositoryIdentity?.canonicalKey.trim().toLowerCase();
+      return (!key || !candidateKey || candidateKey === key) && matches(project);
+    });
     if (found.length === 0) continue;
     const project = found.reduce((best, next) =>
       (Number(sameTitle(source.title, next.title)) - Number(sameTitle(source.title, best.title)) ||

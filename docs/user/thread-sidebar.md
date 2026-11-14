@@ -95,6 +95,13 @@ top level** at the end of the list. Groups always come before projects at each l
 Reordering projects by drag switches the sidebar to manual project order. Every move
 is also in the menus, under **Move to group** and **Move to top level**.
 
+In **Settings → Projects**, select a project and use **Move folder…** beside its checkout to move
+its real folder and contents into another directory on the same environment. Its chats stay with
+the project. Use **Disconnect agent session** in **Previous agents** first. The destination must be on the same disk and must not
+already contain that folder; projects with linked worktrees or other registered projects inside
+them need those separated before moving. Sidebar groups organize the list independently of disk
+locations.
+
 A pinned project stays pinned within its group. Groups, their order, and collapse
 preferences are saved on this client; they do not sync between devices. Mobile
 continues to show its usual project list.

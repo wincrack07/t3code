@@ -1,3 +1,5 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- rmdir removes only empty reservations; FileSystem.remove uses rm.
+import * as NodeFSP from "node:fs/promises";
 import {
   CommandId,
   MessageId,
@@ -12,9 +14,11 @@ import {
   type Project,
   type ProjectCreatePayload,
   type ProjectUpdatePayload,
+  type ProjectMoveWorkspaceInput,
   type ProjectSnapshot,
 } from "@t3tools/contracts";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -26,7 +30,10 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
+import {
+  withWorkspaceLease,
+  withCheckpointRestoreReservation,
+} from "../workspace/workspaceLease.ts";
 import * as ServerConfig from "../config.ts";
 import {
   prepareTaskAttachment,
@@ -123,6 +130,7 @@ export class ProjectOperationError extends Schema.TaggedError<ProjectOperationEr
   {
     operation: Schema.Literals([
       "normalize-workspace",
+      "move-workspace",
       "read-project",
       "list-projects",
       "list-threads",
@@ -158,6 +166,9 @@ export class ProjectService extends Context.Service<
       ProjectServiceError
     >;
     readonly update: (input: ProjectUpdateInput) => Effect.Effect<Project, ProjectServiceError>;
+    readonly moveWorkspace: (
+      input: ProjectMoveWorkspaceInput,
+    ) => Effect.Effect<Project, ProjectServiceError>;
     readonly taskAttachments: (
       input: TaskAttachmentsInput,
     ) => Effect.Effect<TaskAttachmentListResult, TaskAttachmentError>;
@@ -226,6 +237,7 @@ export const make = Effect.gen(function* () {
   );
   const projectLocks = yield* KeyedLock.make<ProjectId>();
   const workspaceLocks = yield* KeyedLock.make<string>();
+  const relocationLocks = yield* KeyedLock.make<ProjectId>();
 
   const toProject = (
     row: ProjectStore.ProjectRow,
@@ -597,6 +609,161 @@ export const make = Effect.gen(function* () {
         : withWorkspaceLease(config.attachmentsDir, effect),
   );
 
+  const moveWorkspace: ProjectService["Service"]["moveWorkspace"] = Effect.fn(
+    "ProjectService.moveWorkspace",
+  )(
+    function* (input) {
+      if ((yield* HostProcess.Platform) === "win32")
+        return yield* new ProjectInvalidError({
+          projectId: input.projectId,
+          detail: "Moving project folders is not supported on Windows yet.",
+        });
+      const found = yield* readRow(input.projectId);
+      if (Option.isNone(found))
+        return yield* new ProjectNotFoundError({ projectId: input.projectId });
+      const project = found.value;
+      const reject = (detail: string) =>
+        new ProjectInvalidError({ projectId: input.projectId, detail });
+      const ioError = (cause: unknown) =>
+        new ProjectOperationError({
+          operation: "move-workspace",
+          projectId: input.projectId,
+          cause,
+        });
+      const source = yield* fileSystem
+        .realPath(project.workspaceRoot)
+        .pipe(Effect.mapError(ioError));
+      if (source !== project.workspaceRoot)
+        return yield* reject(
+          "Choose a project registered at its real folder path before moving it.",
+        );
+      const parent = yield* normalizeWorkspaceRoot({ workspaceRoot: input.destinationParent });
+      const realParent = yield* fileSystem.realPath(parent).pipe(Effect.mapError(ioError));
+      const destination = path.join(realParent, path.basename(source));
+      if (destination === source) return yield* readCommitted(input.projectId);
+      const contains = (root: string, candidate: string) => {
+        const relative = path.relative(root, candidate);
+        return (
+          relative === "" ||
+          (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))
+        );
+      };
+      if (
+        path.dirname(source) === source ||
+        contains(source, config.baseDir) ||
+        contains(config.baseDir, source)
+      )
+        return yield* reject("The filesystem root and T3 home cannot be moved.");
+      if (contains(source, destination))
+        return yield* reject("A project cannot be moved inside itself.");
+      return yield* withCheckpointRestoreReservation(
+        fileSystem,
+        path,
+        source,
+        withWorkspaceLease(
+          source,
+          Effect.gen(function* () {
+            if (yield* fileSystem.exists(destination).pipe(Effect.mapError(ioError)))
+              return yield* reject(
+                "The destination already contains a folder with this name. Nothing was moved.",
+              );
+            const allProjects = yield* projects.list().pipe(Effect.mapError(ioError));
+            if (
+              allProjects.some(
+                (other) =>
+                  other.projectId !== input.projectId && contains(source, other.workspaceRoot),
+              )
+            )
+              return yield* reject(
+                "This folder contains another registered project. Move its projects separately.",
+              );
+            const gitPath = path.join(source, ".git");
+            if (yield* fileSystem.exists(gitPath).pipe(Effect.mapError(ioError))) {
+              const gitInfo = yield* fileSystem.stat(gitPath).pipe(Effect.mapError(ioError));
+              if (gitInfo.type !== "Directory")
+                return yield* reject(
+                  "Linked worktrees and submodule checkouts cannot be moved here.",
+                );
+              const worktreesPath = path.join(gitPath, "worktrees");
+              if (yield* fileSystem.exists(worktreesPath).pipe(Effect.mapError(ioError))) {
+                const linked = yield* fileSystem
+                  .readDirectory(worktreesPath)
+                  .pipe(Effect.mapError(ioError));
+                if (linked.length > 0)
+                  return yield* reject(
+                    "Remove linked worktrees before moving this project folder.",
+                  );
+              }
+            }
+            const snapshot = yield* threadProjections
+              .getShellSnapshot({ projectId: input.projectId })
+              .pipe(Effect.mapError(ioError));
+            for (const thread of [...snapshot.threads, ...snapshot.archivedThreads]) {
+              if (
+                thread.activeRunId !== null ||
+                thread.status === "queued" ||
+                (thread.pendingBackgroundTasks?.length ?? 0) > 0
+              )
+                return yield* reject(
+                  "Stop this project's agents and background work before moving its folder.",
+                );
+              if (thread.worktreePath !== null)
+                return yield* reject(
+                  "Remove this project's thread worktrees before moving its folder.",
+                );
+              const context = yield* threadProjections
+                .getThreadProviderContext(thread.id)
+                .pipe(Effect.mapError(ioError));
+              if (
+                context.providerSessions.some(
+                  (session) => session.status !== "stopped" && session.status !== "error",
+                )
+              )
+                return yield* reject(
+                  "Stop this project's provider sessions before moving its folder.",
+                );
+            }
+            return yield* Effect.uninterruptible(
+              fileSystem.makeDirectory(destination).pipe(
+                Effect.mapError(ioError),
+                Effect.andThen(
+                  fileSystem.rename(source, destination).pipe(
+                    Effect.onError(() =>
+                      Effect.tryPromise({
+                        try: () => NodeFSP.rmdir(destination),
+                        catch: ioError,
+                      }).pipe(Effect.ignore),
+                    ),
+                    Effect.mapError(ioError),
+                  ),
+                ),
+                Effect.andThen(
+                  update({
+                    commandId: input.commandId,
+                    projectId: input.projectId,
+                    workspaceRoot: destination,
+                  }).pipe(
+                    Effect.catchCause((cause) =>
+                      readRow(input.projectId).pipe(
+                        Effect.flatMap((current) =>
+                          Option.isSome(current) && current.value.workspaceRoot === source
+                            ? fileSystem.rename(destination, source).pipe(Effect.mapError(ioError))
+                            : Effect.void,
+                        ),
+                        Effect.andThen(Effect.failCause(cause)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      );
+    },
+    (effect, input) => relocationLocks.withLock(input.projectId, effect),
+  );
+
   const bootstrap: ProjectService["Service"]["bootstrap"] = Effect.fn("ProjectService.bootstrap")(
     function* (input) {
       const existing = yield* getByWorkspaceRoot(input.workspaceRoot);
@@ -844,6 +1011,7 @@ export const make = Effect.gen(function* () {
     taskAttachments,
     bootstrap,
     update,
+    moveWorkspace,
     delete: deleteProject,
     getById,
     getByWorkspaceRoot,

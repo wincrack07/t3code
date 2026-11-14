@@ -52,12 +52,14 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { MoveProjectFolderButton } from "./MoveProjectFolderButton";
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
   projectGroupTitleNeedsUpdate,
   SCRATCH_PROJECT_TITLE,
   scopeProjectSettingsGroup,
+  findProjectSettingsSuccessor,
 } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import { projectFolderOfProject, projectFolderPath, projectFolderTree } from "../../projectFolders";
@@ -190,7 +192,7 @@ interface ProjectSelection {
   readonly key: string;
   readonly environmentId: EnvironmentId | null;
   readonly checkoutKey: string | null;
-  readonly memberKeys: ReadonlyArray<string>;
+  readonly members: ReadonlyArray<SidebarProjectGroupMember>;
 }
 
 function sameProjectSelection(a: ProjectSelection | null, b: ProjectSelection): boolean {
@@ -199,8 +201,12 @@ function sameProjectSelection(a: ProjectSelection | null, b: ProjectSelection): 
     a.key === b.key &&
     a.environmentId === b.environmentId &&
     a.checkoutKey === b.checkoutKey &&
-    a.memberKeys.length === b.memberKeys.length &&
-    a.memberKeys.every((key, index) => key === b.memberKeys[index])
+    a.members.length === b.members.length &&
+    a.members.every(
+      (member, index) =>
+        member.environmentId === b.members[index]?.environmentId &&
+        member.id === b.members[index]?.id,
+    )
   );
 }
 
@@ -233,7 +239,7 @@ export function ProjectSettingsPanel({
       key: selected.projectKey,
       environmentId,
       checkoutKey,
-      memberKeys: members.map((member) => member.physicalProjectKey),
+      members,
     };
     if (!sameProjectSelection(lastSelection, current)) setLastSelection(current);
   }
@@ -243,11 +249,7 @@ export function ProjectSettingsPanel({
     lastSelection?.key === projectKey &&
     lastSelection.environmentId === environmentId &&
     lastSelection.checkoutKey === checkoutKey
-      ? groups.find((group) =>
-          group.memberProjects.some((member) =>
-            lastSelection.memberKeys.includes(member.physicalProjectKey),
-          ),
-        )
+      ? findProjectSettingsSuccessor(groups, lastSelection.members)
       : undefined;
   if (successor) {
     return (
@@ -256,7 +258,15 @@ export function ProjectSettingsPanel({
         search={{
           project: successor.projectKey,
           machine: environmentId ?? undefined,
-          checkout: checkoutKey ?? undefined,
+          checkout:
+            checkoutKey === null
+              ? undefined
+              : successor.memberProjects.find((member) =>
+                  lastSelection?.members.some(
+                    (previous) =>
+                      previous.environmentId === member.environmentId && previous.id === member.id,
+                  ),
+                )?.physicalProjectKey,
         }}
         replace
         hashScrollIntoView={false}
@@ -470,10 +480,11 @@ function ProjectDetail({
   // A lone checkout is removed from the Danger section, but it still needs its grouping
   // rule here so "Keep separate" can be undone.
   const checkoutControls = (member: SidebarProjectGroupMember) => (
-    <div className="flex w-full min-w-0 items-center gap-2 @min-[32rem]/settings-row:w-auto">
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2 @min-[32rem]/settings-row:w-auto">
       <div className="min-w-0 flex-1 @min-[32rem]/settings-row:w-72 @min-[32rem]/settings-row:flex-none">
         <CheckoutGroupingSelect member={member} />
       </div>
+      <MoveProjectFolderButton project={member} />
       {hasMultipleCheckouts ? (
         <Button
           size="sm"

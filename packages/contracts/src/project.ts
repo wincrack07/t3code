@@ -891,6 +891,13 @@ export const ProjectCreateNewInput = Schema.Struct({
 });
 export type ProjectCreateNewInput = typeof ProjectCreateNewInput.Type;
 
+export const ProjectMoveWorkspaceInput = Schema.Struct({
+  commandId: CommandId,
+  projectId: ProjectId,
+  destinationParent: TrimmedNonEmptyString,
+});
+export type ProjectMoveWorkspaceInput = typeof ProjectMoveWorkspaceInput.Type;
+
 export const ProjectCreateNewResult = Schema.Struct({
   projectId: ProjectId,
   workspaceRoot: TrimmedNonEmptyString,

@@ -1,4 +1,5 @@
 import { FinderIntegrationSettingsRow } from "./FinderIntegrationSettingsRow";
+import { WorkspaceFolderPicker } from "../WorkspaceFolderPicker";
 import { SidebarDisplayMenu } from "../sidebar/SidebarDisplayMenu";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
@@ -61,6 +62,7 @@ import {
   useScopedSettings,
   useScopedSettingsMixed,
   useUpdateScopedSettings,
+  useScopedSettingsWriteAllowed,
 } from "./useScopedSettings";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
@@ -1741,6 +1743,7 @@ function ScopedCompactIdleThreadsRow() {
 export function ThreadsSettingsPanel() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
+  const canWriteSettings = useScopedSettingsWriteAllowed();
   const navigate = useNavigate();
   const { environment, connectedEnvironments, target, scope } = useSettingsScope();
   const isProjectScope = scope.kind === "project" || scope.kind === "checkout";
@@ -1820,16 +1823,26 @@ export function ThreadsSettingsPanel() {
             ) : null
           }
           control={
-            <DraftInput
-              size="sm"
-              className="w-full sm:w-72"
-              value={mixedAddProjectBaseDirectory ? "" : settings.addProjectBaseDirectory}
-              onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
-              normalizeDraft={resolvePastedPath}
-              placeholder={mixedAddProjectBaseDirectory ? "Mixed" : "~/"}
-              spellCheck={false}
-              aria-label="Add project base directory"
-            />
+            <div className="flex min-w-0 items-center gap-2">
+              <DraftInput
+                size="sm"
+                className="w-full sm:w-72"
+                value={mixedAddProjectBaseDirectory ? "" : settings.addProjectBaseDirectory}
+                onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
+                normalizeDraft={resolvePastedPath}
+                placeholder={mixedAddProjectBaseDirectory ? "Mixed" : "~/"}
+                spellCheck={false}
+                aria-label="Add project base directory"
+              />
+              {connectedEnvironments.length === 1 && environmentId ? (
+                <WorkspaceFolderPicker
+                  environmentId={environmentId}
+                  value={settings.addProjectBaseDirectory}
+                  disabled={!canWriteSettings}
+                  onChange={(next) => updateSettings({ addProjectBaseDirectory: next })}
+                />
+              ) : null}
+            </div>
           }
         />
         <SettingsRow

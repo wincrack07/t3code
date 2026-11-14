@@ -10,6 +10,7 @@ import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
   AuthEnvironmentMaintainScope,
+  AuthFilesystemWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -73,7 +74,7 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
-  it.effect("requires the destination operate grant for a project move", () =>
+  it.effect("requires the destination grants for project and workspace moves", () =>
     Effect.gen(function* () {
       const registry = yield* setup;
       const move = createCommandPermissions(
@@ -88,6 +89,28 @@ describe("command permissions", () => {
       registry.set(sessions(env), AsyncResult.success(grant(true)));
       expect(registry.get(move.permissionAtom(env))).toBe(true);
       expect(registry.get(move.permissionAtom(other))).toBe(false);
+      const workspaceMove = createCommandPermissions(runtime, WS_METHODS.projectsMoveWorkspace);
+      expect(registry.get(workspaceMove.permissionAtom(env))).toBe(false);
+      registry.set(
+        sessions(env),
+        AsyncResult.success({
+          ...grant(false),
+          scopes: [AuthFilesystemWriteScope],
+          permissions: [AuthFilesystemWriteScope],
+        }),
+      );
+      expect(registry.get(workspaceMove.permissionAtom(env))).toBe(false);
+      registry.set(
+        sessions(env),
+        AsyncResult.success({
+          ...grant(true),
+          scopes: [AuthOrchestrationOperateScope, AuthFilesystemWriteScope],
+          permissions: [AuthOrchestrationOperateScope, AuthFilesystemWriteScope],
+        }),
+      );
+      expect(registry.get(workspaceMove.permissionAtom(env))).toBe(true);
+      yield* workspaceMove.authorize(registry, env);
+      expect(registry.get(workspaceMove.permissionAtom(other))).toBe(false);
     }),
   );
 

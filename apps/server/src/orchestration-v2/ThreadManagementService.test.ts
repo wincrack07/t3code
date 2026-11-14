@@ -11,6 +11,8 @@ import {
   ProviderSessionId,
   type OrchestrationV2StoredEvent,
   type OrchestrationV2ThreadProjection,
+  type OrchestrationV2ThreadShellSnapshot,
+  type T3ThreadExport,
   ProjectId,
   ProviderInstanceId,
   RunId,
@@ -26,6 +28,8 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
+import { portableImportThreadId } from "@t3tools/shared/threadExport";
 
 import { AgentScope } from "@t3tools/shared/AgentScope";
 
@@ -991,6 +995,88 @@ it.effect("Force stop refuses once a newer run has started, before killing anyth
     expect(error.reason).toBe("superseded");
     expect(killed).toBe(false);
   }),
+);
+
+it.effect(
+  "reimports deleted portable chats as stable fresh copies without reviving tombstones",
+  () =>
+    Effect.gen(function* () {
+      const bundle: T3ThreadExport = {
+        format: "t3code.thread",
+        version: 1,
+        threadId: "original",
+        title: "Imported",
+        createdAt: "2026-11-01T00:00:00.000Z",
+        updatedAt: "2026-11-01T00:00:00.000Z",
+        source: { environmentId: "source", label: "Source" },
+        project: { title: "Project", workspacePath: "/old/project" },
+        provider: "codex",
+        model: "test",
+        conversation: [],
+      };
+      const projectId = ProjectId.make("new-destination");
+      const deletedAt = DateTime.makeUnsafe("2026-11-02T00:00:00.000Z");
+      const baseId = portableImportThreadId(bundle);
+      const tombstone = {
+        id: baseId,
+        projectId: ProjectId.make("old-destination"),
+        historyOrigin: "portable_import",
+        deletedAt,
+      } as OrchestrationV2ThreadShellSnapshot["threads"][number];
+      const shells = new Map<ThreadId, OrchestrationV2ThreadShellSnapshot["threads"][number]>([
+        [baseId, tombstone],
+      ]);
+      const created: Array<ThreadId> = [];
+      const layerTest = ThreadManagementService.layer.pipe(
+        Layer.provide(Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({})),
+        Layer.provide(
+          Layer.mock(Orchestrator.OrchestratorV2)({
+            getThreadShell: (id) => Effect.sync(() => shells.get(id) ?? null),
+            dispatch: (command) =>
+              Effect.sync(() => {
+                if (command.type === "thread.create" && !shells.has(command.threadId)) {
+                  created.push(command.threadId);
+                  shells.set(command.threadId, {
+                    ...tombstone,
+                    id: command.threadId,
+                    projectId: command.projectId,
+                    deletedAt: null,
+                  });
+                }
+                return { sequence: created.length, storedEvents: [] } as never;
+              }),
+          }),
+        ),
+        Layer.provide(ServerSettings.layerTest()),
+        Layer.provide(layerReceiptsTest),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* ThreadManagementService.ThreadManagementService;
+        const input = {
+          bundle,
+          projectId,
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "test" },
+        };
+        const first = yield* service.importThread(input);
+        expect(first.existing).toBeUndefined();
+        expect(first.threadId).toBeDefined();
+        expect(first.threadId).not.toBe(baseId);
+        const freshId = first.threadId!;
+        const again = yield* service.importThread(input);
+        expect(again.threadId).toBe(freshId);
+        expect(again.existing).toEqual({ projectId, deleted: false });
+        expect(created).toEqual([freshId]);
+        shells.set(freshId, { ...shells.get(freshId)!, deletedAt });
+        const third = yield* service.importThread(input);
+        expect(third.threadId).not.toBe(freshId);
+        expect(third.threadId).not.toBe(baseId);
+        expect(third.existing).toBeUndefined();
+        expect((yield* service.importThread(input)).threadId).toBe(third.threadId);
+        expect(created).toHaveLength(2);
+        expect(shells.get(baseId)).toBe(tombstone);
+        expect(shells.get(freshId)?.deletedAt).toBe(deletedAt);
+      }).pipe(Effect.provide(layerTest));
+    }),
 );
 
 it.effect(

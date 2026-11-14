@@ -1,3 +1,4 @@
+import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 import { EnvironmentId, ProjectId, SourceControlProviderKind, ThreadId } from "@t3tools/contracts";
 import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
@@ -5,6 +6,8 @@ import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
 import { buildSidebarProjectSnapshots } from "../../sidebarProjectGrouping";
 import type { Project } from "../../types";
 import {
+  findProjectSettingsSuccessor,
+  movedProjectClientSettings,
   projectGroupTitleNeedsUpdate,
   scopeProjectSettingsGroup,
 } from "./ProjectSettingsPanel.logic";
@@ -190,4 +193,34 @@ describe("projectGroupTitleNeedsUpdate", () => {
     );
     expect(projectGroupTitleNeedsUpdate([renamed, renamed], "repo", true)).toBe(false);
   });
+});
+
+it("follows a moved checkout by its environment and project ID", () => {
+  const original = makeProject(localEnvironmentId, { repositoryIdentity: null });
+  const before = projectGroup([original]);
+  const moved = projectGroup([{ ...original, workspaceRoot: "/moved/repo" }]);
+  const unrelated = projectGroup([
+    makeProject(remoteEnvironmentId, {
+      id: original.id,
+      repositoryIdentity: null,
+      workspaceRoot: original.workspaceRoot,
+    }),
+  ]);
+  expect(findProjectSettingsSuccessor([unrelated, moved], before.memberProjects)).toBe(moved);
+  expect(findProjectSettingsSuccessor([unrelated], before.memberProjects)).toBeUndefined();
+});
+
+it("keeps the sidebar group and grouping override when a checkout moves", () => {
+  const project = makeProject(localEnvironmentId);
+  const originalKey = `local:${project.workspaceRoot}`;
+  const nextKey = "local:/moved/repo";
+  const settings = {
+    ...DEFAULT_CLIENT_SETTINGS,
+    sidebarProjectGroupingOverrides: { [originalKey]: "separate" as const },
+    sidebarProjectFolders: [{ id: "work", name: "Work", emoji: "", projectKeys: [originalKey] }],
+  };
+  const moved = movedProjectClientSettings(settings, project, "/moved/repo");
+  expect(moved.sidebarProjectGroupingOverrides).toEqual({ [nextKey]: "separate" });
+  expect(moved.sidebarProjectFolders[0]?.projectKeys).toEqual([nextKey]);
+  expect(settings.sidebarProjectFolders[0]?.projectKeys).toEqual([originalKey]);
 });

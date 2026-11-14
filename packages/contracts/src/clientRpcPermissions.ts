@@ -9,6 +9,7 @@ import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./gi
 import {
   AuthAccessWriteScope,
   AuthEnvironmentMaintainScope,
+  AuthFilesystemWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -26,6 +27,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [ORCHESTRATION_V2_WS_METHODS.importThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.moveThreadToProject]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectsMoveWorkspace]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsTaskAttachments]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsTaskBatchStart]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsTaskBatchCancel]: AuthOrchestrationOperateScope,
@@ -126,6 +128,9 @@ export function clientRpcRequiredScopes(
   method: string,
   input: unknown,
 ): readonly AuthEnvironmentScope[] {
+  if (method === WS_METHODS.projectsMoveWorkspace) {
+    return [AuthOrchestrationOperateScope, AuthFilesystemWriteScope];
+  }
   if (method === WS_METHODS.projectsMutate && input !== undefined) {
     const mutation = decodeProjectMutation(input);
     if (mutation._tag === "Some") return requiredScopesForProjectMutation(mutation.value);
