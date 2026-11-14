@@ -21,7 +21,7 @@ export function ForkComposerSettings() {
   }
   return (
     <SettingsPageContainer>
-      <SettingsSection id="saved-prompts-section" title="Saved prompts">
+      <SettingsSection id="saved-prompts-section" title="Saved prompts" hideTitle>
         <SavedPromptsRow />
       </SettingsSection>
       <PromptSuggestionsSettings />

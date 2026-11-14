@@ -411,7 +411,7 @@ question and answer when the thread wakes; the question stays unanswered.
 
 ## Machine monitor
 
-The gauge icon in the sidebar footer opens **Settings > Machine monitor**. A dot on the icon
+The gauge icon in the sidebar footer opens **Settings > Sally’s Version > Machine monitor**. A dot on the icon
 means the active environment's machine is busy (amber), strained (red) or disconnected (grey);
 hover it for CPU, memory, disk and network numbers. The page shows the current state, recent
 history, and which T3 projects, threads and processes are using the machine. Pick another

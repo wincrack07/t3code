@@ -84,14 +84,14 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
         description="Added after the instruction. Turn a rule off to skip it."
       >
         {settings.rules.length > 0 ? (
-          <div className="mt-3 min-w-0 max-w-2xl space-y-3">
+          <div className="mt-3 min-w-0 max-w-2xl divide-y divide-border/50">
             {settings.rules.map((rule, index) => (
               <div
                 // oxlint-disable-next-line react/no-array-index-key -- Controlled rows have no state tied to their position.
                 key={index}
                 role="group"
                 aria-label={`Rule ${index + 1}`}
-                className="space-y-2 rounded-lg border border-border p-3"
+                className="space-y-2 py-3 first:pt-0"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Switch

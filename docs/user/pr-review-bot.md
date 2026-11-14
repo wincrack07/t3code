@@ -1,6 +1,6 @@
 # PR review bot
 
-Mention the bot on a GitHub pull request and one of your T3 Code environments reviews it in a T3 thread, then posts one GitHub review: a summary plus inline comments on the lines it found problems in. Set it up under **Settings → PR reviews**, separately on each environment that should review.
+Mention the bot on a GitHub pull request and one of your T3 Code environments reviews it in a T3 thread, then posts one GitHub review: a summary plus inline comments on the lines it found problems in. Set it up under **Settings → Sally’s Version → PR reviews**, separately on each environment that should review.
 
 ## Set it up
 
@@ -32,4 +32,4 @@ Give each reviewing environment a **Priority**: 0 reviews first, and higher numb
 
 The review thread works in a separate checkout of the pull request, in **Supervised** mode: it reads and searches files, and any command it tries waits for your approval in the thread. It never pushes, merges, approves, or blocks a pull request; T3 Code posts its findings as a comment review. The pull request's title, description, diff, and comments are treated as untrusted text, and the project's setup script never runs in the review checkout.
 
-The history in **Settings → PR reviews** lists each review with its thread, the GitHub review, and its status.
+The history in **Settings → Sally’s Version → PR reviews** lists each review with its thread, the GitHub review, and its status.

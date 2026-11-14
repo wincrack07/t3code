@@ -2,7 +2,7 @@
 
 In a thread's menu, choose **Export chat… (Markdown)** for a readable copy or **Export chat… (JSON)** for a portable `.t3thread.json` file.
 
-In **Settings → General → Chat backup**, choose **Export all chats** to download a ZIP from every currently connected environment, including archived chats. Connect offline environments first to include them. Each project folder contains Markdown, matching JSON files, and an `_index.md` with newest-first links.
+In **Settings → Sally’s Version → Chats → Chat backup**, choose **Export all chats** to download a ZIP from every currently connected environment, including archived chats. Connect offline environments first to include them. Each project folder contains Markdown, matching JSON files, and an `_index.md` with newest-first links.
 
 Save the download in your Google Drive, iCloud, or Dropbox folder to keep a cloud copy. Extract the ZIP inside an Obsidian vault to use its frontmatter, tags, and thread links. Exports are snapshots; later changes require another export.
 
@@ -14,7 +14,7 @@ Exports include user/assistant text, plans, timestamps, and attachment names. At
 
 ## Chat hub across machines
 
-In **Settings → General → Chat backup → Chat hub**, enter your deployed Hub's HTTPS origin and a separate write token for each connected machine, enable sync, and save. Repeat on every machine you want backed up. Each server uploads independently, including archived chats; the Mac does not need to stay online. Tokens are stored privately on their server and cannot be read back. Cloudflare can read stored chats; v1 has no end-to-end encryption.
+In **Settings → Sally’s Version → Chats → Chat hub**, enter your deployed Hub's HTTPS origin and a separate write token for each connected machine, enable sync, and save. Repeat on every machine you want backed up. Each server uploads independently, including archived chats; the Mac does not need to stay online. Tokens are stored privately on their server and cannot be read back. Cloudflare can read stored chats; v1 has no end-to-end encryption.
 
 The first sync backfills existing chats. Later changes are uploaded after a short delay. The status shows pending chats, the last successful upload, and errors; **Sync now** retries pending uploads. Disabling sync stops future uploads without removing Hub copies. Deleting a source chat hides its Hub copy from search.
 

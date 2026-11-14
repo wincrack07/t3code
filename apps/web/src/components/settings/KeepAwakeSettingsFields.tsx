@@ -119,7 +119,9 @@ export function KeepAwakeSettingsFields({
               disabled={disabled}
               aria-label="Default keep-awake session"
             >
-              <SelectValue />
+              <SelectValue>
+                {KEEP_AWAKE_MODES.find(([mode]) => mode === defaults.mode)?.[1]}
+              </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               {KEEP_AWAKE_MODES.map(([value, label]) => (

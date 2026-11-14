@@ -242,7 +242,7 @@ threads follow it after they restart. Suggestions show on web and desktop.
 
 ## Prompt suggestions
 
-On web and desktop, **Settings → Chat → Prompt suggestions** has the composer suggest text written
+On web and desktop, **Settings → Sally’s Version → Composer → Prompt suggestions** has the composer suggest text written
 by a model on your environment:
 
 - **Suggest a reply when the input is empty**: after a reply finishes, the empty input shows a
@@ -305,7 +305,7 @@ and use **Attach again** or remove the missing file before sending.
 
 ## Saved prompts
 
-Keep prompts you send often in **Settings → Chat → Saved prompts** on web and
+Keep prompts you send often in **Settings → Sally’s Version → Composer → Saved prompts** on web and
 desktop. Type `/` and part of a prompt's name to insert its text where you typed,
 on web, desktop, and mobile. Each environment keeps its own list; choose **All
 environments** at the top of Settings to change the list on every connected
@@ -320,7 +320,7 @@ whole draft as a clearer prompt before you send it. It keeps your language, file
 skills. If you edit the draft while the rewrite runs, your edit wins. On web and
 desktop, **Undo** in the notice restores your original draft.
 
-In **Settings → Polish prompt**, choose a separate model and effort or keep
+In **Settings → Sally’s Version → Composer → Polish prompt**, choose a separate model and effort or keep
 **Same as text generation**. Save to apply your choice. If the chosen model becomes
 unavailable, polishing uses the shared text generation model.
 
@@ -558,7 +558,7 @@ Android opens a compatible installed file viewer.
 
 ## Automatic routing
 
-Enable Settings → Labs → Decisions, choose a configured provider model, **Jev (TypeSafe)**, OpenAI API, or **Custom (OpenAI-compatible)**,
+Enable Settings → Sally’s Version → Composer → Decisions, choose a configured provider model, **Jev (TypeSafe)**, OpenAI API, or **Custom (OpenAI-compatible)**,
 then add rules in priority order. For a custom service, enter its API base URL (including
 any `/v1` prefix), API key, and model name, then use **Test connection**. Keys stay in
 the environment’s secret store. HTTP is allowed only for loopback and tailnet endpoints;

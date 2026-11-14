@@ -216,7 +216,7 @@ export function KeepAwakeForm({
             }}
           >
             <SelectTrigger size="sm" className="w-44" disabled={locked} aria-label="Session">
-              <SelectValue />
+              <SelectValue>{KEEP_AWAKE_MODES.find(([value]) => value === mode)?.[1]}</SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               {KEEP_AWAKE_MODES.map(([value, label]) => (
@@ -262,7 +262,7 @@ export function KeepAwakeForm({
                 }}
               >
                 <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="End day">
-                  <SelectValue />
+                  <SelectValue>{day === "tomorrow" ? "Tomorrow" : "Today"}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   <SelectItem hideIndicator value="today">

@@ -216,7 +216,7 @@ is gone, a version before 0.1.0 starts with no threads or settings.
 ## Keep awake
 
 On macOS, the cup in the menu bar can also show the desktop Mac’s network speed and
-CPU usage. In **Settings → Background activity → Keep awake**, select the desktop’s
+CPU usage. In **Settings → Sally’s Version → This machine → Keep awake**, select the desktop’s
 local environment to configure **Show stats in the menu bar** and the Network speed,
 CPU, Memory, and Disk toggles. Stats, Network speed, and CPU start on; Memory and Disk
 start off. MB/s means megabytes per second. The menu includes full resource readings
@@ -228,7 +228,7 @@ The default follows running and queued turns, releasing the sleep inhibitor ten
 seconds after the last turn finishes. You can also choose a duration, an end time,
 an indefinite session, or Off. Closing a browser does not end a session.
 
-In **Settings → Background activity → Keep awake**, choose the session used when
+In **Settings → Sally’s Version → This machine → Keep awake**, choose the session used when
 the environment starts, whether the display may sleep, and a battery cutoff
 (default 20%). A battery cutoff ends the session; start another session to resume.
 The default session applies on the next server start; options changed in Settings apply now.

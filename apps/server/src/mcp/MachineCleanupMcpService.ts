@@ -47,7 +47,7 @@ const make = Effect.gen(function* () {
           {
             id: "machine-cleanup",
             context: "Cleanup found items that require your explicit review.",
-            text: `Review Phase ${phase} candidates in [Machine cleanup](/settings/maintenance). Only confirming exact paths there approves deletion. A reply here does not approve deletion.`,
+            text: `Review Phase ${phase} candidates in [Machine cleanup](/settings/fork/machine#machine-cleanup). Only confirming exact paths there approves deletion. A reply here does not approve deletion.`,
             suggestions: ["Review in Settings", "Keep everything"],
             recommended: "Keep everything",
           },

@@ -81,7 +81,7 @@ it("opens the popover and its end-time menus, showing only the selected mode's f
   await userEvent.click(page.getByRole("combobox", { name: "End day" }));
   await userEvent.click(page.getByRole("option", { name: "Tomorrow", exact: true }));
   await userEvent.click(page.getByRole("combobox", { name: "End time" }));
-  await userEvent.click(page.getByRole("option", { name: "03:45", exact: true }));
+  await userEvent.keyboard("{Home}{ArrowDown}{Enter}");
   await userEvent.click(page.getByRole("button", { name: "Start session" }));
   expect(send).toHaveBeenCalledWith({ session: { mode: "until", endsAt: expect.any(Number) } });
 });
