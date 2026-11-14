@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { planClaudeAccountSave } from "./claude-accounts";
+import { claudeSubscriptionLoginCommand, planClaudeAccountSave } from "./claudeAccounts.ts";
 
 const claude = ProviderDriverKind.make("claudeAgent");
 const work = ProviderInstanceId.make("claudeAgent_work");
@@ -38,6 +38,9 @@ describe("planClaudeAccountSave", () => {
     });
     expect(plan("", "~/.claude-willy")).toHaveProperty("error");
     expect(plan("Willy", " ")).toHaveProperty("error");
+    expect(claudeSubscriptionLoginCommand("~/.claude-company")).toBe(
+      "CLAUDE_CONFIG_DIR=~/.claude-company claude auth login",
+    );
   });
 
   it("edits the name and folder without dropping the instance's other settings", () => {
@@ -74,7 +77,6 @@ describe("planClaudeAccountSave", () => {
         },
       },
     });
-    // Clearing both falls back to the driver's label and the default ~/.claude folder.
     expect(edit("", "")).toEqual({
       mutation: {
         operation: "upsert",

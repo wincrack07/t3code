@@ -78,6 +78,7 @@ import {
 } from "../ProviderUpdateLaunchNotification.logic";
 import { ProviderUpdatesAction } from "../ProviderUpdatesAction";
 import { Button } from "../ui/button";
+import { AddClaudeAccountButton } from "./AddClaudeAccountButton";
 import {
   Empty,
   EmptyContent,
@@ -1061,6 +1062,16 @@ export function EnvironmentProviderSettings({
                     <PlusIcon className="size-4 shrink-0" />
                     Add provider
                   </button>
+                ) : null}
+                {canAddProvider ? (
+                  <AddClaudeAccountButton
+                    environmentId={environmentId}
+                    providerInstances={settings.providerInstances}
+                    policy={managedPolicy}
+                    disabled={!canWriteSettings}
+                    onSave={persistProviderInstance}
+                    onCreated={setSelectedInstanceId}
+                  />
                 ) : null}
               </div>
             </ScrollArea>
