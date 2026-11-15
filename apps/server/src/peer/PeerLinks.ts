@@ -738,20 +738,39 @@ const make = Effect.gen(function* () {
         });
       }
       // The token goes only to an address that proves it is this peer, so a
-      // reused LAN address or a moved hostname never receives it.
-      const { primary: url, peer } = yield* answeringAs(link.urls, environmentId, link.label);
-      const fenced = linkLimitsHold(peer);
-      const label = peer.label;
+      // reused LAN address or a moved hostname never receives it. The
+      // addresses race, so a silent one never delays one that answers.
+      const reasons: Array<string> = [];
+      const answered =
+        link.urls.length === 0
+          ? Option.none()
+          : yield* Effect.raceAll(
+              link.urls.map((candidate) =>
+                answeringAs([candidate], environmentId, link.label).pipe(
+                  Effect.tapError((error) => Effect.sync(() => reasons.push(error.message))),
+                  Effect.map(({ primary, peer }) => ({ url: primary, peer })),
+                ),
+              ),
+            ).pipe(Effect.option);
+      if (Option.isNone(answered)) {
+        return yield* new PeerLinkError({
+          reason: "unreachable",
+          message: [`${link.label} did not answer at ${link.urls.join(", ")}.`, ...reasons].join(
+            " ",
+          ),
+        });
+      }
+      const { url, peer } = answered.value;
       // A link made before the peer had to fence linked work, or a peer moved
       // back to such a version, would carry work past those limits.
-      if (!fenced) {
+      if (!linkLimitsHold(peer)) {
         return yield* new PeerLinkError({
           reason: "incompatible",
           message: `${link.label} runs a T3 Code version that cannot keep a linked agent's limits. Update it, then link again.`,
         });
       }
       return {
-        link: yield* withLabel(link, label),
+        link: yield* withLabel(link, peer.label),
         url,
         token: new TextDecoder().decode(stored.value),
       };

@@ -81,6 +81,7 @@ export function SavePromptButton({
       attachments: [...images, ...files],
       usesAttachmentUploads:
         sameMachine && appAtomRegistry.get(environmentServerConfigsAtom).has(environmentId),
+      draftTarget: target,
     }).catch((error: unknown) => {
       fail(error instanceof Error ? error.message : "Try again.");
       return null;

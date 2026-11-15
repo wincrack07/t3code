@@ -97,6 +97,7 @@ function harness(options: { crashAfterAccept?: boolean; failTitle?: string } = {
         prepareRun: () => Effect.void,
         checkWorktreeBase: () => Effect.void,
         retryPreparation: () => Effect.die("Unused fixture preparation"),
+        isNonGitProject: () => Effect.succeed(false),
         launch: Effect.fn("TaskBatchTest.launch")(function* (input) {
           attempts.push(input.commandId);
           launchInputs.push(input);

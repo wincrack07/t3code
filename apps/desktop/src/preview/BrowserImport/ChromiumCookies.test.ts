@@ -379,7 +379,7 @@ describe("readChromiumCookieDatabase", () => {
       );
 
       expect(result).toEqual({ cookies: [], undecryptable: 0, undecryptableHosts: [] });
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
   it.effect("skips partitioned cookies without breaking pre-CHIPS schemas", () =>
