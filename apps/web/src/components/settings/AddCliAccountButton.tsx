@@ -119,7 +119,7 @@ export function AddCliAccountButton({
                     <code className="select-text break-words">{command}</code>
                     <span className="mt-1 block">
                       {driver === "codex"
-                        ? "Open the code it prints in a private window and sign in with this account."
+                        ? "Enter the code it prints, sign in and choose this account's workspace. Plans tell accounts with the same email apart, for example Team and Pro."
                         : "Open the link it prints in a private window and sign in with this account."}
                     </span>
                   </>

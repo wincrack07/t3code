@@ -102,7 +102,9 @@ from the other home.
 
 **Add Codex account** in **Settings > Providers** creates that separate home and shows
 the sign-in command to run on the environment's machine. It signs in with a device
-code, so you can enter it in a private window and choose the other ChatGPT account.
+code, so you can enter it in a private window and choose the other ChatGPT account. If
+both accounts use the same email, pick the other workspace when asked; the provider
+list shows each account's plan.
 
 ## Switch accounts in an existing thread
 
