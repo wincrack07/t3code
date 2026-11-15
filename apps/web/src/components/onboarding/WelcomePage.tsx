@@ -51,6 +51,7 @@ import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { retryClerkLoad, useClerkLoadFailed } from "../clerk/clerkLoadFailure";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { completeOnboarding } from "../../onboarding/firstRun";
+import { keepWelcomeOpen } from "../../onboarding/welcomeAutoOpen";
 import {
   groupOnboardingProjects,
   partitionOnboardingProjects,
@@ -251,6 +252,7 @@ export function WelcomePage({
   const selected = projectImport.canWrite ? projectImport.selected : [];
   const newCount = selected.filter(projectImport.isNew).length;
   const start = () => {
+    keepWelcomeOpen();
     keepChoicesRef.current = scans.some((scan) => scan.data === null);
     if (selected.length === 0) {
       projectImport.finishAfterImport();

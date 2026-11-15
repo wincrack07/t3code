@@ -10,6 +10,7 @@ import {
   useClientSettingsHydrationStatus,
 } from "../../hooks/useSettings";
 import { completeOnboarding } from "../../onboarding/firstRun";
+import { claimAutoOpenedWelcome, markWelcomeAutoOpened } from "../../onboarding/welcomeAutoOpen";
 import {
   isFirstRunWorkspaceProvenanceAuthoritative,
   isFreshFirstRunWorkspace,
@@ -164,9 +165,17 @@ export function FirstRunGate({
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- navigates from the home route to /welcome when the gate decides on the wizard
   useEffect(() => {
     if (decision === "wizard" && wizardOwnsRoute) {
+      markWelcomeAutoOpened();
       void navigate({ to: "/welcome", replace: true });
     }
   }, [decision, navigate, wizardOwnsRoute]);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- leaves setup the gate opened once later evidence shows an existing workspace
+  useEffect(() => {
+    if (decision === "app" && pathname === "/welcome" && claimAutoOpenedWelcome()) {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [decision, navigate, pathname]);
 
   if (settingsReadFailed) {
     return <FirstRunRecovery reason="settings" retrying={hydrationStatus === "retrying"} />;
