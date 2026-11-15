@@ -26,7 +26,8 @@ Add another Claude instance in **Settings > Providers**:
 
 In **Settings > Providers**, choose **Add Claude account**, then enter a name and the
 config folder. The same control is on mobile. The login itself still happens on the
-environment's machine, with the command the form shows.
+environment's machine, with the command the form shows; open its link in a private
+window to sign in with the other account.
 
 An empty config-directory setting uses Claude Code's normal configuration. The
 custom setting changes `CLAUDE_CONFIG_DIR`, leaving `HOME` and the system keychain

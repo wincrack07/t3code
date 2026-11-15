@@ -100,6 +100,10 @@ Use a completely separate **CODEX_HOME path**, with no shadow home, when you wan
 separate Codex sessions and configuration. That instance cannot continue threads
 from the other home.
 
+**Add Codex account** in **Settings > Providers** creates that separate home and shows
+the sign-in command to run on the environment's machine. It signs in with a device
+code, so you can enter it in a private window and choose the other ChatGPT account.
+
 ## Switch accounts in an existing thread
 
 Choose the other account from the thread's model picker. T3 Code offers compatible

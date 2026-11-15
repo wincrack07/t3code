@@ -78,7 +78,7 @@ import {
 } from "../ProviderUpdateLaunchNotification.logic";
 import { ProviderUpdatesAction } from "../ProviderUpdatesAction";
 import { Button } from "../ui/button";
-import { AddClaudeAccountButton } from "./AddClaudeAccountButton";
+import { AddCliAccountButton } from "./AddCliAccountButton";
 import {
   Empty,
   EmptyContent,
@@ -1063,16 +1063,19 @@ export function EnvironmentProviderSettings({
                     Add provider
                   </button>
                 ) : null}
-                {canAddProvider ? (
-                  <AddClaudeAccountButton
-                    environmentId={environmentId}
-                    providerInstances={settings.providerInstances}
-                    policy={managedPolicy}
-                    disabled={!canWriteSettings}
-                    onSave={persistProviderInstance}
-                    onCreated={setSelectedInstanceId}
-                  />
-                ) : null}
+                {canAddProvider
+                  ? (["claudeAgent", "codex"] as const).map((driver) => (
+                      <AddCliAccountButton
+                        key={driver}
+                        driver={driver}
+                        providerInstances={settings.providerInstances}
+                        policy={managedPolicy}
+                        disabled={!canWriteSettings}
+                        onSave={persistProviderInstance}
+                        onCreated={setSelectedInstanceId}
+                      />
+                    ))
+                  : null}
               </div>
             </ScrollArea>
           </div>

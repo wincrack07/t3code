@@ -587,9 +587,9 @@
       "types": "./src/providerInstanceIds.ts",
       "default": "./src/providerInstanceIds.ts"
     },
-    "./claude-accounts": {
-      "types": "./src/claudeAccounts.ts",
-      "default": "./src/claudeAccounts.ts"
+    "./cli-accounts": {
+      "types": "./src/cliAccounts.ts",
+      "default": "./src/cliAccounts.ts"
     },
     "./peer-link-mesh": {
       "types": "./src/peerLinkMesh.ts",
