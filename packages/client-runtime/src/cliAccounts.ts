@@ -12,8 +12,8 @@ import {
 
 /** Another subscription with its own CLI login in its own folder. */
 export const CLI_ACCOUNTS = {
-  claudeAgent: { label: "Claude", defaultHome: "~/.claude", accentColor: "#da7756" },
-  codex: { label: "Codex", defaultHome: "~/.codex", accentColor: "#10a37f" },
+  claudeAgent: { label: "Claude", defaultHome: "~/.claude" },
+  codex: { label: "Codex", defaultHome: "~/.codex" },
 } as const;
 
 export type CliAccountDriver = keyof typeof CLI_ACCOUNTS;
@@ -53,12 +53,29 @@ export function cliAccountLoginCommand(driver: CliAccountDriver, home: string): 
     : `CLAUDE_CONFIG_DIR=${dir} claude auth login`;
 }
 
+/** The colour another instance already uses for an account with this name, whatever its provider,
+ * so one account keeps one colour across providers. */
+export function suggestCliAccountColor(
+  providerInstances: ServerSettings["providerInstances"],
+  name: string,
+): string | undefined {
+  const words = slug(name)
+    .split("-")
+    .filter((word) => word.length > 0);
+  if (words.length === 0) return undefined;
+  return Object.values(providerInstances).find((instance) => {
+    const label = slug(instance.displayName ?? "").split("-");
+    return instance.accentColor !== undefined && words.every((word) => label.includes(word));
+  })?.accentColor;
+}
+
 export function planCliAccountAdd(input: {
   readonly driver: CliAccountDriver;
   readonly providerInstances: ServerSettings["providerInstances"];
   readonly policy: ManagedPolicySummary | undefined;
   readonly name: string;
   readonly home: string;
+  readonly accentColor?: string | undefined;
 }): { readonly mutation: ProviderInstanceMutation } | { readonly error: string } {
   const name = input.name.trim();
   const home = input.home.trim();
@@ -78,12 +95,11 @@ export function planCliAccountAdd(input: {
   if (input.policy && isManagedSettingPath(input.policy, `providerInstances.${instanceId}`)) {
     return { error: `Managed by ${input.policy.organization}.` };
   }
-  const account = CLI_ACCOUNTS[input.driver];
   const instance: ProviderInstanceConfig = {
     driver,
     enabled: true,
-    displayName: `${account.label} - ${name}`,
-    accentColor: account.accentColor,
+    displayName: `${CLI_ACCOUNTS[input.driver].label} - ${name}`,
+    ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     config:
       input.driver === "codex" ? { setupMode: "existing", homePath: home } : { homePath: home },
   };

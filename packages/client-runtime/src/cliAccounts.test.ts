@@ -10,6 +10,7 @@ import {
   cliAccountLoginCommand,
   defaultCliAccountHome,
   planCliAccountAdd,
+  suggestCliAccountColor,
   type CliAccountDriver,
 } from "./cliAccounts.ts";
 
@@ -17,17 +18,18 @@ const codex = ProviderDriverKind.make("codex");
 const taken = ProviderInstanceId.make("codex_invu");
 
 describe("planCliAccountAdd", () => {
-  const plan = (driver: CliAccountDriver, name: string, home: string) =>
+  const plan = (driver: CliAccountDriver, name: string, home: string, accentColor?: string) =>
     planCliAccountAdd({
       driver,
       providerInstances: { [taken]: { driver: codex } } as ServerSettings["providerInstances"],
       policy: undefined,
       name,
       home,
+      accentColor,
     });
 
   it("adds a Codex account on its own CODEX_HOME with the CLI's own login", () => {
-    expect(plan("codex", " Invu ", " ~/.codex-company ")).toEqual({
+    expect(plan("codex", " Invu ", " ~/.codex-company ", "#2b68ef")).toEqual({
       mutation: {
         operation: "create",
         instanceId: "codex_invu_2",
@@ -35,7 +37,7 @@ describe("planCliAccountAdd", () => {
           driver: "codex",
           enabled: true,
           displayName: "Codex - Invu",
-          accentColor: "#10a37f",
+          accentColor: "#2b68ef",
           config: { setupMode: "existing", homePath: "~/.codex-company" },
         },
       },
@@ -51,7 +53,6 @@ describe("planCliAccountAdd", () => {
           driver: "claudeAgent",
           enabled: true,
           displayName: "Claude - Invu",
-          accentColor: "#da7756",
           config: { homePath: "~/.claude-company" },
         },
       },
@@ -82,6 +83,28 @@ describe("planCliAccountAdd", () => {
         home: "~/.codex-work",
       }),
     ).toEqual({ error: "Managed by Acme." });
+  });
+});
+
+describe("suggestCliAccountColor", () => {
+  it("reuses the colour of the same account on another provider", () => {
+    const providerInstances = {
+      claudeAgent: {
+        driver: "claudeAgent",
+        displayName: "Claude · Personal · Suscripción",
+        accentColor: "#eb2525",
+      },
+      claudeAgent_work: {
+        driver: "claudeAgent",
+        displayName: "Claude · Invu-Clau · Suscripción",
+        accentColor: "#2b68ef",
+      },
+      codex: { driver: "codex", displayName: "Codex - Invu" },
+    } as unknown as ServerSettings["providerInstances"];
+    expect(suggestCliAccountColor(providerInstances, "Invu")).toBe("#2b68ef");
+    expect(suggestCliAccountColor(providerInstances, "personal")).toBe("#eb2525");
+    expect(suggestCliAccountColor(providerInstances, "Acme")).toBeUndefined();
+    expect(suggestCliAccountColor(providerInstances, " ")).toBeUndefined();
   });
 });
 

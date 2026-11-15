@@ -6,6 +6,7 @@ import {
   cliAccountLoginCommand,
   defaultCliAccountHome,
   planCliAccountAdd,
+  suggestCliAccountColor,
   type CliAccountDriver,
 } from "@t3tools/client-runtime/cli-accounts";
 import type {
@@ -21,6 +22,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { WizardFooter, WizardHeader, WizardPanel, WizardPopup } from "../ui/wizard";
+import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { SettingsRow } from "./settingsLayout";
 
 const HOME_VARIABLE: Record<CliAccountDriver, string> = {
@@ -50,23 +52,33 @@ export function AddCliAccountButton({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("Company");
   const [home, setHome] = useState<string | null>(null);
+  const [color, setColor] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "command" });
   const folder = home ?? defaultCliAccountHome(driver, name);
+  const accentColor = color ?? suggestCliAccountColor(providerInstances, name);
   const command = cliAccountLoginCommand(driver, folder);
 
   const start = () => {
     setName("Company");
     setHome(null);
+    setColor(null);
     setCreated(null);
     setError(null);
     setOpen(true);
   };
 
   const add = async () => {
-    const plan = planCliAccountAdd({ driver, providerInstances, policy, name, home: folder });
+    const plan = planCliAccountAdd({
+      driver,
+      providerInstances,
+      policy,
+      name,
+      home: folder,
+      accentColor,
+    });
     if ("error" in plan) {
       setError(plan.error);
       return;
@@ -153,6 +165,18 @@ export function AddCliAccountButton({
                       disabled={busy}
                       onChange={(event) => setName(event.target.value)}
                       placeholder="e.g. Company"
+                    />
+                  }
+                />
+                <SettingsRow
+                  title="Color"
+                  description="Matches other accounts with this name. One account keeps one color."
+                  control={
+                    <ProviderAccentColorPicker
+                      layout="inline"
+                      displayName={`${label} - ${name.trim() || "Name"}`}
+                      value={accentColor}
+                      onCommit={(value) => setColor(value)}
                     />
                   }
                 />
