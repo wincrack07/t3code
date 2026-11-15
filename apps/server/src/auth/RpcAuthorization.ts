@@ -44,6 +44,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.chatHubGet]: AuthOrchestrationReadScope,
   [WS_METHODS.chatHubEnvironments]: AuthOrchestrationReadScope,
   [WS_METHODS.keepAwakeSubscribe]: AuthOrchestrationReadScope,
+  [WS_METHODS.mcpCatalogSubscribe]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: AuthOrchestrationReadScope,

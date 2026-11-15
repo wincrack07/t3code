@@ -398,7 +398,10 @@ export default defineConfig({
         },
       },
       {
-        files: ["apps/server/src/mcp/McpHttpServer.ts"],
+        files: [
+          "apps/server/src/mcp/McpHttpServer.ts",
+          "apps/server/src/mcp/McpCatalogRegistration.ts",
+        ],
         rules: { "t3code/no-raw-mcp-registration": "off" },
       },
       {

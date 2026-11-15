@@ -20,6 +20,14 @@ import {
 } from "./chatHub.ts";
 import { ChatHubList, ChatHubThread, ChatHubEnvironments } from "./chatHub.ts";
 import { KeepAwakeAuthorize, KeepAwakeChange, KeepAwakeStatus } from "./keepAwake.ts";
+import {
+  McpCatalogError,
+  McpCatalogImportCandidate,
+  McpCatalogImportInput,
+  McpCatalogServerRef,
+  McpCatalogSnapshot,
+  McpCatalogUpsertInput,
+} from "./mcpCatalog.ts";
 import { MachineMonitorSnapshot } from "./systemMonitor.ts";
 import {
   OrchestrationV2SearchThreadError,
@@ -570,6 +578,12 @@ export const WS_METHODS = {
   keepAwakeAuthorize: "keepAwake.authorize",
   keepAwakeChange: "keepAwake.change",
   keepAwakeSubscribe: "keepAwake.subscribe",
+  mcpCatalogSubscribe: "mcpCatalog.subscribe",
+  mcpCatalogUpsert: "mcpCatalog.upsert",
+  mcpCatalogRemove: "mcpCatalog.remove",
+  mcpCatalogReconnect: "mcpCatalog.reconnect",
+  mcpCatalogImportCandidates: "mcpCatalog.importCandidates",
+  mcpCatalogImport: "mcpCatalog.import",
   serverGetConfig: "server.getConfig",
   serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
@@ -2394,7 +2408,45 @@ const WsKeepAwakeAuthorize = Rpc.make(WS_METHODS.keepAwakeAuthorize, {
   success: KeepAwakeStatus,
   error: EnvironmentAuthorizationError,
 });
+const WsMcpCatalogSubscribe = Rpc.make(WS_METHODS.mcpCatalogSubscribe, {
+  payload: Schema.Struct({}),
+  success: McpCatalogSnapshot,
+  stream: true,
+  error: EnvironmentAuthorizationError,
+});
+const WsMcpCatalogUpsert = Rpc.make(WS_METHODS.mcpCatalogUpsert, {
+  payload: McpCatalogUpsertInput,
+  success: McpCatalogSnapshot,
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
+const WsMcpCatalogRemove = Rpc.make(WS_METHODS.mcpCatalogRemove, {
+  payload: McpCatalogServerRef,
+  success: McpCatalogSnapshot,
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
+const WsMcpCatalogReconnect = Rpc.make(WS_METHODS.mcpCatalogReconnect, {
+  payload: McpCatalogServerRef,
+  success: McpCatalogSnapshot,
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
+const WsMcpCatalogImportCandidates = Rpc.make(WS_METHODS.mcpCatalogImportCandidates, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(McpCatalogImportCandidate),
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
+const WsMcpCatalogImport = Rpc.make(WS_METHODS.mcpCatalogImport, {
+  payload: McpCatalogImportInput,
+  success: McpCatalogSnapshot,
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsMcpCatalogSubscribe,
+  WsMcpCatalogUpsert,
+  WsMcpCatalogRemove,
+  WsMcpCatalogReconnect,
+  WsMcpCatalogImportCandidates,
+  WsMcpCatalogImport,
   WsKeepAwakeAuthorize,
   WsChatHubStatus,
   WsChatHubConfigure,

@@ -55,6 +55,9 @@ import * as PreviewControlsHandlers from "./toolkits/previewControls/handlers.ts
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
 import { ThemeToolkit } from "./toolkits/theme/tools.ts";
+import { registerMcpCall } from "./McpCatalogRegistration.ts";
+import * as McpCatalogHandlers from "./toolkits/mcpCatalog/handlers.ts";
+import { McpToolsToolkit } from "./toolkits/mcpCatalog/tools.ts";
 import * as ThemeHandlers from "./toolkits/theme/handlers.ts";
 import { ProjectToolkit } from "./toolkits/project/tools.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
@@ -1288,6 +1291,12 @@ const layerThemeToolkit = toolkitRegistration(ThemeToolkit, ThemeHandlers.layer)
 
 export const layerProjectRegistration = toolkitRegistration(ProjectToolkit, ProjectHandlers.layer);
 
+// The shared MCP catalog: other MCP servers' tools, reached through this one.
+const layerMcpCatalogToolkit = Layer.mergeAll(
+  toolkitRegistration(McpToolsToolkit, McpCatalogHandlers.layerTools),
+  imageToolRegistration(registerMcpCall(decodeAsAdvertised), McpCatalogHandlers.layerCall),
+);
+
 export const layerAttachmentToolkit = toolkitRegistration(
   AttachmentToolkit,
   AttachmentHandlers.layer,
@@ -1358,6 +1367,7 @@ export const layerTools = Layer.mergeAll(
   layerDeviceToolkit,
   layerHtmlToolkit,
   layerMessageToolkit,
+  layerMcpCatalogToolkit,
 );
 
 const layerToolExposure = Layer.effect(

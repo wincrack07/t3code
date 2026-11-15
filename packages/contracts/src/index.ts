@@ -85,6 +85,7 @@ export * from "./systemMonitor.ts";
 export * from "./decisions.ts";
 
 export * from "./keepAwake.ts";
+export * from "./mcpCatalog.ts";
 
 export * from "./machineCleanup.ts";
 export * from "./threadExport.ts";

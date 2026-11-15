@@ -1,5 +1,6 @@
 import * as MachineCleanup from "../MachineCleanupService.ts";
 import * as KeepAwake from "../keepAwake/KeepAwake.ts";
+import * as McpCatalog from "../mcpCatalog/McpCatalog.ts";
 import * as SystemMonitor from "../systemMonitor/SystemMonitor.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -56,6 +57,7 @@ import budget from "./agentContextBudget.json" with { type: "json" };
 const toolHandlerServices = Layer.mergeAll(
   Layer.mock(MachineCleanup.MachineCleanup)({}),
   Layer.mock(KeepAwake.KeepAwake)({}),
+  Layer.mock(McpCatalog.McpCatalog)({}),
   Layer.mock(SystemMonitor.SystemMonitor)({}),
   Layer.mock(AssetSigner)({}),
   Layer.mock(DeviceService)({}),

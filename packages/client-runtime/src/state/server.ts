@@ -1526,6 +1526,31 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:keep-awake:change",
       tag: WS_METHODS.keepAwakeChange,
     }),
+    mcpCatalog: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:mcp-catalog",
+      tag: WS_METHODS.mcpCatalogSubscribe,
+      idleTtlMs: 0,
+    }),
+    upsertMcpCatalogServer: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:upsert",
+      tag: WS_METHODS.mcpCatalogUpsert,
+    }),
+    removeMcpCatalogServer: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:remove",
+      tag: WS_METHODS.mcpCatalogRemove,
+    }),
+    reconnectMcpCatalogServer: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:reconnect",
+      tag: WS_METHODS.mcpCatalogReconnect,
+    }),
+    mcpCatalogImportCandidates: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:import-candidates",
+      tag: WS_METHODS.mcpCatalogImportCandidates,
+    }),
+    importMcpCatalogServers: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:import",
+      tag: WS_METHODS.mcpCatalogImport,
+    }),
     hostResources: createEnvironmentQueryAtomFamily(runtime, {
       label: "environment-data:server:host-resources",
       idleTtlMs: 0,

@@ -11,6 +11,7 @@ export const FORK_SETTINGS_PATHS = [
   "/settings/fork/machine",
   "/settings/fork/monitor",
   "/settings/fork/connections",
+  "/settings/fork/mcp",
 ] as const;
 
 export type ForkSettingsPath = (typeof FORK_SETTINGS_PATHS)[number];
@@ -22,6 +23,7 @@ export const FORK_SETTINGS_SECTION_LABELS: Readonly<Record<ForkSettingsPath, str
   "/settings/fork/machine": msg("This machine"),
   "/settings/fork/monitor": msg("Machine monitor"),
   "/settings/fork/connections": msg("Linked environments"),
+  "/settings/fork/mcp": msg("MCP servers"),
 };
 
 export const FORK_SETTINGS_NAV_GROUP = {
@@ -38,6 +40,7 @@ export const FORK_SETTINGS_CATEGORY_SCOPES: Readonly<
   "/settings/fork/machine": null,
   "/settings/fork/monitor": "environment",
   "/settings/fork/connections": null,
+  "/settings/fork/mcp": null,
 };
 
 /** Pages that act on every connected environment at once, so they hide the scope picker. */
@@ -112,6 +115,13 @@ export const FORK_SETTINGS_SEARCH_ITEMS = [
     title: "PR reviews",
     to: "/settings/fork/pr-reviews",
     searchTerms: ["pull request reviewer GitHub identity triggers instructions"],
+  },
+  {
+    id: "mcp-servers",
+    title: "MCP servers",
+    to: "/settings/fork/mcp",
+    scope: "environment-defaults",
+    searchTerms: ["mcp model context protocol tools catalog connectors shared agents import"],
   },
   {
     id: "keep-awake",

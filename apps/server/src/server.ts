@@ -1,6 +1,7 @@
 import * as ChatHubSync from "./chatHub/ChatHubSync.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as KeepAwakeRuntime from "./keepAwake/runtime.ts";
+import * as McpCatalog from "./mcpCatalog/McpCatalog.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as MachineSampler from "./systemMonitor/MachineSampler.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -713,6 +714,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ),
   layerThreadPullRequestWorker,
   KeepAwake.layer,
+  McpCatalog.layer,
   DelegatedTaskAnalytics.layer,
   Layer.effectDiscard(
     Effect.gen(function* () {

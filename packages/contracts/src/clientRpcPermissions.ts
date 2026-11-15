@@ -35,6 +35,11 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.chatHubSyncNow]: AuthSettingsWriteScope,
   [WS_METHODS.keepAwakeAuthorize]: AuthSettingsWriteScope,
   [WS_METHODS.keepAwakeChange]: AuthSettingsWriteScope,
+  [WS_METHODS.mcpCatalogUpsert]: AuthSettingsWriteScope,
+  [WS_METHODS.mcpCatalogRemove]: AuthSettingsWriteScope,
+  [WS_METHODS.mcpCatalogReconnect]: AuthSettingsWriteScope,
+  [WS_METHODS.mcpCatalogImportCandidates]: AuthSettingsWriteScope,
+  [WS_METHODS.mcpCatalogImport]: AuthSettingsWriteScope,
   [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
   // Stopping a server signals its processes, as closing a terminal does.

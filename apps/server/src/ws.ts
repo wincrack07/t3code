@@ -3,6 +3,7 @@ import * as TaskBatchService from "./project/TaskBatchService.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
 import * as KeepAwake from "./keepAwake/KeepAwake.ts";
+import * as McpCatalog from "./mcpCatalog/McpCatalog.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
@@ -1486,6 +1487,7 @@ export const layerWsRpc = (
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const chatHub = yield* ChatHubSync.ChatHubSync;
       const keepAwake = yield* KeepAwake.KeepAwake;
+      const mcpCatalog = yield* McpCatalog.McpCatalog;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
       yield* Effect.addFinalizer(() =>
@@ -2697,6 +2699,12 @@ export const layerWsRpc = (
         [WS_METHODS.keepAwakeAuthorize]: (input) => keepAwake.authorizeLid(input.action),
         [WS_METHODS.keepAwakeChange]: (input) => keepAwake.change(input),
         [WS_METHODS.keepAwakeSubscribe]: () => keepAwake.changes,
+        [WS_METHODS.mcpCatalogSubscribe]: () => mcpCatalog.changes,
+        [WS_METHODS.mcpCatalogUpsert]: (input) => mcpCatalog.upsert(input),
+        [WS_METHODS.mcpCatalogRemove]: (input) => mcpCatalog.remove(input.id),
+        [WS_METHODS.mcpCatalogReconnect]: (input) => mcpCatalog.reconnect(input.id),
+        [WS_METHODS.mcpCatalogImportCandidates]: () => mcpCatalog.importCandidates,
+        [WS_METHODS.mcpCatalogImport]: (input) => mcpCatalog.importServers(input),
         [WS_METHODS.serverGetHostResources]: (_input) => hostResources.read,
         [WS_METHODS.serverGetProcessResourceHistory]: (input) =>
           processResourceMonitor.readHistory(input),

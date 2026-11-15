@@ -1,4 +1,5 @@
 import * as ChatHubSync from "./chatHub/ChatHubSync.ts";
+import * as McpCatalog from "./mcpCatalog/McpCatalog.ts";
 import * as TaskBatchService from "./project/TaskBatchService.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as Decisions from "./decisions/Decisions.ts";
@@ -852,6 +853,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(EnvironmentTheme.EnvironmentThemeService)({}),
   Layer.mock(GitWorkflowService.GitWorkflowService)({}),
   Layer.mock(KeepAwake.KeepAwake)({}),
+  Layer.mock(McpCatalog.McpCatalog)({}),
   Layer.mock(HostResources.HostResources)({}),
   Layer.mock(SystemMonitor.SystemMonitor)({}),
   Layer.mock(McpAppRequests.McpAppRequests)({}),
