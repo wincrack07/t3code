@@ -5,11 +5,14 @@ import type {
   McpCatalogServer,
   McpCatalogServerStatus,
 } from "@t3tools/contracts";
+import { MCP_CATALOG_OAUTH_CALLBACK_PATH } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
+import { ensureLocalApi } from "../../localApi";
+import { useEnvironmentHttpBaseUrl } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -74,6 +77,10 @@ function McpCatalogSection({ environmentId }: { readonly environmentId: Environm
   const upsert = useAtomCommand(serverEnvironment.upsertMcpCatalogServer, {
     reportFailure: false,
   });
+  const startSignIn = useAtomCommand(serverEnvironment.startMcpCatalogOAuth, {
+    reportFailure: false,
+  });
+  const httpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
   const reconnect = useAtomCommand(serverEnvironment.reconnectMcpCatalogServer, {
     reportFailure: false,
   });
@@ -82,6 +89,39 @@ function McpCatalogSection({ environmentId }: { readonly environmentId: Environm
   const [rowError, setRowError] = useState<{ readonly id: string; readonly message: string }>();
   const snapshot = query.data ?? undefined;
   const statusById = new Map(snapshot?.statuses.map((status) => [status.id, status]));
+
+  const signIn = async (server: McpCatalogServer) => {
+    setRowError(undefined);
+    if (httpBaseUrl === null) {
+      setRowError({ id: server.id, message: "Connect to this environment to sign in." });
+      return;
+    }
+    // A tab opened inside the click survives popup blockers; the desktop app opens the browser.
+    const tab = window.desktopBridge ? null : window.open("", "_blank");
+    const result = await startSignIn({
+      environmentId,
+      input: {
+        id: server.id,
+        redirectUri: new URL(MCP_CATALOG_OAUTH_CALLBACK_PATH, httpBaseUrl).href,
+      },
+    });
+    if (!AsyncResult.isSuccess(result)) {
+      tab?.close();
+      if (AsyncResult.isFailure(result)) {
+        setRowError({
+          id: server.id,
+          message: failureMessage(result, "Could not start the sign-in."),
+        });
+      }
+      return;
+    }
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = result.value.authorizationUrl;
+    } else {
+      void ensureLocalApi().shell.openExternal(result.value.authorizationUrl);
+    }
+  };
 
   const setEnabled = async (server: McpCatalogServer, enabled: boolean) => {
     setRowError(undefined);
@@ -133,6 +173,7 @@ function McpCatalogSection({ environmentId }: { readonly environmentId: Environm
               onEnabledChange={(enabled) => void setEnabled(server, enabled)}
               onEdit={() => setEditing({ server })}
               onRetry={() => void reconnect({ environmentId, input: { id: server.id } })}
+              onSignIn={() => void signIn(server)}
             />
           ))
         )}
@@ -169,6 +210,7 @@ function ServerRow(props: {
   readonly onEnabledChange: (enabled: boolean) => void;
   readonly onEdit: () => void;
   readonly onRetry: () => void;
+  readonly onSignIn: () => void;
 }) {
   const { server, status } = props;
   const state = status?.state;
@@ -198,7 +240,7 @@ function ServerRow(props: {
           <span className="block break-all">
             <code>{server.id}</code> · {transportSummary(server)}
           </span>
-          {failed && status?.error ? (
+          {failed && status?.error && status.auth !== "required" ? (
             <span className="mt-1 block text-destructive-foreground">{status.error}</span>
           ) : null}
           {props.error ? (
@@ -210,7 +252,11 @@ function ServerRow(props: {
       }
       control={
         <div className="flex items-center gap-2">
-          {failed ? (
+          {status?.auth === "required" ? (
+            <Button size="xs" variant="outline" disabled={!props.allowed} onClick={props.onSignIn}>
+              Sign in
+            </Button>
+          ) : failed ? (
             <Button size="xs" variant="outline" disabled={!props.allowed} onClick={props.onRetry}>
               Retry
             </Button>
@@ -321,6 +367,9 @@ function ServerDialog(props: {
   const remove = useAtomCommand(serverEnvironment.removeMcpCatalogServer, {
     reportFailure: false,
   });
+  const signOut = useAtomCommand(serverEnvironment.signOutMcpCatalogServer, {
+    reportFailure: false,
+  });
   const [draft, setDraft] = useState<ServerDraft>(() => (server ? draftFor(server) : emptyDraft()));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -355,6 +404,18 @@ function ServerDialog(props: {
     setBusy(false);
     if (AsyncResult.isFailure(result)) {
       setError(failureMessage(result, "Could not remove this server."));
+      return;
+    }
+    props.onClose();
+  };
+
+  const signOutServer = async () => {
+    if (!server) return;
+    setBusy(true);
+    const result = await signOut({ environmentId, input: { id: server.id } });
+    setBusy(false);
+    if (AsyncResult.isFailure(result)) {
+      setError(failureMessage(result, "Could not sign out."));
       return;
     }
     props.onClose();
@@ -465,7 +526,7 @@ function ServerDialog(props: {
               <>
                 <SettingsRow
                   title="URL"
-                  description="A streamable HTTP endpoint."
+                  description="A streamable HTTP endpoint. If it needs a sign-in, the list shows Sign in."
                   control={
                     <Input
                       aria-label="URL"
@@ -483,6 +544,22 @@ function ServerDialog(props: {
                   disabled={busy}
                   onChange={(headers) => edit({ headers })}
                 />
+                {props.status?.auth === "signed-in" ? (
+                  <SettingsRow
+                    title="Signed in"
+                    description="Through the browser. Every agent here uses this sign-in."
+                    control={
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void signOutServer()}
+                      >
+                        Sign out
+                      </Button>
+                    }
+                  />
+                ) : null}
               </>
             )}
             {tools.length > 0 ? (

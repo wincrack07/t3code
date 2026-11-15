@@ -24,6 +24,8 @@ import {
   McpCatalogError,
   McpCatalogImportCandidate,
   McpCatalogImportInput,
+  McpCatalogOAuthStartInput,
+  McpCatalogOAuthStartResult,
   McpCatalogServerRef,
   McpCatalogSnapshot,
   McpCatalogUpsertInput,
@@ -584,6 +586,8 @@ export const WS_METHODS = {
   mcpCatalogReconnect: "mcpCatalog.reconnect",
   mcpCatalogImportCandidates: "mcpCatalog.importCandidates",
   mcpCatalogImport: "mcpCatalog.import",
+  mcpCatalogOAuthStart: "mcpCatalog.oauthStart",
+  mcpCatalogOAuthSignOut: "mcpCatalog.oauthSignOut",
   serverGetConfig: "server.getConfig",
   serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
@@ -2439,6 +2443,16 @@ const WsMcpCatalogImport = Rpc.make(WS_METHODS.mcpCatalogImport, {
   success: McpCatalogSnapshot,
   error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
 });
+const WsMcpCatalogOAuthStart = Rpc.make(WS_METHODS.mcpCatalogOAuthStart, {
+  payload: McpCatalogOAuthStartInput,
+  success: McpCatalogOAuthStartResult,
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
+const WsMcpCatalogOAuthSignOut = Rpc.make(WS_METHODS.mcpCatalogOAuthSignOut, {
+  payload: McpCatalogServerRef,
+  success: McpCatalogSnapshot,
+  error: Schema.Union([McpCatalogError, EnvironmentAuthorizationError]),
+});
 
 export const WsRpcGroup = RpcGroup.make(
   WsMcpCatalogSubscribe,
@@ -2447,6 +2461,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsMcpCatalogReconnect,
   WsMcpCatalogImportCandidates,
   WsMcpCatalogImport,
+  WsMcpCatalogOAuthStart,
+  WsMcpCatalogOAuthSignOut,
   WsKeepAwakeAuthorize,
   WsChatHubStatus,
   WsChatHubConfigure,

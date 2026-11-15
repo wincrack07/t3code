@@ -64,6 +64,8 @@ export const McpCatalogServerStatus = Schema.Struct({
   error: Schema.NullOr(Schema.String),
   tools: Schema.Array(McpCatalogTool),
   serverVersion: Schema.NullOr(Schema.String),
+  // `required` when the server answered 401; `signed-in` when T3 Code holds its OAuth token.
+  auth: Schema.optionalKey(Schema.Literals(["required", "signed-in"])),
 });
 export type McpCatalogServerStatus = typeof McpCatalogServerStatus.Type;
 
@@ -81,6 +83,18 @@ export const McpCatalogUpsertInput = Schema.Struct({
 export type McpCatalogUpsertInput = typeof McpCatalogUpsertInput.Type;
 
 export const McpCatalogServerRef = Schema.Struct({ id: McpCatalogServerId });
+
+/** Where an MCP server's OAuth sign-in returns, on the environment's own HTTP origin. */
+export const MCP_CATALOG_OAUTH_CALLBACK_PATH = "/api/mcp-catalog/oauth/callback";
+
+export const McpCatalogOAuthStartInput = Schema.Struct({
+  id: McpCatalogServerId,
+  // The callback on the origin this client reaches the environment at.
+  redirectUri: TrimmedNonEmptyString,
+});
+export type McpCatalogOAuthStartInput = typeof McpCatalogOAuthStartInput.Type;
+
+export const McpCatalogOAuthStartResult = Schema.Struct({ authorizationUrl: Schema.String });
 
 export const McpCatalogImportSource = Schema.Literals([
   "claude",

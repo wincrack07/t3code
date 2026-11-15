@@ -1551,6 +1551,14 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:mcp-catalog:import",
       tag: WS_METHODS.mcpCatalogImport,
     }),
+    startMcpCatalogOAuth: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:oauth-start",
+      tag: WS_METHODS.mcpCatalogOAuthStart,
+    }),
+    signOutMcpCatalogServer: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:mcp-catalog:oauth-sign-out",
+      tag: WS_METHODS.mcpCatalogOAuthSignOut,
+    }),
     hostResources: createEnvironmentQueryAtomFamily(runtime, {
       label: "environment-data:server:host-resources",
       idleTtlMs: 0,

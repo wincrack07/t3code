@@ -1,15 +1,18 @@
 import {
+  MCP_CATALOG_OAUTH_CALLBACK_PATH,
   McpCatalogError,
   McpCatalogServer,
   type McpCatalogImportCandidate,
   type McpCatalogImportInput,
+  type McpCatalogOAuthStartInput,
   type McpCatalogServerStatus,
   type McpCatalogSnapshot,
   type McpCatalogUpsertInput,
   type McpCatalogVariable,
 } from "@t3tools/contracts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
-import { McpClient, McpProtocol, type McpSchema } from "effect/ai";
+import { McpClient, McpClientError, McpProtocol, type McpSchema } from "effect/ai";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -33,6 +36,7 @@ import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { readImportCandidates } from "./McpCatalogImport.ts";
+import * as OAuth from "./McpCatalogOAuth.ts";
 
 const CatalogFile = Schema.Struct({
   version: Schema.Literal(1),
@@ -50,6 +54,10 @@ type SecretValues = typeof SecretValues.Type;
 const decodeSecretValues = Schema.decodeUnknownEffect(Schema.fromJsonString(SecretValues));
 const encodeSecretValues = Schema.encodeEffect(Schema.fromJsonString(SecretValues));
 const NO_SECRETS: SecretValues = { env: {}, headers: {} };
+const decodeStoredOAuth = Schema.decodeUnknownEffect(Schema.fromJsonString(OAuth.StoredOAuth));
+const encodeStoredOAuth = Schema.encodeEffect(Schema.fromJsonString(OAuth.StoredOAuth));
+const OAUTH_FLOW_TTL_MS = 10 * 60_000;
+const SIGN_IN_NEEDED = "Sign in to use this server.";
 
 const CONNECT_TIMEOUT = "45 seconds";
 const REQUEST_TIMEOUT = "60 seconds";
@@ -91,7 +99,28 @@ interface Entry {
   readonly status: McpCatalogServerStatus;
   readonly live: Live | undefined;
   readonly lock: Semaphore.Semaphore;
+  readonly oauth: OAuth.StoredOAuth | undefined;
+  // The last 401 challenge, which says where the server's sign-in lives.
+  readonly challenge: string | undefined;
 }
+
+interface PendingSignIn {
+  readonly id: string;
+  readonly verifier: string;
+  readonly clientId: string;
+  readonly clientSecret: string | undefined;
+  readonly tokenEndpoint: string;
+  readonly resource: string;
+  readonly redirectUri: string;
+  readonly expiresAt: number;
+}
+
+/** A connection failure; `unauthorized` when the server answered 401. */
+class ConnectFailure extends Schema.TaggedError<ConnectFailure>()("McpCatalogConnectFailure", {
+  message: Schema.String,
+  unauthorized: Schema.Boolean,
+  challenge: Schema.optionalKey(Schema.String),
+}) {}
 
 export class McpCatalog extends Context.Service<
   McpCatalog,
@@ -131,6 +160,17 @@ export class McpCatalog extends Context.Service<
       resolved: ResolvedCatalogTool,
       args: Readonly<Record<string, unknown>>,
     ) => Effect.Effect<McpSchema.CallToolResult, McpCatalogError>;
+    /** The URL that starts a server's OAuth sign-in in the user's browser. */
+    readonly startSignIn: (
+      input: McpCatalogOAuthStartInput,
+    ) => Effect.Effect<{ readonly authorizationUrl: string }, McpCatalogError>;
+    /** Finishes a sign-in from the browser's return to the callback. */
+    readonly completeSignIn: (input: {
+      readonly state: string;
+      readonly code: string | undefined;
+      readonly error: string | undefined;
+    }) => Effect.Effect<{ readonly serverName: string }, McpCatalogError>;
+    readonly signOut: (id: string) => Effect.Effect<McpCatalogSnapshot, McpCatalogError>;
   }
 >()("t3/mcpCatalog/McpCatalog") {}
 
@@ -146,14 +186,37 @@ const describe = (cause: unknown): string => {
 
 /** Why a server would not connect, in terms of what the user configured. */
 const connectionError = (server: McpCatalogServer, cause: unknown) => {
+  if (
+    McpClientError.isMcpClientError(cause) &&
+    cause.reason._tag === "HttpError" &&
+    cause.reason.status === 401
+  ) {
+    return new ConnectFailure({
+      message: SIGN_IN_NEEDED,
+      unauthorized: true,
+      ...(cause.reason.wwwAuthenticate === undefined
+        ? {}
+        : { challenge: cause.reason.wwwAuthenticate }),
+    });
+  }
   const message = describe(cause);
-  return server.transport.type === "stdio" && /spawn/iu.test(message)
-    ? `Could not start \`${server.transport.command}\`. Check that it is installed on this machine.`
-    : message;
+  return new ConnectFailure({
+    message:
+      server.transport.type === "stdio" && /spawn/iu.test(message)
+        ? `Could not start \`${server.transport.command}\`. Check that it is installed on this machine.`
+        : message,
+    unauthorized: false,
+  });
 };
+
+const isUnauthorized = (cause: unknown) =>
+  McpClientError.isMcpClientError(cause) &&
+  cause.reason._tag === "HttpError" &&
+  cause.reason.status === 401;
 
 const statusOf = (
   server: McpCatalogServer,
+  signedIn = false,
   state: McpCatalogServerStatus["state"] = server.enabled ? "idle" : "disabled",
 ): McpCatalogServerStatus => ({
   id: server.id,
@@ -161,7 +224,13 @@ const statusOf = (
   error: null,
   tools: [],
   serverVersion: null,
+  ...(signedIn ? { auth: "signed-in" as const } : {}),
 });
+
+const sameEndpoint = (left: McpCatalogServer, right: McpCatalogServer) =>
+  left.transport.type === "http" &&
+  right.transport.type === "http" &&
+  left.transport.url === right.transport.url;
 
 const toolSummary = (tool: McpSchema.Tool) => ({
   name: tool.name,
@@ -252,6 +321,8 @@ const make = Effect.gen(function* () {
   const serviceScope = yield* Effect.scope;
   const catalogPath = path.join(config.stateDir, "mcp-catalog.json");
   const secretName = (id: string) => `mcp-catalog-${id}`;
+  const oauthSecretName = (id: string) => `mcp-catalog-${id}-oauth`;
+  const pendingSignIns = new Map<string, PendingSignIn>();
   // Catalog edits run one at a time; each server's connection has its own lock.
   const editLock = yield* Semaphore.make(1);
 
@@ -274,6 +345,27 @@ const make = Effect.gen(function* () {
           Effect.mapError(() => failure("The server's secrets could not be saved.")),
         );
 
+  const readOAuth = (id: string) =>
+    secretStore.get(oauthSecretName(id)).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.undefined,
+          onSome: (bytes) => decodeStoredOAuth(new TextDecoder().decode(bytes)),
+        }),
+      ),
+      Effect.orElseSucceed(() => undefined),
+    );
+
+  const writeOAuth = (id: string, oauth: OAuth.StoredOAuth | undefined) =>
+    oauth === undefined
+      ? secretStore.remove(oauthSecretName(id)).pipe(Effect.ignore)
+      : encodeStoredOAuth(oauth).pipe(
+          Effect.flatMap((json) =>
+            secretStore.set(oauthSecretName(id), new TextEncoder().encode(json)),
+          ),
+          Effect.mapError(() => failure("The sign-in could not be saved.")),
+        );
+
   const loaded = yield* fileSystem.readFileString(catalogPath).pipe(
     Effect.flatMap(decodeCatalogFile),
     Effect.map((file) => file.servers),
@@ -288,12 +380,15 @@ const make = Effect.gen(function* () {
   );
   const initial = new Map<string, Entry>();
   for (const server of loaded) {
+    const oauth = yield* readOAuth(server.id);
     initial.set(server.id, {
       server,
       secrets: yield* readSecrets(server.id),
-      status: statusOf(server),
+      status: statusOf(server, oauth !== undefined),
       live: undefined,
       lock: yield* Semaphore.make(1),
+      oauth,
+      challenge: undefined,
     });
   }
   let entries = initial;
@@ -343,7 +438,11 @@ const make = Effect.gen(function* () {
     live === undefined ? Effect.void : Scope.close(live.scope, Exit.void);
 
   const open = Effect.fn("McpCatalog.open")(
-    function* (server: McpCatalogServer, secrets: SecretValues) {
+    function* (
+      server: McpCatalogServer,
+      secrets: SecretValues,
+      oauth: OAuth.StoredOAuth | undefined,
+    ) {
       const scope = yield* Scope.make();
       const connected = yield* Effect.gen(function* () {
         const transport =
@@ -358,7 +457,10 @@ const make = Effect.gen(function* () {
               })
             : yield* McpClient.http({
                 url: server.transport.url,
-                headers: resolvedValues(server.headers, secrets.headers),
+                headers: {
+                  ...resolvedValues(server.headers, secrets.headers),
+                  ...(oauth === undefined ? {} : { Authorization: `Bearer ${oauth.accessToken}` }),
+                },
                 protocol: McpProtocol.v2025_11_25,
               });
         const client = yield* McpClient.make({
@@ -384,8 +486,24 @@ const make = Effect.gen(function* () {
       }
       return connected.value;
     },
-    (effect, server) => Effect.mapError(effect, (cause) => failure(connectionError(server, cause))),
+    (effect, server) => Effect.mapError(effect, (cause) => connectionError(server, cause)),
   );
+
+  /** A fresh token for the server, refreshed when it is about to expire. */
+  const freshOAuth = Effect.fn("McpCatalog.freshOAuth")(function* (id: string, force: boolean) {
+    const oauth = entries.get(id)?.oauth;
+    if (oauth === undefined) return undefined;
+    const now = yield* Clock.currentTimeMillis;
+    if (!force && !OAuth.needsRefresh(oauth, now)) return oauth;
+    const refreshed = yield* OAuth.refresh(oauth, now).pipe(
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.option,
+    );
+    if (Option.isNone(refreshed)) return force ? undefined : oauth;
+    yield* setEntry(id, (value) => ({ ...value, oauth: refreshed.value }));
+    yield* writeOAuth(id, refreshed.value).pipe(Effect.ignore);
+    return refreshed.value;
+  });
 
   /** The server's live connection, opening it when there is none. */
   const connection = (id: string) =>
@@ -404,7 +522,22 @@ const make = Effect.gen(function* () {
             ...value,
             status: { ...value.status, state: "connecting", error: null },
           }));
-          const opened = yield* open(current.server, current.secrets).pipe(Effect.exit);
+          let opened = yield* open(
+            current.server,
+            current.secrets,
+            yield* freshOAuth(id, false),
+          ).pipe(Effect.exit);
+          // A token the server refused gets one refresh before the user signs in again.
+          if (
+            Exit.isFailure(opened) &&
+            Option.getOrUndefined(Exit.findErrorOption(opened))?.unauthorized === true &&
+            current.oauth?.refreshToken !== undefined
+          ) {
+            const refreshed = yield* freshOAuth(id, true);
+            if (refreshed !== undefined) {
+              opened = yield* open(current.server, current.secrets, refreshed).pipe(Effect.exit);
+            }
+          }
           // An edit or removal while this connected replaced the entry; drop this connection.
           if (entries.get(id)?.server !== current.server) {
             if (Exit.isSuccess(opened)) yield* closeLive(opened.value);
@@ -416,9 +549,21 @@ const make = Effect.gen(function* () {
             const error = Option.getOrUndefined(Exit.findErrorOption(opened));
             yield* setEntry(id, (value) => ({
               ...value,
-              status: { ...value.status, state: "error", error: error?.message ?? null, tools: [] },
+              challenge: error?.challenge ?? value.challenge,
+              status: {
+                id,
+                state: "error",
+                error: error?.message ?? null,
+                tools: [],
+                serverVersion: null,
+                ...(error?.unauthorized === true
+                  ? { auth: "required" as const }
+                  : value.oauth === undefined
+                    ? {}
+                    : { auth: "signed-in" as const }),
+              },
             }));
-            return yield* Effect.failCause(opened.cause);
+            return yield* failure(error?.message ?? "The server could not be reached.");
           }
           const live = opened.value;
           yield* setEntry(id, (value) => ({
@@ -430,6 +575,7 @@ const make = Effect.gen(function* () {
               error: null,
               tools: live.tools.map(toolSummary),
               serverVersion: live.client.serverInfo?.version ?? null,
+              ...(value.oauth === undefined ? {} : { auth: "signed-in" as const }),
             },
           }));
           return live;
@@ -469,12 +615,19 @@ const make = Effect.gen(function* () {
     readonly secrets: SecretValues;
   }) {
     const previous = input.previousId === undefined ? undefined : entries.get(input.previousId);
+    // A sign-in belongs to the endpoint; a new URL needs a new one.
+    const oauth =
+      previous !== undefined && sameEndpoint(previous.server, input.server)
+        ? previous.oauth
+        : undefined;
     const entry: Entry = {
       server: input.server,
       secrets: input.secrets,
-      status: statusOf(input.server),
+      status: statusOf(input.server, oauth !== undefined),
       live: undefined,
       lock: previous?.lock ?? (yield* Semaphore.make(1)),
+      oauth,
+      challenge: undefined,
     };
     // An edit keeps the server where it was in the list.
     entries =
@@ -488,8 +641,10 @@ const make = Effect.gen(function* () {
     yield* closeLive(previous?.live);
     if (input.previousId !== undefined && input.previousId !== input.server.id) {
       yield* secretStore.remove(secretName(input.previousId)).pipe(Effect.ignore);
+      yield* writeOAuth(input.previousId, undefined);
     }
     yield* writeSecrets(input.server.id, input.secrets);
+    if (previous !== undefined) yield* writeOAuth(input.server.id, oauth);
   });
 
   const upsert = Effect.fn("McpCatalog.upsert")(function* (input: McpCatalogUpsertInput) {
@@ -557,6 +712,7 @@ const make = Effect.gen(function* () {
         entries = next;
         yield* closeLive(entry.live);
         yield* secretStore.remove(secretName(id)).pipe(Effect.ignore);
+        yield* writeOAuth(id, undefined);
         yield* persist;
         yield* publish;
         return snapshotOf();
@@ -575,7 +731,7 @@ const make = Effect.gen(function* () {
         yield* setEntry(id, (value) => ({
           ...value,
           live: undefined,
-          status: statusOf(value.server),
+          status: statusOf(value.server, value.oauth !== undefined),
         }));
       }),
     );
@@ -743,12 +899,129 @@ const make = Effect.gen(function* () {
     return yield* live.client
       .callTool({ tool: resolved.tool, arguments: args }, { timeout: CALL_TIMEOUT })
       .pipe(
-        Effect.catch((error) =>
-          dropConnection(resolved.server, live, error.message).pipe(
-            Effect.andThen(Effect.fail(failure(describe(error)))),
-          ),
-        ),
+        Effect.catch((error) => {
+          // A refused token marks the server for sign-in; the next use refreshes or asks.
+          const message = isUnauthorized(error) ? SIGN_IN_NEEDED : describe(error);
+          return dropConnection(resolved.server, live, message).pipe(
+            Effect.andThen(Effect.fail(failure(message))),
+          );
+        }),
       );
+  });
+
+  /** Closes a server's connection and opens a new one with its current sign-in. */
+  const restart = Effect.fn("McpCatalog.restart")(function* (id: string) {
+    const entry = entries.get(id);
+    if (entry === undefined) return;
+    yield* entry.lock.withPermits(1)(
+      Effect.gen(function* () {
+        const current = entries.get(id);
+        if (current === undefined) return;
+        yield* closeLive(current.live);
+        yield* setEntry(id, (value) => ({
+          ...value,
+          live: undefined,
+          status: statusOf(value.server, value.oauth !== undefined),
+        }));
+      }),
+    );
+    yield* connection(id).pipe(Effect.ignore, Effect.forkIn(serviceScope));
+  });
+
+  const startSignIn = Effect.fn("McpCatalog.startSignIn")(function* (
+    input: McpCatalogOAuthStartInput,
+  ) {
+    const entry = entries.get(input.id);
+    if (entry === undefined) return yield* failure(`No MCP server named \`${input.id}\`.`);
+    if (entry.server.transport.type !== "http") {
+      return yield* failure("Only servers reached by URL sign in through the browser.");
+    }
+    const redirect = URL.canParse(input.redirectUri) ? new URL(input.redirectUri) : undefined;
+    if (
+      redirect === undefined ||
+      (redirect.protocol !== "https:" && redirect.protocol !== "http:") ||
+      redirect.pathname !== MCP_CATALOG_OAUTH_CALLBACK_PATH
+    ) {
+      return yield* failure("The sign-in return address must be this environment's callback.");
+    }
+    const now = yield* Clock.currentTimeMillis;
+    for (const [state, flow] of pendingSignIns) {
+      if (flow.expiresAt < now) pendingSignIns.delete(state);
+    }
+    const toFailure = (error: OAuth.McpCatalogOAuthError) => failure(error.message);
+    const plan = yield* OAuth.discover({
+      url: entry.server.transport.url,
+      wwwAuthenticate: entry.challenge,
+    }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient), Effect.mapError(toFailure));
+    const client = yield* OAuth.register(plan, redirect.href).pipe(
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.mapError(toFailure),
+    );
+    const state = OAuth.randomState();
+    const request = OAuth.authorizationRequest({
+      plan,
+      clientId: client.clientId,
+      redirectUri: redirect.href,
+      state,
+    });
+    pendingSignIns.set(state, {
+      id: input.id,
+      verifier: request.verifier,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      tokenEndpoint: plan.tokenEndpoint,
+      resource: plan.resource,
+      redirectUri: redirect.href,
+      expiresAt: now + OAUTH_FLOW_TTL_MS,
+    });
+    return { authorizationUrl: request.url };
+  });
+
+  const completeSignIn = Effect.fn("McpCatalog.completeSignIn")(function* (input: {
+    readonly state: string;
+    readonly code: string | undefined;
+    readonly error: string | undefined;
+  }) {
+    const flow = pendingSignIns.get(input.state);
+    pendingSignIns.delete(input.state);
+    const now = yield* Clock.currentTimeMillis;
+    if (flow === undefined || flow.expiresAt < now) {
+      return yield* failure("This sign-in expired. Start it again from Settings.");
+    }
+    const entry = entries.get(flow.id);
+    if (entry === undefined) return yield* failure("This MCP server was removed.");
+    if (input.error !== undefined || input.code === undefined) {
+      return yield* failure(
+        input.error === "access_denied"
+          ? "The sign-in was cancelled."
+          : `The server refused the sign-in${input.error ? ` (${input.error})` : ""}.`,
+      );
+    }
+    const oauth = yield* OAuth.exchangeCode({
+      tokenEndpoint: flow.tokenEndpoint,
+      clientId: flow.clientId,
+      clientSecret: flow.clientSecret,
+      resource: flow.resource,
+      redirectUri: flow.redirectUri,
+      verifier: flow.verifier,
+      code: input.code,
+      now,
+    }).pipe(
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.mapError((error) => failure(error.message)),
+    );
+    yield* writeOAuth(flow.id, oauth);
+    yield* setEntry(flow.id, (value) => ({ ...value, oauth, challenge: undefined }));
+    yield* restart(flow.id);
+    return { serverName: entry.server.name };
+  });
+
+  const signOut = Effect.fn("McpCatalog.signOut")(function* (id: string) {
+    if (!entries.has(id)) return yield* failure(`No MCP server named \`${id}\`.`);
+    yield* writeOAuth(id, undefined);
+    yield* setEntry(id, (value) => ({ ...value, oauth: undefined }));
+    yield* restart(id);
+    return snapshotOf();
   });
 
   yield* Effect.addFinalizer(() =>
@@ -769,6 +1042,9 @@ const make = Effect.gen(function* () {
     search,
     resolveTool,
     callTool,
+    startSignIn,
+    completeSignIn,
+    signOut,
   });
 });
 

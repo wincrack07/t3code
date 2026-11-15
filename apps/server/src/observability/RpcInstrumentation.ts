@@ -110,6 +110,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.mcpCatalogReconnect]: "server",
   [WS_METHODS.mcpCatalogImportCandidates]: "server",
   [WS_METHODS.mcpCatalogImport]: "server",
+  [WS_METHODS.mcpCatalogOAuthStart]: "server",
+  [WS_METHODS.mcpCatalogOAuthSignOut]: "server",
   [WS_METHODS.serverGetHostResources]: "server",
   [WS_METHODS.serverGetProcessResourceHistory]: "server",
   [WS_METHODS.serverGetResourceTelemetryHistory]: "server",

@@ -2,6 +2,7 @@ import * as ChatHubSync from "./chatHub/ChatHubSync.ts";
 import * as MachineCleanup from "./MachineCleanupService.ts";
 import * as KeepAwakeRuntime from "./keepAwake/runtime.ts";
 import * as McpCatalog from "./mcpCatalog/McpCatalog.ts";
+import * as McpCatalogOAuthRoute from "./mcpCatalog/McpCatalogOAuthRoute.ts";
 import * as SystemMonitor from "./systemMonitor/SystemMonitor.ts";
 import * as MachineSampler from "./systemMonitor/MachineSampler.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -870,6 +871,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
     ServerHttp.layerAttachmentUploadRoute,
+    McpCatalogOAuthRoute.layer,
     GuestHttp.layer,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,

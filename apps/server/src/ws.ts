@@ -2705,6 +2705,8 @@ export const layerWsRpc = (
         [WS_METHODS.mcpCatalogReconnect]: (input) => mcpCatalog.reconnect(input.id),
         [WS_METHODS.mcpCatalogImportCandidates]: () => mcpCatalog.importCandidates,
         [WS_METHODS.mcpCatalogImport]: (input) => mcpCatalog.importServers(input),
+        [WS_METHODS.mcpCatalogOAuthStart]: (input) => mcpCatalog.startSignIn(input),
+        [WS_METHODS.mcpCatalogOAuthSignOut]: (input) => mcpCatalog.signOut(input.id),
         [WS_METHODS.serverGetHostResources]: (_input) => hostResources.read,
         [WS_METHODS.serverGetProcessResourceHistory]: (input) =>
           processResourceMonitor.readHistory(input),

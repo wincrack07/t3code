@@ -170,7 +170,7 @@ export const statusLabel = (status: McpCatalogServerStatus | undefined): string 
     case "connecting":
       return "Connecting…";
     case "error":
-      return "Not connected";
+      return status.auth === "required" ? "Sign-in needed" : "Not connected";
     case "disabled":
       return "Off";
     default:
