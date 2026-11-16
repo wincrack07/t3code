@@ -70,6 +70,7 @@ const theme = (name: string, accent = "#3b82f6") => ({
   name,
   appearance: "dark",
   colors: { accent },
+  css: "[data-chat-canvas]{background:purple}",
 });
 
 const themeFile = (name: string, accent?: string) =>
@@ -110,6 +111,7 @@ it.each(["Update existing", "Keep both"])(
     expect(getCustomThemes().find((theme) => theme.label === label)?.colors).toEqual(
       parseThemeFile(theme("Dusk", "#f97316")).colors,
     );
+    expect(getCustomThemes().find((theme) => theme.label === label)?.css).toBe(theme("Dusk").css);
     await expect.element(page.getByText(/^broken\.json:/)).toBeVisible();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   },

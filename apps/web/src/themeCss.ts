@@ -52,6 +52,7 @@ function stripFetches(parent: RuleParent): void {
 export function applyThemeCss(css: string | undefined): void {
   if (typeof document === "undefined" || typeof CSSStyleSheet === "undefined") return;
   const next = css ?? "";
+  document.documentElement.toggleAttribute("data-theme-css", next.length > 0);
   if (next === appliedCss) return;
   appliedCss = next;
   if (!themeSheet) {

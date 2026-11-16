@@ -10,6 +10,8 @@ it("applies theme CSS and drops every rule that would load a remote file", () =>
   using _css = { [Symbol.dispose]: () => applyThemeCss(undefined) };
 
   applyThemeCss(`
+    @property --theme-safe { syntax: "<percentage>"; inherits: false; initial-value: 50%; }
+    @keyframes theme-safe { to { --theme-safe: 80%; } }
     @import url(https://example.com/sheet.css);
     @namespace svg url(http://www.w3.org/2000/svg);
     @property --registered { syntax: "<url>"; inherits: false; initial-value: url(https://example.com/d); }
@@ -18,6 +20,7 @@ it("applies theme CSS and drops every rule that would load a remote file", () =>
     :root { --leak: u\\72l(https://example.com/a); }
     [data-theme-css-probe] {
       color: rgb(1, 2, 3);
+      animation-name: theme-safe;
       background-image: u\\72l(https://example.com/b);
       list-style-image: var(--leak);
       border-image-source: var(--registered);
@@ -26,8 +29,11 @@ it("applies theme CSS and drops every rule that would load a remote file", () =>
     }
   `);
 
+  expect(document.documentElement.hasAttribute("data-theme-css")).toBe(true);
   const style = getComputedStyle(probe);
   expect(style.color).toBe("rgb(1, 2, 3)");
+  expect(style.animationName).toBe("theme-safe");
+  expect(style.getPropertyValue("--theme-safe")).toBe("50%");
   expect(style.backgroundImage).toBe("none");
   expect(style.listStyleImage).toBe("none");
   expect(style.borderImageSource).toBe("none");
@@ -39,5 +45,6 @@ it("applies theme CSS and drops every rule that would load a remote file", () =>
   expect(style.cursor).toBe("auto");
 
   applyThemeCss(undefined);
+  expect(document.documentElement.hasAttribute("data-theme-css")).toBe(false);
   expect(getComputedStyle(probe).color).not.toBe("rgb(1, 2, 3)");
 });

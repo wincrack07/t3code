@@ -333,6 +333,7 @@ function ThemeImportBody({
         colors: theme.colors,
         ...(theme.variants ? { variants: theme.variants } : {}),
         ...(theme.managed ? { managed: true } : {}),
+        ...(theme.css ? { css: theme.css } : {}),
       });
       if (!getCustomThemes().some((existing) => existing.id === candidate.id)) return candidate;
     }
@@ -344,6 +345,7 @@ function ThemeImportBody({
         colors: theme.colors,
         ...(theme.variants ? { variants: theme.variants } : {}),
         ...(theme.managed ? { managed: true } : {}),
+        ...(theme.css ? { css: theme.css } : {}),
       });
       if (getCustomThemes().some((existing) => existing.id === candidate.id)) continue;
       return candidate;

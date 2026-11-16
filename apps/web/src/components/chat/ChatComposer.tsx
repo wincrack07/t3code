@@ -3537,7 +3537,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             className={cn(
               isMobileViewport
                 ? "rounded-2xl transition-[background-color] duration-200"
-                : "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end rounded-xl bg-(--chat-composer-glass-surface) transition-[background-color] duration-200",
+                : "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end rounded-xl bg-(--chat-composer-glass-surface) transition-[background-color] duration-200 [html[data-theme-css]_&]:bg-transparent",
               "in-data-[thread-context-over]:bg-accent/45 in-data-[thread-context-over]:ring-1 in-data-[thread-context-over]:ring-inset in-data-[thread-context-over]:ring-primary/70",
               isDragOverComposer ? "bg-accent/45 ring-1 ring-inset ring-primary/70" : null,
               projectSelectionRequired ? "opacity-75" : null,
@@ -3981,7 +3981,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ) : (
           <div
             data-composer-quiet-row
-            className="composer-quiet-row flex min-w-0 items-center gap-1 px-2 pt-1 text-xs text-muted-foreground"
+            className="composer-quiet-row flex min-w-0 items-center gap-1 px-2 pt-1 text-xs text-muted-foreground [html[data-theme-css]_&]:pb-1"
           >
             {props.locationControls ? (
               <div className="flex min-w-0 flex-1 items-center gap-1">{props.locationControls}</div>

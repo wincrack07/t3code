@@ -448,6 +448,7 @@ export function resolveThemeLabelCollisions(
         colors: theme.colors,
         ...(theme.variants ? { variants: theme.variants } : {}),
         ...(theme.managed ? { managed: true } : {}),
+        ...(theme.css ? { css: theme.css } : {}),
       });
     } catch {
       return null;

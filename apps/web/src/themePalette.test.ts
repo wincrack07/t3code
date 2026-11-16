@@ -67,6 +67,30 @@ function contrastRatio(first: string, second: string): number {
 }
 
 describe("theme files", () => {
+  it("imports skin palette seeds before applying role overrides", () => {
+    const colors = { sidebar: "#160a18", messageAction: "#a0309f" };
+    const file = {
+      version: 1,
+      name: "Nebula",
+      appearance: "dark",
+      canvas: "#0b060d",
+      accent: "#d1458f",
+      css: "[data-chat-canvas]{background:purple}",
+    };
+    const theme = parseThemeFile({ ...file, colors });
+    expect(theme.colors).toEqual({
+      ...createVividThemeColors("dark", file.canvas, file.accent),
+      sidebar: canonical(colors.sidebar),
+      messageAction: canonical(colors.messageAction),
+    });
+    expect(parseThemeFile(file).colors).toEqual(
+      createVividThemeColors("dark", file.canvas, file.accent),
+    );
+    expect(theme.css).toBe(file.css);
+    expect(parseThemeFile(JSON.parse(serializeThemeFile(theme)))).toEqual(theme);
+    expect(() => parseThemeFile({ ...file, accent: "invalid", colors })).toThrow();
+  });
+
   it("gives non-Latin theme names distinct stable ids", () => {
     const file = {
       version: THEME_FILE_VERSION,

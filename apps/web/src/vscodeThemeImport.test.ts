@@ -492,15 +492,20 @@ describe("VS Code theme import", () => {
         colors: { "editor.background": bg, "editor.foreground": "#f8f8f2" },
       });
     const themes = resolveThemeLabelCollisions([
-      { theme: dracula("#282a36"), sourceName: "dracula.json" },
+      {
+        theme: { ...dracula("#282a36"), css: "[data-chat-canvas]{background:purple}" },
+        sourceName: "dracula.json",
+      },
       { theme: dracula("#22232e"), sourceName: "dracula-soft.json" },
     ]);
     expect(themes.map((theme) => theme.label)).toEqual(["Dracula", "Dracula Soft"]);
     expect(themes.map((theme) => theme.id)).toEqual(["dracula", "dracula-soft"]);
+    expect(themes[0]?.css).toBe("[data-chat-canvas]{background:purple}");
     const numbered = resolveThemeLabelCollisions([
       { theme: dracula("#282a36") },
-      { theme: dracula("#22232e") },
+      { theme: { ...dracula("#22232e"), css: "[data-chat-canvas]{background:purple}" } },
     ]);
     expect(numbered.map((theme) => theme.label)).toEqual(["Dracula", "Dracula 2"]);
+    expect(numbered[1]?.css).toBe("[data-chat-canvas]{background:purple}");
   });
 });

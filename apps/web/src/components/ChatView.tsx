@@ -3588,12 +3588,12 @@ export default function ChatView(props: ChatViewProps) {
               className={
                 isDraftHeroState
                   ? "pointer-events-none absolute inset-0 z-20 flex items-center [@media(max-height:34rem)]:items-end"
-                  : "relative shrink-0 bg-background pt-1.5 sm:pt-2"
+                  : "relative shrink-0 bg-background pt-1.5 sm:pt-2 [html[data-theme-css]_&]:bg-transparent"
               }
             >
               <div
                 ref={draftHeroTransitionGroupRef}
-                className="chat-composer-lane w-full bg-background"
+                className="chat-composer-lane w-full bg-background [html[data-theme-css]_&]:bg-transparent"
               >
                 <div
                   data-chat-composer-stack="true"

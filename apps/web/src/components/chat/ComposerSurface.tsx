@@ -32,7 +32,12 @@ function Host({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="composer-host"
-      className={cn("relative z-10 w-full rounded-xl after:hidden", className)}
+      className={cn(
+        "relative z-10 w-full rounded-xl after:hidden",
+        outlineClasses,
+        "[html[data-theme-css]_&]:bg-(--chat-composer-glass-surface) [html[data-theme-css]_&]:after:block",
+        className,
+      )}
       {...props}
     />
   );
@@ -43,9 +48,9 @@ function Main({ className, ...props }: ComponentProps<"div">) {
     <div
       data-chat-composer-main-surface="true"
       className={cn(
-        "group relative z-10 rounded-xl border border-border p-px",
+        "group relative z-10 rounded-xl border border-border p-px [html[data-theme-css]_&]:border-transparent",
         outlineClasses,
-        "after:z-20 after:hidden group-has-data-[composer-banner-surface=attached]/composer-surface:after:block",
+        "after:z-20 after:hidden group-has-data-[composer-banner-surface=attached]/composer-surface:after:block [html[data-theme-css]_&]:after:hidden",
         "group-has-data-[composer-banner-surface=attached]/composer-surface:bg-(--chat-composer-glass-surface)/(--glass-opacity) group-has-data-[composer-banner-surface=attached]/composer-surface:backdrop-blur-(--glass-blur) group-has-data-[composer-banner-surface=attached]/composer-surface:backdrop-saturate-(--glass-saturation)",
         "group-has-data-[composer-banner-surface=attached]/composer-surface:shadow-composer dark:group-has-data-[composer-banner-surface=attached]/composer-surface:shadow-none",
         "not-supports-[((backdrop-filter:blur(1px))_or_(-webkit-backdrop-filter:blur(1px)))]:group-has-data-[composer-banner-surface=attached]/composer-surface:bg-(--chat-composer-glass-surface)",

@@ -1627,7 +1627,11 @@ export function parseThemeFile(value: unknown): ThemeDefinition {
 
   const name = value.name;
   const appearance = value.appearance;
-  const rawColors = value.colors;
+  const hasSeeds = value.canvas !== undefined || value.accent !== undefined;
+  if (hasSeeds && (!isThemeColor(value.canvas) || !isThemeColor(value.accent))) {
+    throw new Error("Theme palette seeds need valid canvas and accent colors.");
+  }
+  const rawColors = value.colors === undefined && hasSeeds ? {} : value.colors;
   if (!isThemeLabel(name)) throw new Error("Theme files need a name (48 characters or fewer).");
   if (!isThemeAppearance(appearance)) {
     throw new Error('Theme files need an appearance of "light" or "dark".');
@@ -1642,7 +1646,8 @@ export function parseThemeFile(value: unknown): ThemeDefinition {
     throw new Error(`The theme id "${id}" is reserved.`);
   }
 
-  const overrides = parseThemeColorOverrides(rawColors);
+  const overrides =
+    hasSeeds && Object.keys(rawColors).length === 0 ? {} : parseThemeColorOverrides(rawColors);
   const collection = parseThemeCollection(value.collection);
   if (value.collection !== undefined && !collection) {
     throw new Error("Theme collections need a valid id and label.");
@@ -1652,7 +1657,10 @@ export function parseThemeFile(value: unknown): ThemeDefinition {
     throw new Error(`Theme CSS must be text of ${THEME_CSS_MAX_LENGTH} characters or fewer.`);
   }
 
-  const fallback = getDefaultThemeColors(appearance);
+  const fallback =
+    isThemeColor(value.canvas) && isThemeColor(value.accent)
+      ? createVividThemeColors(appearance, value.canvas, value.accent)
+      : getDefaultThemeColors(appearance);
   const variants: Partial<Record<ThemeAppearance, ThemeColors>> = {};
   if (value.variants !== undefined) {
     if (!isRecord(value.variants)) throw new Error("Theme variants must be an object.");
