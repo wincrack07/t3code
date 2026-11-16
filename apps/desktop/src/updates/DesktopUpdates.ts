@@ -1332,14 +1332,7 @@ export const make = Effect.gen(function* () {
           handleUpdateAvailable(info).pipe(
             Effect.andThen(
               electronUpdater.installOnQuitOnly === true && policy.mode === "auto"
-                ? Effect.scoped(
-                    Effect.gen(function* () {
-                      const completions = yield* PubSub.subscribe(finishedUpdateActions);
-                      while (Option.contains(yield* activeUpdateAction, "check"))
-                        yield* PubSub.take(completions);
-                      yield* downloadAvailableUpdate;
-                    }),
-                  )
+                ? downloadAvailableUpdate(false).pipe(Effect.asVoid)
                 : Effect.void,
             ),
           ),
