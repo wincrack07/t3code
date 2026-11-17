@@ -158,7 +158,10 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "html-card" | "file" | "terminal" | "pull-request" | "issue" | "side-chat">,
+    kind: Exclude<
+      RightPanelKind,
+      "html-card" | "file" | "terminal" | "pull-request" | "issue" | "side-chat"
+    >,
   ) => void;
   reconcileHtmlCards: (ref: ScopedThreadRef, cards: readonly PinnedHtmlCardRef[]) => void;
   openHtmlCard: (ref: ScopedThreadRef, card: HtmlRenderReference & { id: string }) => void;
@@ -227,7 +230,10 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "html-card" | "file" | "terminal" | "pull-request" | "issue" | "side-chat">,
+    kind: Exclude<
+      RightPanelKind,
+      "html-card" | "file" | "terminal" | "pull-request" | "issue" | "side-chat"
+    >,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
