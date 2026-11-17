@@ -25,7 +25,7 @@ import {
 } from "../../navigationHistory";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { cn } from "../../lib/utils";
-import { usePullRequestsSupported } from "../../state/environments";
+import { useIssuesSupported, usePullRequestsSupported } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -50,6 +50,8 @@ import {
 } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
+import { readIssueListPreferences } from "../issue/issueListPreferences";
+import { IssueGlyph } from "../issue/issuePresentation";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
@@ -277,6 +279,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     observeResize(row, ([entry]) => {
       if (entry) setUtilityWidth(Math.floor(entry.contentRect.width));
     });
+  const issuesSupported = useIssuesSupported();
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -288,6 +291,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       to: "/pull-requests",
       search: readPullRequestListPreferences(),
     });
+  };
+  const handleIssuesClick = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/issues", search: readIssueListPreferences() });
   };
   const handleSettingsClick = () => {
     closeMobileSidebar();
@@ -345,6 +352,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             onClick: handlePullRequestsClick,
           },
         ]
+      : []),
+    ...(issuesSupported
+      ? [{ label: "Issues", icon: <IssueGlyph.issue />, onClick: handleIssuesClick }]
       : []),
     { label: "Usage", icon: <ChartNoAxesColumnIcon />, onClick: handleUsageClick },
     { label: "Artifacts", icon: <LayoutGridIcon />, onClick: handleArtifactsClick },

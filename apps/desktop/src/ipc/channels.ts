@@ -161,3 +161,5 @@ export const WINDOW_THREADS_CHANNEL = "desktop:window-threads";
 export const FOCUS_THREAD_CHANNEL = "desktop:focus-thread";
 
 export const RESTART_AUDIO_SERVICE_CHANNEL = "desktop:restart-audio-service";
+
+export const START_FILE_DRAG_CHANNEL = "desktop:start-file-drag";
