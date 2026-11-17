@@ -1,7 +1,6 @@
 name: Fork nightly
 
-# Fork-only: once a day, merges upstream (pingdotgg/t3code) main into this
-# fork's main, then builds and publishes a prerelease on this fork with:
+# Fork-only: builds and publishes a prerelease of this fork's main with:
 #   - t3-<version>-linux-x64.tar.gz + SHA256SUMS, the server runtime that
 #     self-hosted T3 servers install. Point a server at this fork's releases with
 #     T3CODE_RELEASE_BASE_URL=https://github.com/<owner>/<repo>/releases/download
@@ -9,22 +8,20 @@ name: Fork nightly
 # The version is <base>-nightly.<UTC date>.<9000 + run number>, so a fork build
 # always sorts above the same day's upstream nightly.
 #
-# A merge conflict with upstream stops the run and opens an issue; resolve it
-# by hand on main and the next run picks it up.
+# The daily upstream sync runs as a scheduled T3 Code agent, which resolves
+# conflicts, runs the checks and then dispatches this workflow with sync=false.
+# sync=true only works when GitHub can merge upstream without conflicts.
 # Upstream merges that touch .github/workflows need a token with the
 # `workflow` scope: add it as the FORK_SYNC_TOKEN secret. Without it the sync
 # uses GITHUB_TOKEN, which GitHub refuses for those merges.
 
 on:
-  schedule:
-    # 09:00 UTC = 04:00 in Panama.
-    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       sync:
-        description: Merge upstream main into main before building.
+        description: Merge upstream main into main before building (fails on conflicts).
         type: boolean
-        default: true
+        default: false
       ref:
         description: Commit or branch to build instead of main (skips the sync).
         required: false
@@ -44,7 +41,6 @@ on:
 
 permissions:
   contents: write
-  issues: write
 
 concurrency:
   group: fork-nightly
@@ -67,7 +63,7 @@ jobs:
     steps:
       - name: Merge upstream main
         id: sync
-        if: github.event_name == 'schedule' || (inputs.sync && inputs.ref == '')
+        if: inputs.sync && inputs.ref == ''
         shell: bash
         run: |
           set -uo pipefail
@@ -78,15 +74,18 @@ jobs:
             echo "Upstream sync: $(jq -r '.merge_type + " — " + .message' <<<"$out" 2>/dev/null || echo ok)"
             exit 0
           fi
-          title="Fork nightly: could not merge upstream main"
-          body=$(printf 'The daily sync of `pingdotgg/t3code` main into `main` failed in [run %s](%s/%s/actions/runs/%s).\n\n```\n%s\n```\n\nA conflict needs a manual merge on `main`. If the error mentions workflows, add a `FORK_SYNC_TOKEN` secret with the `repo` and `workflow` scopes.' \
-            "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$REPO" "$GITHUB_RUN_ID" "$out")
-          existing=$(GH_TOKEN="${{ github.token }}" gh issue list -R "$REPO" --state open --search "\"$title\" in:title" --json number -q '.[0].number')
-          if [[ -n "$existing" ]]; then
-            GH_TOKEN="${{ github.token }}" gh issue comment "$existing" -R "$REPO" --body "$body"
-          else
-            GH_TOKEN="${{ github.token }}" gh issue create -R "$REPO" --title "$title" --body "$body"
-          fi
+          # Issues are off on this fork, so the failure goes to the run summary.
+          {
+            echo "### Could not merge upstream main"
+            echo
+            echo "A conflict needs a manual merge on \`main\` (the scheduled sync agent does this daily)."
+            echo "If the error mentions workflows, add a \`FORK_SYNC_TOKEN\` secret with the \`repo\` and \`workflow\` scopes."
+            echo
+            echo '```'
+            echo "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=Upstream sync failed::GitHub could not merge upstream main into main; see the run summary."
           exit 1
 
       - name: Resolve commit and version
@@ -222,7 +221,7 @@ jobs:
   mac_dmg:
     name: Desktop macOS arm64 DMG
     needs: prepare
-    if: needs.prepare.outputs.build == 'true' && (github.event_name == 'schedule' || inputs.build_mac)
+    if: needs.prepare.outputs.build == 'true' && inputs.build_mac
     runs-on: macos-15
     timeout-minutes: 90
     steps:
