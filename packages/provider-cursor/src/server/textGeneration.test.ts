@@ -199,6 +199,8 @@ describe("CursorTextGeneration", () => {
       });
 
       expect(generated.title).toBe("Trim reconnect spinner status after resume.");
+      // Plan mode otherwise explores the empty workspace and can answer in a plan instead.
+      expect(cursorSdkMock.send.mock.calls[0]?.[0]).toMatch(/^Answer in your reply message itself/);
     }).pipe(Effect.provide(layerTest)),
   );
 

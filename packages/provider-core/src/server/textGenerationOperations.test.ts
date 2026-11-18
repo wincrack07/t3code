@@ -26,3 +26,22 @@ it.effect("fails a thread title reply that is only the schema key", () =>
     assert.strictEqual(outcome.operation, "generateThreadTitle");
   }),
 );
+
+it.effect("tells prompt-only runners the transcription reply shape", () =>
+  Effect.gen(function* () {
+    let prompt = "";
+    const textGeneration = fromRunner("Stub", (request) => {
+      prompt = request.prompt;
+      return decodeJsonReply(request, "Stub", '{"transcription":"Rewritten draft."}');
+    });
+
+    const generated = yield* textGeneration.generateTranscriptionPostProcessing({
+      cwd: process.cwd(),
+      prompt: "Rewrite the draft.",
+      modelSelection: { instanceId: ProviderInstanceId.make("cursor"), model: "composer-2" },
+    });
+
+    assert.strictEqual(generated.transcription, "Rewritten draft.");
+    assert.match(prompt, /JSON object with one key, transcription/);
+  }),
+);

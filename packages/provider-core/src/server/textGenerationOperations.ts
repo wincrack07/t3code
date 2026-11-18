@@ -176,7 +176,8 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
       return yield* run({
         operation: "generateTranscriptionPostProcessing",
         cwd: input.cwd,
-        prompt: input.prompt,
+        // Runners without native structured output only see the shape the prompt asks for.
+        prompt: `${input.prompt}\n\nReturn a JSON object with one key, transcription: the result text.`,
         outputSchema: TranscriptionPostProcessingOutput,
         modelSelection: input.modelSelection,
       });

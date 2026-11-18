@@ -20,6 +20,9 @@ import * as CursorSdk from "./CursorSdk.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const CURSOR_TIMEOUT_MS = 180_000;
+// Plan mode otherwise searches the empty workspace and can leave the answer in a plan, not the reply.
+const DIRECT_ANSWER_INSTRUCTION =
+  "Answer in your reply message itself. Do not use tools, search the workspace, or create a plan.";
 
 const isTextGenerationError = Schema.is(TextGenerationError);
 
@@ -166,7 +169,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
         );
         const run = yield* Effect.tryPromise({
           try: (signal) =>
-            agent.send(prompt).then((run) => {
+            agent.send(`${DIRECT_ANSWER_INSTRUCTION}\n\n${prompt}`).then((run) => {
               if (signal.aborted) void run.cancel().catch(() => undefined);
               return run;
             }),
