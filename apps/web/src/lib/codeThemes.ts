@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { READABLE_LIGHT_THEME_NAME } from "./readableSyntaxTheme";
 
 type Appearance = "light" | "dark";
@@ -10,6 +9,7 @@ export interface CodeThemeOption {
 
 // A curated subset of the Highlights catalog @pierre/diffs already ships; each theme is its own
 // lazy chunk, loaded only when picked. The first entry of each list is the default.
+/* oxlint-disable t3code/no-untranslated-copy -- published theme names stay as their authors spell them */
 export const CODE_THEME_OPTIONS: Readonly<Record<Appearance, ReadonlyArray<CodeThemeOption>>> = {
   light: [
     { id: READABLE_LIGHT_THEME_NAME, label: "Pierre Light (readable)" },
@@ -54,6 +54,7 @@ export const CODE_THEME_OPTIONS: Readonly<Record<Appearance, ReadonlyArray<CodeT
     { id: "vesper", label: "Vesper" },
   ],
 };
+/* oxlint-enable t3code/no-untranslated-copy */
 
 export type CodeThemePreferences = Readonly<Record<Appearance, string>>;
 

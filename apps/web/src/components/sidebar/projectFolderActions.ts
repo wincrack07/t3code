@@ -1,6 +1,7 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
 import type { ClientSettings } from "@t3tools/contracts";
+import { msg } from "gt-react";
+import { m } from "../../i18n/messages";
 import { persistClientSettingsUpdate } from "../../hooks/useSettings";
 import {
   deleteProjectFolder,
@@ -20,8 +21,8 @@ function saveFolders(update: (current: ClientSettings) => Partial<ClientSettings
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not save project groups",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: m(msg("Could not save project groups")),
+          description: error instanceof Error ? error.message : m(msg("An error occurred.")),
         }),
       );
     },

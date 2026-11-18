@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
+import { useGT } from "gt-react-native";
 import { serverEnvironment } from "../../../state/server";
 import { useAtomCommand } from "../../../state/use-atom-command";
 import type { SettingsTarget } from "../settings-environment-filter";
@@ -13,6 +13,7 @@ export function MachineCleanupStatus({ target }: { readonly target: SettingsTarg
   const allowed = useAtomValue(
     serverEnvironment.runMachineCleanupPhaseA.permissionAtom(environmentId),
   );
+  const gt = useGT();
   const run = useAtomCommand(serverEnvironment.runMachineCleanupPhaseA);
   const scan = useAtomCommand(serverEnvironment.scanMachineCleanup);
   const state = query._tag === "Success" ? query.value : null;
@@ -21,35 +22,37 @@ export function MachineCleanupStatus({ target }: { readonly target: SettingsTarg
     report?.items.filter((item) => item.phase === "B" && item.outcome === "pending") ?? [];
   return (
     <SettingsSection
-      title={`Machine cleanup · ${target.label}`}
-      footer="Review and confirm approval or aggressive items in the web or desktop maintenance settings. Mobile never approves those deletions."
+      title={gt("Machine cleanup · {label}", { label: target.label })}
+      footer={gt(
+        "Review and confirm approval or aggressive items in the web or desktop maintenance settings. Mobile never approves those deletions.",
+      )}
     >
       <SettingsRow
         icon="internaldrive"
-        label="Free space"
+        label={gt("Free space")}
         value={
           state?.freeNow !== undefined
             ? `${(state.freeNow / 1024 ** 3).toFixed(1)} GiB`
             : report
               ? `${(report.freeAfter / 1024 ** 3).toFixed(1)} GiB`
-              : "Not measured"
+              : gt("Not measured")
         }
       />
       <SettingsRow
         icon="clock"
-        label="Last report"
-        value={`${report?.finishedAt ?? state?.progress ?? "No report yet"}${pending.length ? ` · ${pending.length} await review` : ""}`}
+        label={gt("Last report")}
+        value={`${report?.finishedAt ?? state?.progress ?? gt("No report yet")}${pending.length ? ` · ${gt("{count} await review", { count: pending.length })}` : ""}`}
         valuePosition="below"
       />
       <ListActionRow
         icon="magnifyingglass"
-        label="Scan machine cleanup"
+        label={gt("Scan machine cleanup")}
         disabled={!allowed || state?.running === true}
         onPress={() => void scan({ environmentId, input: {} })}
       />
       <ListActionRow
         icon="trash"
-        label="Clean regenerable files now"
+        label={gt("Clean regenerable files now")}
         disabled={!allowed || state?.running === true}
         onPress={() => void run({ environmentId, input: {} })}
       />

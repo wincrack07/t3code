@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import type { AuthMcpClientAccess } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import {
   peerMeshBusyAtom,
@@ -17,6 +17,7 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSearchableSetting } from "./settingsSearch";
 
 export function PeerLinkMeshSettings() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const hosts = usePeerLinkHosts();
   const [settings, setSettings] = usePeerMeshSettings();
@@ -28,23 +29,25 @@ export function PeerLinkMeshSettings() {
     return (
       <SettingsSection {...searchableSetting("peer-link-mesh")}>
         <SettingsRow
-          title="Connect two or more environments"
-          description="Then link them all to each other here in one step."
+          title={gt("Connect two or more environments")}
+          description={gt("Then link them all to each other here in one step.")}
         />
       </SettingsSection>
     );
   return (
     <SettingsSection {...searchableSetting("peer-link-mesh")}>
       <SettingsRow
-        title="Link every environment"
-        description="Links each connected environment to every other one, both ways. Run it again to retry any that failed."
+        title={gt("Link every environment")}
+        description={gt(
+          "Links each connected environment to every other one, both ways. Run it again to retry any that failed.",
+        )}
         control={
           <Button
             size="sm"
             disabled={busy || !permissions.link}
             onClick={() => void runPeerMesh(false, access)}
           >
-            {busy ? "Linking…" : "Link all"}
+            {busy ? gt("Linking…") : gt("Link all")}
           </Button>
         }
       >
@@ -53,20 +56,24 @@ export function PeerLinkMeshSettings() {
         </div>
       </SettingsRow>
       <SettingsRow
-        title="Keep links renewed"
-        description="Renews each link in its last five days while both sides are connected. Revoked or expired links need linking again."
+        title={gt("Keep links renewed")}
+        description={gt(
+          "Renews each link in its last five days while both sides are connected. Revoked or expired links need linking again.",
+        )}
         control={
           <Switch
             checked={settings.enabled}
             disabled={busy}
             onCheckedChange={(enabled) => setSettings((current) => ({ ...current, enabled }))}
-            aria-label="Keep links renewed"
+            aria-label={gt("Keep links renewed")}
           />
         }
       />
       <SettingsRow
-        title="Unlink all"
-        description="Stops renewal and forgets links between connected environments. Offline ones keep theirs until they reconnect. To cut access on the other side too, revoke the session in its Sharing & access."
+        title={gt("Unlink all")}
+        description={gt(
+          "Stops renewal and forgets links between connected environments. Offline ones keep theirs until they reconnect. To cut access on the other side too, revoke the session in its Sharing & access.",
+        )}
         control={
           <Button
             size="sm"
@@ -74,12 +81,12 @@ export function PeerLinkMeshSettings() {
             disabled={busy || !permissions.unlink}
             onClick={() => void runPeerMesh(false, access, true)}
           >
-            Unlink all
+            <T>Unlink all</T>
           </Button>
         }
       />
       {progress.length > 0 ? (
-        <SettingsRow title="Progress">
+        <SettingsRow title={gt("Progress")}>
           <ul className="mt-2 flex flex-col gap-1 pb-3 text-xs" role="status" aria-live="polite">
             {progress.map((pair) => (
               <li key={pair.key} className="text-muted-foreground">

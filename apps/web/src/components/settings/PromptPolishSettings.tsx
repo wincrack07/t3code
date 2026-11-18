@@ -1,9 +1,9 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   DEFAULT_PROMPT_POLISH_BASE,
   type PromptPolishSettings as Settings,
   type ModelSelection,
 } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../ui/button";
@@ -42,6 +42,7 @@ export function PromptPolishSettings() {
 }
 
 function PromptPolishEditor({ initial }: { initial: Settings }) {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const [settings, setSettings] = useState(initial);
   const dirty = JSON.stringify(settings) !== JSON.stringify(initial);
@@ -60,12 +61,12 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
         onChange={(modelSelection) => setSettings({ ...settings, modelSelection })}
       />
       <SettingsRow
-        title="Instruction"
-        description="How the model rewrites your draft."
+        title={gt("Instruction", { $context: "settings row title, the polish prompt" })}
+        description={gt("How the model rewrites your draft.")}
         resetAction={
           settings.basePrompt !== DEFAULT_PROMPT_POLISH_BASE ? (
             <SettingResetButton
-              ariaLabel="Reset polish instruction to default"
+              ariaLabel={gt("Reset polish instruction to default")}
               onClick={() => setSettings({ ...settings, basePrompt: DEFAULT_PROMPT_POLISH_BASE })}
             />
           ) : null
@@ -73,7 +74,7 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
       >
         <div className="mt-3 max-w-2xl pb-3.5">
           <Textarea
-            aria-label="Polish instruction"
+            aria-label={gt("Polish instruction")}
             rows={4}
             maxLength={8000}
             value={settings.basePrompt}
@@ -82,8 +83,8 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
         </div>
       </SettingsRow>
       <SettingsRow
-        title="Rules"
-        description="Added after the instruction. Turn a rule off to skip it."
+        title={gt("Rules", { $context: "settings row title, polish rules" })}
+        description={gt("Added after the instruction. Turn a rule off to skip it.")}
       >
         {settings.rules.length > 0 ? (
           <div className="mt-3 min-w-0 max-w-2xl divide-y divide-border/50">
@@ -92,20 +93,22 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
                 // oxlint-disable-next-line react/no-array-index-key -- Controlled rows have no state tied to their position.
                 key={index}
                 role="group"
-                aria-label={`Rule ${index + 1}`}
+                aria-label={gt("Rule {number}", { number: index + 1 })}
                 className="space-y-2 py-3 first:pt-0"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Switch
                     size="sm"
-                    aria-label={`Enable ${rule.name || "rule"}`}
+                    aria-label={
+                      rule.name ? gt("Enable {name}", { name: rule.name }) : gt("Enable rule")
+                    }
                     checked={rule.enabled}
                     onCheckedChange={(enabled) => updateRule(index, { enabled })}
                   />
                   <div className="min-w-0 flex-1">
                     <Input
                       size="sm"
-                      aria-label={`Rule ${index + 1} name`}
+                      aria-label={gt("Rule {number} name", { number: index + 1 })}
                       value={rule.name}
                       maxLength={100}
                       onChange={(event) => updateRule(index, { name: event.target.value })}
@@ -114,7 +117,11 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
                   <Button
                     size="icon-sm"
                     variant="ghost-destructive"
-                    aria-label={`Remove ${rule.name || `rule ${index + 1}`}`}
+                    aria-label={
+                      rule.name
+                        ? gt("Remove {name}", { name: rule.name })
+                        : gt("Remove rule {number}", { number: index + 1 })
+                    }
                     onClick={() =>
                       setSettings({
                         ...settings,
@@ -127,7 +134,7 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
                 </div>
                 <Textarea
                   size="sm"
-                  aria-label={`Rule ${index + 1} instruction`}
+                  aria-label={gt("Rule {number} instruction", { number: index + 1 })}
                   value={rule.text}
                   maxLength={2000}
                   rows={2}
@@ -150,24 +157,24 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
             }
           >
             <PlusIcon />
-            Add rule
+            <T>Add rule</T>
           </Button>
         </div>
       </SettingsRow>
       {dirty ? (
         <SettingsRow
-          title="Unsaved changes"
+          title={gt("Unsaved changes")}
           control={
             <>
               <Button size="sm" variant="outline" onClick={() => setSettings(initial)}>
-                Discard
+                <T $context="verb, discard unsaved changes">Discard</T>
               </Button>
               <Button
                 size="sm"
                 disabled={!writable}
                 onClick={() => update({ promptPolish: settings })}
               >
-                Save
+                <T $context="verb, button">Save</T>
               </Button>
             </>
           }
@@ -184,6 +191,7 @@ function PolishModelRow({
   selection: ModelSelection | null;
   onChange: (selection: ModelSelection | null) => void;
 }) {
+  const gt = useGT();
   const settings = useScopedSettings();
   const { environment } = useSettingsScope();
   const byEnvironment = useEnvironmentProviders();
@@ -208,8 +216,8 @@ function PolishModelRow({
     <SettingsRow
       serverScoped
       settingKeys={["promptPolish"]}
-      title="Model"
-      description="Uses the text generation model unless you turn on a separate one."
+      title={gt("Model", { $context: "settings row title" })}
+      description={gt("Uses the text generation model unless you turn on a separate one.")}
       control={
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           {selection ? (
@@ -242,10 +250,12 @@ function PolishModelRow({
               ) : null}
             </>
           ) : (
-            <span className="text-sm text-muted-foreground">Text generation model</span>
+            <span className="text-sm text-muted-foreground">
+              <T>Text generation model</T>
+            </span>
           )}
           <Switch
-            aria-label="Use a separate Polish model"
+            aria-label={gt("Use a separate Polish model")}
             checked={selection !== null}
             disabled={
               !selection &&

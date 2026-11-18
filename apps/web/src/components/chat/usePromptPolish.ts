@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import { type EnvironmentId, type ProjectId, PromptPolishLimitError } from "@t3tools/contracts";
 import {
@@ -6,6 +5,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import * as Schema from "effect/Schema";
+import { useGT } from "gt-react";
 import { type RefObject, useState } from "react";
 
 import { serverEnvironment } from "~/state/server";
@@ -24,6 +24,7 @@ export function usePromptPolish(input: {
 }) {
   const { environmentId, projectId, promptRef, reviewsResult = false } = input;
   const available = useAtomValue(serverEnvironment.polishPrompt.permissionAtom(environmentId));
+  const gt = useGT();
   const run = useAtomCommand(serverEnvironment.polishPrompt, { reportFailure: false });
   const [running, setRunning] = useState(false);
 
@@ -31,7 +32,7 @@ export function usePromptPolish(input: {
   const polish = async (replaceDraft: (expected: string, next: string) => boolean) => {
     const original = promptRef.current;
     if (original.trim().length === 0) return;
-    const toastId = toastManager.add({ type: "loading", title: "Polishing prompt..." });
+    const toastId = toastManager.add({ type: "loading", title: gt("Polishing prompt...") });
     setRunning(true);
     const result = await run({
       environmentId,
@@ -46,9 +47,12 @@ export function usePromptPolish(input: {
       const error = squashAtomCommandFailure(result);
       toastManager.update(toastId, {
         type: "error",
-        title: "Could not polish the prompt",
+        title: gt("Could not polish the prompt"),
         description: isPolishLimitError(error)
-          ? `Polish rewrites prompts up to ${error.maxLength.toLocaleString()} characters. This one has ${error.length.toLocaleString()}.`
+          ? gt("Polish rewrites prompts up to {maxLength} characters. This one has {length}.", {
+              maxLength: error.maxLength.toLocaleString(),
+              length: error.length.toLocaleString(),
+            })
           : error instanceof Error
             ? error.message
             : undefined,
@@ -60,8 +64,8 @@ export function usePromptPolish(input: {
     if (!replaceDraft(original, polished)) {
       toastManager.update(toastId, {
         type: "warning",
-        title: "Prompt not polished",
-        description: "The draft changed while the rewrite was running.",
+        title: gt("Prompt not polished"),
+        description: gt("The draft changed while the rewrite was running."),
       });
       return;
     }
@@ -71,12 +75,12 @@ export function usePromptPolish(input: {
     }
     toastManager.update(toastId, {
       type: "success",
-      title: polished === original ? "Prompt already clear" : "Prompt polished",
+      title: polished === original ? gt("Prompt already clear") : gt("Prompt polished"),
       ...(polished === original
         ? {}
         : {
             actionProps: {
-              children: "Undo",
+              children: gt("Undo"),
               onClick: () => {
                 replaceDraft(polished, original);
                 toastManager.close(toastId);

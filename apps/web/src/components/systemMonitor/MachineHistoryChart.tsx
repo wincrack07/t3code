@@ -1,8 +1,9 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { formatMachineRate } from "@t3tools/client-runtime/state/machine-monitor";
 import type { MachineSample } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 
 import { cn } from "~/lib/utils";
+import type { MessageResolver } from "~/i18n/messages";
 
 export type MachineHistoryMetric = "usage" | "network";
 
@@ -18,16 +19,20 @@ const SERIES: Record<MachineHistoryMetric, readonly Series[]> = {
   usage: [
     { label: "CPU", className: "text-primary", value: (s) => s.cpu },
     {
-      label: "Memory",
+      label: msg("Memory"),
       className: "text-muted-foreground",
       dashed: true,
       value: (s) => (s.memoryTotal > 0 ? (100 * s.memoryUsed) / s.memoryTotal : null),
     },
   ],
   network: [
-    { label: "Download", className: "text-primary", value: (s) => s.networkDown },
     {
-      label: "Upload",
+      label: msg("Download", { $context: "network traffic received" }),
+      className: "text-primary",
+      value: (s) => s.networkDown,
+    },
+    {
+      label: msg("Upload", { $context: "network traffic sent" }),
       className: "text-muted-foreground",
       dashed: true,
       value: (s) => s.networkUp,
@@ -38,10 +43,16 @@ const SERIES: Record<MachineHistoryMetric, readonly Series[]> = {
 const WIDTH = 600;
 const HEIGHT = 160;
 
-function formatWindow(ms: number) {
+function formatWindow(ms: number, resolve: MessageResolver) {
   return ms >= 3_600_000
-    ? `${Math.round(ms / 3_600_000)} h ago`
-    : `${Math.round(ms / 60_000)} min ago`;
+    ? resolve(msg("{count} h ago", { count: Math.round(ms / 3_600_000) }))
+    : resolve(msg("{count} min ago", { count: Math.round(ms / 60_000) }));
+}
+
+function formatSpan(ms: number, resolve: MessageResolver) {
+  return ms >= 3_600_000
+    ? resolve(msg("{count} h", { count: Math.round(ms / 3_600_000) }))
+    : resolve(msg("{count} min", { count: Math.round(ms / 60_000) }));
 }
 
 /** History is mixed resolution (2 s recent, 5 min older), so points sit on a time axis. */
@@ -51,6 +62,8 @@ export function MachineHistoryChart(props: {
   windowMs: number;
   now: number;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const start = props.now - props.windowMs;
   const samples = props.history.filter((s) => s.at >= start && s.at <= props.now);
   const series = SERIES[props.metric];
@@ -68,7 +81,7 @@ export function MachineHistoryChart(props: {
   if (values.every((points) => points.length < 2)) {
     return (
       <p className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-        Collecting history. The first points appear within a few seconds
+        <T>Collecting history. The first points appear within a few seconds</T>
       </p>
     );
   }
@@ -92,7 +105,11 @@ export function MachineHistoryChart(props: {
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={`${series.map((line) => line.label).join(" and ")} over the last ${formatWindow(props.windowMs).replace(" ago", "")}`}
+          aria-label={gt("{first} and {second} over the last {window}", {
+            first: messages(series[0]!.label),
+            second: messages(series[1]!.label),
+            window: formatSpan(props.windowMs, messages),
+          })}
           className="absolute inset-y-0 left-0 h-full w-[calc(100%-4rem)] overflow-visible"
         >
           {series.map((line, index) => (
@@ -114,8 +131,10 @@ export function MachineHistoryChart(props: {
         </svg>
       </div>
       <div className="flex justify-between pr-16 font-mono text-2xs text-muted-foreground">
-        <span>{formatWindow(props.windowMs)}</span>
-        <span>now</span>
+        <span>{formatWindow(props.windowMs, messages)}</span>
+        <span>
+          <T context="right end of a time axis">now</T>
+        </span>
       </div>
       <figcaption className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
         {series.map((line, index) => {
@@ -136,9 +155,11 @@ export function MachineHistoryChart(props: {
                   strokeDasharray={line.dashed ? "4 3" : undefined}
                 />
               </svg>
-              <span className="text-foreground">{line.label}</span>
+              <span className="text-foreground">{messages(line.label)}</span>
               <span className="text-muted-foreground tabular-nums">
-                peak {format(top)} · average {format(average)}
+                <T>
+                  peak <Var>{format(top)}</Var> · average <Var>{format(average)}</Var>
+                </T>
               </span>
             </span>
           );

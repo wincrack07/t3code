@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -11,6 +10,7 @@ import {
 import { createModelSelection } from "@t3tools/shared/model";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useNavigate } from "@tanstack/react-router";
+import { T, useGT, useMessages, Var } from "gt-react";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -112,6 +112,7 @@ export function TaskCriteriaEditor({
   disabled: boolean;
   onChange: (criteria: TaskCriterion[]) => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState("");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const apply = (edit: TaskCriteriaEdit) => {
@@ -128,7 +129,7 @@ export function TaskCriteriaEditor({
   const full = criteria.length >= TASK_CRITERIA_MAX_COUNT;
   return (
     <BriefSection
-      title="Acceptance criteria"
+      title={gt("Acceptance criteria")}
       detail={
         criteria.length > 0
           ? `${criteria.filter((item) => item.done).length}/${criteria.length}`
@@ -161,15 +162,17 @@ export function TaskCriteriaEditor({
       {disabled || full ? (
         full ? (
           <p className="px-1 text-xs text-muted-foreground">
-            {TASK_CRITERIA_MAX_COUNT} criteria at most.
+            <T>
+              <Var>{TASK_CRITERIA_MAX_COUNT}</Var> criteria at most.
+            </T>
           </p>
         ) : null
       ) : (
         <div className="flex h-8 items-center gap-2 pl-6">
           <Input
             size="compact"
-            aria-label="Add acceptance criterion"
-            placeholder="Add a criterion and press Enter"
+            aria-label={gt("Add acceptance criterion")}
+            placeholder={gt("Add a criterion and press Enter")}
             maxLength={TASK_CRITERION_MAX_LENGTH}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -201,6 +204,7 @@ function CriterionRow({
   disabled: boolean;
   onEdit: (edit: TaskCriteriaEdit) => boolean;
 }) {
+  const gt = useGT();
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({
     id,
     disabled,
@@ -221,7 +225,7 @@ function CriterionRow({
     >
       <button
         type="button"
-        aria-label="Reorder criterion"
+        aria-label={gt("Reorder criterion")}
         disabled={disabled}
         className="flex size-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground opacity-0 group-hover/criterion:opacity-100 disabled:hidden"
         {...attributes}
@@ -231,13 +235,13 @@ function CriterionRow({
         <GripVerticalIcon className="size-3.5" />
       </button>
       <Checkbox
-        aria-label={item.done ? "Mark criterion not met" : "Mark criterion met"}
+        aria-label={item.done ? gt("Mark criterion not met") : gt("Mark criterion met")}
         checked={item.done}
         disabled={disabled}
         onCheckedChange={() => onEdit({ kind: "toggle", index })}
       />
       <input
-        aria-label={`Criterion ${index + 1}`}
+        aria-label={gt("Criterion {number}", { number: index + 1 })}
         className={cn(
           "h-8 min-w-0 flex-1 truncate bg-transparent px-1.5 text-sm outline-none",
           item.done && "text-muted-foreground line-through decoration-muted-foreground/50",
@@ -266,7 +270,7 @@ function CriterionRow({
           <Button
             size="icon-xs"
             variant="ghost-muted"
-            aria-label="Remove criterion"
+            aria-label={gt("Remove criterion")}
             tabIndex={-1}
             onClick={() => onEdit({ kind: "remove", index })}
           >
@@ -352,6 +356,8 @@ export function TaskRunWith({
   disabled: boolean;
   onChange: (settings: TaskRunSettings | null) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const labelOf = useEnvironmentLabel();
   const saved = entry.task.runSettings ?? null;
   const target = taskRunProject(entry, group);
@@ -374,7 +380,7 @@ export function TaskRunWith({
   );
   const activeEntry = entries.find((candidate) => candidate.instanceId === selection?.instanceId);
   const set = (patch: Partial<TaskRunSettings>) => onChange({ ...saved, ...patch });
-  const machines = taskStartTargets(group, entry, labelOf);
+  const machines = taskStartTargets(group, entry, labelOf, messages);
   const runtimeMode: RuntimeMode = saved?.runtimeMode ?? defaults.defaultRuntimeMode;
   const envMode = saved?.threadEnvMode ?? defaults.defaultThreadEnvMode ?? "local";
   const runtimeOptions = resolveRuntimeModeOptions(
@@ -385,12 +391,12 @@ export function TaskRunWith({
   return (
     <BriefSection
       id={TASK_RUN_WITH_ANCHOR}
-      title="Run with"
-      detail={saved === null ? "Project default" : null}
+      title={gt("Run with")}
+      detail={saved === null ? gt("Project default") : null}
       action={
         saved !== null && !disabled ? (
           <Button size="micro" variant="ghost-muted" onClick={() => onChange(null)}>
-            Use project default
+            <T>Use project default</T>
           </Button>
         ) : null
       }
@@ -416,7 +422,9 @@ export function TaskRunWith({
           />
         ) : (
           <span className="text-xs text-muted-foreground">
-            No providers on {labelOf(environmentId)}
+            <T>
+              No providers on <Var>{labelOf(environmentId)}</Var>
+            </T>
           </span>
         )}
         {selection && activeEntry ? (
@@ -440,7 +448,7 @@ export function TaskRunWith({
         ) : null}
         {machines.length > 1 ? (
           <ChoiceMenu<EnvironmentId>
-            label="Machine"
+            label={gt("Machine")}
             icon={<ServerIcon />}
             value={environmentId}
             disabled={disabled}
@@ -455,7 +463,7 @@ export function TaskRunWith({
           />
         ) : null}
         <ChoiceMenu<"local" | "worktree">
-          label="Workspace"
+          label={gt("Workspace")}
           value={envMode}
           disabled={disabled}
           options={(["local", "worktree"] as const).map((mode) => ({
@@ -465,7 +473,7 @@ export function TaskRunWith({
           onChange={(threadEnvMode) => set({ threadEnvMode })}
         />
         <ChoiceMenu<RuntimeMode>
-          label="Permissions"
+          label={gt("Permissions")}
           icon={<PermissionIcon />}
           value={runtimeMode}
           disabled={disabled}
@@ -500,12 +508,16 @@ export function TaskSubtasks({
   onUpdate: (action: SavedPromptAction) => void;
   onOpen: (key: string) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   if (parent) {
     return (
       <div className="flex h-7 min-w-0 items-center gap-1 px-1 text-xs text-muted-foreground">
-        <span className="shrink-0">Subtask of</span>
+        <span className="shrink-0">
+          <T>Subtask of</T>
+        </span>
         <Button size="micro" variant="ghost" onClick={() => onOpen(parent.key)}>
           <span className="max-w-60 truncate">{taskTitle(parent.task)}</span>
         </Button>
@@ -518,15 +530,17 @@ export function TaskSubtasks({
     <Menu>
       <MenuTrigger render={<Button size="micro" variant="ghost-muted" />}>
         <PlusIcon />
-        {subtasks.length === 0 ? "Split into subtasks" : "Add subtask"}
+        {subtasks.length === 0 ? <T>Split into subtasks</T> : <T>Add subtask</T>}
       </MenuTrigger>
       <MenuPopup align="end">
-        <MenuItem onClick={() => setAdding(true)}>Write subtasks…</MenuItem>
+        <MenuItem onClick={() => setAdding(true)}>
+          <T>Write subtasks…</T>
+        </MenuItem>
         <MenuItem
           disabled={criteria.length === 0}
           onClick={() => void onAdd(criteria.map((item) => item.text))}
         >
-          One per open criterion
+          <T>One per open criterion</T>
           {criteria.length > 0 ? (
             <span className="ms-auto ps-4 text-xs text-muted-foreground tabular-nums">
               {criteria.length}
@@ -538,14 +552,14 @@ export function TaskSubtasks({
   );
   if (subtasks.length === 0 && !adding) {
     return (
-      <BriefSection title="Subtasks" action={addButton}>
+      <BriefSection title={gt("Subtasks")} action={addButton}>
         {null}
       </BriefSection>
     );
   }
   return (
     <BriefSection
-      title="Subtasks"
+      title={gt("Subtasks")}
       detail={subtasks.length > 0 ? `${done}/${subtasks.length}` : null}
       action={addButton}
     >
@@ -556,7 +570,7 @@ export function TaskSubtasks({
             className="flex h-8 min-w-0 items-center gap-2 rounded-md pr-1 pl-6 hover:bg-accent/50"
           >
             <Checkbox
-              aria-label={child.status === "done" ? "Reopen subtask" : "Mark subtask done"}
+              aria-label={child.status === "done" ? gt("Reopen subtask") : gt("Mark subtask done")}
               checked={child.status === "done"}
               disabled={disabled}
               onCheckedChange={() =>
@@ -579,7 +593,7 @@ export function TaskSubtasks({
             </button>
             {child.status !== "open" && child.status !== "done" ? (
               <span className="shrink-0 text-xs text-muted-foreground">
-                {TASK_STATUS_LABELS[child.status]}
+                {messages(TASK_STATUS_LABELS[child.status])}
               </span>
             ) : null}
           </li>
@@ -590,8 +604,8 @@ export function TaskSubtasks({
           <Input
             size="compact"
             autoFocus
-            aria-label="New subtask"
-            placeholder="Subtask title, Enter to add, Esc to finish"
+            aria-label={gt("New subtask")}
+            placeholder={gt("Subtask title, Enter to add, Esc to finish")}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={() => {
@@ -618,14 +632,16 @@ export function TaskSubtasks({
 
 /** Every attempt at the task, newest first, each opening its thread. */
 export function TaskHistory({ entry }: { entry: TaskEntry }) {
+  const gt = useGT();
+  const messages = useMessages();
   const labelOf = useEnvironmentLabel();
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const attempts = taskAttempts(entry.task, entry.home.environmentId);
+  const attempts = taskAttempts(entry.task, entry.home.environmentId, messages);
   if (attempts.length === 0) return null;
   const visible = expanded ? attempts : attempts.slice(0, 3);
   return (
-    <BriefSection title="History" detail={`${attempts.length}`}>
+    <BriefSection title={gt("History")} detail={`${attempts.length}`}>
       <ol className="flex flex-col">
         {visible.map((attempt, index) => (
           <li key={attempt.key}>
@@ -640,7 +656,9 @@ export function TaskHistory({ entry }: { entry: TaskEntry }) {
               }
             >
               <span className="w-16 shrink-0 text-muted-foreground tabular-nums">
-                Attempt {attempts.length - index}
+                <T>
+                  Attempt <Var>{attempts.length - index}</Var>
+                </T>
               </span>
               {attempt.review ? (
                 <Badge variant={attempt.review.tone} size="sm">
@@ -648,7 +666,11 @@ export function TaskHistory({ entry }: { entry: TaskEntry }) {
                 </Badge>
               ) : (
                 <Badge variant="quiet" size="sm">
-                  {index === 0 && entry.status === "in-progress" ? "Running" : "No result"}
+                  {index === 0 && entry.status === "in-progress" ? (
+                    <T context="task attempt state">Running</T>
+                  ) : (
+                    <T>No result</T>
+                  )}
                 </Badge>
               )}
               <span className="min-w-0 flex-1 truncate text-muted-foreground">
@@ -673,7 +695,7 @@ export function TaskHistory({ entry }: { entry: TaskEntry }) {
       </ol>
       {attempts.length > 3 ? (
         <Button size="micro" variant="ghost-muted" onClick={() => setExpanded(!expanded)}>
-          {expanded ? "Show fewer" : `Show all ${attempts.length}`}
+          {expanded ? <T>Show fewer</T> : gt("Show all {count}", { count: attempts.length })}
         </Button>
       ) : null}
     </BriefSection>

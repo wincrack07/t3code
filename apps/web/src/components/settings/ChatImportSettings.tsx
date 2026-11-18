@@ -1,8 +1,8 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { useSyncExternalStore } from "react";
 import { AsyncResult } from "effect/reactivity";
+import { msg, T, useGT } from "gt-react";
 import type { EnvironmentId, ModelSelection, ProjectId, T3ThreadExport } from "@t3tools/contracts";
 import { getCloneDestinationPath } from "@t3tools/client-runtime/operations/projects";
 import { findProjectByPath } from "@t3tools/client-runtime/state/projects";
@@ -22,6 +22,7 @@ import {
   useEnvironmentProviders,
 } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { m } from "../../i18n/messages";
 import { orchestrationEnvironment } from "../../state/orchestration";
 import { projectEnvironment } from "../../state/projects";
 import { threadEnvironment } from "../../state/threads";
@@ -54,6 +55,7 @@ import {
 } from "./ChatImportSettings.logic";
 
 export function ChatImportSettings() {
+  const gt = useGT();
   const connected = useConnectedEnvironmentIds();
   const projects = useProjects().filter(
     (project) => connected.includes(project.environmentId) && !project.archivedAt,
@@ -81,12 +83,18 @@ export function ChatImportSettings() {
   const left = session ? remainingChats(chats, session.draft).length : 0;
   const rowStatus =
     session && !session.open
-      ? session.status || `${session.fileLabel} · ${left} chats left. Continue when you want.`
+      ? session.status ||
+        gt("{fileLabel} · {left} chats left. Continue when you want.", {
+          fileLabel: session.fileLabel,
+          left,
+        })
       : session
         ? ""
         : status ||
           (savedLabel
-            ? `${savedLabel} is saved on this browser. Choose that same backup to continue.`
+            ? gt("{savedLabel} is saved on this browser. Choose that same backup to continue.", {
+                savedLabel,
+              })
             : "");
 
   const retarget = (next: EnvironmentId) => {
@@ -112,7 +120,7 @@ export function ChatImportSettings() {
     readonly draft: ImportDraft;
   }) => {
     const config = configs.get(plan.environmentId);
-    if (!config) throw new Error("The destination environment is unavailable.");
+    if (!config) throw new Error(m(msg("The destination environment is unavailable.")));
     const defaultModel =
       config.settings.defaultModelSelection ??
       resolveProjectDefaultProviderModelSelection(
@@ -121,20 +129,24 @@ export function ChatImportSettings() {
         null,
       );
     if (!defaultModel)
-      throw new Error("Configure a provider on the destination environment first.");
+      throw new Error(m(msg("Configure a provider on the destination environment first.")));
     const known = projects.filter((project) => project.environmentId === plan.environmentId);
     const planGroups = planImportProjects(plan.bundles, known);
     const refs = importChats(plan.bundles);
     let draft = plan.draft;
     if (!foldersReady(draft, planGroups, refs, new Set(known.map((project) => project.id))))
       throw new Error(
-        "Choose a full folder path on the destination environment, such as ~/Projects.",
+        m(
+          msg("Choose a full folder path on the destination environment, such as {example}.", {
+            example: "~/Projects",
+          }),
+        ),
       );
     const pending = remainingChats(refs, draft);
     const needed = new Set(pending.map((chat) => chat.projectKey));
     const destinations = new Map<string, { id: ProjectId; model: ModelSelection }>();
     for (const group of planGroups) {
-      if (takeStopImport()) throw new Error("Stopped. Your progress is saved.");
+      if (takeStopImport()) throw new Error(m(msg("Stopped. Your progress is saved.")));
       if (!needed.has(group.key)) continue;
       const chosen = draft.destinations[group.key];
       if (chosen === NEW_PROJECT) {
@@ -152,7 +164,7 @@ export function ChatImportSettings() {
           environmentId: plan.environmentId,
           input: {
             projectId: id,
-            title: group.source.title.trim().slice(0, 200) || "Imported chats",
+            title: group.source.title.trim().slice(0, 200) || gt("Imported chats"),
             workspaceRoot,
             createWorkspaceRootIfMissing: true,
             defaultModelSelection: null,
@@ -160,12 +172,19 @@ export function ChatImportSettings() {
         });
         if (!AsyncResult.isSuccess(result))
           throw new Error(
-            `Could not add ${workspaceRoot}. No chats from this attempt were imported.`,
+            m(
+              msg("Could not add {path}. No chats from this attempt were imported.", {
+                path: workspaceRoot,
+              }),
+            ),
           );
         destinations.set(group.key, { id, model: defaultModel });
       } else {
         const project = known.find((item) => item.id === chosen);
-        if (!project) throw new Error(`Choose a folder for ${group.source.title}.`);
+        if (!project)
+          throw new Error(
+            m(msg("Choose a folder for {project}.", { project: group.source.title })),
+          );
         destinations.set(group.key, {
           id: project.id,
           model: project.defaultModelSelection ?? defaultModel,
@@ -174,18 +193,23 @@ export function ChatImportSettings() {
     }
     const counts = { imported: 0, present: 0, moved: 0 };
     for (const bundle of plan.bundles) {
-      if (takeStopImport()) throw new Error("Stopped. Your progress is saved.");
+      if (takeStopImport()) throw new Error(m(msg("Stopped. Your progress is saved.")));
       const id = portableImportThreadId(bundle);
       const key = importProjectKey(bundle.project);
       if (draft.doneChats.has(id) || !chatIncluded(draft, key, id)) continue;
       const destination = destinations.get(key);
-      if (!destination) throw new Error(`Choose a folder for ${bundle.project.title}.`);
+      if (!destination)
+        throw new Error(
+          m(msg("Choose a folder for {project}.", { project: bundle.project.title })),
+        );
       const result = await runImport({
         environmentId: plan.environmentId,
         input: { bundle, projectId: destination.id, modelSelection: destination.model },
       });
       if (!AsyncResult.isSuccess(result))
-        throw new Error(`Import stopped. ${importProgressLabel(counts)} so far.`);
+        throw new Error(
+          m(msg("Import stopped. {progress} so far.", { progress: importProgressLabel(counts) })),
+        );
       const placement = importPlacement({
         existing: result.value.existing,
         fallbackProjectId: result.value.existing?.projectId ?? destination.id,
@@ -201,7 +225,14 @@ export function ChatImportSettings() {
           },
         });
         if (!AsyncResult.isSuccess(moved))
-          throw new Error(`Could not move ${bundle.title}. ${importProgressLabel(counts)} so far.`);
+          throw new Error(
+            m(
+              msg("Could not move {chat}. {progress} so far.", {
+                chat: bundle.title,
+                progress: importProgressLabel(counts),
+              }),
+            ),
+          );
         counts.moved++;
       } else counts.present++;
       draft = markChatsDone(draft, [id]);
@@ -212,23 +243,25 @@ export function ChatImportSettings() {
       }
       patchImportSession({
         draft,
-        status: `${label} of ${pending.length}`,
+        status: m(msg("{progress} of {total}", { progress: label, total: pending.length })),
       });
     }
-    if (takeStopImport()) throw new Error("Stopped. Your progress is saved.");
+    if (takeStopImport()) throw new Error(m(msg("Stopped. Your progress is saved.")));
     const label = importProgressLabel(counts);
     patchImportSession({
       draft,
       busy: false,
       open: true,
-      status: `${label}. You can continue later.`,
+      status: m(msg("{progress}. You can continue later.", { progress: label })),
     });
   };
 
   return (
     <SettingsRow
-      title="Import chats"
-      description="Choose which chats to restore and the folder for each source project. A backup you leave unfinished stays here until you continue or discard it."
+      title={gt("Import chats")}
+      description={gt(
+        "Choose which chats to restore and the folder for each source project. A backup you leave unfinished stays here until you continue or discard it.",
+      )}
       status={rowStatus ? <span role="status">{rowStatus}</span> : null}
       control={
         <>
@@ -242,11 +275,11 @@ export function ChatImportSettings() {
             }}
             disabled={reading || session?.busy === true || connected.length === 0}
           >
-            <SelectTrigger size="sm" aria-label="Import environment">
+            <SelectTrigger size="sm" aria-label={gt("Import environment")}>
               <SelectValue>
                 {environmentId
                   ? (readEnvironment(environmentId)?.label ?? environmentId)
-                  : "No environments"}
+                  : gt("No environments")}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -263,7 +296,7 @@ export function ChatImportSettings() {
             disabled={reading || session?.busy === true || !environmentId || !allowed}
             onClick={() => input.current?.click()}
           >
-            Import chats…
+            <T>Import chats…</T>
           </Button>
           {session && !session.open ? (
             <Button
@@ -272,12 +305,13 @@ export function ChatImportSettings() {
               disabled={session.busy}
               onClick={resumeImportSession}
             >
-              Continue{left > 0 ? ` (${left})` : ""}
+              <T>Continue</T>
+              {left > 0 ? ` (${left})` : ""}
             </Button>
           ) : null}
           {session && !session.busy ? (
             <Button size="sm" variant="ghost" onClick={() => discardImportSession()}>
-              Discard
+              <T>Discard</T>
             </Button>
           ) : null}
           <input
@@ -310,8 +344,11 @@ export function ChatImportSettings() {
                 .catch(() => {
                   const current = getImportSession();
                   if (current)
-                    patchImportSession({ status: "Could not read these files.", busy: false });
-                  else discardImportSession("Could not read these files.");
+                    patchImportSession({
+                      status: m(msg("Could not read these files.")),
+                      busy: false,
+                    });
+                  else discardImportSession(m(msg("Could not read these files.")));
                 })
                 .finally(() => {
                   setReading(false);
@@ -338,13 +375,17 @@ export function ChatImportSettings() {
                 // Let the click finish before the button becomes Stop.
                 void Promise.resolve()
                   .then(() => {
-                    patchImportSession({ busy: true, status: "Importing chats…", open: true });
+                    patchImportSession({
+                      busy: true,
+                      status: m(msg("Importing chats…")),
+                      open: true,
+                    });
                     return importSelected(getImportSession() ?? current);
                   })
                   .catch((error: unknown) => {
                     patchImportSession({
                       busy: false,
-                      status: error instanceof Error ? error.message : "Import failed.",
+                      status: error instanceof Error ? error.message : m(msg("Import failed.")),
                     });
                   });
               }}

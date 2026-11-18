@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   buildPendingUserInputAnswers,
   setPendingUserInputCustomAnswer,
@@ -14,6 +13,7 @@ import {
   seedUserInputDraftAnswers,
 } from "@t3tools/client-runtime/state/thread-requests";
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 import { useState } from "react";
 
 import { derivePendingUserInputProgress } from "../../pendingUserInput";
@@ -47,6 +47,7 @@ function ChildQuestionForm({
   readonly threadRef: ScopedThreadRef;
   readonly prompt: PendingUserInput;
 }) {
+  const gt = useGT();
   const respond = useOrchestrationCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
@@ -79,7 +80,7 @@ function ChildQuestionForm({
       input: { threadId: threadRef.threadId, requestId: prompt.requestId, answers: resolved },
     });
     if (result._tag === "Failure") setResponding(false);
-    reportFailure(result, "Could not send your answer");
+    reportFailure(result, gt("Could not send your answer"));
   };
 
   const advance = () => {
@@ -96,7 +97,7 @@ function ChildQuestionForm({
       input: { threadId: threadRef.threadId, requestId: prompt.requestId },
     });
     if (result._tag === "Failure") setResponding(false);
-    reportFailure(result, "Could not dismiss the question");
+    reportFailure(result, gt("Could not dismiss the question"));
   };
 
   const updateDraft = (
@@ -144,8 +145,8 @@ function ChildQuestionForm({
             <div className="min-w-0 flex-1">
               <Input
                 size="sm"
-                aria-label="Your answer"
-                placeholder="Or type your answer"
+                aria-label={gt("Your answer")}
+                placeholder={gt("Or type your answer")}
                 value={progress.customAnswer}
                 disabled={disabled}
                 onChange={(event) => {
@@ -158,7 +159,11 @@ function ChildQuestionForm({
             </div>
           )}
           <Button type="submit" size="xs" disabled={disabled || !progress.canAdvance}>
-            {responding ? "Sending..." : progress.isLastQuestion ? "Send" : "Next"}
+            {responding
+              ? gt("Sending...")
+              : progress.isLastQuestion
+                ? gt("Send", { $context: "verb, submits an answer" })
+                : gt("Next", { $context: "button, goes to the next question" })}
           </Button>
         </form>
       ) : null}

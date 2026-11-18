@@ -1,9 +1,10 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { RegistryContext } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { useContext, useEffect, useState } from "react";
 
 import { useClientSettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import type { MessageResolver } from "../../i18n/messages";
 import { randomUUID } from "../../lib/utils";
 import {
   applyProjectGroupProposal,
@@ -37,25 +38,47 @@ import {
 import { Input } from "../ui/input";
 import { Spinner } from "../ui/spinner";
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
-
-function actionLabel({ groups, projects }: { groups: number; projects: number }) {
-  const move = `move ${plural(projects, "project")}`;
-  if (groups === 0) return move.charAt(0).toUpperCase() + move.slice(1);
+function actionLabel(
+  { groups, projects }: { groups: number; projects: number },
+  resolve: MessageResolver,
+) {
+  if (groups === 0) {
+    return resolve(
+      msg("{projects, plural, one {Move {projects} project} other {Move {projects} projects}}", {
+        projects,
+      }),
+    );
+  }
   return projects === 0
-    ? `Create ${plural(groups, "group")}`
-    : `Create ${plural(groups, "group")}, ${move}`;
+    ? resolve(
+        msg("{groups, plural, one {Create {groups} group} other {Create {groups} groups}}", {
+          groups,
+        }),
+      )
+    : resolve(
+        msg(
+          "{groups, plural, one {Create {groups} group} other {Create {groups} groups}}, {projects, plural, one {move {projects} project} other {move {projects} projects}}",
+          { groups, projects },
+        ),
+      );
 }
 
-function sourceLabel(source: ProjectGroupProposalSource) {
-  if (source.kind === "model") return `Suggested by ${source.model}`;
-  const why = {
-    failed: "the model was unavailable",
-    timeout: "the model took too long",
-    "invalid-output": "the model's answer was unreadable",
-    "no-environment": "no connected environment can run a model",
-  }[source.reason];
-  return `Suggested from shared name prefixes, as ${why}`;
+const FALLBACK_SOURCE_LABEL = {
+  failed: msg("Suggested from shared name prefixes, as the model was unavailable"),
+  timeout: msg("Suggested from shared name prefixes, as the model took too long"),
+  "invalid-output": msg(
+    "Suggested from shared name prefixes, as the model's answer was unreadable",
+  ),
+  "no-environment": msg(
+    "Suggested from shared name prefixes, as no connected environment can run a model",
+  ),
+};
+
+function sourceLabel(source: ProjectGroupProposalSource, resolve: MessageResolver) {
+  if (source.kind === "model") {
+    return resolve(msg("Suggested by {model}", { model: source.model }));
+  }
+  return resolve(FALLBACK_SOURCE_LABEL[source.reason]);
 }
 
 /**
@@ -77,6 +100,8 @@ export function ProjectGroupSuggestions({
   projects: readonly SidebarProjectSnapshot[];
   onClose: () => void;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const update = useUpdatePrimarySettings();
   const registry = useContext(RegistryContext);
@@ -153,26 +178,35 @@ export function ProjectGroupSuggestions({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Suggested project groups</DialogTitle>
+          <DialogTitle>
+            <T>Suggested project groups</T>
+          </DialogTitle>
           <DialogDescription>
-            Review before applying. Unchecked projects stay ungrouped.
+            <T>Review before applying. Unchecked projects stay ungrouped.</T>
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           {asked === 0 ? (
-            <p className="text-sm text-muted-foreground">Every project is already in a group.</p>
+            <p className="text-sm text-muted-foreground">
+              <T>Every project is already in a group.</T>
+            </p>
           ) : loading ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner size="sm" tone="muted" />
-              Asking the model about {plural(asked, "ungrouped project")}…
+              {gt(
+                "{count, plural, one {Asking the model about {count} ungrouped project…} other {Asking the model about {count} ungrouped projects…}}",
+                { count: asked },
+              )}
             </p>
           ) : empty ? (
             <p className="text-sm text-muted-foreground">
-              No grouping found for {plural(asked, "ungrouped project")}. Titles and repositories
-              gave no clear way to group them.
+              {gt(
+                "{count, plural, one {No grouping found for {count} ungrouped project. Titles and repositories gave no clear way to group them.} other {No grouping found for {count} ungrouped projects. Titles and repositories gave no clear way to group them.}}",
+                { count: asked },
+              )}
             </p>
           ) : (
-            <ul aria-label="Proposed groups" className="-mx-2 space-y-2">
+            <ul aria-label={gt("Proposed groups")} className="-mx-2 space-y-2">
               {rows.map((row) => {
                 const checkedCount = row.projects.filter((project) => project.checked).length;
                 const parent = parentLabel(row);
@@ -180,7 +214,9 @@ export function ProjectGroupSuggestions({
                   <li key={row.id}>
                     <div className="flex h-8 items-center gap-2 rounded-lg px-2 hover:bg-accent/50">
                       <Checkbox
-                        aria-label={`Include ${row.name || "group"}`}
+                        aria-label={
+                          row.name ? gt("Include {name}", { name: row.name }) : gt("Include group")
+                        }
                         checked={row.checked}
                         indeterminate={
                           row.checked && checkedCount > 0 && checkedCount < row.projects.length
@@ -197,7 +233,7 @@ export function ProjectGroupSuggestions({
                         <div className="min-w-0 flex-1">
                           <Input
                             size="compact"
-                            aria-label="Group name"
+                            aria-label={gt("Group name")}
                             value={row.name}
                             onChange={(event) =>
                               editRow(row.id, (entry) => ({ ...entry, name: event.target.value }))
@@ -211,12 +247,14 @@ export function ProjectGroupSuggestions({
                       )}
                       {parent ? (
                         <span className="max-w-40 shrink-0 truncate text-xs text-muted-foreground">
-                          in {parent}
+                          <T>
+                            in <Var>{parent}</Var>
+                          </T>
                         </span>
                       ) : null}
                       {row.kind === "existing" ? (
                         <Badge variant="outline" size="sm">
-                          Existing
+                          <T context="badge, a project group that already exists">Existing</T>
                         </Badge>
                       ) : null}
                     </div>
@@ -251,20 +289,23 @@ export function ProjectGroupSuggestions({
           {proposal ? (
             <div className="flex min-h-7 items-center gap-2 text-xs text-muted-foreground">
               <span className="min-w-0 flex-1">
-                {sourceLabel(proposal.source)}
+                {sourceLabel(proposal.source, m)}
                 {proposal.omitted > 0
-                  ? `. ${plural(proposal.omitted, "more project")} left out of this request.`
+                  ? `. ${gt(
+                      "{count, plural, one {{count} more project left out of this request.} other {{count} more projects left out of this request.}}",
+                      { count: proposal.omitted },
+                    )}`
                   : ""}
               </span>
               <Button size="xs" variant="ghost" onClick={retry}>
-                Try again
+                <T>Try again</T>
               </Button>
             </div>
           ) : null}
         </DialogPanel>
         <DialogFooter>
           <Button size="sm" variant="outline" onClick={onClose}>
-            {empty ? "Close" : "Cancel"}
+            {empty ? gt("Close") : gt("Cancel")}
           </Button>
           {!loading && !empty ? (
             <Button
@@ -278,7 +319,9 @@ export function ProjectGroupSuggestions({
                 onClose();
               }}
             >
-              {counts.groups + counts.projects === 0 ? "Nothing selected" : actionLabel(counts)}
+              {counts.groups + counts.projects === 0
+                ? gt("Nothing selected")
+                : actionLabel(counts, m)}
             </Button>
           ) : null}
         </DialogFooter>

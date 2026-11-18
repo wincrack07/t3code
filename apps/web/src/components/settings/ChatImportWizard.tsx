@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import type { T3ThreadExport } from "@t3tools/contracts";
@@ -61,6 +61,8 @@ export function ChatImportWizard({
   readonly onImport: () => void;
   readonly onStop: () => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { draft, busy } = session;
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -96,15 +98,18 @@ export function ChatImportWizard({
     >
       <WizardPopup size="wide">
         <WizardHeader
-          title="Import chats"
-          description={`${chats.length} chats from ${groups.length} source projects in ${session.fileLabel}. Pick what to bring and where it goes. You can close this and continue later.`}
+          title={gt("Import chats")}
+          description={gt(
+            "{chats} chats from {projects} source projects in {file}. Pick what to bring and where it goes. You can close this and continue later.",
+            { chats: chats.length, projects: groups.length, file: session.fileLabel },
+          )}
         >
           <WizardSteps
-            steps={IMPORT_STEPS}
+            steps={IMPORT_STEPS.map((step) => messages(step))}
             currentStep={draft.step}
             summaries={[
-              `${remaining.length} chats`,
-              createsProjects ? "New folders" : "Existing projects",
+              gt("{count} chats", { count: remaining.length }),
+              createsProjects ? gt("New folders") : gt("Existing projects"),
               null,
             ]}
             isStepDisabled={(index) => busy || index > draft.step}
@@ -159,8 +164,12 @@ export function ChatImportWizard({
         <WizardFooter
           leading={
             <p className="text-sm text-muted-foreground">
-              {remaining.length} to import
-              {draft.doneChats.size > 0 ? ` · ${draft.doneChats.size} already done` : ""}
+              {draft.doneChats.size > 0
+                ? gt("{remaining} to import · {done} already done", {
+                    remaining: remaining.length,
+                    done: draft.doneChats.size,
+                  })
+                : gt("{remaining} to import", { remaining: remaining.length })}
             </p>
           }
         >
@@ -170,11 +179,11 @@ export function ChatImportWizard({
               disabled={busy}
               onClick={() => setDraft({ ...draft, step: draft.step - 1 })}
             >
-              Back
+              <T>Back</T>
             </Button>
           ) : (
             <Button variant="outline" disabled={busy} onClick={onClose}>
-              Import later
+              <T>Import later</T>
             </Button>
           )}
           {draft.step < 2 ? (
@@ -187,11 +196,11 @@ export function ChatImportWizard({
               }
               onClick={() => setDraft({ ...draft, step: draft.step + 1 })}
             >
-              Next
+              <T>Next</T>
             </Button>
           ) : busy ? (
             <Button variant="outline" onClick={onStop}>
-              Stop
+              <T $context="verb, stop the import">Stop</T>
             </Button>
           ) : (
             <Button
@@ -203,7 +212,7 @@ export function ChatImportWizard({
               }
               onClick={onImport}
             >
-              {draft.doneChats.size > 0 ? "Continue import" : "Import chats"}
+              {draft.doneChats.size > 0 ? gt("Continue import") : gt("Import chats")}
             </Button>
           )}
         </WizardFooter>
@@ -235,12 +244,13 @@ function ChatStep({
   readonly onDraft: (draft: ImportDraft) => void;
   readonly projectKeys: readonly string[];
 }) {
+  const gt = useGT();
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          aria-label="Search source projects"
-          placeholder="Search projects or chats"
+          aria-label={gt("Search source projects")}
+          placeholder={gt("Search projects or chats")}
           value={query}
           disabled={busy}
           onChange={(event) => onQuery(event.target.value)}
@@ -251,7 +261,7 @@ function ChatStep({
           disabled={busy}
           onClick={() => onDraft(setAllProjects(draft, projectKeys, true))}
         >
-          Select all
+          <T>Select all</T>
         </Button>
         <Button
           size="sm"
@@ -259,7 +269,7 @@ function ChatStep({
           disabled={busy}
           onClick={() => onDraft(setAllProjects(draft, projectKeys, false))}
         >
-          Select none
+          <T>Select none</T>
         </Button>
       </div>
       <div className="max-h-80 divide-y divide-border overflow-y-auto">
@@ -285,7 +295,7 @@ function ChatStep({
             <div key={group.key} className="py-3">
               <div className="flex min-w-0 items-start gap-2">
                 <Checkbox
-                  aria-label={`Import ${group.source.title}`}
+                  aria-label={gt("Import {title}", { title: group.source.title })}
                   checked={selection === "all" || selection === "done"}
                   indeterminate={selection === "some"}
                   disabled={busy || selection === "done"}
@@ -311,7 +321,16 @@ function ChatStep({
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{group.source.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {`Source project · ${sourcePath || "No folder recorded"} · ${group.count} ${group.count === 1 ? "chat" : "chats"}${selection === "done" ? " · imported" : ""}`}
+                      {[
+                        gt("Source project"),
+                        sourcePath || gt("No folder recorded"),
+                        gt("{count, plural, one {{count} chat} other {{count} chats}}", {
+                          count: group.count,
+                        }),
+                        ...(selection === "done"
+                          ? [gt("imported", { $context: "chat import state" })]
+                          : []),
+                      ].join(" · ")}
                     </span>
                   </span>
                 </button>
@@ -323,7 +342,10 @@ function ChatStep({
                     return (
                       <li key={chat.id} className="flex min-w-0 items-start gap-2">
                         <Checkbox
-                          aria-label={`Import ${chat.title} from ${chat.projectTitle}`}
+                          aria-label={gt("Import {title} from {project}", {
+                            title: chat.title,
+                            project: chat.projectTitle,
+                          })}
                           checked={done || chatIncluded(draft, chat.projectKey, chat.id)}
                           disabled={busy || done}
                           onCheckedChange={() =>
@@ -340,8 +362,9 @@ function ChatStep({
                         <span className="min-w-0">
                           <span className="block truncate text-sm">{chat.title}</span>
                           <span className="block truncate text-xs text-muted-foreground">
-                            From {chat.projectTitle}
-                            {done ? " · imported" : ""}
+                            {done
+                              ? gt("From {project} · imported", { project: chat.projectTitle })
+                              : gt("From {project}", { project: chat.projectTitle })}
                           </span>
                         </span>
                       </li>
@@ -353,7 +376,9 @@ function ChatStep({
           );
         })}
         {groups.length === 0 ? (
-          <p className="py-6 text-sm text-muted-foreground">No projects match that search.</p>
+          <p className="py-6 text-sm text-muted-foreground">
+            <T>No projects match that search.</T>
+          </p>
         ) : null}
       </div>
     </div>
@@ -379,12 +404,15 @@ function FolderStep({
   readonly onDraft: (draft: ImportDraft) => void;
   readonly candidates: readonly { readonly id: string; readonly title: string }[];
 }) {
+  const gt = useGT();
   const { draft } = session;
   return (
     <div className="space-y-4">
       {createsProjects ? (
         <div className="space-y-2">
-          <Label htmlFor="chat-import-base-folder">Projects folder</Label>
+          <Label htmlFor="chat-import-base-folder">
+            <T>Projects folder</T>
+          </Label>
           <div className="flex min-w-0 items-center gap-2">
             <Input
               id="chat-import-base-folder"
@@ -401,12 +429,16 @@ function FolderStep({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Each source project that needs a new folder gets one inside this directory. Existing
-            folders are kept.
+            <T>
+              Each source project that needs a new folder gets one inside this directory. Existing
+              folders are kept.
+            </T>
           </p>
           {!canCreate ? (
             <p role="alert" className="text-sm text-muted-foreground">
-              This connection cannot create projects. Choose an existing project for each source.
+              <T>
+                This connection cannot create projects. Choose an existing project for each source.
+              </T>
             </p>
           ) : null}
         </div>
@@ -423,7 +455,15 @@ function FolderStep({
               <div className="min-w-0 space-y-1">
                 <p className="truncate text-sm font-medium">{group.source.title}</p>
                 <p className="break-all text-xs text-muted-foreground">
-                  {`From ${sourcePath || "an unknown folder"} · ${count} ${count === 1 ? "chat" : "chats"}`}
+                  {sourcePath
+                    ? gt(
+                        "{count, plural, one {From {path} · {count} chat} other {From {path} · {count} chats}}",
+                        { count, path: sourcePath },
+                      )
+                    : gt(
+                        "{count, plural, one {From an unknown folder · {count} chat} other {From an unknown folder · {count} chats}}",
+                        { count },
+                      )}
                 </p>
               </div>
               <div className="min-w-0 space-y-2">
@@ -438,16 +478,21 @@ function FolderStep({
                     });
                   }}
                 >
-                  <SelectTrigger size="sm" aria-label={`Folder for ${group.source.title}`}>
+                  <SelectTrigger
+                    size="sm"
+                    aria-label={gt("Folder for {title}", { title: group.source.title })}
+                  >
                     <SelectValue>
                       {destination === NEW_PROJECT
-                        ? "New folder"
+                        ? gt("New folder")
                         : (candidates.find((project) => project.id === destination)?.title ??
-                          "Choose a project")}
+                          gt("Choose a project"))}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectPopup>
-                    <SelectItem value={NEW_PROJECT}>New folder</SelectItem>
+                    <SelectItem value={NEW_PROJECT}>
+                      <T>New folder</T>
+                    </SelectItem>
                     {candidates.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.title}
@@ -490,11 +535,21 @@ function ConfirmStep({
   readonly busy: boolean;
   readonly onDraft: (draft: ImportDraft) => void;
 }) {
+  const gt = useGT();
   const { draft } = session;
+  const summary = gt(
+    "{chats, plural, one {{chats} chat} other {{chats} chats}} from {projects, plural, one {{projects} source project} other {{projects} source projects}}.",
+    { chats: remaining, projects: groups.length },
+  );
   return (
     <div className="space-y-4">
       <p className="text-sm">
-        {`${remaining} ${remaining === 1 ? "chat" : "chats"} from ${groups.length} source ${groups.length === 1 ? "project" : "projects"}${done > 0 ? `. ${done} from this backup ${done === 1 ? "is" : "are"} already imported and will be skipped.` : "."}`}
+        {done > 0
+          ? `${summary} ${gt(
+              "{done, plural, one {{done} from this backup is already imported and will be skipped.} other {{done} from this backup are already imported and will be skipped.}}",
+              { done },
+            )}`
+          : summary}
       </p>
       <ul className="max-h-64 divide-y divide-border overflow-y-auto">
         {groups.map((group) => {
@@ -519,7 +574,7 @@ function ConfirmStep({
           disabled={busy || !canMove}
           onCheckedChange={(checked) => onDraft({ ...draft, moveExisting: checked === true })}
         />
-        Move existing imported chats into the folders chosen above
+        <T>Move existing imported chats into the folders chosen above</T>
       </label>
     </div>
   );

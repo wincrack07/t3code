@@ -1,10 +1,11 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { useGT } from "gt-react";
 import { Kbd } from "../ui/kbd";
 
 /** Key hint after an empty-composer suggestion, with its place among several at the bar's edge. */
 export function PromptSuggestionHint(props: {
   readonly position: { readonly index: number; readonly count: number } | null;
 }) {
+  const gt = useGT();
   return (
     <>
       <span className="ml-2 inline-flex align-[1px]">
@@ -13,7 +14,10 @@ export function PromptSuggestionHint(props: {
       {props.position ? (
         <span
           className="absolute top-0 right-0 text-2xs tabular-nums"
-          aria-label={`Suggestion ${props.position.index + 1} of ${props.position.count}`}
+          aria-label={gt("Suggestion {index} of {count}", {
+            index: props.position.index + 1,
+            count: props.position.count,
+          })}
         >
           {props.position.index + 1}/{props.position.count}
         </span>

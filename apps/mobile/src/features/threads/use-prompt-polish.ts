@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
@@ -6,8 +5,10 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { msg } from "gt-react-native";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { m } from "../../i18n/messages";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { getComposerDraftSnapshot } from "../../state/use-composer-drafts";
@@ -39,7 +40,7 @@ export function usePromptPolish(input: {
       if (isAtomCommandInterrupted(result)) return;
       const error = squashAtomCommandFailure(result);
       Dialog.alert(
-        "Could not polish the prompt",
+        m(msg("Could not polish the prompt")),
         error instanceof Error ? error.message : undefined,
       );
       return;

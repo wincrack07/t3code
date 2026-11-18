@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type {
   OrchestrationV2AppThread,
   OrchestrationV2Checkpoint,
@@ -7,6 +6,8 @@ import type {
   RunId,
   ThreadProjectMoveRejectedError,
 } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 export type ThreadProjectMoveRejection = Pick<ThreadProjectMoveRejectedError, "reason" | "dirty">;
 
@@ -26,20 +27,23 @@ export function threadProjectMoveRejection(error: unknown): ThreadProjectMoveRej
 export function threadProjectMoveRejectionMessage(
   rejection: ThreadProjectMoveRejection,
   targetName: string,
+  resolve: MFunctionType = mFallback,
 ): string {
   switch (rejection.reason) {
     case "target_not_local":
-      return `${targetName} is not on this thread's machine.`;
+      return resolve(msg("{targetName} is not on this thread's machine."), { targetName });
     case "target_deleted":
-      return `${targetName} was deleted.`;
+      return resolve(msg("{targetName} was deleted."), { targetName });
     case "same_project":
-      return `The thread is already in ${targetName}.`;
+      return resolve(msg("The thread is already in {targetName}."), { targetName });
     case "thread_deleted":
-      return "This thread was deleted.";
+      return resolve(msg("This thread was deleted."));
     case "child_thread":
-      return "Subagents, forks, and side chats stay in the project of the thread they came from.";
+      return resolve(
+        msg("Subagents, forks, and side chats stay in the project of the thread they came from."),
+      );
     case "detach_required":
-      return "The thread is in a worktree or on another branch.";
+      return resolve(msg("The thread is in a worktree or on another branch."));
   }
 }
 

@@ -1,7 +1,7 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
   ArrowLeftIcon,
   ListChecksIcon,
@@ -59,9 +59,9 @@ import { useEnvironmentLabel, useTaskProjectGroups } from "./useTaskProjects";
 const TasksView = Schema.Literals(["inbox", "project", "board"]);
 type TasksView = typeof TasksView.Type;
 const VIEW_LABELS: Record<TasksView, string> = {
-  inbox: "Inbox",
-  project: "By project",
-  board: "Board",
+  inbox: msg("Inbox", { $context: "tasks view" }),
+  project: msg("By project", { $context: "tasks view" }),
+  board: msg("Board", { $context: "tasks view" }),
 };
 
 export interface TasksSearch {
@@ -80,6 +80,8 @@ export function TasksPage({
   search: TasksSearch;
   draft?: NewTaskSeed | null;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const navigate = useNavigate();
   const groups = useTaskProjectGroups();
   const projectKey = search.project ?? null;
@@ -87,7 +89,7 @@ export function TasksPage({
   const filter: TaskFilter = { ...refine, projectKey };
   const [view, setView] = useLocalStorage("t3code:tasks:view-v2", "inbox", TasksView);
   const board = view === "board";
-  const model = buildTaskList(groups, filter, view === "inbox" ? "inbox" : "project");
+  const model = buildTaskList(groups, filter, view === "inbox" ? "inbox" : "project", m);
   const entries = groups.flatMap((group) => group.tasks.map((entry) => ({ entry, group })));
   const selected = entries.find(({ entry }) => entry.key === search.task) ?? null;
   const tagsInUse = taskTagsInUse(groups);
@@ -129,7 +131,7 @@ export function TasksPage({
     });
   const newTask = () =>
     void navigate({ to: "/tasks/new", search: projectKey ? { project: projectKey } : {} });
-  const filterLabel = groups.find((group) => group.key === projectKey)?.label ?? "Project";
+  const filterLabel = groups.find((group) => group.key === projectKey)?.label ?? null;
   const showingDetail = draft !== null || selected !== null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- N focuses the capture field from anywhere on the page, a window-level shortcut
   useEffect(() => {
@@ -176,10 +178,12 @@ export function TasksPage({
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <h1 className="truncate text-sm font-medium">Tasks</h1>
+          <h1 className="truncate text-sm font-medium">
+            <T>Tasks</T>
+          </h1>
           <div className="ml-auto flex items-center gap-2">
             <ToggleGroup
-              aria-label="Tasks view"
+              aria-label={gt("Tasks view")}
               value={[view]}
               onValueChange={(next) => {
                 const value = next[0];
@@ -188,7 +192,7 @@ export function TasksPage({
             >
               {(["inbox", "project", "board"] as const).map((value) => (
                 <Toggle key={value} value={value}>
-                  {VIEW_LABELS[value]}
+                  {m(VIEW_LABELS[value])}
                 </Toggle>
               ))}
             </ToggleGroup>
@@ -199,17 +203,19 @@ export function TasksPage({
               onClick={() => (selection.active ? clearPicked() : setPicking(true))}
             >
               <ListChecksIcon />
-              {selection.active ? "Done selecting" : "Select"}
+              {selection.active
+                ? gt("Done selecting")
+                : gt("Select", { $context: "verb, start selecting tasks" })}
             </Button>
             <Button size="compact" variant="ghost" onClick={newTask}>
               <PlusIcon />
-              New task
+              <T>New task</T>
             </Button>
           </div>
         </WorkspacePageHeader>
         <div className="flex min-h-0 flex-1">
           <section
-            aria-label={board ? "Task board" : "Task list"}
+            aria-label={board ? gt("Task board") : gt("Task list")}
             className={cn(
               "min-h-0 min-w-0 flex-1 flex-col md:flex",
               showingDetail ? "hidden" : "flex",
@@ -275,12 +281,12 @@ export function TasksPage({
                   onClick={() => go({ project: search.project })}
                 >
                   <ArrowLeftIcon />
-                  Tasks
+                  <T>Tasks</T>
                 </Button>
                 <Button
                   size="icon-xs"
                   variant="ghost-muted"
-                  aria-label="Close task"
+                  aria-label={gt("Close task")}
                   className="ml-auto hidden md:inline-flex"
                   onClick={() => go({ project: search.project })}
                 >
@@ -330,10 +336,12 @@ function TasksToolbar({
   onRefine: (next: Omit<TaskFilter, "projectKey">) => void;
   onProject: (key: string | null) => void;
 }) {
+  const gt = useGT();
   const labelOf = useEnvironmentLabel();
   const { projectKey: _projectKey, ...refine } = filter;
   const set = (patch: Partial<Omit<TaskFilter, "projectKey">>) => onRefine({ ...refine, ...patch });
-  const projectLabel = groups.find((group) => group.key === filter.projectKey)?.label ?? "Project";
+  const projectLabel =
+    groups.find((group) => group.key === filter.projectKey)?.label ?? gt("Project");
   const projectOptions = groups.filter(
     (group) => group.tasks.length > 0 || group.key === filter.projectKey,
   );
@@ -372,8 +380,8 @@ function TasksToolbar({
         <InputGroupInput
           size="compact"
           type="search"
-          aria-label="Search tasks"
-          placeholder="Search"
+          aria-label={gt("Search tasks")}
+          placeholder={gt("Search", { $context: "search field placeholder" })}
           value={filter.query}
           onChange={(event) => set({ query: event.target.value })}
           onKeyDown={(event) => {
@@ -389,13 +397,15 @@ function TasksToolbar({
           value={filter.projectKey ?? "all"}
           onValueChange={(value) => onProject(value && value !== "all" ? value : null)}
         >
-          <SelectTrigger size="compact" aria-label="Filter tasks by project">
+          <SelectTrigger size="compact" aria-label={gt("Filter tasks by project")}>
             <SelectValue>
-              {(value: string) => (value === "all" ? "All projects" : projectLabel)}
+              {(value: string) => (value === "all" ? gt("All projects") : projectLabel)}
             </SelectValue>
           </SelectTrigger>
           <SelectPopup>
-            <SelectItem value="all">All projects</SelectItem>
+            <SelectItem value="all">
+              <T>All projects</T>
+            </SelectItem>
             {projectOptions.map((group) => (
               <SelectItem key={group.key} value={group.key}>
                 {group.label}
@@ -405,17 +415,27 @@ function TasksToolbar({
         </Select>
       </div>
       <Menu>
-        <MenuTrigger render={<Button size="icon-sm" variant="ghost-muted" aria-label="Filter" />}>
+        <MenuTrigger
+          render={
+            <Button
+              size="icon-sm"
+              variant="ghost-muted"
+              aria-label={gt("Filter", { $context: "noun, filter menu" })}
+            />
+          }
+        >
           <ListFilterIcon />
         </MenuTrigger>
         <MenuPopup align="start" className="min-w-44">
           <MenuSub>
-            <MenuSubTrigger>Priority</MenuSubTrigger>
+            <MenuSubTrigger>
+              <T>Priority</T>
+            </MenuSubTrigger>
             <MenuSubPopup>
               <FilterRadio
                 value={filter.priority ?? ""}
                 options={[
-                  { value: "", label: "Any priority" },
+                  { value: "", label: gt("Any priority") },
                   ...TASK_PRIORITIES.map((value) => ({
                     value,
                     label: TASK_PRIORITY_LABELS[value],
@@ -426,12 +446,14 @@ function TasksToolbar({
             </MenuSubPopup>
           </MenuSub>
           <MenuSub>
-            <MenuSubTrigger disabled={tagsInUse.length === 0}>Tag</MenuSubTrigger>
+            <MenuSubTrigger disabled={tagsInUse.length === 0}>
+              <T $context="noun">Tag</T>
+            </MenuSubTrigger>
             <MenuSubPopup>
               <FilterRadio
                 value={filter.tag ?? ""}
                 options={[
-                  { value: "", label: "Any tag" },
+                  { value: "", label: gt("Any tag") },
                   ...tagsInUse.map((tag) => ({ value: tag, label: tag })),
                 ]}
                 onChange={(value) => set({ tag: value || null })}
@@ -439,12 +461,14 @@ function TasksToolbar({
             </MenuSubPopup>
           </MenuSub>
           <MenuSub>
-            <MenuSubTrigger disabled={machines.length < 2}>Machine</MenuSubTrigger>
+            <MenuSubTrigger disabled={machines.length < 2}>
+              <T>Machine</T>
+            </MenuSubTrigger>
             <MenuSubPopup>
               <FilterRadio
                 value={filter.environmentId ?? ""}
                 options={[
-                  { value: "", label: "Any machine" },
+                  { value: "", label: gt("Any machine") },
                   ...machines.map((id) => ({ value: id, label: labelOf(id) })),
                 ]}
                 onChange={(value) =>
@@ -461,7 +485,12 @@ function TasksToolbar({
             key={chip.key}
             variant="outline"
             size="control"
-            render={<button type="button" aria-label={`Clear filter ${chip.label}`} />}
+            render={
+              <button
+                type="button"
+                aria-label={gt("Clear filter {label}", { label: chip.label })}
+              />
+            }
             onClick={chip.clear}
           >
             <span className="max-w-28 truncate">{chip.label}</span>
@@ -469,7 +498,11 @@ function TasksToolbar({
           </Badge>
         ))}
       </div>
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{openCount} open</span>
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+        <T>
+          <Var>{openCount}</Var> open
+        </T>
+      </span>
     </div>
   );
 }
@@ -505,21 +538,29 @@ function TasksEmpty({
   onShowAll,
 }: {
   kind: "none" | "filtered";
-  label: string;
+  label: string | null;
   unreachable: number;
   onNewTask: () => void;
   onShowAll: () => void;
 }) {
+  const gt = useGT();
   return (
     <Empty size="compact">
       <EmptyHeader>
-        <EmptyTitle>{kind === "none" ? "No tasks yet" : "No matching tasks"}</EmptyTitle>
+        <EmptyTitle>{kind === "none" ? gt("No tasks yet") : gt("No matching tasks")}</EmptyTitle>
         <EmptyDescription>
           {kind === "none"
-            ? "Type one above and press Enter, or save a prompt from the composer with Save for later."
-            : `Nothing in ${label === "Project" ? "this view" : label} matches the filters.`}
+            ? gt(
+                "Type one above and press Enter, or save a prompt from the composer with Save for later.",
+              )
+            : label === null
+              ? gt("Nothing in this view matches the filters.")
+              : gt("Nothing in {label} matches the filters.", { label })}
           {unreachable > 0
-            ? ` ${unreachable} ${unreachable === 1 ? "machine is" : "machines are"} not reachable, so some tasks may be missing.`
+            ? ` ${gt(
+                "{count, plural, one {{count} machine is not reachable, so some tasks may be missing.} other {{count} machines are not reachable, so some tasks may be missing.}}",
+                { count: unreachable },
+              )}`
             : ""}
         </EmptyDescription>
       </EmptyHeader>
@@ -527,11 +568,11 @@ function TasksEmpty({
         {kind === "none" ? (
           <Button size="compact" variant="outline" onClick={onNewTask}>
             <PlusIcon />
-            Add a task
+            <T>Add a task</T>
           </Button>
         ) : (
           <Button size="compact" variant="outline" onClick={onShowAll}>
-            Clear filters
+            <T>Clear filters</T>
           </Button>
         )}
       </EmptyContent>

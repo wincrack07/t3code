@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { useGT } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
@@ -12,10 +12,11 @@ export function ComposerPolishAction(props: {
   readonly running: boolean;
   readonly onPress: () => void;
 }) {
+  const gt = useGT();
   const { scale } = useAndroidControlSizing();
   return (
     <Pressable
-      accessibilityLabel={props.running ? "Polishing prompt" : "Polish prompt"}
+      accessibilityLabel={props.running ? gt("Polishing prompt") : gt("Polish prompt")}
       accessibilityRole="button"
       accessibilityState={{ busy: props.running, disabled: props.disabled }}
       className="size-[44px] shrink-0 items-center justify-center active:opacity-70"

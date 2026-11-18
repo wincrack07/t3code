@@ -1,6 +1,7 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { AuthMcpClientAccess, EnvironmentId, PeerLinkSummary } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import { isLocalLoopbackHost } from "@t3tools/shared/hostClassification";
 
 export interface ManagedPeerLink {
@@ -83,10 +84,14 @@ export function meshDestinationUrls(machine: MeshMachine): ReadonlyArray<string>
   return urls;
 }
 
-export function peerMeshFailure(error: unknown): string {
+export function peerMeshFailure(error: unknown, resolve: MFunctionType = mFallback): string {
   return error instanceof Error && error.message.length > 0
     ? error.message
     : typeof error === "string"
       ? error
-      : "The environment request failed. Check that both machines are connected and your sessions can manage access.";
+      : resolve(
+          msg(
+            "The environment request failed. Check that both machines are connected and your sessions can manage access.",
+          ),
+        );
 }

@@ -1,5 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
-import { msg } from "gt-react";
+import { msg, T, Var, useGT, useMessages } from "gt-react";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -39,6 +38,7 @@ import { openUrlInPreview } from "../../browser/openFileInPreview";
 import { previewRuntimeTabId } from "../../browser/previewRuntimeTabId";
 import { useOpenLink } from "../../browser/useOpenLink";
 import { isElectron } from "../../env";
+import { m, type MessageResolver } from "../../i18n/messages";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { getClientSettings, persistClientSettingsUpdate } from "../../hooks/useSettings";
@@ -91,13 +91,13 @@ import {
 } from "./artifacts.logic";
 
 const TABS: ReadonlyArray<{ readonly value: ArtifactRelationFilter; readonly label: string }> = [
-  { value: "all", label: "All" },
-  { value: "mine", label: "Yours" },
-  { value: "shared", label: "Shared with you" },
+  { value: "all", label: msg("All", { $context: "artifact owner filter" }) },
+  { value: "mine", label: msg("Yours", { $context: "artifact owner filter" }) },
+  { value: "shared", label: msg("Shared with you") },
 ];
 const SORTS: ReadonlyArray<{ readonly value: ArtifactSort; readonly label: string }> = [
-  { value: "updated", label: "Recently updated" },
-  { value: "title", label: "Title" },
+  { value: "updated", label: msg("Recently updated") },
+  { value: "title", label: msg("Title", { $context: "sort option" }) },
 ];
 const ALL_ACCOUNTS = "all";
 const EMPTY_PROVIDERS: ReadonlyArray<ServerProvider> = [];
@@ -194,13 +194,15 @@ const reportOpenFailure = (url: string, cause: unknown): void => {
   toastManager.add(
     stackedThreadToast({
       type: "error",
-      title: "Could not open the artifact",
+      title: m(msg("Could not open the artifact")),
       description: cause instanceof Error ? cause.message : url,
     }),
   );
 };
 
 export function ArtifactsPage() {
+  const gt = useGT();
+  const resolve = useMessages();
   const { ready, accounts } = useClaudeAccounts();
   const [selectedKey, setSelectedKey] = useState<string>(ALL_ACCOUNTS);
   const [relation, setRelation] = useState<ArtifactRelationFilter>("all");
@@ -277,6 +279,7 @@ export function ArtifactsPage() {
         failureMessage: msg("Failed to copy link to the clipboard."),
       }).catch(() => undefined),
   };
+  const sortLabel = SORTS.find((option) => option.value === sort)?.label;
   const current = history.urls[history.index];
   const currentId = current === undefined ? undefined : parseClaudeArtifactUrl(current)?.id;
   const step = (delta: -1 | 1) => {
@@ -289,7 +292,9 @@ export function ArtifactsPage() {
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <h1 className="truncate text-sm font-medium">Artifacts</h1>
+          <h1 className="truncate text-sm font-medium">
+            <T>Artifacts</T>
+          </h1>
           <div className="ms-auto flex shrink-0 items-center gap-1">
             {accounts.length > 1 ? (
               <Select
@@ -297,22 +302,28 @@ export function ArtifactsPage() {
                 onValueChange={(value) => setSelectedKey(value ?? ALL_ACCOUNTS)}
               >
                 <SelectTrigger
-                  aria-label="Claude account"
+                  aria-label={gt("Claude account")}
                   size="compact"
                   variant="ghost"
                   className="w-auto min-w-0"
                 >
-                  <SelectValue>{selectedAccount?.label ?? "All accounts"}</SelectValue>
+                  <SelectValue>{selectedAccount?.label ?? gt("All accounts")}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem value={ALL_ACCOUNTS}>All accounts</SelectItem>
+                  <SelectItem value={ALL_ACCOUNTS}>
+                    <T>All accounts</T>
+                  </SelectItem>
                   {accounts.map((account) => (
                     <SelectItem
                       key={account.key}
                       value={account.key}
                       title={[
                         account.email,
-                        `via ${account.sources.map((source) => source.environmentLabel).join(", ")}`,
+                        gt("via {environments}", {
+                          environments: account.sources
+                            .map((source) => source.environmentLabel)
+                            .join(", "),
+                        }),
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -326,8 +337,8 @@ export function ArtifactsPage() {
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label="Refresh artifacts"
-              title="Refresh"
+              aria-label={gt("Refresh artifacts")}
+              title={gt("Refresh", { $context: "verb, button" })}
               disabled={accounts.length === 0 || refreshPending}
               onClick={() => void refresh()}
             >
@@ -345,9 +356,11 @@ export function ArtifactsPage() {
               <EmptyMedia variant="icon">
                 <LayoutGridIcon />
               </EmptyMedia>
-              <EmptyTitle>No Claude accounts</EmptyTitle>
+              <EmptyTitle>
+                <T>No Claude accounts</T>
+              </EmptyTitle>
               <EmptyDescription>
-                Add a Claude provider in Settings to see its claude.ai artifacts here.
+                <T>Add a Claude provider in Settings to see its claude.ai artifacts here.</T>
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -366,15 +379,15 @@ export function ArtifactsPage() {
                     <SearchIcon />
                   </InputGroupAddon>
                   <InputGroupInput
-                    aria-label="Search artifacts"
-                    placeholder="Search"
+                    aria-label={gt("Search artifacts")}
+                    placeholder={gt("Search", { $context: "search field placeholder" })}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
                 </InputGroup>
                 <div className="flex items-center gap-2">
                   <ToggleGroup
-                    aria-label="Artifact owner"
+                    aria-label={gt("Artifact owner")}
                     variant="segmented"
                     value={[relation]}
                     onValueChange={(value) => {
@@ -384,7 +397,7 @@ export function ArtifactsPage() {
                   >
                     {TABS.map((option) => (
                       <Toggle key={option.value} value={option.value}>
-                        {option.label}
+                        {resolve(option.label)}
                       </Toggle>
                     ))}
                   </ToggleGroup>
@@ -396,19 +409,19 @@ export function ArtifactsPage() {
                       }
                     >
                       <SelectTrigger
-                        aria-label="Sort artifacts"
+                        aria-label={gt("Sort artifacts")}
                         size="compact"
                         variant="ghost"
                         className="w-auto min-w-0"
                       >
                         <SelectValue>
-                          {SORTS.find((option) => option.value === sort)?.label}
+                          {sortLabel === undefined ? null : resolve(sortLabel)}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectPopup align="end" alignItemWithTrigger={false}>
                         {SORTS.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                            {resolve(option.label)}
                           </SelectItem>
                         ))}
                       </SelectPopup>
@@ -463,9 +476,11 @@ export function ArtifactsPage() {
                     <EmptyMedia variant="icon">
                       <LayoutGridIcon />
                     </EmptyMedia>
-                    <EmptyTitle>Select an artifact</EmptyTitle>
+                    <EmptyTitle>
+                      <T>Select an artifact</T>
+                    </EmptyTitle>
                     <EmptyDescription>
-                      It opens here. Private artifacts ask you to sign in to claude.ai once.
+                      <T>It opens here. Private artifacts ask you to sign in to claude.ai once.</T>
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -546,7 +561,7 @@ function useArtifactViewer(): {
   const openInPanel = async (url: string) => {
     const environmentId: EnvironmentId | null = scratchEnvironmentId(primaryEnvironmentId);
     if (environmentId === null) return reportOpenFailure(url, undefined);
-    const project = await openScratchProject(environmentId, "Could not open the artifact");
+    const project = await openScratchProject(environmentId, m(msg("Could not open the artifact")));
     if (!project) return;
     const thread = await openThread(scopeProjectRef(project.environmentId, project.id));
     if (!thread) return reportOpenFailure(url, undefined);
@@ -569,15 +584,16 @@ function AccountStates(props: {
     AsyncResult.AsyncResult<{ readonly artifacts: ReadonlyArray<ClaudeArtifact> }, unknown>
   >;
 }) {
+  const gt = useGT();
   const named = props.accounts.length > 1;
   return props.accounts.map((account, index) => {
     const result = props.results[index]!;
     const message = AsyncResult.isFailure(result)
       ? formatEnvironmentQueryError(result.cause)
       : AsyncResult.isInitial(result)
-        ? "Loading artifacts…"
+        ? gt("Loading artifacts…")
         : result.value.artifacts.length === 0
-          ? "No artifacts yet."
+          ? gt("No artifacts yet.")
           : null;
     if (message === null || (!named && AsyncResult.isInitial(result))) return null;
     return (
@@ -595,15 +611,19 @@ function RecentArtifacts(props: {
   readonly currentId: string | undefined;
   readonly actions: ArtifactActions;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const recents = useArtifactRecentsStore((state) => state.recents);
   const clear = useArtifactRecentsStore((state) => state.clear);
   if (recents.length === 0) return null;
   return (
-    <section aria-label="Recent artifacts" className="flex flex-col gap-1">
+    <section aria-label={gt("Recent artifacts")} className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-medium text-muted-foreground">Recent</h2>
+        <h2 className="text-xs font-medium text-muted-foreground">
+          <T $context="heading for recently opened artifacts">Recent</T>
+        </h2>
         <Button size="compact" variant="ghost-muted" onClick={clear}>
-          Clear
+          <T $context="verb, button">Clear</T>
         </Button>
       </div>
       {recents.slice(0, RECENTS_SHOWN).map((recent) => {
@@ -615,7 +635,13 @@ function RecentArtifacts(props: {
             listed={listed}
             account={listed ? props.accountByKey.get(listed.accountKey) : undefined}
             showAccount={props.showAccount}
-            detail={`Opened ${formatRelativeTimeLabel(new Date(recent.openedAt).toISOString())}`}
+            detail={gt("Opened {time}", {
+              time: formatRelativeTimeLabel(
+                new Date(recent.openedAt).toISOString(),
+                undefined,
+                resolve,
+              ),
+            })}
             current={recent.id === props.currentId}
             actions={props.actions}
           />
@@ -634,14 +660,17 @@ function ArtifactList(props: {
   readonly truncated: boolean;
   readonly actions: ArtifactActions;
 }) {
+  const gt = useGT();
   const [shown, setShown] = useState(PAGE_SIZE);
   if (props.entries.length === 0) {
     return props.total > 0 ? (
-      <p className="text-sm text-muted-foreground">No artifacts match.</p>
+      <p className="text-sm text-muted-foreground">
+        <T>No artifacts match.</T>
+      </p>
     ) : null;
   }
   return (
-    <section aria-label="Artifacts" className="flex flex-col gap-1">
+    <section aria-label={gt("Artifacts")} className="flex flex-col gap-1">
       {props.entries.slice(0, shown).map((entry) => (
         <ArtifactRow
           key={entry.artifact.id}
@@ -656,11 +685,13 @@ function ArtifactList(props: {
       ))}
       {props.entries.length > shown ? (
         <Button variant="ghost" size="compact" onClick={() => setShown(shown + PAGE_SIZE)}>
-          Show more ({props.entries.length - shown})
+          <T>
+            Show more (<Var>{props.entries.length - shown}</Var>)
+          </T>
         </Button>
       ) : props.truncated ? (
         <p className="text-xs text-muted-foreground">
-          Showing the most recent artifacts Claude returns. Older ones are on claude.ai.
+          <T>Showing the most recent artifacts Claude returns. Older ones are on claude.ai.</T>
         </p>
       ) : null}
     </section>
@@ -672,14 +703,21 @@ function artifactMeta(
   account: ClaudeAccountGroup | undefined,
   showAccount: boolean,
   detail: string | undefined,
+  resolve: MessageResolver = m,
 ): string {
   const artifact = listed?.artifact;
   const updated = artifact?.updatedAt
-    ? `Updated ${formatRelativeTimeLabel(artifact.updatedAt)}`
+    ? resolve(
+        msg("Updated {time}", {
+          time: formatRelativeTimeLabel(artifact.updatedAt, undefined, resolve),
+        }),
+      )
     : null;
   return [
     showAccount ? account?.label : null,
-    artifact?.relation === "shared" ? (artifact.ownerEmail ?? "Shared with you") : null,
+    artifact?.relation === "shared"
+      ? (artifact.ownerEmail ?? resolve(msg("Shared with you")))
+      : null,
     detail ?? updated,
   ]
     .filter(Boolean)
@@ -695,6 +733,8 @@ function ArtifactRow(props: {
   readonly current: boolean;
   readonly actions: ArtifactActions;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const dark = useTheme().resolvedTheme === "dark";
   const artifact = props.listed?.artifact;
   const thumbnail = dark
@@ -734,12 +774,20 @@ function ArtifactRow(props: {
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 items-center gap-1 text-sm/5 font-medium">
-            <span className="truncate">{artifact?.title ?? "Artifact"}</span>
+            <span className="truncate">
+              {artifact?.title ?? gt("Artifact", { $context: "fallback title" })}
+            </span>
             {artifact ? (
               artifact.isPublic ? (
-                <GlobeIcon aria-label="Public" className="size-3 shrink-0 text-muted-foreground" />
+                <GlobeIcon
+                  aria-label={gt("Public", { $context: "artifact visibility" })}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
               ) : (
-                <LockIcon aria-label="Private" className="size-3 shrink-0 text-muted-foreground" />
+                <LockIcon
+                  aria-label={gt("Private", { $context: "artifact visibility" })}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
               )
             ) : null}
           </span>
@@ -747,7 +795,7 @@ function ArtifactRow(props: {
             <span className="truncate text-xs text-muted-foreground">{artifact.description}</span>
           ) : null}
           <span className="truncate text-xs text-muted-foreground">
-            {artifactMeta(props.listed, props.account, props.showAccount, props.detail) ||
+            {artifactMeta(props.listed, props.account, props.showAccount, props.detail, resolve) ||
               props.url}
           </span>
         </div>
@@ -758,29 +806,34 @@ function ArtifactRow(props: {
 }
 
 function ArtifactActionsMenu(props: { readonly url: string; readonly actions: ArtifactActions }) {
+  const gt = useGT();
   const { view, openInPanel, openExternally, copy } = props.actions;
   return (
     <Menu>
       <MenuTrigger
-        render={<Button size="icon-sm" variant="ghost-muted" aria-label="Artifact actions" />}
+        render={<Button size="icon-sm" variant="ghost-muted" aria-label={gt("Artifact actions")} />}
       >
         <MoreHorizontalIcon />
       </MenuTrigger>
       <MenuPopup align="end">
-        {view ? <MenuItem onClick={() => view(props.url)}>View here</MenuItem> : null}
+        {view ? (
+          <MenuItem onClick={() => view(props.url)}>
+            <T>View here</T>
+          </MenuItem>
+        ) : null}
         {openInPanel ? (
           <MenuItem onClick={() => openInPanel(props.url)}>
             <PanelRightIcon />
-            Open in Browser panel
+            <T>Open in Browser panel</T>
           </MenuItem>
         ) : null}
         <MenuItem onClick={() => openExternally(props.url)}>
           <ExternalLinkIcon />
-          Open in default browser
+          <T>Open in default browser</T>
         </MenuItem>
         <MenuItem onClick={() => copy(props.url)}>
           <CopyIcon />
-          Copy link
+          <T>Copy link</T>
         </MenuItem>
       </MenuPopup>
     </Menu>
@@ -799,10 +852,12 @@ function ArtifactViewer(props: {
   readonly onClose: () => void;
   readonly actions: ArtifactActions;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const previewState = useThreadPreviewState(props.viewerRef);
   const tabId = previewState.activeTabId;
   const account = props.listed ? props.accountByKey.get(props.listed.accountKey) : undefined;
-  const meta = artifactMeta(props.listed, account, true, undefined);
+  const meta = artifactMeta(props.listed, account, true, undefined, resolve);
   const reload = () => {
     if (previewBridge && tabId) {
       void previewBridge.refresh(
@@ -811,12 +866,12 @@ function ArtifactViewer(props: {
     }
   };
   return (
-    <section aria-label="Artifact viewer" className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <section aria-label={gt("Artifact viewer")} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex min-w-0 items-center gap-1 border-b border-border px-2 py-1.5">
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Back to artifacts"
+          aria-label={gt("Back to artifacts")}
           className="md:hidden"
           onClick={props.onClose}
         >
@@ -825,7 +880,7 @@ function ArtifactViewer(props: {
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Previous artifact"
+          aria-label={gt("Previous artifact")}
           disabled={!props.canGoBack}
           onClick={() => props.onStep(-1)}
         >
@@ -834,7 +889,7 @@ function ArtifactViewer(props: {
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Next artifact"
+          aria-label={gt("Next artifact")}
           disabled={!props.canGoForward}
           onClick={() => props.onStep(1)}
         >
@@ -842,15 +897,15 @@ function ArtifactViewer(props: {
         </Button>
         <div className="flex min-w-0 flex-1 flex-col px-1">
           <span className="truncate text-sm font-medium">
-            {props.listed?.artifact.title ?? "Artifact"}
+            {props.listed?.artifact.title ?? gt("Artifact", { $context: "fallback title" })}
           </span>
           <span className="truncate text-xs text-muted-foreground">{meta || props.url}</span>
         </div>
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Reload artifact"
-          title="Reload"
+          aria-label={gt("Reload artifact")}
+          title={gt("Reload", { $context: "verb, button" })}
           disabled={!tabId}
           onClick={reload}
         >
@@ -859,8 +914,8 @@ function ArtifactViewer(props: {
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Copy link"
-          title="Copy link"
+          aria-label={gt("Copy link")}
+          title={gt("Copy link")}
           onClick={() => props.actions.copy(props.url)}
         >
           <CopyIcon />
@@ -868,8 +923,8 @@ function ArtifactViewer(props: {
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Open in default browser"
-          title="Open in default browser"
+          aria-label={gt("Open in default browser")}
+          title={gt("Open in default browser")}
           onClick={() => props.actions.openExternally(props.url)}
         >
           <ExternalLinkIcon />
@@ -878,8 +933,8 @@ function ArtifactViewer(props: {
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label="Open in Browser panel"
-            title="Open in Browser panel"
+            aria-label={gt("Open in Browser panel")}
+            title={gt("Open in Browser panel")}
             onClick={() => props.actions.openInPanel?.(props.url)}
           >
             <PanelRightIcon />

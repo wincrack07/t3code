@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { EnvironmentId } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 
 import { useKeepAwake } from "../../KeepAwakeControl";
 import { KeepAwakeSettingsFields, KeepAwakeTrayStatsFields } from "../KeepAwakeSettingsFields";
@@ -14,6 +14,7 @@ import {
 import { useSearchableSetting } from "../settingsSearch";
 
 export function ForkMachineSettings() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const { environment } = useSettingsScope();
   return (
@@ -23,8 +24,8 @@ export function ForkMachineSettings() {
       ) : (
         <SettingsSection {...searchableSetting("keep-awake")}>
           <SettingsRow
-            title="Choose one environment"
-            description="Keep awake defaults belong to a single machine. Choose one above."
+            title={gt("Choose one environment")}
+            description={gt("Keep awake defaults belong to a single machine. Choose one above.")}
           />
         </SettingsSection>
       )}
@@ -39,6 +40,7 @@ export function ForkMachineSettings() {
 }
 
 function KeepAwakeSections({ environmentId }: { environmentId: EnvironmentId }) {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const { status, error, disabled, send, authorize, localDesktop } = useKeepAwake(environmentId);
   return (
@@ -46,13 +48,13 @@ function KeepAwakeSections({ environmentId }: { environmentId: EnvironmentId }) 
       <SettingsSection {...searchableSetting("keep-awake")}>
         {!status ? (
           <SettingsRow
-            title={error ? "Keep awake is unavailable" : "Connecting…"}
+            title={error ? gt("Keep awake is unavailable") : gt("Connecting…")}
             description={error}
           />
         ) : !status.supported ? (
           <SettingsRow
-            title="Not supported"
-            description="This machine can't be kept awake from T3 Code."
+            title={gt("Not supported")}
+            description={gt("This machine can't be kept awake from T3 Code.")}
           />
         ) : (
           <KeepAwakeSettingsFields

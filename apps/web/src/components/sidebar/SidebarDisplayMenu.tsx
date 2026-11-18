@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { resolveProjectExpanded, useUiStateStore } from "../../uiStateStore";
 import { sidebarFolderExpansionKeys } from "../Sidebar.logic";
@@ -30,6 +30,7 @@ export function SidebarDisplayMenu({
   onCreateGroup?: () => void;
   onSuggestGroups?: () => void;
 }) {
+  const gt = useGT();
   const expanded = useUiStateStore((state) => state.projectExpandedById);
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const allCollapsed = projects
@@ -38,7 +39,7 @@ export function SidebarDisplayMenu({
   const setAll = (open: boolean) => {
     setAllProjectsExpanded(projects, open, activeProjectKey, folders);
   };
-  const label = allCollapsed ? "Expand all projects" : "Collapse all projects";
+  const label = allCollapsed ? gt("Expand all projects") : gt("Collapse all projects");
   const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
   const density = useClientSettings((settings) => settings.sidebarDensity);
   const grouping = useClientSettings((settings) => settings.sidebarThreadGrouping);
@@ -68,25 +69,37 @@ export function SidebarDisplayMenu({
       ) : null}
       <Menu>
         <MenuTrigger
-          render={<Button size="icon-sm" variant="ghost" aria-label="Sidebar display" />}
+          render={<Button size="icon-sm" variant="ghost" aria-label={gt("Sidebar display")} />}
         >
           <SlidersHorizontalIcon className="size-4" />
         </MenuTrigger>
         <MenuPopup align="end">
           {projects.length > 0 ? (
             <>
-              <MenuItem onClick={() => setAll(false)}>Collapse all projects</MenuItem>
-              <MenuItem onClick={() => setAll(true)}>Expand all projects</MenuItem>
+              <MenuItem onClick={() => setAll(false)}>
+                <T>Collapse all projects</T>
+              </MenuItem>
+              <MenuItem onClick={() => setAll(true)}>
+                <T>Expand all projects</T>
+              </MenuItem>
             </>
           ) : null}
-          {onCreateGroup ? <MenuItem onClick={onCreateGroup}>New project group…</MenuItem> : null}
-          {onSuggestGroups ? <MenuItem onClick={onSuggestGroups}>Suggest groups</MenuItem> : null}
+          {onCreateGroup ? (
+            <MenuItem onClick={onCreateGroup}>
+              <T>New project group…</T>
+            </MenuItem>
+          ) : null}
+          {onSuggestGroups ? (
+            <MenuItem onClick={onSuggestGroups}>
+              <T>Suggest groups</T>
+            </MenuItem>
+          ) : null}
           <MenuSeparator />
           <MenuCheckboxItem
             checked={hideIcons}
             onCheckedChange={(checked) => update({ hideSidebarProjectIcons: checked })}
           >
-            Hide project icons
+            <T>Hide project icons</T>
           </MenuCheckboxItem>
           <MenuRadioGroup
             value={density}
@@ -95,10 +108,18 @@ export function SidebarDisplayMenu({
                 update({ sidebarDensity: value });
             }}
           >
-            <MenuGroupLabel>Thread density</MenuGroupLabel>
-            <MenuRadioItem value="theme">Theme default</MenuRadioItem>
-            <MenuRadioItem value="compact">Compact</MenuRadioItem>
-            <MenuRadioItem value="comfortable">Comfortable</MenuRadioItem>
+            <MenuGroupLabel>
+              <T>Thread density</T>
+            </MenuGroupLabel>
+            <MenuRadioItem value="theme">
+              <T>Theme default</T>
+            </MenuRadioItem>
+            <MenuRadioItem value="compact">
+              <T $context="sidebar density">Compact</T>
+            </MenuRadioItem>
+            <MenuRadioItem value="comfortable">
+              <T $context="sidebar density">Comfortable</T>
+            </MenuRadioItem>
           </MenuRadioGroup>
           <MenuSeparator />
           <MenuRadioGroup
@@ -108,10 +129,18 @@ export function SidebarDisplayMenu({
                 update({ sidebarThreadGrouping: value });
             }}
           >
-            <MenuGroupLabel>Thread grouping</MenuGroupLabel>
-            <MenuRadioItem value="theme">Theme default</MenuRadioItem>
-            <MenuRadioItem value="project">All threads by project</MenuRadioItem>
-            <MenuRadioItem value="global">Global settled section</MenuRadioItem>
+            <MenuGroupLabel>
+              <T>Thread grouping</T>
+            </MenuGroupLabel>
+            <MenuRadioItem value="theme">
+              <T>Theme default</T>
+            </MenuRadioItem>
+            <MenuRadioItem value="project">
+              <T>All threads by project</T>
+            </MenuRadioItem>
+            <MenuRadioItem value="global">
+              <T>Global settled section</T>
+            </MenuRadioItem>
           </MenuRadioGroup>
         </MenuPopup>
       </Menu>

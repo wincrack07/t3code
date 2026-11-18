@@ -1,10 +1,10 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { randomUUID } from "../../lib/utils";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { isInSideChatPane } from "../../lib/sideChatPane";
 import { use, useEffect, useState } from "react";
 import { BookmarkPlusIcon } from "lucide-react";
+import { T, useGT } from "gt-react";
 import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
 import { type DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
@@ -39,6 +39,7 @@ export function SavePromptButton({
   automaticEnvironment?: boolean;
   disabled: boolean;
 }) {
+  const gt = useGT();
   const groups = useTaskProjectGroups();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const labelOf = useEnvironmentLabel();
@@ -58,7 +59,7 @@ export function SavePromptButton({
     const images = draft?.images ?? [];
     const files = draft?.files ?? [];
     const fail = (description: string) =>
-      toastManager.add({ type: "error", title: "Could not save prompt", description });
+      toastManager.add({ type: "error", title: gt("Could not save prompt"), description });
     const limit = taskAttachmentLimitError(
       [],
       [...images, ...files].map((item) => ({
@@ -72,7 +73,10 @@ export function SavePromptButton({
     const sameMachine = homeEnvironmentId === environmentId;
     if (!sameMachine && files.length > 0) {
       return fail(
-        `Files in this draft were uploaded to ${labelOf(environmentId)}. Save it from a composer on ${labelOf(homeEnvironmentId)}, or remove the files.`,
+        gt(
+          "Files in this draft were uploaded to {uploadMachine}. Save it from a composer on {homeMachine}, or remove the files.",
+          { uploadMachine: labelOf(environmentId), homeMachine: labelOf(homeEnvironmentId) },
+        ),
       );
     }
     setBusy(true);
@@ -84,7 +88,7 @@ export function SavePromptButton({
         sameMachine && appAtomRegistry.get(environmentServerConfigsAtom).has(environmentId),
       draftTarget: target,
     }).catch((error: unknown) => {
-      fail(error instanceof Error ? error.message : "Try again.");
+      fail(error instanceof Error ? error.message : gt("Try again."));
       return null;
     });
     if (!attachments) {
@@ -110,12 +114,16 @@ export function SavePromptButton({
     const count = attachments.length;
     toastManager.add({
       type: "success",
-      title: "Prompt saved for later",
-      description: `Saved to Tasks on ${labelOf(homeEnvironmentId)}${
-        count > 0 ? ` with ${count} ${count === 1 ? "attachment" : "attachments"}` : ""
-      }.`,
+      title: gt("Prompt saved for later"),
+      description:
+        count > 0
+          ? gt(
+              "{count, plural, one {Saved to Tasks on {machine} with {count} attachment.} other {Saved to Tasks on {machine} with {count} attachments.}}",
+              { count, machine: labelOf(homeEnvironmentId) },
+            )
+          : gt("Saved to Tasks on {machine}.", { machine: labelOf(homeEnvironmentId) }),
       actionProps: {
-        children: "Undo",
+        children: gt("Undo"),
         onClick: async () => {
           if (!(await update({ kind: "delete", id }))) return;
           const current = store.getComposerDraft(target)?.prompt;
@@ -153,7 +161,7 @@ export function SavePromptButton({
             type="button"
             size="icon-sm"
             variant="ghost"
-            aria-label="Save for later"
+            aria-label={gt("Save for later")}
             disabled={disabled || busy || !allowed || !text.trim()}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => void save()}
@@ -162,7 +170,9 @@ export function SavePromptButton({
           </Button>
         }
       />
-      <TooltipPopup>Save for later</TooltipPopup>
+      <TooltipPopup>
+        <T>Save for later</T>
+      </TooltipPopup>
     </Tooltip>
   );
 }

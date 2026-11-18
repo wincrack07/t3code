@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   DndContext,
   type DragEndEvent,
@@ -10,10 +9,12 @@ import {
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CommandId, type SavedPromptAction } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
 import { Fragment, type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
+import { m } from "../../i18n/messages";
 import { cn, randomUUID } from "../../lib/utils";
 import { projectEnvironment } from "../../state/projects";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -84,6 +85,7 @@ export function TaskList({
   renderExpanded?: (entry: TaskEntry) => ReactNode;
   selection?: TaskSelection | null;
 }) {
+  const gt = useGT();
   const [doneExpanded, setDoneExpanded] = useState(false);
   const clearDone = useClearDone(model);
   const listRef = useRef<HTMLDivElement>(null);
@@ -173,7 +175,7 @@ export function TaskList({
         <div
           ref={listRef}
           role="list"
-          aria-label="Tasks"
+          aria-label={gt("Tasks")}
           className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"
           onKeyDown={onKeyDown}
         >
@@ -196,7 +198,9 @@ export function TaskList({
             ),
           )}
           {allOpenEmpty ? (
-            <p className="px-2 py-2 text-sm text-muted-foreground">Nothing open. Nice.</p>
+            <p className="px-2 py-2 text-sm text-muted-foreground">
+              <T>Nothing open. Nice.</T>
+            </p>
           ) : null}
           {model.doneCount > 0 ? (
             <div className="mt-2 flex flex-col">
@@ -210,11 +214,16 @@ export function TaskList({
                   <ChevronRightIcon
                     className={cn("size-3.5 shrink-0", doneExpanded && "rotate-90")}
                   />
-                  Done <span className="tabular-nums">· {model.doneCount}</span>
+                  <T context="completed tasks section">
+                    Done{" "}
+                    <span className="tabular-nums">
+                      · <Var>{model.doneCount}</Var>
+                    </span>
+                  </T>
                 </button>
                 {clearDone.allowed ? (
                   <Button size="micro" variant="ghost-muted" onClick={() => void clearDone.run()}>
-                    Clear done
+                    <T>Clear done</T>
                   </Button>
                 ) : null}
               </div>
@@ -264,15 +273,19 @@ function TaskSection({
 }
 
 function TaskListFooter({ unreachable }: { unreachable: number }) {
+  const gt = useGT();
   return (
     <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border px-3 text-xs text-muted-foreground">
       {unreachable > 0 ? (
         <Tooltip>
           <TooltipTrigger render={<span className="min-w-0 truncate" />}>
-            {unreachable} {unreachable === 1 ? "machine" : "machines"} not reachable
+            {gt(
+              "{unreachable, plural, one {{unreachable} machine not reachable} other {{unreachable} machines not reachable}}",
+              { unreachable },
+            )}
           </TooltipTrigger>
           <TooltipPopup>
-            Tasks stored on a disconnected machine show again when it reconnects.
+            <T>Tasks stored on a disconnected machine show again when it reconnects.</T>
           </TooltipPopup>
         </Tooltip>
       ) : null}
@@ -308,6 +321,8 @@ function TaskRow({
   onSelect: () => void;
   onEditTags: (() => void) | null;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { entry, group, depth } = row;
   const queue = useTaskQueue(entry);
   const picking = selection !== null && selection.active && entry.status !== "done";
@@ -352,7 +367,7 @@ function TaskRow({
       <span className="relative flex size-4 shrink-0 items-center justify-center">
         {picking ? (
           <Checkbox
-            aria-label={picked ? "Deselect task" : "Select task"}
+            aria-label={picked ? gt("Deselect task") : gt("Select task")}
             checked={picked}
             tabIndex={-1}
             onCheckedChange={() => selection!.onToggle(entry.key, false)}
@@ -371,7 +386,7 @@ function TaskRow({
             )}
           >
             <Checkbox
-              aria-label={done ? "Reopen task" : "Mark task done"}
+              aria-label={done ? gt("Reopen task") : gt("Mark task done")}
               checked={done}
               disabled={!allowed}
               tabIndex={-1}
@@ -443,7 +458,10 @@ function TaskRow({
       ) : null}
       {subtasks.total > 0 ? (
         <span
-          aria-label={`${subtasks.done} of ${subtasks.total} subtasks done`}
+          aria-label={gt("{done} of {total} subtasks done", {
+            done: subtasks.done,
+            total: subtasks.total,
+          })}
           className="shrink-0 text-xs text-muted-foreground tabular-nums"
         >
           {subtasks.done}/{subtasks.total}
@@ -455,8 +473,8 @@ function TaskRow({
         <TaskQueueChip entry={entry} group={group} queue={queue} />
       ) : null}
       {entry.status === "review" && entry.task.review ? (
-        <Badge variant={taskReviewView(entry.task.review).tone} size="sm">
-          {taskReviewView(entry.task.review).outcome}
+        <Badge variant={taskReviewView(entry.task.review, messages).tone} size="sm">
+          {taskReviewView(entry.task.review, messages).outcome}
         </Badge>
       ) : null}
       <Menu>
@@ -467,7 +485,7 @@ function TaskRow({
               <Button
                 size="icon-xs"
                 variant="ghost-muted"
-                aria-label="Task options"
+                aria-label={gt("Task options")}
                 tabIndex={-1}
               />
             }
@@ -484,7 +502,7 @@ function TaskRow({
           />
           <MenuSeparator />
           <MenuItem onClick={toggleDone}>
-            {done ? "Reopen" : "Mark done"}
+            {done ? gt("Reopen", { $context: "verb, reopens a task" }) : gt("Mark done")}
             <MenuShortcut>X</MenuShortcut>
           </MenuItem>
         </MenuPopup>
@@ -525,9 +543,14 @@ function useClearDone(model: TaskListModel) {
       if (cleared.length === 0) return;
       toastManager.add({
         type: "success",
-        title: `Cleared ${cleared.length} done ${cleared.length === 1 ? "task" : "tasks"}`,
+        title: m(
+          msg(
+            "{count, plural, one {Cleared {count} done task} other {Cleared {count} done tasks}}",
+            { count: cleared.length },
+          ),
+        ),
         actionProps: {
-          children: "Undo",
+          children: m(msg("Undo")),
           onClick: () =>
             void Promise.all(
               cleared.map((entry) => mutate(entry, { kind: "restore", id: entry.task.id })),

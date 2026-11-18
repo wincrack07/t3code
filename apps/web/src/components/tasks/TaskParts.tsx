@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { SavedPromptStatus, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { T, useGT, useMessages, Var } from "gt-react";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ServerIcon } from "lucide-react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -43,8 +43,13 @@ export function TaskThreadRow({
       <p className="flex h-8 min-w-0 items-center gap-2 px-2 text-xs text-muted-foreground">
         <TaskThreadDot state="missing" />
         <span className="min-w-0 truncate">
-          The linked thread is archived or not loaded
-          {machineLabel ? ` on ${machineLabel}` : ""}.
+          {machineLabel ? (
+            <T>
+              The linked thread is archived or not loaded on <Var>{machineLabel}</Var>.
+            </T>
+          ) : (
+            <T>The linked thread is archived or not loaded.</T>
+          )}
         </span>
       </p>
     );
@@ -123,6 +128,8 @@ export function TaskStatusMenu({
   disabled: boolean;
   onChange: (status: SavedPromptStatus) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   return (
     <Menu>
       <MenuTrigger
@@ -131,11 +138,18 @@ export function TaskStatusMenu({
           <Badge
             variant={STATUS_BADGE[status]}
             size="control"
-            render={<button type="button" aria-label={`Status: ${TASK_STATUS_LABELS[status]}`} />}
+            render={
+              <button
+                type="button"
+                aria-label={gt("Status: {status}", {
+                  status: messages(TASK_STATUS_LABELS[status]),
+                })}
+              />
+            }
           />
         }
       >
-        {TASK_STATUS_LABELS[status]}
+        {messages(TASK_STATUS_LABELS[status])}
         <ChevronDownIcon />
       </MenuTrigger>
       <MenuPopup align="start">
@@ -143,7 +157,7 @@ export function TaskStatusMenu({
           (value) => (
             <MenuItem key={value} onClick={() => value !== status && onChange(value)}>
               <CheckIcon className={value === status ? undefined : "invisible"} />
-              {TASK_STATUS_LABELS[value]}
+              {messages(TASK_STATUS_LABELS[value])}
             </MenuItem>
           ),
         )}
@@ -163,20 +177,27 @@ export function TaskMachineChip({ label }: { label: string }) {
         <ServerIcon className="size-3 shrink-0" />
         <span className="truncate">{label}</span>
       </TooltipTrigger>
-      <TooltipPopup>Stored on {label}</TooltipPopup>
+      <TooltipPopup>
+        <T>
+          Stored on <Var>{label}</Var>
+        </T>
+      </TooltipPopup>
     </Tooltip>
   );
 }
 
 /** "running · 4 min" for a task whose latest thread is working; repaints once a minute. */
 export function TaskRunningLabel({ startedAt }: { startedAt: string | null }) {
+  const gt = useGT();
   const now = useNowMinute();
   // The tick is a UTC minute without its zone (2026-11-12T17:32).
   const minutes = taskRunningMinutes(startedAt, `${now}:00Z`);
   return (
     <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
       <TaskThreadDot state="running" />
-      {minutes === null ? "running" : `running · ${minutes} min`}
+      {minutes === null
+        ? gt("running", { $context: "task thread state" })
+        : gt("running · {minutes} min", { minutes })}
     </span>
   );
 }

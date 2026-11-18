@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import { useEffect, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -15,6 +15,7 @@ import { useSearchableSetting } from "./settingsSearch";
 
 type Status = typeof ChatHubStatus.Type;
 function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId }) {
+  const gt = useGT();
   const read = useAtomCommand(serverEnvironment.chatHubStatus, { reportFailure: false });
   const save = useAtomCommand(serverEnvironment.chatHubConfigure, { reportFailure: false });
   const sync = useAtomCommand(serverEnvironment.chatHubSyncNow, { reportFailure: false });
@@ -48,22 +49,26 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
   const locked = !allowed || busy;
   const statusLine = status
     ? [
-        status.enabled ? "Sync on" : "Sync off",
-        `${status.pendingCount} pending`,
-        `last synced ${status.lastSuccess ?? "never"}`,
+        status.enabled ? gt("Sync on") : gt("Sync off"),
+        gt("{count} pending", { count: status.pendingCount }),
+        gt("last synced {when}", { when: status.lastSuccess ?? gt("never") }),
         ...(status.lastError ? [status.lastError] : []),
       ].join(" · ")
-    : "Loading…";
+    : gt("Loading…");
   return (
-    <SettingsSection title={`Chat hub · ${readEnvironment(environmentId)?.label ?? environmentId}`}>
+    <SettingsSection
+      title={gt("Chat hub · {environment}", {
+        environment: readEnvironment(environmentId)?.label ?? environmentId,
+      })}
+    >
       <SettingsRow
-        title="Hub URL"
-        description="The Worker that stores chats from all your machines."
+        title={gt("Hub URL")}
+        description={gt("The Worker that stores chats from all your machines.")}
         control={
           <Input
             size="sm"
             className="w-full sm:w-64"
-            aria-label="Hub URL"
+            aria-label={gt("Hub URL")}
             value={url}
             disabled={locked}
             onChange={(e) => setUrl(e.target.value)}
@@ -72,28 +77,32 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
         }
       />
       <SettingsRow
-        title="Write token"
-        description="Stays on this machine."
+        title={gt("Write token")}
+        description={gt("Stays on this machine.")}
         control={
           <Input
             size="sm"
             className="w-full sm:w-64"
-            aria-label="Write token"
+            aria-label={gt("Write token")}
             type="password"
             autoComplete="new-password"
             value={token}
             disabled={locked}
             onChange={(e) => setToken(e.target.value)}
-            placeholder={status?.configured ? "Saved. Leave blank to keep" : "Paste the token"}
+            placeholder={
+              status?.configured ? gt("Saved. Leave blank to keep") : gt("Paste the token")
+            }
           />
         }
       />
       <SettingsRow
-        title="Sync automatically"
-        description="Uploads this machine's chats. The hub can read them; they aren't end-to-end encrypted."
+        title={gt("Sync automatically")}
+        description={gt(
+          "Uploads this machine's chats. The hub can read them; they aren't end-to-end encrypted.",
+        )}
         control={
           <Switch
-            aria-label="Enable automatic sync"
+            aria-label={gt("Enable automatic sync")}
             checked={enabled}
             disabled={locked}
             onCheckedChange={(checked) => setEnabled(checked)}
@@ -101,7 +110,7 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
         }
       />
       <SettingsRow
-        title="Status"
+        title={gt("Status")}
         description={statusLine}
         status={message ? <span role="status">{message}</span> : undefined}
         control={
@@ -114,12 +123,12 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
                 void sync({ environmentId, input: {} }).then((result) => {
                   if (AsyncResult.isSuccess(result)) {
                     setStatus(result.value);
-                    setMessage("Sync queued. Uploads start within ten seconds.");
-                  } else setMessage("Could not queue sync.");
+                    setMessage(gt("Sync queued. Uploads start within ten seconds."));
+                  } else setMessage(gt("Could not queue sync."));
                 });
               }}
             >
-              Sync now
+              <T>Sync now</T>
             </Button>
             <Button
               size="sm"
@@ -133,15 +142,15 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
                       setToken("");
                       setMessage(
                         result.value.enabled && result.value.configured
-                          ? "Saved. Pending chats sync automatically."
-                          : "Saved. Automatic sync is off.",
+                          ? gt("Saved. Pending chats sync automatically.")
+                          : gt("Saved. Automatic sync is off."),
                       );
-                    } else setMessage("Could not save hub settings.");
+                    } else setMessage(gt("Could not save hub settings."));
                   })
                   .finally(() => setBusy(false));
               }}
             >
-              Save
+              <T>Save</T>
             </Button>
           </>
         }
@@ -150,15 +159,16 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
   );
 }
 export function ChatHubSettings() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const connected = useConnectedEnvironmentIds();
   return (
     <SettingsSearchTarget {...searchableSetting("chat-hub")} className="flex flex-col gap-8">
       {connected.length === 0 ? (
-        <SettingsSection title="Chat hub">
+        <SettingsSection title={gt("Chat hub")}>
           <SettingsRow
-            title="No environments connected"
-            description="Connect an environment to sync its chats to your hub."
+            title={gt("No environments connected")}
+            description={gt("Connect an environment to sync its chats to your hub.")}
           />
         </SettingsSection>
       ) : (

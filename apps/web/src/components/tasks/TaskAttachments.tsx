@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { EnvironmentId } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { AlertTriangleIcon, FileIcon, FolderIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -12,9 +12,9 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { TaskAttachmentView, TaskReferenceState } from "./tasks.logic";
 
 const REFERENCE_STATE_LABELS: Record<TaskReferenceState, string> = {
-  ok: "available",
-  missing: "missing",
-  unavailable: "not checked",
+  ok: msg("available", { $context: "attachment state on a machine" }),
+  missing: msg("missing", { $context: "attachment state on a machine" }),
+  unavailable: msg("not checked", { $context: "attachment state on a machine" }),
 };
 
 export function TaskAttachmentStrip({
@@ -26,9 +26,11 @@ export function TaskAttachmentStrip({
   attachments: ReadonlyArray<TaskAttachmentView>;
   onRemove: ((key: string) => void) | null;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   if (attachments.length === 0) return null;
   return (
-    <ul aria-label="Attachments" className="flex min-w-0 flex-wrap items-center gap-1.5">
+    <ul aria-label={gt("Attachments")} className="flex min-w-0 flex-wrap items-center gap-1.5">
       {attachments.map((attachment) => (
         <li
           key={attachment.key}
@@ -56,12 +58,16 @@ export function TaskAttachmentStrip({
             </TooltipTrigger>
             <TooltipPopup>
               <span className="block max-w-96 break-all">
-                {attachment.missing ? "Missing: " : ""}
-                {attachment.detail}
+                {attachment.missing
+                  ? gt("Missing: {detail}", { detail: attachment.detail })
+                  : attachment.detail}
               </span>
               {attachment.machines.map((machine) => (
                 <span key={machine.label} className="block">
-                  On {machine.label}: {REFERENCE_STATE_LABELS[machine.state]}
+                  {gt("On {machine}: {state}", {
+                    machine: machine.label,
+                    state: messages(REFERENCE_STATE_LABELS[machine.state]),
+                  })}
                 </span>
               ))}
             </TooltipPopup>
@@ -85,7 +91,7 @@ export function TaskAttachmentStrip({
             <Button
               size="icon-micro"
               variant="ghost-muted"
-              aria-label={`Remove ${attachment.name}`}
+              aria-label={gt("Remove {name}", { name: attachment.name })}
               onClick={() => onRemove(attachment.key)}
             >
               <XIcon />
@@ -131,6 +137,7 @@ export function TaskAddPathForm({
   onSubmit: (path: string) => void;
   onCancel: () => void;
 }) {
+  const gt = useGT();
   const [path, setPath] = useState("");
   const trimmed = path.trim();
   return (
@@ -144,8 +151,8 @@ export function TaskAddPathForm({
       <Input
         size="compact"
         autoFocus
-        aria-label={`File or folder path on ${machineLabel}`}
-        placeholder={`Absolute path on ${machineLabel}`}
+        aria-label={gt("File or folder path on {machineLabel}", { machineLabel })}
+        placeholder={gt("Absolute path on {machineLabel}", { machineLabel })}
         className="min-w-0 flex-1"
         value={path}
         onChange={(event) => setPath(event.target.value)}
@@ -157,10 +164,10 @@ export function TaskAddPathForm({
         }}
       />
       <Button size="compact" type="submit" disabled={!trimmed || busy}>
-        {busy ? "Adding…" : "Add"}
+        {busy ? gt("Adding…") : gt("Add", { $context: "verb, adds a path" })}
       </Button>
       <Button size="compact" variant="ghost" type="button" onClick={onCancel}>
-        Cancel
+        <T>Cancel</T>
       </Button>
     </form>
   );

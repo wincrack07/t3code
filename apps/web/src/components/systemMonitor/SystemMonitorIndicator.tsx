@@ -1,10 +1,10 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   formatMachineBytes,
   formatMachinePercent,
   formatMachineRate,
   presentMachineHealth,
 } from "@t3tools/client-runtime/state/machine-monitor";
+import { useGT, useMessages } from "gt-react";
 import { GaugeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -30,13 +30,14 @@ function Item(props: {
   dot?: "busy" | "strained" | "unknown" | null;
   tooltip?: ReactNode;
 }) {
+  const gt = useGT();
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
             <SidebarMenuButton
-              aria-label={props.label ?? "Machine monitor"}
+              aria-label={props.label ?? gt("Machine monitor")}
               onClick={props.onOpen}
               size="icon"
             >
@@ -44,7 +45,7 @@ function Item(props: {
             </SidebarMenuButton>
           }
         />
-        <TooltipPopup side="top">{props.tooltip ?? "Machine monitor"}</TooltipPopup>
+        <TooltipPopup side="top">{props.tooltip ?? gt("Machine monitor")}</TooltipPopup>
       </Tooltip>
       {props.dot ? (
         <span className="pointer-events-none absolute top-1.5 right-1.5 flex rounded-full ring-2 ring-sidebar">
@@ -56,6 +57,8 @@ function Item(props: {
 }
 
 function LiveItem({ onOpen }: { onOpen: () => void }) {
+  const gt = useGT();
+  const messages = useMessages();
   const id = usePrimaryEnvironmentId();
   const phase = useEnvironment(id)?.connection.phase;
   // Samples only: process details are sampled while the monitor page is open.
@@ -66,11 +69,15 @@ function LiveItem({ onOpen }: { onOpen: () => void }) {
     return (
       <Item
         onOpen={onOpen}
-        tooltip={error ? `Machine monitor unavailable: ${error}` : "Machine monitor"}
+        tooltip={
+          error
+            ? gt("Machine monitor unavailable: {error}", { error: String(error) })
+            : gt("Machine monitor")
+        }
       />
     );
   }
-  const health = presentMachineHealth(sample);
+  const health = presentMachineHealth(sample, messages);
   const headline = connected ? health.headline : "Disconnected, last sample";
   const rows: [string, string][] = [
     ["CPU", formatMachinePercent(health.cpu)],
@@ -94,7 +101,7 @@ function LiveItem({ onOpen }: { onOpen: () => void }) {
   return (
     <Item
       onOpen={onOpen}
-      label={`Machine monitor: ${headline}`}
+      label={gt("Machine monitor: {headline}", { headline })}
       dot={!connected ? "unknown" : health.level === "ok" ? null : health.level}
       tooltip={
         <span className="flex flex-col gap-1.5">

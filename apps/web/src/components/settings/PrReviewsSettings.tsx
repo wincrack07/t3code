@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -16,6 +15,7 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { PlusIcon, RotateCwIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -53,8 +53,8 @@ const AUTHOR_PROVIDERS = [
   ["opencode", "OpenCode"],
   ["antigravity", "Antigravity"],
   ["kiro", "Kiro"],
-  ["unknown", "Unknown author"],
-  ["any", "Any author"],
+  ["unknown", msg("Unknown author")],
+  ["any", msg("Any author")],
 ] as const;
 
 const EFFORTS = ["default", "low", "medium", "high", "xhigh"] as const;
@@ -136,6 +136,7 @@ function ReviewerPicker({
   readonly value: ModelSelection | null;
   readonly onChange: (selection: ModelSelection) => void;
 }) {
+  const gt = useGT();
   const settings = useEnvironmentSettings(environmentId);
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
@@ -175,13 +176,17 @@ function ReviewerPicker({
           value={effortOf(value)}
           onValueChange={(effort) => effort && onChange(withEffort(value, effort))}
         >
-          <SelectTrigger aria-label="Effort" size="sm" className="w-full sm:w-36">
+          <SelectTrigger
+            aria-label={gt("Effort", { $context: "reasoning effort picker" })}
+            size="sm"
+            className="w-full sm:w-36"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
             {EFFORTS.map((effort) => (
               <SelectItem hideIndicator key={effort} value={effort}>
-                {effort === "default" ? "Default effort" : effort}
+                {effort === "default" ? gt("Default effort") : effort}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -200,6 +205,8 @@ function HistoryRow({
   readonly record: PrReviewRecord;
   readonly canOperate: boolean;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const rerun = useAtomCommand(serverEnvironment.rerunPrReview, {
     label: "PR review re-run",
     reportFailure: false,
@@ -211,10 +218,15 @@ function HistoryRow({
       description={
         <span className="flex flex-wrap items-center gap-x-2">
           <span>
-            {record.trigger}
-            {record.requestedBy ? ` by ${record.requestedBy}` : ""} ·{" "}
-            {record.reviewer?.model ?? "no model"} · author {record.authorProvider} ·{" "}
-            {formatRelativeTimeLabel(record.updatedAt)}
+            {record.requestedBy
+              ? gt("{trigger} by {requestedBy}", {
+                  trigger: record.trigger,
+                  requestedBy: record.requestedBy,
+                })
+              : record.trigger}{" "}
+            · {record.reviewer?.model ?? gt("no model")} ·{" "}
+            {gt("author {provider}", { provider: record.authorProvider })} ·{" "}
+            {formatRelativeTimeLabel(record.updatedAt, undefined, m)}
           </span>
           {record.threadId ? (
             <Link
@@ -222,7 +234,7 @@ function HistoryRow({
               params={buildThreadRouteParams(scopeThreadRef(environmentId, record.threadId))}
               className="underline underline-offset-2 hover:text-foreground"
             >
-              Thread
+              <T context="link to the review's thread">Thread</T>
             </Link>
           ) : null}
           {record.reviewUrl ? (
@@ -232,7 +244,7 @@ function HistoryRow({
               rel="noreferrer"
               className="underline underline-offset-2 hover:text-foreground"
             >
-              GitHub review
+              <T>GitHub review</T>
             </a>
           ) : null}
           {record.detail ? <span className="text-destructive">{record.detail}</span> : null}
@@ -249,11 +261,12 @@ function HistoryRow({
               setBusy(true);
               const result = await rerun({ environmentId, input: { recordId: record.id } });
               setBusy(false);
-              if (result._tag === "Failure") reportFailure("Could not re-run the review", result);
+              if (result._tag === "Failure")
+                reportFailure(gt("Could not re-run the review"), result);
             }}
           >
             <RotateCwIcon className="size-3" />
-            Re-run
+            <T context="verb, run the review again">Re-run</T>
           </Button>
         </div>
       }
@@ -274,21 +287,26 @@ function RepositoryRow({
   readonly onChange: (patch: Partial<PrReviewConfig["repositories"][number]>) => void;
   readonly onRemove: () => void;
 }) {
+  const gt = useGT();
   return (
     <SettingsRow
-      title={repo.repository || "New repository"}
+      title={repo.repository || gt("New repository")}
       control={
         <div className="flex items-center gap-2">
           <Switch
             checked={repo.enabled}
             disabled={!canWrite}
             onCheckedChange={(enabled) => onChange({ enabled })}
-            aria-label={`Review ${repo.repository || "this repository"}`}
+            aria-label={
+              repo.repository
+                ? gt("Review {repository}", { repository: repo.repository })
+                : gt("Review this repository")
+            }
           />
           <Button
             size="icon-sm"
             variant="ghost-destructive"
-            aria-label="Remove repository"
+            aria-label={gt("Remove repository")}
             disabled={!canWrite}
             onClick={onRemove}
           >
@@ -304,7 +322,7 @@ function RepositoryRow({
               size="sm"
               font="mono"
               placeholder="owner/name"
-              aria-label="Repository"
+              aria-label={gt("Repository")}
               value={repo.repository}
               disabled={!canWrite}
               onChange={(event) => onChange({ repository: event.target.value.trim() })}
@@ -316,7 +334,7 @@ function RepositoryRow({
               projectId && onChange({ projectId: projectId as ProjectId })
             }
           >
-            <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Project">
+            <SelectTrigger size="sm" className="w-full sm:w-48" aria-label={gt("Project")}>
               <SelectValue />
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -335,12 +353,12 @@ function RepositoryRow({
             disabled={!canWrite}
             onCheckedChange={(autoReview) => onChange({ autoReview })}
           />
-          Review new pull requests automatically
+          <T>Review new pull requests automatically</T>
         </label>
         <Textarea
           size="sm"
-          aria-label="Repository review instructions"
-          placeholder="Instructions for this repository. Replaces the default instructions."
+          aria-label={gt("Repository review instructions")}
+          placeholder={gt("Instructions for this repository. Replaces the default instructions.")}
           value={repo.instructions}
           disabled={!canWrite}
           onChange={(event) => onChange({ instructions: event.target.value })}
@@ -351,6 +369,8 @@ function RepositoryRow({
 }
 
 export function PrReviewsSettings() {
+  const gt = useGT();
+  const m = useMessages();
   const { connectedEnvironments, environment } = useSettingsScope();
   const [selectedId, setSelectedId] = useState<EnvironmentId | null>(null);
   const environmentId =
@@ -396,7 +416,7 @@ export function PrReviewsSettings() {
     setSaving(true);
     const result = await updateConfig({ environmentId, input: config });
     setSaving(false);
-    if (result._tag === "Failure") reportFailure("Could not save PR review settings", result);
+    if (result._tag === "Failure") reportFailure(gt("Could not save PR review settings"), result);
     else {
       setDraft(null);
       query.refresh();
@@ -405,7 +425,7 @@ export function PrReviewsSettings() {
   const saveKey = async () => {
     if (environmentId === null) return;
     const result = await setPrivateKey({ environmentId, input: { privateKey } });
-    if (result._tag === "Failure") reportFailure("Could not store the private key", result);
+    if (result._tag === "Failure") reportFailure(gt("Could not store the private key"), result);
     else {
       setPrivateKeyText("");
       query.refresh();
@@ -414,17 +434,20 @@ export function PrReviewsSettings() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="pr-reviews" title="Reviewer">
+      <SettingsSection
+        id="pr-reviews"
+        title={gt("Reviewer", { $context: "settings section for the pull request reviewer" })}
+      >
         {connectedEnvironments.length > 1 ? (
           <SettingsRow
-            title="Environment"
-            description="Each environment keeps its own PR review settings."
+            title={gt("Environment")}
+            description={gt("Each environment keeps its own PR review settings.")}
             control={
               <Select
                 value={environmentId ?? ""}
                 onValueChange={(value) => value && setSelectedId(value as EnvironmentId)}
               >
-                <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Environment">
+                <SelectTrigger size="sm" className="w-full sm:w-48" aria-label={gt("Environment")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -439,24 +462,26 @@ export function PrReviewsSettings() {
           />
         ) : null}
         {config === null ? (
-          <SettingsRow title={query.error ?? "Loading…"} />
+          <SettingsRow title={query.error ?? gt("Loading…")} />
         ) : (
           <>
             <SettingsRow
-              title="Review pull requests from this environment"
-              description="Only environments with this on poll GitHub. With several, the lowest priority number reviews and the others step in if it doesn't claim the pull request in time."
+              title={gt("Review pull requests from this environment")}
+              description={gt(
+                "Only environments with this on poll GitHub. With several, the lowest priority number reviews and the others step in if it doesn't claim the pull request in time.",
+              )}
               control={
                 <Switch
                   checked={config.enabled}
                   disabled={!canWrite}
                   onCheckedChange={(enabled) => edit({ enabled })}
-                  aria-label="Review pull requests from this environment"
+                  aria-label={gt("Review pull requests from this environment")}
                 />
               }
             />
             <SettingsRow
-              title="Priority"
-              description="0 is the main reviewer, 1 the first fallback, and so on."
+              title={gt("Priority")}
+              description={gt("0 is the main reviewer, 1 the first fallback, and so on.")}
               control={
                 <Input
                   size="sm"
@@ -472,8 +497,8 @@ export function PrReviewsSettings() {
               }
             />
             <SettingsRow
-              title="Claim grace"
-              description="Seconds each fallback waits before it steps in."
+              title={gt("Claim grace")}
+              description={gt("Seconds each fallback waits before it steps in.")}
               control={
                 <Input
                   size="sm"
@@ -496,13 +521,15 @@ export function PrReviewsSettings() {
 
       {config !== null && state && environmentId !== null ? (
         <>
-          <SettingsSection title="GitHub identity">
+          <SettingsSection title={gt("GitHub identity")}>
             <SettingsRow
-              title="Post reviews as"
+              title={gt("Post reviews as")}
               description={state.identity.detail}
               status={
                 <Badge variant={state.identity.ready ? "default" : "outline"}>
-                  {state.identity.ready ? "Ready" : "Not ready"}
+                  {state.identity.ready
+                    ? gt("Ready", { $context: "GitHub identity status" })
+                    : gt("Not ready", { $context: "GitHub identity status" })}
                 </Badge>
               }
               control={
@@ -513,15 +540,19 @@ export function PrReviewsSettings() {
                     edit({ identity: { ...config.identity, mode } })
                   }
                 >
-                  <SelectTrigger size="sm" className="w-full sm:w-56" aria-label="Identity">
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full sm:w-56"
+                    aria-label={gt("Identity", { $context: "GitHub account reviews post as" })}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectPopup align="end" alignItemWithTrigger={false}>
                     <SelectItem hideIndicator value="github-app">
-                      GitHub App (bot account)
+                      <T>GitHub App (bot account)</T>
                     </SelectItem>
                     <SelectItem hideIndicator value="gh">
-                      This environment's gh login
+                      <T>This environment's gh login</T>
                     </SelectItem>
                   </SelectPopup>
                 </Select>
@@ -530,20 +561,28 @@ export function PrReviewsSettings() {
             {config.identity.mode === "github-app" ? (
               <>
                 <SettingsRow
-                  title="Create the App"
-                  description="Reviews come from the App's own bot account. It needs no webhook."
+                  title={gt("Create the App")}
+                  description={gt(
+                    "Reviews come from the App's own bot account. It needs no webhook.",
+                  )}
                 >
                   <div className="mt-3 flex max-w-2xl flex-col items-start gap-3 pb-3 text-xs leading-normal text-muted-foreground">
                     <ol className="list-decimal space-y-1 ps-4">
                       <li>
-                        Create it with the button, or by hand under GitHub Settings → Developer
-                        settings → GitHub Apps with Webhook off and these repository permissions:
-                        Pull requests read and write, Issues read and write, Contents read.
+                        <T>
+                          Create it with the button, or by hand under GitHub Settings → Developer
+                          settings → GitHub Apps with Webhook off and these repository permissions:
+                          Pull requests read and write, Issues read and write, Contents read.
+                        </T>
                       </li>
-                      <li>Copy the App ID and generate a private key on the App's page.</li>
                       <li>
-                        Install the App on the repositories to review; the installation ID is the
-                        number at the end of the installation page's URL.
+                        <T>Copy the App ID and generate a private key on the App's page.</T>
+                      </li>
+                      <li>
+                        <T>
+                          Install the App on the repositories to review; the installation ID is the
+                          number at the end of the installation page's URL.
+                        </T>
                       </li>
                     </ol>
                     <form
@@ -553,13 +592,13 @@ export function PrReviewsSettings() {
                     >
                       <input type="hidden" name="manifest" value={APP_MANIFEST} />
                       <Button size="sm" variant="outline" type="submit">
-                        Create the App on GitHub
+                        <T>Create the App on GitHub</T>
                       </Button>
                     </form>
                   </div>
                 </SettingsRow>
                 <SettingsRow
-                  title="App ID"
+                  title={gt("App ID")}
                   control={
                     <Input
                       size="sm"
@@ -573,7 +612,7 @@ export function PrReviewsSettings() {
                   }
                 />
                 <SettingsRow
-                  title="Installation ID"
+                  title={gt("Installation ID")}
                   control={
                     <Input
                       size="sm"
@@ -589,8 +628,8 @@ export function PrReviewsSettings() {
                   }
                 />
                 <SettingsRow
-                  title="App slug"
-                  description="Optional. Read from GitHub when empty."
+                  title={gt("App slug")}
+                  description={gt("Optional. Read from GitHub when empty.")}
                   control={
                     <Input
                       size="sm"
@@ -604,26 +643,31 @@ export function PrReviewsSettings() {
                   }
                 />
                 <SettingsRow
-                  title="Private key"
+                  title={gt("Private key")}
                   description={
                     state.identity.hasPrivateKey
-                      ? "Saved in this environment's secret store. Paste a new key to replace it, or remove it."
-                      : "Paste the .pem file. It's saved in this environment's secret store and never sent back."
+                      ? gt(
+                          "Saved in this environment's secret store. Paste a new key to replace it, or remove it.",
+                        )
+                      : gt(
+                          "Paste the .pem file. It's saved in this environment's secret store and never sent back.",
+                        )
                   }
                 >
                   <div className="mt-3 flex max-w-2xl flex-col items-start gap-2 pb-3">
                     <Textarea
                       size="sm"
-                      aria-label="Private key"
+                      aria-label={gt("Private key")}
                       value={privateKey}
+                      // oxlint-disable-next-line t3code/no-untranslated-copy -- PEM header, a file format
                       placeholder="-----BEGIN RSA PRIVATE KEY-----"
                       disabled={!canWrite}
                       onChange={(event) => setPrivateKeyText(event.target.value)}
                     />
                     <Button size="sm" variant="outline" disabled={!canWrite} onClick={saveKey}>
                       {privateKey.trim() === "" && state.identity.hasPrivateKey
-                        ? "Remove key"
-                        : "Store key"}
+                        ? gt("Remove key")
+                        : gt("Store key")}
                     </Button>
                   </div>
                 </SettingsRow>
@@ -631,10 +675,14 @@ export function PrReviewsSettings() {
             ) : null}
           </SettingsSection>
 
-          <SettingsSection title="Triggers">
+          <SettingsSection
+            title={gt("Triggers", { $context: "settings section, events that start a review" })}
+          >
             <SettingsRow
-              title="Command"
-              description="Comment this on a pull request to ask for a review. Text after it sets the focus. Reply with it to a bot comment to ask a question."
+              title={gt("Command", { $context: "comment text that asks for a review" })}
+              description={gt(
+                "Comment this on a pull request to ask for a review. Text after it sets the focus. Reply with it to a bot comment to ask a question.",
+              )}
               control={
                 <Input
                   size="sm"
@@ -647,20 +695,22 @@ export function PrReviewsSettings() {
               }
             />
             <SettingsRow
-              title="Review when requested as a reviewer"
-              description="GitHub App only. Requesting the bot reviews the latest commit."
+              title={gt("Review when requested as a reviewer")}
+              description={gt("GitHub App only. Requesting the bot reviews the latest commit.")}
               control={
                 <Switch
                   checked={config.reviewOnRequest}
                   disabled={!canWrite}
                   onCheckedChange={(reviewOnRequest) => edit({ reviewOnRequest })}
-                  aria-label="Review when requested as a reviewer"
+                  aria-label={gt("Review when requested as a reviewer")}
                 />
               }
             />
             <SettingsRow
-              title="Allowed users"
-              description="GitHub logins, comma separated. Empty allows collaborators with write access."
+              title={gt("Allowed users")}
+              description={gt(
+                "GitHub logins, comma separated. Empty allows collaborators with write access.",
+              )}
               control={
                 <Input
                   size="sm"
@@ -680,11 +730,11 @@ export function PrReviewsSettings() {
             />
           </SettingsSection>
 
-          <SettingsSection title="Repositories">
+          <SettingsSection title={gt("Repositories")}>
             {config.repositories.length === 0 ? (
               <SettingsRow
-                title="No repositories yet"
-                description="Add a GitHub repository and the project that holds its checkout."
+                title={gt("No repositories yet")}
+                description={gt("Add a GitHub repository and the project that holds its checkout.")}
               />
             ) : null}
             {config.repositories.map((repo, index) => {
@@ -731,25 +781,27 @@ export function PrReviewsSettings() {
                 }
               >
                 <PlusIcon />
-                Add repository
+                <T>Add repository</T>
               </Button>
             </div>
           </SettingsSection>
 
-          <SettingsSection title="Reviewer rules">
+          <SettingsSection title={gt("Reviewer rules")}>
             <SettingsRow
-              title="How the author is found"
-              description="From the T3 thread that opened or pushed the pull request, otherwise from its Co-Authored-By trailers. The first matching rule picks the reviewer."
+              title={gt("How the author is found")}
+              description={gt(
+                "From the T3 thread that opened or pushed the pull request, otherwise from its Co-Authored-By trailers. The first matching rule picks the reviewer.",
+              )}
             />
             {config.rules.map((rule, index) => (
               <SettingsRow
                 key={`${rule.authorProvider}:${rule.reviewer.instanceId}:${rule.reviewer.model}`}
-                title={`Rule ${index + 1}`}
+                title={gt("Rule {number}", { number: index + 1 })}
                 control={
                   <Button
                     size="icon-sm"
                     variant="ghost-destructive"
-                    aria-label="Remove rule"
+                    aria-label={gt("Remove rule")}
                     disabled={!canWrite}
                     onClick={() =>
                       edit({ rules: config.rules.filter((_entry, at) => at !== index) })
@@ -760,46 +812,52 @@ export function PrReviewsSettings() {
                 }
               >
                 <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 pb-3 text-sm text-muted-foreground">
-                  <span>Written by</span>
-                  <Select
-                    value={rule.authorProvider}
-                    onValueChange={(authorProvider) =>
-                      authorProvider &&
-                      edit({
-                        rules: config.rules.map((entry, at) =>
-                          at === index ? { ...entry, authorProvider } : entry,
-                        ),
-                      })
-                    }
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      className="w-full sm:w-40"
-                      aria-label="Author provider"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup alignItemWithTrigger={false}>
-                      {AUTHOR_PROVIDERS.map(([value, label]) => (
-                        <SelectItem hideIndicator key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                  <span>reviewed by</span>
-                  <ReviewerPicker
-                    environmentId={environmentId}
-                    projectId={null}
-                    value={rule.reviewer}
-                    onChange={(reviewer) =>
-                      edit({
-                        rules: config.rules.map((entry, at) =>
-                          at === index ? { ...entry, reviewer } : entry,
-                        ),
-                      })
-                    }
-                  />
+                  <T>
+                    <span>Written by</span>
+                    <Var>
+                      <Select
+                        value={rule.authorProvider}
+                        onValueChange={(authorProvider) =>
+                          authorProvider &&
+                          edit({
+                            rules: config.rules.map((entry, at) =>
+                              at === index ? { ...entry, authorProvider } : entry,
+                            ),
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          className="w-full sm:w-40"
+                          aria-label={gt("Author provider")}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectPopup alignItemWithTrigger={false}>
+                          {AUTHOR_PROVIDERS.map(([value, label]) => (
+                            <SelectItem hideIndicator key={value} value={value}>
+                              {m(label)}
+                            </SelectItem>
+                          ))}
+                        </SelectPopup>
+                      </Select>
+                    </Var>
+                    <span>reviewed by</span>
+                    <Var>
+                      <ReviewerPicker
+                        environmentId={environmentId}
+                        projectId={null}
+                        value={rule.reviewer}
+                        onChange={(reviewer) =>
+                          edit({
+                            rules: config.rules.map((entry, at) =>
+                              at === index ? { ...entry, reviewer } : entry,
+                            ),
+                          })
+                        }
+                      />
+                    </Var>
+                  </T>
                 </div>
               </SettingsRow>
             ))}
@@ -827,12 +885,12 @@ export function PrReviewsSettings() {
                 }
               >
                 <PlusIcon />
-                Add rule
+                <T>Add rule</T>
               </Button>
             </div>
             <SettingsRow
-              title="Otherwise"
-              description="When no rule matches. Unset uses the environment's default model."
+              title={gt("Otherwise", { $context: "fallback reviewer when no rule matches" })}
+              description={gt("When no rule matches. Unset uses the environment's default model.")}
               control={
                 <ReviewerPicker
                   environmentId={environmentId}
@@ -844,14 +902,14 @@ export function PrReviewsSettings() {
             />
           </SettingsSection>
 
-          <SettingsSection title="Review instructions">
+          <SettingsSection title={gt("Review instructions")}>
             <SettingsRow
-              title="Default instructions"
-              description="Empty uses T3's default: verified defects only, no style nits."
+              title={gt("Default instructions")}
+              description={gt("Empty uses T3's default: verified defects only, no style nits.")}
             >
               <div className="mt-3 max-w-2xl pb-3">
                 <Textarea
-                  aria-label="Default review instructions"
+                  aria-label={gt("Default review instructions")}
                   value={config.instructions}
                   disabled={!canWrite}
                   onChange={(event) => edit({ instructions: event.target.value })}
@@ -860,23 +918,25 @@ export function PrReviewsSettings() {
             </SettingsRow>
           </SettingsSection>
 
-          <SettingsSection title="History">
+          <SettingsSection title={gt("History")}>
             <SettingsRow
-              title="Polling"
+              title={gt("Polling", { $context: "checking GitHub for new pull requests" })}
               description={
                 state.polling.lastError
-                  ? `Last poll failed: ${state.polling.lastError}`
+                  ? gt("Last poll failed: {error}", { error: state.polling.lastError })
                   : state.polling.lastPollAt
-                    ? `Last polled ${formatRelativeTimeLabel(state.polling.lastPollAt)}.`
+                    ? gt("Last polled {time}.", {
+                        time: formatRelativeTimeLabel(state.polling.lastPollAt, undefined, m),
+                      })
                     : config.enabled
-                      ? "Waiting for the first poll."
-                      : "Off on this environment."
+                      ? gt("Waiting for the first poll.")
+                      : gt("Off on this environment.")
               }
             />
             {state.history.length === 0 ? (
               <SettingsRow
-                title="No reviews yet"
-                description="Reviews this environment runs show up here."
+                title={gt("No reviews yet")}
+                description={gt("Reviews this environment runs show up here.")}
               />
             ) : null}
             {state.history.map((record) => (
@@ -892,13 +952,15 @@ export function PrReviewsSettings() {
       ) : null}
       {dirty ? (
         <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-popover px-4 py-2 shadow-lg">
-          <span className="text-sm text-muted-foreground">Unsaved changes</span>
+          <span className="text-sm text-muted-foreground">
+            <T>Unsaved changes</T>
+          </span>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" disabled={saving} onClick={() => setDraft(null)}>
-              Discard
+              <T context="verb, drop unsaved changes">Discard</T>
             </Button>
             <Button size="sm" disabled={saving || !canWrite} onClick={save}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? gt("Saving…") : gt("Save", { $context: "verb, save settings" })}
             </Button>
           </div>
         </div>

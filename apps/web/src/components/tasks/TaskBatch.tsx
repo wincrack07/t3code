@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -7,9 +6,11 @@ import { CommandId, type EnvironmentId, type ModelSelection } from "@t3tools/con
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { useNavigate } from "@tanstack/react-router";
+import { msg, T, useGT, Var } from "gt-react";
 import { ListOrderedIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { m } from "../../i18n/messages";
 import { cn, randomUUID } from "../../lib/utils";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
@@ -61,7 +62,7 @@ const reachableProjects = (groups: ReadonlyArray<TaskProjectGroup>) =>
 
 const failureMessage = (result: Parameters<typeof squashAtomCommandFailure>[0]) => {
   const error = squashAtomCommandFailure(result);
-  return error instanceof Error && error.message ? error.message : "Try again.";
+  return error instanceof Error && error.message ? error.message : m(msg("Try again."));
 };
 
 /** The launch fallback for tasks without saved settings, from the first task's project. */
@@ -117,6 +118,7 @@ interface TaskBatchPlan {
 
 /** Prepares a batch (where each task runs) and starts the prepared groups. */
 function useTaskBatchRun(groups: ReadonlyArray<TaskProjectGroup>) {
+  const gt = useGT();
   const prepare = useAtomCommand(projectEnvironment.tasks.prepareBatch, { reportFailure: false });
   const start = useAtomCommand(projectEnvironment.tasks.batchStart, { reportFailure: false });
   const labelOf = useEnvironmentLabel();
@@ -130,9 +132,9 @@ function useTaskBatchRun(groups: ReadonlyArray<TaskProjectGroup>) {
       concurrency: number,
     ): Promise<TaskBatchPlan | { error: string }> => {
       const first = entries[0];
-      if (!first) return { error: "Select tasks to run." };
+      if (!first) return { error: gt("Select tasks to run.") };
       const launch = batchLaunchFallback(first, groupOf(first));
-      if (!launch) return { error: "Choose a default model in project settings." };
+      if (!launch) return { error: gt("Choose a default model in project settings.") };
       const involved = [...new Set(entries.map(groupOf))];
       const result = await prepare({
         commandId: CommandId.make(randomUUID()),
@@ -205,6 +207,7 @@ function TaskBatchConfirm({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const gt = useGT();
   const openRunWith = useOpenRunWith();
   const runnable = plan?.summary.runnable ?? 0;
   const blocked = (plan?.summary.rows ?? []).flatMap((row) =>
@@ -216,14 +219,18 @@ function TaskBatchConfirm({
       <AlertDialogPopup className="sm:max-w-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            Run {runnable} {runnable === 1 ? "task" : "tasks"}?
+            {gt("{count, plural, one {Run {count} task?} other {Run {count} tasks?}}", {
+              count: runnable,
+            })}
           </AlertDialogTitle>
           <AlertDialogDescription>
             <span className="block font-medium text-foreground tabular-nums">
               {plan?.summary.headline}
             </span>
-            Each starts a paid agent turn with no one watching. Tasks past a machine&apos;s limit
-            wait in a queue you can cancel.
+            <T>
+              Each starts a paid agent turn with no one watching. Tasks past a machine&apos;s limit
+              wait in a queue you can cancel.
+            </T>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="flex max-h-80 min-h-0 flex-col gap-3 overflow-y-auto px-6 pb-4">
@@ -252,7 +259,7 @@ function TaskBatchConfirm({
                             <TooltipTrigger
                               render={<span className="shrink-0 text-xs text-muted-foreground" />}
                             >
-                              Pinned to its machine
+                              <T>Pinned to its machine</T>
                             </TooltipTrigger>
                             <TooltipPopup className="max-w-72">{item.pinned}</TooltipPopup>
                           </Tooltip>
@@ -288,9 +295,9 @@ function TaskBatchConfirm({
             );
           })}
           {blocked.length > 0 ? (
-            <section aria-label="Will not run" className="flex flex-col">
+            <section aria-label={gt("Will not run")} className="flex flex-col">
               <h3 className="flex h-7 items-center gap-1 text-xs font-medium text-muted-foreground">
-                Will not run
+                <T>Will not run</T>
                 <span className="tabular-nums">· {blocked.length}</span>
               </h3>
               {reasons.map((reason) => (
@@ -312,7 +319,7 @@ function TaskBatchConfirm({
                         openRunWith(item.key);
                       }}
                     >
-                      Choose a model
+                      <T>Choose a model</T>
                     </Button>
                   </li>
                 ))}
@@ -321,9 +328,11 @@ function TaskBatchConfirm({
           ) : null}
         </div>
         <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+          <AlertDialogClose render={<Button variant="outline" />}>
+            <T>Cancel</T>
+          </AlertDialogClose>
           <Button disabled={starting || runnable === 0} onClick={onConfirm}>
-            {starting ? "Starting…" : `Start ${runnable}`}
+            {starting ? gt("Starting…") : gt("Start {count}", { count: runnable })}
           </Button>
         </AlertDialogFooter>
       </AlertDialogPopup>
@@ -341,6 +350,7 @@ export function TaskBatchBar({
   selected: ReadonlyArray<TaskEntry>;
   onClear: () => void;
 }) {
+  const gt = useGT();
   const labelOf = useEnvironmentLabel();
   const run = useTaskBatchRun(groups);
   const [distribution, setDistribution] = useState<Distribution>("saved");
@@ -361,10 +371,10 @@ export function TaskBatchBar({
   );
   const distributionLabel = (value: string) =>
     value === "spread"
-      ? "Spread across machines"
+      ? gt("Spread across machines")
       : value === "saved"
-        ? "Each task's machine"
-        : `On ${labelOf(value as EnvironmentId)}`;
+        ? gt("Each task's machine")
+        : gt("On {machine}", { machine: labelOf(value as EnvironmentId) });
   const review = async () => {
     setPreparing(true);
     const prepared = await run.prepare(selected, distribution, concurrency);
@@ -372,7 +382,7 @@ export function TaskBatchBar({
     if ("error" in prepared) {
       toastManager.add({
         type: "error",
-        title: "Could not plan the run",
+        title: gt("Could not plan the run"),
         description: prepared.error,
       });
       return;
@@ -385,12 +395,18 @@ export function TaskBatchBar({
     const error = await run.start(plan.groups);
     setStarting(false);
     if (error) {
-      toastManager.add({ type: "error", title: "Could not start the batch", description: error });
+      toastManager.add({
+        type: "error",
+        title: gt("Could not start the batch"),
+        description: error,
+      });
       return;
     }
     toastManager.add({
       type: "success",
-      title: `Queued ${plan.summary.runnable} ${plan.summary.runnable === 1 ? "task" : "tasks"}`,
+      title: gt("{count, plural, one {Queued {count} task} other {Queued {count} tasks}}", {
+        count: plan.summary.runnable,
+      }),
     });
     setPlan(null);
     onClear();
@@ -399,17 +415,26 @@ export function TaskBatchBar({
   return (
     <div
       role="toolbar"
-      aria-label="Selected tasks"
+      aria-label={gt("Selected tasks")}
       className="flex h-11 shrink-0 items-center gap-2 border-t border-border bg-background px-3"
     >
-      <Button size="icon-xs" variant="ghost-muted" aria-label="Clear selection" onClick={onClear}>
+      <Button
+        size="icon-xs"
+        variant="ghost-muted"
+        aria-label={gt("Clear selection")}
+        onClick={onClear}
+      >
         <XIcon />
       </Button>
-      <span className="shrink-0 text-sm tabular-nums">{count} selected</span>
+      <span className="shrink-0 text-sm tabular-nums">
+        <T>
+          <Var>{count}</Var> selected
+        </T>
+      </span>
       <div className="ml-auto flex min-w-0 items-center gap-2">
         <div className="w-48 min-w-0 shrink">
           <Select value={distribution} onValueChange={(value) => value && setDistribution(value)}>
-            <SelectTrigger size="compact" aria-label="Where to run">
+            <SelectTrigger size="compact" aria-label={gt("Where to run")}>
               <SelectValue>{(value: string) => distributionLabel(value)}</SelectValue>
             </SelectTrigger>
             <SelectPopup>
@@ -430,14 +455,14 @@ export function TaskBatchBar({
             value={String(concurrency)}
             onValueChange={(value) => value && setConcurrency(Number(value))}
           >
-            <SelectTrigger size="compact" aria-label="How many run at once">
-              <SelectValue>{(value: string) => `Max ${value} at a time`}</SelectValue>
+            <SelectTrigger size="compact" aria-label={gt("How many run at once")}>
+              <SelectValue>{(value: string) => gt("Max {value} at a time", { value })}</SelectValue>
             </SelectTrigger>
             <SelectPopup>
               {Array.from({ length: TASK_BATCH_MAX_CONCURRENCY }, (_, index) => index + 1).map(
                 (value) => (
                   <SelectItem key={value} value={String(value)}>
-                    Max {value} at a time
+                    {gt("Max {value} at a time", { value })}
                   </SelectItem>
                 ),
               )}
@@ -449,7 +474,7 @@ export function TaskBatchBar({
           disabled={!allowed || preparing || count === 0}
           onClick={() => void review()}
         >
-          {preparing ? "Planning…" : `Run ${count}`}
+          {preparing ? gt("Planning…") : gt("Run {count}", { count })}
         </Button>
       </div>
       <TaskBatchConfirm
@@ -468,12 +493,13 @@ export function TaskBatchBar({
  * Both keep the machine's current limit.
  */
 function useTaskRetry(group: TaskProjectGroup) {
+  const gt = useGT();
   const run = useTaskBatchRun([group]);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<TaskBatchPlan | null>(null);
   const [starting, setStarting] = useState(false);
   const fail = (description: string) =>
-    toastManager.add({ type: "error", title: "Could not retry", description });
+    toastManager.add({ type: "error", title: gt("Could not retry"), description });
   return {
     busy,
     retry: async (entry: TaskEntry, queue: TaskQueueView) => {
@@ -514,6 +540,7 @@ function useTaskRetry(group: TaskProjectGroup) {
 
 /** The live queue across loaded machines, each machine's limit, and what did not start. */
 export function TaskQueueBar({ groups }: { groups: ReadonlyArray<TaskProjectGroup> }) {
+  const gt = useGT();
   const labelOf = useEnvironmentLabel();
   const projects = reachableProjects(groups);
   const totals = taskQueueTotals(
@@ -525,15 +552,19 @@ export function TaskQueueBar({ groups }: { groups: ReadonlyArray<TaskProjectGrou
   const active = totals.queued + totals.starting + totals.running + totals.failed;
   if (active + totals.refused.length === 0) return null;
   const parts = [
-    totals.running + totals.starting > 0 ? `${totals.running + totals.starting} running` : null,
-    totals.queued > 0 ? `${totals.queued} queued` : null,
-    totals.failed > 0 ? `${totals.failed} failed to start` : null,
+    totals.running + totals.starting > 0
+      ? gt("{count} running", { count: totals.running + totals.starting })
+      : null,
+    totals.queued > 0 ? gt("{count} queued", { count: totals.queued }) : null,
+    totals.failed > 0 ? gt("{count} failed to start", { count: totals.failed }) : null,
   ].filter(Boolean);
   const caps =
     totals.caps.length === 1
-      ? `Max ${totals.caps[0]!.cap} at a time`
+      ? gt("Max {value} at a time", { value: totals.caps[0]!.cap })
       : totals.caps
-          .map(({ environmentId, cap }) => `Max ${cap} on ${labelOf(environmentId)}`)
+          .map(({ environmentId, cap }) =>
+            gt("Max {cap} on {machine}", { cap, machine: labelOf(environmentId) }),
+          )
           .join(" · ");
   return (
     <div
@@ -542,12 +573,16 @@ export function TaskQueueBar({ groups }: { groups: ReadonlyArray<TaskProjectGrou
     >
       <ListOrderedIcon className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate tabular-nums">
-        {["Queue", ...parts, caps].filter(Boolean).join(" · ")}
+        {[gt("Queue", { $context: "noun, the task run queue" }), ...parts, caps]
+          .filter(Boolean)
+          .join(" · ")}
       </span>
       {totals.refused.length > 0 ? (
         <Popover>
           <PopoverTrigger render={<Button size="micro" variant="ghost" />}>
-            {totals.refused.length} not started
+            <T>
+              <Var>{totals.refused.length}</Var> not started
+            </T>
           </PopoverTrigger>
           <PopoverPopup align="start" padding="compact" width="lg">
             <ul className="flex flex-col">
@@ -584,7 +619,7 @@ export function TaskQueueBar({ groups }: { groups: ReadonlyArray<TaskProjectGrou
             setBusy(false);
           }}
         >
-          Cancel remaining
+          <T>Cancel remaining</T>
         </Button>
       ) : null}
     </div>
@@ -611,7 +646,7 @@ function RefusedRow({
           disabled={retry.busy}
           onClick={() => void retry.retry(entry, queue)}
         >
-          Retry
+          <T>Retry</T>
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">{queue.reason}</p>
@@ -635,6 +670,7 @@ export function TaskQueueChip({
   group: TaskProjectGroup;
   queue: TaskQueueView;
 }) {
+  const gt = useGT();
   const retry = useTaskRetry(group);
   if (queue.state === "running") return null;
   if (queue.state === "failed-to-start" || queue.state === "refused") {
@@ -644,10 +680,10 @@ export function TaskQueueChip({
           <TooltipTrigger
             render={<Badge variant={queue.state === "refused" ? "warning" : "error"} size="sm" />}
           >
-            {queue.state === "refused" ? "Not started" : "Failed to start"}
+            {queue.state === "refused" ? gt("Not started") : gt("Failed to start")}
           </TooltipTrigger>
           <TooltipPopup className="max-w-72">
-            {queue.reason ?? "The machine refused the start."}
+            {queue.reason ?? gt("The machine refused the start.")}
           </TooltipPopup>
         </Tooltip>
         <Button
@@ -656,7 +692,7 @@ export function TaskQueueChip({
           disabled={retry.busy}
           onClick={() => void retry.retry(entry, queue)}
         >
-          Retry
+          <T>Retry</T>
         </Button>
         {retry.dialog}
       </span>
@@ -665,8 +701,10 @@ export function TaskQueueChip({
   return (
     <Badge variant="quiet" size="sm">
       {queue.state === "queued"
-        ? `Queued${queue.position ? ` · #${queue.position}` : ""}`
-        : "Starting"}
+        ? queue.position
+          ? gt("Queued · #{position}", { position: queue.position })
+          : gt("Queued", { $context: "status, a task waits in the run queue" })
+        : gt("Starting", { $context: "status, a task is starting" })}
     </Badge>
   );
 }

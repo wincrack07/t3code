@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
 import { useClientSettings } from "../../hooks/useSettings";
@@ -22,6 +22,7 @@ import { Menu, MenuTrigger, MenuPopup } from "../ui/menu";
 import { SettingsGroup } from "./SettingsGroup";
 
 export function ProjectFoldersSettings() {
+  const gt = useGT();
   const projects = useSidebarProjectGroups();
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const [editor, setEditor] = useState<{ folder?: ProjectFolder; projectKeys?: string[] } | null>(
@@ -31,18 +32,22 @@ export function ProjectFoldersSettings() {
   return (
     <section className="space-y-3">
       <div className="space-y-1 px-3 sm:px-4">
-        <h2 className="flex min-h-7 items-center text-base font-semibold">Project groups</h2>
+        <h2 className="flex min-h-7 items-center text-base font-semibold">
+          <T>Project groups</T>
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Organize projects across environments. Deleting a group moves its projects and subgroups
-          up a level.
+          <T>
+            Organize projects across environments. Deleting a group moves its projects and subgroups
+            up a level.
+          </T>
         </p>
       </div>
       <div className="flex flex-wrap gap-2 px-3 sm:px-4">
         <Button size="sm" variant="outline" onClick={() => setEditor({})}>
-          New group
+          <T>New group</T>
         </Button>
         <Button size="sm" variant="outline" onClick={() => setSuggest(true)}>
-          Suggest groups
+          <T>Suggest groups</T>
         </Button>
       </div>
       {projectFolderTree(folders).map(({ folder }) => (
@@ -52,7 +57,7 @@ export function ProjectFoldersSettings() {
               {folder.emoji} {projectFolderPath(folders, folder.id)}
             </span>
             <Button size="sm" variant="ghost" onClick={() => setEditor({ folder })}>
-              Rename
+              <T context="verb, renames a project group">Rename</T>
             </Button>
             <Menu>
               <MenuTrigger
@@ -60,7 +65,7 @@ export function ProjectFoldersSettings() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label={`Move group ${folder.name}`}
+                    aria-label={gt("Move group {name}", { name: folder.name })}
                     disabled={
                       projectFolderAncestors(folders, folder.id).length === 0 &&
                       folders.every(
@@ -72,7 +77,7 @@ export function ProjectFoldersSettings() {
                   />
                 }
               >
-                Move
+                <T context="verb, moves a project group">Move</T>
               </MenuTrigger>
               <MenuPopup>
                 <ProjectFolderMenu
@@ -94,7 +99,7 @@ export function ProjectFoldersSettings() {
               </MenuPopup>
             </Menu>
             <Button size="sm" variant="ghost" onClick={() => deleteSidebarFolder(folder.id)}>
-              Delete
+              <T context="verb, deletes a project group">Delete</T>
             </Button>
           </div>
           <ul className="space-y-1 text-sm text-muted-foreground">
@@ -102,14 +107,14 @@ export function ProjectFoldersSettings() {
               <li key={key} className="flex min-h-8 min-w-0 items-center gap-2">
                 <span className="min-w-0 flex-1 truncate">
                   {projects.find((project) => project.projectKey === key)?.displayName ??
-                    "Unavailable project"}
+                    gt("Unavailable project")}
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => moveSidebarProjectToFolder(key, null)}
                 >
-                  Remove
+                  <T context="verb, removes a project from a group">Remove</T>
                 </Button>
               </li>
             ))}
@@ -130,11 +135,14 @@ export function ProjectFoldersSettings() {
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label={`Group ${project.displayName}`}
+                      aria-label={gt("Group {name}", {
+                        $context: "verb, adds a project to a group",
+                        name: project.displayName,
+                      })}
                     />
                   }
                 >
-                  Group
+                  <T context="verb, adds a project to a group">Group</T>
                 </MenuTrigger>
                 <MenuPopup>
                   <ProjectFolderMenu

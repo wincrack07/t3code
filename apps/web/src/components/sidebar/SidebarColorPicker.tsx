@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import { CheckIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -48,6 +48,7 @@ function SidebarColorChoices({
   value: string | null;
   onChange: (color: string | null) => void;
 }) {
+  const gt = useGT();
   const [custom, setCustom] = useState(value ?? "#629bd7");
   const valid = isSidebarColor(custom);
   const customSelected =
@@ -64,8 +65,13 @@ function SidebarColorChoices({
             onChange(color === "default" ? null : color);
         }}
       >
-        <MenuGroupLabel>Sidebar color</MenuGroupLabel>
-        {[{ name: "Default", value: "default" }, ...SIDEBAR_COLORS].map((color) => (
+        <MenuGroupLabel>
+          <T>Sidebar color</T>
+        </MenuGroupLabel>
+        {[
+          { name: gt("Default", { $context: "no custom color" }), value: "default" },
+          ...SIDEBAR_COLORS,
+        ].map((color) => (
           <MenuRadioItem
             variant="rounded"
             closeOnClick={false}
@@ -87,11 +93,15 @@ function SidebarColorChoices({
       <MenuGroup>
         <MenuGroupLabel>
           <span className="flex items-center gap-2">
-            <span className="flex-1">Custom color</span>
+            <span className="flex-1">
+              <T>Custom color</T>
+            </span>
             {customSelected ? (
               <>
                 <CheckIcon aria-hidden className="size-3.5" />
-                <span className="sr-only">Current color</span>
+                <span className="sr-only">
+                  <T>Current color</T>
+                </span>
               </>
             ) : null}
           </span>
@@ -104,7 +114,7 @@ function SidebarColorChoices({
         >
           <SidebarColorMarker variant="swatch" color={valid ? custom : null} />
           <Input
-            aria-label="Custom sidebar color"
+            aria-label={gt("Custom sidebar color")}
             value={custom}
             aria-invalid={!valid || undefined}
             spellCheck={false}
@@ -120,7 +130,7 @@ function SidebarColorChoices({
             size="sm"
           />
           <Button size="sm" variant="outline" disabled={!valid} onClick={apply}>
-            Apply
+            <T>Apply</T>
           </Button>
         </div>
       </MenuGroup>
@@ -136,7 +146,7 @@ export function SidebarColorPicker(props: {
     <Menu>
       <MenuTrigger render={<Button variant="outline" size="sm" disabled={props.disabled} />}>
         <SidebarColorMarker variant="swatch" color={props.value} />
-        Sidebar color
+        <T>Sidebar color</T>
       </MenuTrigger>
       <MenuPopup align="end">
         <SidebarColorChoices {...props} />
@@ -150,7 +160,9 @@ export function SidebarColorSubmenu(props: {
 }) {
   return (
     <MenuSub>
-      <MenuSubTrigger>Sidebar color</MenuSubTrigger>
+      <MenuSubTrigger>
+        <T>Sidebar color</T>
+      </MenuSubTrigger>
       <MenuSubPopup>
         <SidebarColorChoices {...props} />
       </MenuSubPopup>

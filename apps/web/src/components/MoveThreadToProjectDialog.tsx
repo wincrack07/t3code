@@ -1,10 +1,10 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import {
   pickableProjectGroups,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 
@@ -69,6 +69,8 @@ function MoveThreadToProjectPicker({ threadRef }: { readonly threadRef: ScopedTh
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  const gt = useGT();
+  const messages = useMessages();
   if (thread === null) return null;
 
   const labelById = new Map(
@@ -88,12 +90,15 @@ function MoveThreadToProjectPicker({ threadRef }: { readonly threadRef: ScopedTh
       sortOrder,
     ),
   );
-  const sections = buildThreadMoveTargetSections({
-    groups,
-    folders,
-    thread,
-    machineLabel,
-  });
+  const sections = buildThreadMoveTargetSections(
+    {
+      groups,
+      folders,
+      thread,
+      machineLabel,
+    },
+    messages,
+  );
   const pendingProjectId = thread.pendingProjectMove?.projectId ?? null;
   const paletteGroups: CommandPaletteGroup[] = sections.map((section) => ({
     value: `move-section:${section.id}`,
@@ -111,7 +116,7 @@ function MoveThreadToProjectPicker({ threadRef }: { readonly threadRef: ScopedTh
         ? {
             titleTrailingContent: (
               <Badge variant="secondary" size="sm">
-                Pending
+                <T context="thread move not yet applied">Pending</T>
               </Badge>
             ),
           }
@@ -132,15 +137,15 @@ function MoveThreadToProjectPicker({ threadRef }: { readonly threadRef: ScopedTh
 
   return (
     <CommandDialogPopup
-      aria-label="Move thread to project"
+      aria-label={gt("Move thread to project")}
       className="overflow-hidden"
       onBackdropPointerDown={close}
     >
       <CommandPaletteContent
-        aria-label="Move thread to project"
+        aria-label={gt("Move thread to project")}
         autoHighlight="always"
-        footerActionLabel="Move"
-        inputProps={{ placeholder: `Move "${thread.title}" to…` }}
+        footerActionLabel={gt("Move", { $context: "verb, confirms moving a thread" })}
+        inputProps={{ placeholder: gt('Move "{title}" to…', { title: thread.title }) }}
         mode="none"
         onItemHighlighted={(value) => setHighlighted(typeof value === "string" ? value : null)}
         onValueChange={(value) => {
@@ -151,7 +156,7 @@ function MoveThreadToProjectPicker({ threadRef }: { readonly threadRef: ScopedTh
         value={query}
       >
         <CommandPaletteResults
-          emptyStateMessage="No matching projects."
+          emptyStateMessage={gt("No matching projects.")}
           groups={visibleGroups}
           highlightedItemValue={highlighted}
           isActionsOnly={false}

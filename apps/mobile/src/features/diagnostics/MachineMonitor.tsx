@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useIsFocused } from "@react-navigation/native";
 import {
   formatMachineBytes,
@@ -10,6 +9,7 @@ import {
 } from "@t3tools/client-runtime/state/machine-monitor";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { AuthOrchestrationReadScope } from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -36,6 +36,8 @@ const DOT: Record<MachineHealthLevel | "unknown", string> = {
 const TABULAR = { fontVariant: ["tabular-nums" as const] };
 
 export function MachineMonitor() {
+  const gt = useGT();
+  const messages = useMessages();
   const { environments } = useEnvironments();
   const focused = useIsFocused();
   const [selected, setSelected] = useState<EnvironmentId | null>(null);
@@ -49,30 +51,37 @@ export function MachineMonitor() {
       : null,
   );
   const sample = data?.sample ?? null;
-  const health = sample ? presentMachineHealth(sample) : null;
+  const health = sample ? presentMachineHealth(sample, messages) : null;
   const connected = environment?.connection.phase === "connected";
   const level = health && connected ? health.level : "unknown";
   const headline =
     environment === undefined
-      ? "No environment connected"
+      ? gt("No environment connected")
       : !allowed
-        ? "No access to this machine"
+        ? gt("No access to this machine")
         : health === null
           ? error
-            ? "Monitor unavailable"
-            : "Reading machine"
+            ? gt("Monitor unavailable")
+            : gt("Reading machine")
           : connected
             ? health.headline
-            : "Disconnected";
+            : gt("Disconnected");
   const subline =
     sample === null
-      ? (error ?? (environment ? environment.label : "Connect an environment to see its machine"))
+      ? (error ??
+        (environment ? environment.label : gt("Connect an environment to see its machine")))
       : connected
-        ? `${environment!.label} · up ${formatMachineUptime(sample.uptime)}`
-        : `${environment!.label} · last sample ${new Date(sample.at).toLocaleTimeString()}`;
+        ? gt("{label} · up {uptime}", {
+            label: environment!.label,
+            uptime: formatMachineUptime(sample.uptime),
+          })
+        : gt("{label} · last sample {time}", {
+            label: environment!.label,
+            time: new Date(sample.at).toLocaleTimeString(),
+          });
 
   return (
-    <SettingsSection title="Machine monitor">
+    <SettingsSection title={gt("Machine monitor")}>
       <View className="gap-4 p-4">
         {environments.length > 1 ? (
           <SegmentedControl
@@ -99,33 +108,47 @@ export function MachineMonitor() {
               share={health.cpu}
               level={health.cpuLevel}
               value={formatMachinePercent(health.cpu)}
-              detail={`Load ${sample.load.map((v) => v.toFixed(2)).join(" · ")}`}
+              detail={gt("Load {load}", {
+                load: sample.load.map((v) => v.toFixed(2)).join(" · "),
+              })}
             />
             <Meter
-              label="Memory"
+              label={gt("Memory")}
               share={health.memory}
               level={health.memoryLevel}
               value={formatMachinePercent(health.memory)}
-              detail={`${formatMachineBytes(sample.memoryUsed)} of ${formatMachineBytes(sample.memoryTotal)}${
+              detail={
                 sample.swapUsed !== null && sample.swapTotal
-                  ? ` · swap ${formatMachineBytes(sample.swapUsed)}`
-                  : ""
-              }`}
+                  ? gt("{used} of {total} · swap {swap}", {
+                      used: formatMachineBytes(sample.memoryUsed),
+                      total: formatMachineBytes(sample.memoryTotal),
+                      swap: formatMachineBytes(sample.swapUsed),
+                    })
+                  : gt("{used} of {total}", {
+                      used: formatMachineBytes(sample.memoryUsed),
+                      total: formatMachineBytes(sample.memoryTotal),
+                    })
+              }
             />
             {sample.diskFree !== null && sample.diskTotal !== null ? (
               <Meter
-                label="Disk"
+                label={gt("Disk")}
                 share={health.disk}
                 level={health.diskLevel}
                 value={formatMachinePercent(health.disk)}
-                detail={`${formatMachineBytes(sample.diskFree)} free of ${formatMachineBytes(sample.diskTotal)}`}
+                detail={gt("{free} free of {total}", {
+                  free: formatMachineBytes(sample.diskFree),
+                  total: formatMachineBytes(sample.diskTotal),
+                })}
               />
             ) : null}
             <View className="flex-row items-baseline justify-between gap-3">
-              <Text className="text-sm text-foreground-muted">Network</Text>
+              <Text className="text-sm text-foreground-muted">
+                <T>Network</T>
+              </Text>
               <Text className="text-sm text-foreground" style={TABULAR}>
                 {sample.networkDown === null || sample.networkUp === null
-                  ? "Not reported yet"
+                  ? gt("Not reported yet")
                   : `↓ ${formatMachineRate(sample.networkDown)}   ↑ ${formatMachineRate(sample.networkUp)}`}
               </Text>
             </View>

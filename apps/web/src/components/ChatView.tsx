@@ -2711,10 +2711,13 @@ export default function ChatView(props: ChatViewProps) {
     const pendingMoveItems =
       activeThreadRef && pendingProjectMove
         ? [
-            pendingProjectMoveBannerItem({
-              targetTitle: pendingMoveProject?.title ?? gt("another project"),
-              onCancel: () => void cancelThreadProjectMove(activeThreadRef),
-            }),
+            pendingProjectMoveBannerItem(
+              {
+                targetTitle: pendingMoveProject?.title ?? gt("another project"),
+                onCancel: () => void cancelThreadProjectMove(activeThreadRef),
+              },
+              messages,
+            ),
           ]
         : [];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {

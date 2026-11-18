@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { type ReactNode, useState } from "react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   ProjectId,
@@ -45,13 +45,16 @@ import {
 } from "./useScopedSettings";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
 import { useSettingsScope } from "./SettingsScopeContext";
+import { m as resolveMessage, type MessageResolver } from "../../i18n/messages";
 
 type Option = { value: string; label: string };
 const SOURCES: Option[] = [
-  { value: "provider", label: "Configured provider" },
+  { value: "provider", label: msg("Configured provider") },
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- product name
   { value: "jev", label: "Jev (TypeSafe)" },
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- product name
   { value: "openai", label: "OpenAI API" },
-  { value: "custom", label: "OpenAI-compatible API" },
+  { value: "custom", label: msg("OpenAI-compatible API") },
 ];
 const ROLES = ["implementation", "research", "review", "design", "test", "general"] as const;
 const options = (values: readonly string[]): Option[] =>
@@ -68,6 +71,7 @@ function Picker({
   choices: readonly Option[];
   onChange: (value: string) => void;
 }) {
+  const gt = useGT();
   return (
     <Select
       value={value}
@@ -77,7 +81,7 @@ function Picker({
     >
       <SelectTrigger size="sm" className="w-full sm:w-56" aria-label={label}>
         <SelectValue>
-          {() => choices.find((choice) => choice.value === value)?.label ?? "Unavailable"}
+          {() => choices.find((choice) => choice.value === value)?.label ?? gt("Unavailable")}
         </SelectValue>
       </SelectTrigger>
       <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -105,18 +109,19 @@ function MultiPicker({
   emptyLabel: string;
   onChange: (value: string[]) => void;
 }) {
+  const gt = useGT();
   const all = [
     ...choices,
     ...value
       .filter((id) => !choices.some((choice) => choice.value === id))
-      .map((id) => ({ value: id, label: `Unavailable (${id})` })),
+      .map((id) => ({ value: id, label: gt("Unavailable ({id})", { id }) })),
   ];
   const summary =
     value.length === 0
       ? emptyLabel
       : value.length === 1
         ? (all.find((choice) => choice.value === value[0])?.label ?? value[0])
-        : `${value.length} selected`;
+        : gt("{count} selected", { count: value.length });
   return (
     <Menu>
       <MenuTrigger
@@ -125,7 +130,11 @@ function MultiPicker({
         {summary}
       </MenuTrigger>
       <MenuPopup align="end">
-        {all.length === 0 ? <MenuItem disabled>No options</MenuItem> : null}
+        {all.length === 0 ? (
+          <MenuItem disabled>
+            <T>No options</T>
+          </MenuItem>
+        ) : null}
         {all.map((choice) => (
           <MenuCheckboxItem
             key={choice.value}
@@ -153,19 +162,29 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function ruleSummary(rule: DecisionRule): string {
+function ruleSummary(rule: DecisionRule, resolve: MessageResolver = resolveMessage): string {
   const conditions = Object.values(rule.when).filter((value) => value?.length).length;
   const targets = Object.values(rule.choose).filter((value) => value?.length).length;
   return [
-    rule.action === "decide" ? "Decide and stop" : "Restrict options",
+    rule.action === "decide" ? resolve(msg("Decide and stop")) : resolve(msg("Restrict options")),
     conditions === 0
-      ? "every prompt"
-      : `${conditions} ${conditions === 1 ? "condition" : "conditions"}`,
-    targets === 0 ? "no target set" : `${targets} ${targets === 1 ? "target" : "targets"}`,
+      ? resolve(msg("every prompt"))
+      : resolve(
+          msg("{count, plural, one {{count} condition} other {{count} conditions}}", {
+            count: conditions,
+          }),
+        ),
+    targets === 0
+      ? resolve(msg("no target set"))
+      : resolve(
+          msg("{count, plural, one {{count} target} other {{count} targets}}", { count: targets }),
+        ),
   ].join(" · ");
 }
 
 export function DecisionsSettingsSection() {
+  const gt = useGT();
+  const m = useMessages();
   const settings = useScopedSettings();
   const config = settings.decisions;
   const update = useUpdateScopedSettings();
@@ -271,15 +290,17 @@ export function DecisionsSettingsSection() {
 
   return (
     <div className="flex flex-col gap-8" inert={!writable}>
-      <SettingsSection id="decisions" title="Decisions">
+      <SettingsSection id="decisions" title={gt("Decisions")}>
         <SettingsRow
           serverScoped
           settingKeys={["decisions"]}
-          title="Automatic routing"
-          description="Adds Auto to the model picker and applies your rules before a turn starts."
+          title={gt("Automatic routing")}
+          description={gt(
+            "Adds Auto to the model picker and applies your rules before a turn starts.",
+          )}
           control={
             <Switch
-              aria-label="Enable Decisions"
+              aria-label={gt("Enable Decisions")}
               checked={config.enabled}
               onCheckedChange={(enabled) => save({ enabled })}
             />
@@ -288,13 +309,13 @@ export function DecisionsSettingsSection() {
         <SettingsRow
           serverScoped
           settingKeys={["decisions"]}
-          title="Decision source"
-          description="Which model picks where a prompt runs."
+          title={gt("Decision source")}
+          description={gt("Which model picks where a prompt runs.")}
           control={
             <Picker
-              label="Decision source"
+              label={gt("Decision source")}
               value={config.source}
-              choices={SOURCES}
+              choices={SOURCES.map((source) => ({ ...source, label: m(source.label) }))}
               onChange={(value) => {
                 if (
                   value === "provider" ||
@@ -311,8 +332,8 @@ export function DecisionsSettingsSection() {
         />
         {config.source === "provider" ? (
           <SettingsRow
-            title="Decision model"
-            description="Automatic uses the first available provider's fast model."
+            title={gt("Decision model")}
+            description={gt("Automatic uses the first available provider's fast model.")}
             control={
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {selection ? (
@@ -330,10 +351,12 @@ export function DecisionsSettingsSection() {
                     }
                   />
                 ) : (
-                  <span className="text-sm text-muted-foreground">Automatic</span>
+                  <span className="text-sm text-muted-foreground">
+                    <T>Automatic</T>
+                  </span>
                 )}
                 <Switch
-                  aria-label="Use a specific decision model"
+                  aria-label={gt("Use a specific decision model")}
                   checked={selection !== null}
                   disabled={
                     !selection &&
@@ -361,14 +384,16 @@ export function DecisionsSettingsSection() {
           <>
             {custom ? (
               <SettingsRow
-                title="Base URL"
-                description="Include the API prefix, such as /v1. HTTP works only on loopback or a tailnet."
+                title={gt("Base URL")}
+                description={gt(
+                  "Include the API prefix, such as /v1. HTTP works only on loopback or a tailnet.",
+                )}
                 control={
                   <Input
                     key={`${environmentId}-url`}
                     size="sm"
                     className="w-full sm:w-56"
-                    aria-label="Custom base URL"
+                    aria-label={gt("Custom base URL")}
                     placeholder="https://example.com/v1"
                     defaultValue={config.customBaseUrl ?? ""}
                     onBlur={(event) => save({ customBaseUrl: event.target.value.trim() })}
@@ -377,14 +402,14 @@ export function DecisionsSettingsSection() {
               />
             ) : null}
             <SettingsRow
-              title="Model name"
-              description="The model ID the API expects."
+              title={gt("Model name")}
+              description={gt("The model ID the API expects.")}
               control={
                 <Input
                   key={`${environmentId}-${config.source}-model`}
                   size="sm"
                   className="w-full sm:w-56"
-                  aria-label="Decision API model"
+                  aria-label={gt("Decision API model")}
                   defaultValue={
                     config.source === "jev"
                       ? (config.jevModel ?? "jev-latest")
@@ -405,8 +430,8 @@ export function DecisionsSettingsSection() {
               }
             />
             <SettingsRow
-              title="API key"
-              description="Stored in this environment's secret store."
+              title={gt("API key")}
+              description={gt("Stored in this environment's secret store.")}
               control={
                 <Input
                   key={`${environmentId}-${config.source}-key`}
@@ -414,7 +439,7 @@ export function DecisionsSettingsSection() {
                   className="w-full sm:w-56"
                   type="password"
                   autoComplete="off"
-                  aria-label="Decision API key"
+                  aria-label={gt("Decision API key")}
                   defaultValue={typeof apiKey === "string" ? apiKey : ""}
                   onBlur={(event) =>
                     save(
@@ -429,8 +454,14 @@ export function DecisionsSettingsSection() {
               }
             />
             <SettingsRow
-              title="Test connection"
-              description={`Uses the saved settings on ${environment?.label ?? "the selected environment"}.`}
+              title={gt("Test connection")}
+              description={
+                environment
+                  ? gt("Uses the saved settings on {environment}.", {
+                      environment: environment.label,
+                    })
+                  : gt("Uses the saved settings on the selected environment.")
+              }
               status={connection || undefined}
               control={
                 <Button
@@ -444,26 +475,26 @@ export function DecisionsSettingsSection() {
                     setConnection(
                       answer._tag === "Success"
                         ? answer.value.message
-                        : "Could not test the connection.",
+                        : gt("Could not test the connection."),
                     );
                     setTesting(false);
                   }}
                 >
-                  {testing ? "Testing…" : "Test connection"}
+                  {testing ? gt("Testing…") : gt("Test connection")}
                 </Button>
               }
             />
           </>
         )}
       </SettingsSection>
-      <SettingsSection title="Limits">
+      <SettingsSection title={gt("Limits")}>
         <SettingsRow
-          title="Environments"
-          description="Where Auto may run a prompt."
+          title={gt("Environments")}
+          description={gt("Where Auto may run a prompt.")}
           control={
             <MultiPicker
-              label="Allowed environments"
-              emptyLabel="All environments"
+              label={gt("Allowed environments")}
+              emptyLabel={gt("All environments")}
               value={config.allowedEnvironmentIds ?? []}
               choices={environmentOptions}
               onChange={(value) => save({ allowedEnvironmentIds: value.length ? value : null })}
@@ -471,12 +502,12 @@ export function DecisionsSettingsSection() {
           }
         />
         <SettingsRow
-          title="Providers"
-          description="Which provider instances Auto may pick."
+          title={gt("Providers")}
+          description={gt("Which provider instances Auto may pick.")}
           control={
             <MultiPicker
-              label="Allowed provider instances"
-              emptyLabel="All providers"
+              label={gt("Allowed provider instances")}
+              emptyLabel={gt("All providers")}
               value={config.allowedProviderInstanceIds ?? []}
               choices={providerOptions}
               onChange={(value) =>
@@ -486,11 +517,13 @@ export function DecisionsSettingsSection() {
           }
         />
       </SettingsSection>
-      <SettingsSection title="Rules">
+      <SettingsSection title={gt("Rules")}>
         {config.rules.length === 0 ? (
           <SettingsRow
-            title="No rules yet"
-            description="Rules run top to bottom. Restrict narrows the options. Decide picks the first remaining option and stops."
+            title={gt("No rules yet")}
+            description={gt(
+              "Rules run top to bottom. Restrict narrows the options. Decide picks the first remaining option and stops.",
+            )}
           />
         ) : (
           config.rules.map((rule, index) => {
@@ -503,19 +536,19 @@ export function DecisionsSettingsSection() {
               <SettingsRow
                 key={rule.id}
                 title={rule.name}
-                description={ruleSummary(rule)}
+                description={ruleSummary(rule, m)}
                 control={
                   <div className="flex items-center gap-1">
                     <Switch
                       size="sm"
-                      aria-label={`Enable ${rule.name}`}
+                      aria-label={gt("Enable {name}", { name: rule.name })}
                       checked={rule.enabled}
                       onCheckedChange={(enabled) => saveRule({ ...rule, enabled })}
                     />
                     <Button
                       size="icon-sm"
                       variant="ghost-muted"
-                      aria-label={`Edit ${rule.name}`}
+                      aria-label={gt("Edit {name}", { name: rule.name })}
                       onClick={() => setEditingId(rule.id)}
                     >
                       <PencilIcon />
@@ -523,7 +556,7 @@ export function DecisionsSettingsSection() {
                     <Button
                       size="icon-sm"
                       variant="ghost-muted"
-                      aria-label={`Move ${rule.name} up`}
+                      aria-label={gt("Move {name} up", { name: rule.name })}
                       disabled={index === 0}
                       onClick={() => move(-1)}
                     >
@@ -532,7 +565,7 @@ export function DecisionsSettingsSection() {
                     <Button
                       size="icon-sm"
                       variant="ghost-muted"
-                      aria-label={`Move ${rule.name} down`}
+                      aria-label={gt("Move {name} down", { name: rule.name })}
                       disabled={index === config.rules.length - 1}
                       onClick={() => move(1)}
                     >
@@ -541,7 +574,7 @@ export function DecisionsSettingsSection() {
                     <Button
                       size="icon-sm"
                       variant="ghost-destructive"
-                      aria-label={`Remove ${rule.name}`}
+                      aria-label={gt("Remove {name}", { name: rule.name })}
                       onClick={() =>
                         save({ rules: config.rules.filter((entry) => entry.id !== rule.id) })
                       }
@@ -564,7 +597,7 @@ export function DecisionsSettingsSection() {
                   ...config.rules,
                   {
                     id: nextRuleId,
-                    name: "New rule",
+                    name: gt("New rule"),
                     enabled: true,
                     when: {},
                     choose: {},
@@ -576,7 +609,7 @@ export function DecisionsSettingsSection() {
             }}
           >
             <PlusIcon />
-            Add rule
+            <T>Add rule</T>
           </Button>
         </div>
       </SettingsSection>
@@ -586,29 +619,31 @@ export function DecisionsSettingsSection() {
       >
         <DialogPopup className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit rule</DialogTitle>
+            <DialogTitle>
+              <T>Edit rule</T>
+            </DialogTitle>
           </DialogHeader>
           {editing && editingOptions ? (
             <DialogPanel>
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-3">
-                  <Field label="Name">
+                  <Field label={gt("Name")}>
                     <Input
                       key={editing.id}
                       size="sm"
                       className="w-full sm:w-56"
-                      aria-label="Rule name"
+                      aria-label={gt("Rule name")}
                       defaultValue={editing.name}
                       onBlur={(event) => saveRule({ ...editing, name: event.target.value })}
                     />
                   </Field>
-                  <Field label="Action">
+                  <Field label={gt("Action", { $context: "rule action type" })}>
                     <Picker
-                      label="Rule action"
+                      label={gt("Rule action")}
                       value={editing.action}
                       choices={[
-                        { value: "restrict", label: "Restrict options" },
-                        { value: "decide", label: "Decide and stop" },
+                        { value: "restrict", label: gt("Restrict options") },
+                        { value: "decide", label: gt("Decide and stop") },
                       ]}
                       onChange={(action) =>
                         saveRule({
@@ -620,11 +655,13 @@ export function DecisionsSettingsSection() {
                   </Field>
                 </div>
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">When</h3>
-                  <Field label="Project">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    <T context="rule section: conditions">When</T>
+                  </h3>
+                  <Field label={gt("Project")}>
                     <MultiPicker
-                      label="Rule projects"
-                      emptyLabel="Any project"
+                      label={gt("Rule projects")}
+                      emptyLabel={gt("Any project")}
                       value={editing.when.projectIds ?? []}
                       choices={projectOptions}
                       onChange={(projectIds) =>
@@ -634,10 +671,10 @@ export function DecisionsSettingsSection() {
                       }
                     />
                   </Field>
-                  <Field label="Kind of work">
+                  <Field label={gt("Kind of work")}>
                     <MultiPicker
-                      label="Kind of work"
-                      emptyLabel="Any kind"
+                      label={gt("Kind of work")}
+                      emptyLabel={gt("Any kind")}
                       value={editing.when.roles ?? []}
                       choices={options(ROLES)}
                       onChange={(values) =>
@@ -647,10 +684,10 @@ export function DecisionsSettingsSection() {
                       }
                     />
                   </Field>
-                  <Field label="Author provider">
+                  <Field label={gt("Author provider")}>
                     <MultiPicker
-                      label="Author provider"
-                      emptyLabel="Any provider"
+                      label={gt("Author provider")}
+                      emptyLabel={gt("Any provider")}
                       value={editing.when.authorDrivers ?? []}
                       choices={authorOptions}
                       onChange={(authorDrivers) =>
@@ -658,10 +695,10 @@ export function DecisionsSettingsSection() {
                       }
                     />
                   </Field>
-                  <Field label="Author instance">
+                  <Field label={gt("Author instance")}>
                     <MultiPicker
-                      label="Author instance"
-                      emptyLabel="Any instance"
+                      label={gt("Author instance")}
+                      emptyLabel={gt("Any instance")}
                       value={editing.when.authorInstanceIds ?? []}
                       choices={providerOptions}
                       onChange={(authorInstanceIds) =>
@@ -671,11 +708,13 @@ export function DecisionsSettingsSection() {
                   </Field>
                 </div>
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">Choose</h3>
-                  <Field label="Provider instance">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    <T context="rule section: what to pick">Choose</T>
+                  </h3>
+                  <Field label={gt("Provider instance")}>
                     <MultiPicker
-                      label="Rule provider instances"
-                      emptyLabel="Any instance"
+                      label={gt("Rule provider instances")}
+                      emptyLabel={gt("Any instance")}
                       value={editing.choose.providerInstanceIds ?? []}
                       choices={providerOptions}
                       onChange={(providerInstanceIds) =>
@@ -685,10 +724,10 @@ export function DecisionsSettingsSection() {
                       }
                     />
                   </Field>
-                  <Field label="Provider type">
+                  <Field label={gt("Provider type")}>
                     <MultiPicker
-                      label="Rule provider types"
-                      emptyLabel="Any type"
+                      label={gt("Rule provider types")}
+                      emptyLabel={gt("Any type")}
                       value={editing.choose.drivers ?? []}
                       choices={authorOptions}
                       onChange={(drivers) =>
@@ -696,19 +735,19 @@ export function DecisionsSettingsSection() {
                       }
                     />
                   </Field>
-                  <Field label="Model">
+                  <Field label={gt("Model")}>
                     <MultiPicker
-                      label="Rule models"
-                      emptyLabel="Any model"
+                      label={gt("Rule models")}
+                      emptyLabel={gt("Any model")}
                       value={editing.choose.models ?? []}
                       choices={editingOptions.models}
                       onChange={(models) => setChoose(editing, { models: listOrUndefined(models) })}
                     />
                   </Field>
-                  <Field label="Effort">
+                  <Field label={gt("Effort", { $context: "reasoning effort" })}>
                     <MultiPicker
-                      label="Rule efforts"
-                      emptyLabel="Any effort"
+                      label={gt("Rule efforts")}
+                      emptyLabel={gt("Any effort")}
                       value={editing.choose.efforts ?? []}
                       choices={editingOptions.efforts}
                       onChange={(efforts) =>
@@ -716,10 +755,10 @@ export function DecisionsSettingsSection() {
                       }
                     />
                   </Field>
-                  <Field label="Environment">
+                  <Field label={gt("Environment")}>
                     <MultiPicker
-                      label="Rule environments"
-                      emptyLabel="Any environment"
+                      label={gt("Rule environments")}
+                      emptyLabel={gt("Any environment")}
                       value={editing.choose.environmentIds ?? []}
                       choices={environmentOptions}
                       onChange={(environmentIds) =>
@@ -732,31 +771,33 @@ export function DecisionsSettingsSection() {
             </DialogPanel>
           ) : null}
           <DialogFooter variant="bare">
-            <Button onClick={() => setEditingId(null)}>Done</Button>
+            <Button onClick={() => setEditingId(null)}>
+              <T>Done</T>
+            </Button>
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-      <SettingsSection title="Test a prompt">
+      <SettingsSection title={gt("Test a prompt")}>
         <SettingsRow
-          title="Project"
+          title={gt("Project")}
           control={
             <Picker
-              label="Test project"
+              label={gt("Test project")}
               value={projectId}
-              choices={[{ value: "", label: "Choose a project" }, ...projectOptions]}
+              choices={[{ value: "", label: gt("Choose a project") }, ...projectOptions]}
               onChange={setProjectId}
             />
           }
         />
         <SettingsRow
-          title="Prompt"
-          description="Shows what Auto would pick and why, without starting a turn."
+          title={gt("Prompt", { $context: "noun" })}
+          description={gt("Shows what Auto would pick and why, without starting a turn.")}
         >
           <div className="mt-3 flex max-w-2xl flex-col items-start gap-3 pb-3.5">
             <Textarea
               size="sm"
-              aria-label="Test a prompt"
-              placeholder="Fix the flaky login test"
+              aria-label={gt("Test a prompt")}
+              placeholder={gt("Fix the flaky login test")}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
             />
@@ -767,7 +808,7 @@ export function DecisionsSettingsSection() {
               onClick={async () => {
                 if (!environmentId) return;
                 setTesting(true);
-                setResult("Deciding…");
+                setResult(gt("Deciding…"));
                 const answer = await run({
                   environmentId,
                   input: { projectId: ProjectId.make(projectId), prompt },
@@ -781,13 +822,13 @@ export function DecisionsSettingsSection() {
                     (entry) => entry.environmentId === choice?.environmentId,
                   );
                   setResult(
-                    `${choice ? `${provider?.displayName ?? "Unavailable provider"} · ${choice.model}${choice.effort ? ` · ${choice.effort}` : ""} · ${host?.label ?? "Unavailable environment"}` : "Normal defaults"}\n${reason}`,
+                    `${choice ? `${provider?.displayName ?? gt("Unavailable provider")} · ${choice.model}${choice.effort ? ` · ${choice.effort}` : ""} · ${host?.label ?? gt("Unavailable environment")}` : gt("Normal defaults")}\n${reason}`,
                   );
-                } else setResult("Could not test this prompt.");
+                } else setResult(gt("Could not test this prompt."));
                 setTesting(false);
               }}
             >
-              Test prompt
+              <T>Test prompt</T>
             </Button>
             {result ? (
               <p

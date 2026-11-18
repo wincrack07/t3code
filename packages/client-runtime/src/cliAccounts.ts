@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { deriveAvailableInstanceId, deriveInstanceId } from "./providerInstanceIds.ts";
 import {
   defaultInstanceIdForDriver,
@@ -10,6 +9,8 @@ import {
   type ProviderInstanceMutation,
   type ServerSettings,
 } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 /** Another subscription with its own CLI login in its own folder. */
 export const CLI_ACCOUNTS = {
@@ -70,20 +71,27 @@ export function suggestCliAccountColor(
   })?.accentColor;
 }
 
-export function planCliAccountAdd(input: {
-  readonly driver: CliAccountDriver;
-  readonly providerInstances: ServerSettings["providerInstances"];
-  readonly policy: ManagedPolicySummary | undefined;
-  readonly name: string;
-  readonly home: string;
-  readonly accentColor?: string | undefined;
-}): { readonly mutation: ProviderInstanceMutation } | { readonly error: string } {
+export function planCliAccountAdd(
+  input: {
+    readonly driver: CliAccountDriver;
+    readonly providerInstances: ServerSettings["providerInstances"];
+    readonly policy: ManagedPolicySummary | undefined;
+    readonly name: string;
+    readonly home: string;
+    readonly accentColor?: string | undefined;
+  },
+  resolve: MFunctionType = mFallback,
+): { readonly mutation: ProviderInstanceMutation } | { readonly error: string } {
   const name = input.name.trim();
   const home = input.home.trim();
-  if (name.length === 0) return { error: "Enter a name for this account." };
-  if (home.length === 0) return { error: "Enter the folder this account signs in with." };
+  if (name.length === 0) return { error: resolve(msg("Enter a name for this account.")) };
+  if (home.length === 0) {
+    return { error: resolve(msg("Enter the folder this account signs in with.")) };
+  }
   if (isDefaultHome(input.driver, home)) {
-    return { error: `${home} is the default account's folder. Choose another one.` };
+    return {
+      error: resolve(msg("{home} is the default account's folder. Choose another one.", { home })),
+    };
   }
   const driver = ProviderDriverKind.make(input.driver);
   const instanceId = ProviderInstanceId.make(
@@ -94,7 +102,11 @@ export function planCliAccountAdd(input: {
     ),
   );
   if (input.policy && isManagedSettingPath(input.policy, `providerInstances.${instanceId}`)) {
-    return { error: `Managed by ${input.policy.organization}.` };
+    return {
+      error: resolve(
+        msg("Managed by {organization}.", { organization: input.policy.organization }),
+      ),
+    };
   }
   const instance: ProviderInstanceConfig = {
     driver,

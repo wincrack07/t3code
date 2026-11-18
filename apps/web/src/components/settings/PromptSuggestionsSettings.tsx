@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { createModelSelection } from "@t3tools/shared/model";
 import { resolvePromptCompletionModelSelection } from "@t3tools/shared/serverSettings";
+import { T, useGT } from "gt-react";
 
 import { useTextGenerationTargets } from "../../textGenerators";
 import { useEnvironmentProviders } from "../../state/environments";
@@ -24,23 +24,26 @@ const DELAY_OPTIONS = [400, 700, 1_000, 1_500, 2_500] as const;
 
 /** Model-written prompt suggestions in the composer. They run on the draft's environment. */
 export function PromptSuggestionsSettings() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
-    <SettingsSection id="prompt-suggestions" title="Prompt suggestions">
+    <SettingsSection id="prompt-suggestions" title={gt("Prompt suggestions")}>
       <SettingsRow
         serverScoped
         settingKeys={["promptCompletionNextEnabled"]}
         {...searchableSetting("prompt-completion-next")}
-        description="After a reply, show likely next prompts in the empty input. Tab fills one in, Alt+] and Alt+[ switch between them."
+        description={gt(
+          "After a reply, show likely next prompts in the empty input. Tab fills one in, Alt+] and Alt+[ switch between them.",
+        )}
         control={
           <Switch
             checked={settings.promptCompletionNextEnabled}
             onCheckedChange={(checked) =>
               updateSettings({ promptCompletionNextEnabled: Boolean(checked) })
             }
-            aria-label="Suggest a reply when the input is empty"
+            aria-label={gt("Suggest a reply when the input is empty")}
           />
         }
       />
@@ -48,14 +51,16 @@ export function PromptSuggestionsSettings() {
         serverScoped
         settingKeys={["promptCompletionInlineEnabled"]}
         {...searchableSetting("prompt-completion-inline")}
-        description="Show a likely continuation when you pause. Tab accepts it, Alt+Right or Ctrl+Right accepts one word, Escape dismisses it."
+        description={gt(
+          "Show a likely continuation when you pause. Tab accepts it, Alt+Right or Ctrl+Right accepts one word, Escape dismisses it.",
+        )}
         control={
           <Switch
             checked={settings.promptCompletionInlineEnabled}
             onCheckedChange={(checked) =>
               updateSettings({ promptCompletionInlineEnabled: Boolean(checked) })
             }
-            aria-label="Complete while typing"
+            aria-label={gt("Complete while typing")}
           />
         }
       />
@@ -63,7 +68,7 @@ export function PromptSuggestionsSettings() {
         serverScoped
         settingKeys={["promptCompletionDelayMs"]}
         {...searchableSetting("prompt-completion-delay")}
-        description="How long you pause before a suggestion is requested."
+        description={gt("How long you pause before a suggestion is requested.")}
         control={
           <Select
             value={String(settings.promptCompletionDelayMs)}
@@ -77,7 +82,7 @@ export function PromptSuggestionsSettings() {
             <SelectTrigger
               size="sm"
               className="w-full sm:w-32"
-              aria-label="Pause before suggesting"
+              aria-label={gt("Pause before suggesting")}
             >
               <SelectValue>{formatDelay(settings.promptCompletionDelayMs)}</SelectValue>
             </SelectTrigger>
@@ -101,6 +106,7 @@ function formatDelay(delayMs: number): string {
 }
 
 function SuggestionModelRow() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const { environment, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
@@ -141,7 +147,11 @@ function SuggestionModelRow() {
   const setModel = (next: ReturnType<typeof createModelSelection>) => {
     const reason = modelDisabledReason(next.instanceId, next.model);
     if (reason) {
-      toastManager.add({ type: "error", title: "Suggestion model not saved", description: reason });
+      toastManager.add({
+        type: "error",
+        title: gt("Suggestion model not saved"),
+        description: reason,
+      });
       return;
     }
     updateSettings({ promptCompletionModelSelection: next });
@@ -151,10 +161,14 @@ function SuggestionModelRow() {
       serverScoped
       settingKeys={["promptCompletionModelSelection"]}
       {...searchableSetting("prompt-completion-model")}
-      description="Use a separate fast model for suggestions. When off, suggestions use the text generation model."
+      description={gt(
+        "Use a separate fast model for suggestions. When off, suggestions use the text generation model.",
+      )}
       control={
         connectedEnvironments.length === 0 ? (
-          <span className="text-sm text-muted-foreground">Connect an environment first.</span>
+          <span className="text-sm text-muted-foreground">
+            <T>Connect an environment first.</T>
+          </span>
         ) : (
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             {dedicated && hasProvider && instanceEntry ? (
@@ -199,7 +213,7 @@ function SuggestionModelRow() {
                     : null,
                 })
               }
-              aria-label="Use a separate suggestion model"
+              aria-label={gt("Use a separate suggestion model")}
             />
           </div>
         )

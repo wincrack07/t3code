@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
+import { T, useGT, Var } from "gt-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
 import { isElectron } from "../env";
@@ -42,6 +42,7 @@ import { Button } from "./ui/button";
 import { SidebarInset } from "./ui/sidebar";
 
 function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadColumn }) {
+  const gt = useGT();
   const resize = (width: number, otherWidth: number) => {
     const store = useThreadColumnsStore.getState();
     store.resize(column.id, width);
@@ -83,7 +84,7 @@ function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadCol
     <div
       ref={ref}
       role="separator"
-      aria-label="Resize thread columns"
+      aria-label={gt("Resize thread columns")}
       aria-orientation="vertical"
       tabIndex={0}
       className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none hover:bg-primary/20 focus-visible:bg-primary/20 [-webkit-app-region:no-drag]"
@@ -228,7 +229,9 @@ function Column({
       >
         {full ? (
           <span className="absolute inset-x-0 top-1/2 text-center text-xs group-data-[column-reordering=true]/columns:hidden">
-            {MAX_THREAD_COLUMNS} column limit · Drop an open thread to focus it
+            <T>
+              <Var>{MAX_THREAD_COLUMNS}</Var> column limit · Drop an open thread to focus it
+            </T>
           </span>
         ) : null}
       </div>

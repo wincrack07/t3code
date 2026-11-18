@@ -1,5 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
-import { msg } from "gt-react";
+import { msg, T, useGT, Var } from "gt-react";
 import { useState } from "react";
 import { AsyncResult } from "effect/reactivity";
 import { PlusIcon } from "lucide-react";
@@ -25,6 +24,7 @@ import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { WizardFooter, WizardHeader, WizardPanel, WizardPopup } from "../ui/wizard";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
+import { m } from "../../i18n/messages";
 import { SettingsRow } from "./settingsLayout";
 
 const HOME_VARIABLE: Record<CliAccountDriver, string> = {
@@ -50,6 +50,7 @@ export function AddCliAccountButton({
   ) => Promise<AsyncResult.AsyncResult<unknown, unknown>>;
   readonly onCreated: (instanceId: ProviderInstanceId) => void;
 }) {
+  const gt = useGT();
   const { label, defaultHome } = CLI_ACCOUNTS[driver];
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("Company");
@@ -79,14 +80,17 @@ export function AddCliAccountButton({
   };
 
   const add = async () => {
-    const plan = planCliAccountAdd({
-      driver,
-      providerInstances,
-      policy,
-      name,
-      home: folder,
-      accentColor,
-    });
+    const plan = planCliAccountAdd(
+      {
+        driver,
+        providerInstances,
+        policy,
+        name,
+        home: folder,
+        accentColor,
+      },
+      m,
+    );
     if ("error" in plan) {
       setError(plan.error);
       return;
@@ -100,7 +104,7 @@ export function AddCliAccountButton({
       onCreated(plan.mutation.instanceId);
     } else if (AsyncResult.isFailure(result)) {
       const failure = squashAtomCommandFailure(result);
-      setError(failure instanceof Error ? failure.message : "Could not add this account.");
+      setError(failure instanceof Error ? failure.message : gt("Could not add this account."));
     }
   };
 
@@ -113,7 +117,9 @@ export function AddCliAccountButton({
         onClick={start}
       >
         <PlusIcon className="size-4 shrink-0" />
-        Add {label} account
+        <T>
+          Add <Var>{label}</Var> account
+        </T>
       </button>
       <Dialog
         open={open}
@@ -123,24 +129,33 @@ export function AddCliAccountButton({
       >
         <WizardPopup>
           <WizardHeader
-            title={created ?? `Add ${label} account`}
+            title={created ?? gt("Add {label} account", { label })}
             description={
               created
-                ? "Sign in on this environment's machine. The account appears as connected once the login finishes."
-                : `A separate ${label} CLI login in its own folder. The default account in ${defaultHome} is not touched.`
+                ? gt(
+                    "Sign in on this environment's machine. The account appears as connected once the login finishes.",
+                  )
+                : gt(
+                    "A separate {label} CLI login in its own folder. The default account in {defaultHome} is not touched.",
+                    { label, defaultHome },
+                  )
             }
           />
           <WizardPanel>
             {created ? (
               <SettingsRow
-                title="Sign in"
+                title={gt("Sign in", { $context: "step title" })}
                 description={
                   <>
                     <code className="select-text break-words">{command}</code>
                     <span className="mt-1 block">
                       {driver === "codex"
-                        ? "Enter the code it prints, sign in and choose this account's workspace. Plans tell accounts with the same email apart, for example Team and Pro."
-                        : "Open the link it prints in a private window and sign in with this account."}
+                        ? gt(
+                            "Enter the code it prints, sign in and choose this account's workspace. Plans tell accounts with the same email apart, for example Team and Pro.",
+                          )
+                        : gt(
+                            "Open the link it prints in a private window and sign in with this account.",
+                          )}
                     </span>
                   </>
                 }
@@ -150,7 +165,9 @@ export function AddCliAccountButton({
                     size="xs"
                     onClick={() => copyToClipboard(command, undefined)}
                   >
-                    {isCopied ? "Copied" : "Copy command"}
+                    {isCopied
+                      ? gt("Copied", { $context: "copy button state" })
+                      : gt("Copy command")}
                   </Button>
                 }
               />
@@ -164,21 +181,27 @@ export function AddCliAccountButton({
                 }}
               >
                 <SettingsRow
-                  title="Account name"
-                  description={`Shown as "${label} - ${name.trim() || "Name"}".`}
+                  title={gt("Account name")}
+                  description={
+                    name.trim()
+                      ? gt('Shown as "{label} - {name}".', { label, name: name.trim() })
+                      : gt('Shown as "{label} - Name".', { label })
+                  }
                   control={
                     <Input
-                      aria-label="Account name"
+                      aria-label={gt("Account name")}
                       value={name}
                       disabled={busy}
                       onChange={(event) => setName(event.target.value)}
-                      placeholder="e.g. Company"
+                      placeholder={gt("e.g. Company")}
                     />
                   }
                 />
                 <SettingsRow
-                  title="Color"
-                  description="Matches other accounts with this name. One account keeps one color."
+                  title={gt("Color", { $context: "settings row title, account accent color" })}
+                  description={gt(
+                    "Matches other accounts with this name. One account keeps one color.",
+                  )}
                   control={
                     <ProviderAccentColorPicker
                       layout="inline"
@@ -189,11 +212,15 @@ export function AddCliAccountButton({
                   }
                 />
                 <SettingsRow
-                  title="Folder"
-                  description={`${HOME_VARIABLE[driver]} for this account.`}
+                  title={gt("Folder", { $context: "settings row title, account config folder" })}
+                  description={gt("{variable} for this account.", {
+                    variable: HOME_VARIABLE[driver],
+                  })}
                   control={
                     <Input
-                      aria-label="Folder"
+                      aria-label={gt("Folder", {
+                        $context: "settings row title, account config folder",
+                      })}
                       value={folder}
                       disabled={busy}
                       onChange={(event) => setHome(event.target.value)}
@@ -210,18 +237,20 @@ export function AddCliAccountButton({
           </WizardPanel>
           <WizardFooter>
             {created ? (
-              <Button onClick={() => setOpen(false)}>Done</Button>
+              <Button onClick={() => setOpen(false)}>
+                <T $context="button, close the dialog">Done</T>
+              </Button>
             ) : (
               <>
                 <Button variant="outline" disabled={busy} onClick={() => setOpen(false)}>
-                  Cancel
+                  <T $context="verb, button">Cancel</T>
                 </Button>
                 <Button
                   type="submit"
                   form={`add-${driver}-cli-account`}
                   disabled={busy || disabled}
                 >
-                  {busy ? "Adding…" : "Continue"}
+                  {busy ? gt("Adding…") : gt("Continue", { $context: "verb, button" })}
                 </Button>
               </>
             )}

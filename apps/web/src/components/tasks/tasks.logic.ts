@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { msg } from "gt-react";
 import {
   scopedProjectKey,
   scopedThreadKey,
@@ -33,6 +33,7 @@ import { taskBatchEffectiveConcurrency } from "@t3tools/shared/savedTasks";
 import { buildNewThreadLink, PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 
 import { runtimeModeConfig } from "../chat/runtimeModeConfig";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 export const TASK_STATUSES = [
   "open",
@@ -47,10 +48,10 @@ export const TASK_MANUAL_STATUSES = [
   "done",
 ] as const satisfies ReadonlyArray<SavedPromptStatus>;
 export const TASK_STATUS_LABELS: Record<SavedPromptStatus, string> = {
-  open: "Open",
-  "in-progress": "In progress",
-  review: "Review",
-  done: "Done",
+  open: msg("Open", { $context: "task status" }),
+  "in-progress": msg("In progress", { $context: "task status" }),
+  review: msg("Review", { $context: "task status" }),
+  done: msg("Done", { $context: "task status" }),
 };
 export const TASK_TEXT_MAX_LENGTH = 120_000;
 export const TASK_TITLE_MAX_LENGTH = 160;
@@ -228,9 +229,9 @@ export const taskPriority = (task: Pick<ProjectSavedPrompt, "priority">): TaskPr
 
 export type TaskWhen = "today" | "later" | "none";
 export const TASK_WHEN_LABELS: Record<TaskWhen, string> = {
-  today: "Today",
-  later: "Later",
-  none: "Anytime",
+  today: msg("Today", { $context: "when to do a task" }),
+  later: msg("Later", { $context: "when to do a task" }),
+  none: msg("Anytime", { $context: "when to do a task" }),
 };
 export const taskWhen = (task: Pick<ProjectSavedPrompt, "when">): TaskWhen => task.when ?? "none";
 
@@ -371,6 +372,7 @@ export function buildTaskList(
   groups: ReadonlyArray<TaskProjectGroup>,
   filter: TaskFilter,
   view: TaskListView = "project",
+  resolve: MessageResolver = m,
 ): TaskListModel {
   const visibleGroups =
     filter.projectKey === null ? groups : groups.filter((group) => group.key === filter.projectKey);
@@ -388,7 +390,7 @@ export function buildTaskList(
     view === "inbox"
       ? (["today", "later", "none"] as const).map((when) => ({
           id: when,
-          label: TASK_WHEN_LABELS[when],
+          label: resolve(TASK_WHEN_LABELS[when]),
           when,
           group: null,
           rows: open.rows(open.top.filter(({ entry }) => taskWhen(entry.task) === when)),
@@ -537,10 +539,10 @@ const REVIEW_OUTCOMES: Record<
   TaskReviewSnapshot["outcome"],
   { readonly label: string; readonly tone: TaskReviewTone }
 > = {
-  completed: { label: "Finished", tone: "success" },
-  "waiting for input": { label: "Finished with questions", tone: "warning" },
-  failed: { label: "Failed", tone: "error" },
-  interrupted: { label: "Interrupted", tone: "quiet" },
+  completed: { label: msg("Finished", { $context: "task outcome" }), tone: "success" },
+  "waiting for input": { label: msg("Finished with questions"), tone: "warning" },
+  failed: { label: msg("Failed", { $context: "task outcome" }), tone: "error" },
+  interrupted: { label: msg("Interrupted", { $context: "task outcome" }), tone: "quiet" },
 };
 
 /** Markdown reduced to the words a two-line preview can show. */
@@ -563,11 +565,14 @@ function formatTaskDuration(ms: number): string {
   return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
 }
 
-export function taskReviewView(snapshot: TaskReviewSnapshot): TaskReviewView {
+export function taskReviewView(
+  snapshot: TaskReviewSnapshot,
+  resolve: MessageResolver = m,
+): TaskReviewView {
   const outcome = REVIEW_OUTCOMES[snapshot.outcome];
   const excerpt = snapshot.assistantMessage ? plainTextExcerpt(snapshot.assistantMessage) : "";
   return {
-    outcome: outcome.label,
+    outcome: resolve(outcome.label),
     tone: outcome.tone,
     excerpt: excerpt || null,
     changes:
@@ -642,18 +647,30 @@ export interface TaskAttachmentCandidate {
 export function taskAttachmentLimitError(
   existing: ReadonlyArray<ProjectTaskAttachment>,
   incoming: ReadonlyArray<TaskAttachmentCandidate>,
+  resolve: MessageResolver = m,
 ): string | null {
   if (existing.length + incoming.length > TASK_ATTACHMENT_MAX_COUNT) {
     const room = Math.max(0, TASK_ATTACHMENT_MAX_COUNT - existing.length);
     return room === 0
-      ? `A task holds up to ${TASK_ATTACHMENT_MAX_COUNT} attachments. Remove one to add another.`
-      : `A task holds up to ${TASK_ATTACHMENT_MAX_COUNT} attachments. There is room for ${room} more.`;
+      ? resolve(msg("A task holds up to {max} attachments. Remove one to add another."), {
+          max: TASK_ATTACHMENT_MAX_COUNT,
+        })
+      : resolve(msg("A task holds up to {max} attachments. There is room for {room} more."), {
+          max: TASK_ATTACHMENT_MAX_COUNT,
+          room,
+        });
   }
   for (const item of incoming) {
     if (item.kind === "image" && item.sizeBytes > TASK_IMAGE_MAX_BYTES)
-      return `${item.name} is larger than the ${TASK_IMAGE_MAX_BYTES / MIB} MiB image limit.`;
+      return resolve(msg("{name} is larger than the {limit} MiB image limit."), {
+        name: item.name,
+        limit: TASK_IMAGE_MAX_BYTES / MIB,
+      });
     if (item.kind === "file" && item.sizeBytes > TASK_FILE_MAX_BYTES)
-      return `${item.name} is larger than the ${TASK_FILE_MAX_BYTES / MIB} MiB file limit.`;
+      return resolve(msg("{name} is larger than the {limit} MiB file limit."), {
+        name: item.name,
+        limit: TASK_FILE_MAX_BYTES / MIB,
+      });
   }
   return null;
 }
@@ -694,12 +711,15 @@ const basename = (path: string) =>
     .split(/[/\\]/)
     .at(-1) || path;
 
-export function taskAttachmentViews(input: {
-  readonly attachments: ReadonlyArray<ProjectTaskAttachment>;
-  readonly inspected: ReadonlyArray<InspectedTaskAttachment> | null;
-  readonly homeEnvironmentId: EnvironmentId;
-  readonly labelOf: (environmentId: EnvironmentId) => string;
-}): TaskAttachmentView[] {
+export function taskAttachmentViews(
+  input: {
+    readonly attachments: ReadonlyArray<ProjectTaskAttachment>;
+    readonly inspected: ReadonlyArray<InspectedTaskAttachment> | null;
+    readonly homeEnvironmentId: EnvironmentId;
+    readonly labelOf: (environmentId: EnvironmentId) => string;
+  },
+  resolve: MessageResolver = m,
+): TaskAttachmentView[] {
   const byKey = new Map(input.inspected?.map((item) => [item.key, item]));
   return input.attachments.map((item): TaskAttachmentView => {
     const key = taskAttachmentKey(item);
@@ -710,8 +730,10 @@ export function taskAttachmentViews(input: {
       return {
         key,
         kind: image ? "image" : "file",
-        name: "name" in attachment ? attachment.name : "Attachment",
-        detail: `Stored copy on ${input.labelOf(input.homeEnvironmentId)}`,
+        name: "name" in attachment ? attachment.name : resolve(msg("Attachment")),
+        detail: resolve(msg("Stored copy on {machine}"), {
+          machine: input.labelOf(input.homeEnvironmentId),
+        }),
         sizeBytes: "sizeBytes" in attachment ? attachment.sizeBytes : null,
         missing: inspected?.missing ?? false,
         warning: inspected?.warning ?? null,
@@ -750,6 +772,7 @@ export function taskStartTargets(
   group: Pick<TaskProjectGroup, "members">,
   entry: Pick<TaskEntry, "task" | "home">,
   labelOf: (environmentId: EnvironmentId) => string,
+  resolve: MessageResolver = m,
 ): TaskStartTarget[] {
   const homeId = entry.home.environmentId;
   const stored = (entry.task.attachments ?? []).some((item) => item.kind === "stored");
@@ -768,13 +791,13 @@ export function taskStartTargets(
       project,
       home: false,
       disabledReason: !reachable
-        ? "Not connected"
+        ? resolve(msg("Not connected"))
         : homeKey === null ||
             !project.repositoryIdentity ||
             repositoryGroupingKeyOf(project.repositoryIdentity) !== homeKey
-          ? "Not the same repository"
+          ? resolve(msg("Not the same repository"))
           : stored
-            ? `Has attachments stored on ${labelOf(homeId)}`
+            ? resolve(msg("Has attachments stored on {machine}"), { machine: labelOf(homeId) })
             : null,
     })),
   ];
@@ -900,6 +923,7 @@ export interface TaskAttempt {
 export function taskAttempts(
   task: Pick<ProjectSavedPrompt, "threadLinks">,
   homeEnvironmentId: EnvironmentId,
+  resolve: MessageResolver = m,
 ): TaskAttempt[] {
   return (task.threadLinks ?? []).map((link, index) => {
     const environmentId = link.environmentId ?? homeEnvironmentId;
@@ -907,7 +931,7 @@ export function taskAttempts(
       key: `${environmentId}:${link.threadId}:${link.userMessageId ?? index}`,
       thread: scopeThreadRef(environmentId, link.threadId),
       remote: environmentId !== homeEnvironmentId,
-      review: link.snapshot ? taskReviewView(link.snapshot) : null,
+      review: link.snapshot ? taskReviewView(link.snapshot, resolve) : null,
       finishedAt: link.snapshot?.finishedAt ?? null,
     };
   });

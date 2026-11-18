@@ -1,5 +1,7 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { EnvironmentId, ProjectId, ScopedProjectRef } from "@t3tools/contracts";
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "./i18n/messages";
 
 import {
   projectFolderOfProject,
@@ -34,11 +36,14 @@ export interface ThreadMoveTargetSection<G extends MoveTargetGroup> {
 }
 
 /** Projects are per machine, so only a project on the thread's own machine can take it. */
-export function resolveThreadMoveTarget<G extends MoveTargetGroup>(input: {
-  readonly group: G;
-  readonly thread: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId };
-  readonly machineLabel: string;
-}): ThreadMoveTarget<G> {
+export function resolveThreadMoveTarget<G extends MoveTargetGroup>(
+  input: {
+    readonly group: G;
+    readonly thread: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId };
+    readonly machineLabel: string;
+  },
+  resolve: MessageResolver = m,
+): ThreadMoveTarget<G> {
   const project =
     input.group.memberProjects.find(
       (member) => member.environmentId === input.thread.environmentId,
@@ -52,9 +57,9 @@ export function resolveThreadMoveTarget<G extends MoveTargetGroup>(input: {
     project,
     current,
     disabledReason: current
-      ? "Current project"
+      ? resolve(msg("Current project"))
       : project === null
-        ? `Not on ${input.machineLabel}`
+        ? resolve(msg("Not on {machine}", { machine: input.machineLabel }))
         : null,
   };
 }
@@ -63,19 +68,25 @@ export function resolveThreadMoveTarget<G extends MoveTargetGroup>(input: {
  * The picker's sections in sidebar order: one per user group, then Ungrouped. `groups` arrive
  * sorted the way the sidebar sorts them, so pinned and recent projects lead each section.
  */
-export function buildThreadMoveTargetSections<G extends MoveTargetGroup>(input: {
-  readonly groups: ReadonlyArray<G>;
-  readonly folders: ReadonlyArray<ProjectFolder>;
-  readonly thread: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId };
-  readonly machineLabel: string;
-}): ReadonlyArray<ThreadMoveTargetSection<G>> {
+export function buildThreadMoveTargetSections<G extends MoveTargetGroup>(
+  input: {
+    readonly groups: ReadonlyArray<G>;
+    readonly folders: ReadonlyArray<ProjectFolder>;
+    readonly thread: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId };
+    readonly machineLabel: string;
+  },
+  resolve: MessageResolver = m,
+): ReadonlyArray<ThreadMoveTargetSection<G>> {
   const byFolderId = new Map<string | null, ThreadMoveTarget<G>[]>();
   for (const group of input.groups) {
     if (group.isScratch || group.archived) continue;
     const folderId = projectFolderOfProject(input.folders, group.projectKey)?.id ?? null;
     const targets = byFolderId.get(folderId) ?? [];
     targets.push(
-      resolveThreadMoveTarget({ group, thread: input.thread, machineLabel: input.machineLabel }),
+      resolveThreadMoveTarget(
+        { group, thread: input.thread, machineLabel: input.machineLabel },
+        resolve,
+      ),
     );
     byFolderId.set(folderId, targets);
   }
@@ -91,7 +102,10 @@ export function buildThreadMoveTargetSections<G extends MoveTargetGroup>(input: 
   if (ungrouped)
     sections.push({
       id: "ungrouped",
-      label: sections.length > 0 ? "Ungrouped" : "Projects",
+      label:
+        sections.length > 0
+          ? resolve(msg("Ungrouped", { $context: "section of projects outside any group" }))
+          : resolve(msg("Projects")),
       targets: ungrouped,
     });
   return sections;
@@ -106,15 +120,34 @@ export function detachConfirmationMessage(input: {
   readonly dirty: boolean | undefined;
 }): string {
   const left = input.inWorktree
-    ? "The thread leaves its worktree and continues in the project folder. The worktree and its branch stay on disk."
-    : `The thread leaves ${input.branch ? `branch ${input.branch}` : "its branch"} and continues in the project folder. The branch stays on disk.`;
+    ? m(
+        msg(
+          "The thread leaves its worktree and continues in the project folder. The worktree and its branch stay on disk.",
+        ),
+      )
+    : input.branch
+      ? m(
+          msg(
+            "The thread leaves branch {branch} and continues in the project folder. The branch stays on disk.",
+            { branch: input.branch },
+          ),
+        )
+      : m(
+          msg(
+            "The thread leaves its branch and continues in the project folder. The branch stays on disk.",
+          ),
+        );
   const dirty =
     input.dirty === true
       ? input.inWorktree
-        ? "The worktree has uncommitted changes. They stay in the worktree."
-        : "The current folder has uncommitted changes. They stay there."
+        ? m(msg("The worktree has uncommitted changes. They stay in the worktree."))
+        : m(msg("The current folder has uncommitted changes. They stay there."))
       : null;
-  return [`Move "${input.threadTitle}" to ${input.targetTitle}?`, left, dirty]
-    .filter(Boolean)
-    .join("\n");
+  const question = m(
+    msg('Move "{threadTitle}" to {targetTitle}?', {
+      threadTitle: input.threadTitle,
+      targetTitle: input.targetTitle,
+    }),
+  );
+  return [question, left, dirty].filter(Boolean).join("\n");
 }

@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT, Var } from "gt-react";
 import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -30,6 +30,7 @@ import { movedProjectClientSettings } from "./ProjectSettingsPanel.logic";
 import { toastManager } from "../ui/toast";
 
 export function MoveProjectFolderButton({ project }: { project: Project }) {
+  const gt = useGT();
   const { environmentId, id: projectId, workspaceRoot, title } = project;
   const allowed = useAtomValue(projectEnvironment.moveWorkspace.permissionAtom(environmentId));
   const move = useAtomCommand(projectEnvironment.moveWorkspace, { reportFailure: false });
@@ -47,14 +48,14 @@ export function MoveProjectFolderButton({ project }: { project: Project }) {
         size="sm"
         variant="outline"
         disabled={!allowed}
-        aria-label={`Move folder ${workspaceRoot}`}
+        aria-label={gt("Move folder {path}", { path: workspaceRoot })}
         onClick={() => {
           setParent(getBrowseParentPath(workspaceRoot) ?? "");
           setError(null);
           setOpen(true);
         }}
       >
-        Move folder…
+        <T>Move folder…</T>
       </Button>
       <Dialog
         open={open}
@@ -64,20 +65,30 @@ export function MoveProjectFolderButton({ project }: { project: Project }) {
       >
         <DialogPopup>
           <DialogHeader>
-            <DialogTitle>Move {title}</DialogTitle>
+            <DialogTitle>
+              <T>
+                Move <Var>{title}</Var>
+              </T>
+            </DialogTitle>
             <DialogDescription>
-              Move the project folder and its contents on this environment. Chats stay with the
-              project. Disconnect its agent sessions from Previous agents before moving.
+              <T>
+                Move the project folder and its contents on this environment. Chats stay with the
+                project. Disconnect its agent sessions from Previous agents before moving.
+              </T>
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
             <div className="space-y-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium">Current folder</p>
+                <p className="text-sm font-medium">
+                  <T>Current folder</T>
+                </p>
                 <p className="break-all text-sm text-muted-foreground">{workspaceRoot}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor={`move-project-parent-${projectId}`}>Destination folder</Label>
+                <Label htmlFor={`move-project-parent-${projectId}`}>
+                  <T>Destination folder</T>
+                </Label>
                 <div className="flex min-w-0 items-center gap-2">
                   <Input
                     id={`move-project-parent-${projectId}`}
@@ -95,7 +106,9 @@ export function MoveProjectFolderButton({ project }: { project: Project }) {
               </div>
               {parent.trim() ? (
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">New location</p>
+                  <p className="text-sm font-medium">
+                    <T>New location</T>
+                  </p>
                   <p className="break-all text-sm text-muted-foreground">{destination}</p>
                 </div>
               ) : null}
@@ -108,7 +121,7 @@ export function MoveProjectFolderButton({ project }: { project: Project }) {
           </DialogPanel>
           <DialogFooter variant="bare">
             <Button variant="outline" disabled={busy} onClick={() => setOpen(false)}>
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button
               disabled={!allowed || busy || !parent.trim() || destination === workspaceRoot}
@@ -133,24 +146,26 @@ export function MoveProjectFolderButton({ project }: { project: Project }) {
                     } catch {
                       toastManager.add({
                         type: "warning",
-                        title: "Folder moved; sidebar preferences could not be updated",
+                        title: gt("Folder moved; sidebar preferences could not be updated"),
                       });
                     }
                     toastManager.add({
                       type: "success",
-                      title: "Project folder moved",
+                      title: gt("Project folder moved"),
                       description: result.value.workspaceRoot,
                     });
                   } else {
                     const failure = squashAtomCommandFailure(result);
                     setError(
-                      failure instanceof Error ? failure.message : "Could not move this folder.",
+                      failure instanceof Error
+                        ? failure.message
+                        : gt("Could not move this folder."),
                     );
                   }
                 });
               }}
             >
-              {busy ? "Moving…" : "Move folder"}
+              {busy ? gt("Moving…") : gt("Move folder")}
             </Button>
           </DialogFooter>
         </DialogPopup>

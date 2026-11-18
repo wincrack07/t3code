@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -9,6 +8,7 @@ import {
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { PanelRightOpenIcon, XIcon } from "lucide-react";
 
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -26,6 +26,7 @@ export function ThreadPinnedCardsPanel(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
+  const gt = useGT();
   const threadRef = scopeThreadRef(props.environmentId, props.threadId);
   const cards = useThreadShell(threadRef)?.pinnedHtmlCards;
   const canOperate = useEnvironmentScope(props.environmentId, AuthOrchestrationOperateScope);
@@ -44,8 +45,8 @@ export function ThreadPinnedCardsPanel(props: {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not remove the card",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: gt("Could not remove the card"),
+          description: error instanceof Error ? error.message : gt("An error occurred."),
         }),
       );
     }
@@ -65,14 +66,16 @@ export function ThreadPinnedCardsPanel(props: {
                   size="icon-xs"
                   variant="ghost"
                   part="icon"
-                  aria-label={`Open ${card.title} in the panel`}
+                  aria-label={gt("Open {title} in the panel", { title: card.title })}
                   onClick={() => useRightPanelStore.getState().openHtmlCard(threadRef, card)}
                 />
               }
             >
               <PanelRightOpenIcon aria-hidden className="size-3.5" />
             </TooltipTrigger>
-            <TooltipPopup side="left">Open in the panel</TooltipPopup>
+            <TooltipPopup side="left">
+              <T>Open in the panel</T>
+            </TooltipPopup>
           </Tooltip>
           {canOperate ? (
             <Tooltip>
@@ -82,14 +85,16 @@ export function ThreadPinnedCardsPanel(props: {
                     size="icon-xs"
                     variant="ghost"
                     part="icon"
-                    aria-label={`Remove ${card.title}`}
+                    aria-label={gt("Remove {title}", { title: card.title })}
                     onClick={() => void remove(card.id)}
                   />
                 }
               >
                 <XIcon aria-hidden className="size-3.5" />
               </TooltipTrigger>
-              <TooltipPopup side="left">Remove card</TooltipPopup>
+              <TooltipPopup side="left">
+                <T>Remove card</T>
+              </TooltipPopup>
             </Tooltip>
           ) : null}
         </>
@@ -97,8 +102,8 @@ export function ThreadPinnedCardsPanel(props: {
     >
       <p className="mx-2 text-xs text-muted-foreground">
         {card.updatedAt
-          ? `Updated ${new Date(card.updatedAt).toLocaleString()}`
-          : "Updated before card timestamps were recorded"}
+          ? gt("Updated {time}", { time: new Date(card.updatedAt).toLocaleString() })
+          : gt("Updated before card timestamps were recorded")}
       </p>
     </ThreadDetailsSection>
   ));

@@ -1,4 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT, Var } from "gt-react";
+
 import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -35,6 +36,7 @@ export function ContextUsageControl(props: {
   compactDisabled: boolean;
   onCompact: () => void;
 }) {
+  const gt = useGT();
   const percent =
     props.percentage === null ? null : Math.min(100, Math.max(0, Math.round(props.percentage)));
   const tone = contextUsageTone(percent, props.compactionSuggested);
@@ -49,7 +51,11 @@ export function ContextUsageControl(props: {
           <button
             type="button"
             className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-popup-open:bg-accent"
-            aria-label={`Context window: ${used} tokens${percent === null ? "" : `, ${percent}%`}`}
+            aria-label={
+              percent === null
+                ? gt("Context window: {used} tokens", { used })
+                : gt("Context window: {used} tokens, {percent}%", { used, percent })
+            }
           />
         }
       >
@@ -80,10 +86,16 @@ export function ContextUsageControl(props: {
       </PopoverTrigger>
       <PopoverPopup side="top" align="end" padding="compact" width="sm">
         <div className="grid gap-3 py-1 text-sm">
-          <div className="text-muted-foreground text-xs">Context window · this thread</div>
+          <div className="text-muted-foreground text-xs">
+            <T>Context window · this thread</T>
+          </div>
           <div className="grid gap-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span>{used} tokens used</span>
+              <span>
+                <T>
+                  <Var>{used}</Var> tokens used
+                </T>
+              </span>
               {percent === null ? null : (
                 <span className="text-muted-foreground text-xs tabular-nums">{percent}%</span>
               )}
@@ -108,7 +120,7 @@ export function ContextUsageControl(props: {
                 />
               }
             >
-              Compact context
+              <T>Compact context</T>
             </PopoverClose>
           </div>
         </div>

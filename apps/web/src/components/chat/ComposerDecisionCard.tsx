@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   assembleOpenQuestionAnswers,
   nextAfterOpenQuestionAnswer,
@@ -9,10 +8,12 @@ import {
   type OpenQuestionDrafts,
 } from "@t3tools/client-runtime/state/open-questions";
 import type { OpenQuestion, ScopedThreadRef } from "@t3tools/contracts";
+import { msg, useGT } from "gt-react";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { use, useEffect, useRef, useState } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";
+import { m } from "~/i18n/messages";
 import { isMacPlatform } from "~/lib/utils";
 import { useComposerDraftStore, type ComposerThreadTarget } from "../../composerDraftStore";
 import {
@@ -69,6 +70,7 @@ function DecisionCard(props: {
   readonly drafts: OpenQuestionDrafts;
 }) {
   const { threadRef, deck, drafts } = props;
+  const gt = useGT();
   const question = deck.question;
   const sendAppMessage = use(HtmlRenderPromptContext);
   const setStatus = useSetOpenQuestionStatus();
@@ -91,8 +93,8 @@ function DecisionCard(props: {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not send your answer",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: m(msg("Could not send your answer")),
+            description: error instanceof Error ? error.message : m(msg("An error occurred.")),
           }),
         );
         return false;
@@ -104,7 +106,11 @@ function DecisionCard(props: {
       threadRef,
       assembled.update.updates.map((entry) => entry.id),
     );
-    await setStatus(threadRef, assembled.update, "Answer sent, but the question did not update");
+    await setStatus(
+      threadRef,
+      assembled.update,
+      m(msg("Answer sent, but the question did not update")),
+    );
   };
 
   // One open question sends at once. Several collect answers and send together when
@@ -148,7 +154,7 @@ function DecisionCard(props: {
     void setStatus(
       threadRef,
       { action: "set_status", updates: [{ id: question.id, status: "dismissed" }] },
-      "Could not dismiss the question",
+      m(msg("Could not dismiss the question")),
     );
   };
   const step = (delta: number) =>
@@ -179,7 +185,7 @@ function DecisionCard(props: {
                     type="button"
                     size="icon-xs"
                     variant="ghost-muted"
-                    aria-label="Previous question"
+                    aria-label={gt("Previous question")}
                     onClick={() => step(-1)}
                   >
                     <ChevronLeftIcon />
@@ -191,7 +197,7 @@ function DecisionCard(props: {
                     type="button"
                     size="icon-xs"
                     variant="ghost-muted"
-                    aria-label="Next question"
+                    aria-label={gt("Next question")}
                     onClick={() => step(1)}
                   >
                     <ChevronRightIcon />
@@ -200,7 +206,7 @@ function DecisionCard(props: {
               ) : null}
               <ComposerBanner.Dismiss
                 type="button"
-                aria-label="Dismiss question"
+                aria-label={gt("Dismiss question")}
                 onClick={dismiss}
               />
             </div>
@@ -216,7 +222,9 @@ function DecisionCard(props: {
                 aria-keyshortcuts={index === 0 ? SHORTCUT_KEYS : undefined}
                 onClick={() => choose(option)}
               >
-                {chosen === option ? <CheckIcon aria-label="Picked" /> : null}
+                {chosen === option ? (
+                  <CheckIcon aria-label={gt("Picked", { $context: "the chosen answer" })} />
+                ) : null}
                 <span>{option}</span>
                 {index === 0 ? <Kbd className="-me-1">{SHORTCUT_LABEL}</Kbd> : null}
               </Button>
@@ -229,7 +237,10 @@ function DecisionCard(props: {
                 disabled={sending}
                 onClick={() => void send(drafts)}
               >
-                {pendingCount === 1 ? "Send 1 answer now" : `Send ${pendingCount} answers now`}
+                {gt(
+                  "{pendingCount, plural, =1 {Send 1 answer now} other {Send {pendingCount} answers now}}",
+                  { pendingCount },
+                )}
               </Button>
             ) : null}
           </div>

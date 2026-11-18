@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import {
   MAX_SAVED_PROMPT_LENGTH,
@@ -29,6 +29,7 @@ type Draft = { readonly id: string | null; readonly name: string; readonly promp
 
 /** Edits the prompts the composer's / menu inserts. */
 export function SavedPromptsRow() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const savedPrompts = useScopedSettings((settings) => settings.savedPrompts);
   const updateSettings = useUpdateScopedSettings();
@@ -57,7 +58,7 @@ export function SavedPromptsRow() {
       serverScoped
       settingKeys={["savedPrompts"]}
       {...searchableSetting("saved-prompts")}
-      description="Reusable prompts. Type / in the composer and pick one to insert it."
+      description={gt("Reusable prompts. Type / in the composer and pick one to insert it.")}
     >
       <div className="flex flex-col gap-1.5 pt-3 pb-2">
         {savedPrompts.map((entry) => (
@@ -69,7 +70,7 @@ export function SavedPromptsRow() {
             <Button
               variant="ghost-muted"
               size="icon-sm"
-              aria-label={`Edit ${entry.name}`}
+              aria-label={gt("Edit {name}", { name: entry.name })}
               onClick={() => setDraft(entry)}
             >
               <PencilIcon />
@@ -77,7 +78,7 @@ export function SavedPromptsRow() {
             <Button
               variant="ghost-muted"
               size="icon-sm"
-              aria-label={`Remove ${entry.name}`}
+              aria-label={gt("Remove {name}", { name: entry.name })}
               onClick={() =>
                 updateSettings({
                   savedPrompts: savedPrompts.filter((candidate) => candidate.id !== entry.id),
@@ -96,14 +97,14 @@ export function SavedPromptsRow() {
             onClick={() => setDraft({ id: null, name: "", prompt: "" })}
           >
             <PlusIcon />
-            Add prompt
+            <T>Add prompt</T>
           </Button>
         </div>
       </div>
       <Dialog open={draft !== null} onOpenChange={(open) => (open ? undefined : setDraft(null))}>
         <DialogPopup className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>{draft?.id ? "Edit prompt" : "Add prompt"}</DialogTitle>
+            <DialogTitle>{draft?.id ? gt("Edit prompt") : gt("Add prompt")}</DialogTitle>
           </DialogHeader>
           <DialogPanel>
             <form
@@ -114,10 +115,12 @@ export function SavedPromptsRow() {
               }}
             >
               <div className="grid gap-1.5">
-                <Label htmlFor="saved-prompt-name">Name</Label>
+                <Label htmlFor="saved-prompt-name">
+                  <T $context="saved prompt name field">Name</T>
+                </Label>
                 <Input
                   id="saved-prompt-name"
-                  placeholder="Review my changes"
+                  placeholder={gt("Review my changes")}
                   maxLength={MAX_SAVED_PROMPT_NAME_LENGTH}
                   value={draft?.name ?? ""}
                   onChange={(event) =>
@@ -127,7 +130,9 @@ export function SavedPromptsRow() {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="saved-prompt-text">Prompt</Label>
+                <Label htmlFor="saved-prompt-text">
+                  <T $context="noun, saved prompt text field">Prompt</T>
+                </Label>
                 <Textarea
                   id="saved-prompt-text"
                   rows={8}
@@ -142,10 +147,10 @@ export function SavedPromptsRow() {
           </DialogPanel>
           <DialogFooter variant="bare">
             <Button variant="outline" onClick={() => setDraft(null)}>
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button onClick={save} disabled={!canSave}>
-              Save
+              <T>Save</T>
             </Button>
           </DialogFooter>
         </DialogPopup>

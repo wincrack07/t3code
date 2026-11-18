@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -17,6 +16,7 @@ import {
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { useNavigate } from "@tanstack/react-router";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
@@ -32,6 +32,7 @@ import { useComposerDraftStore } from "../../composerDraftStore";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
 import { useStableCallback } from "../../hooks/useStableCallback";
+import { m } from "../../i18n/messages";
 import { cn, newThreadId, randomUUID } from "../../lib/utils";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
@@ -112,6 +113,8 @@ export function TaskDetail({
   startAddingTag?: boolean;
   onAddingTagChange?: (adding: boolean) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { task, home } = entry;
   const environmentId = home.environmentId;
   const projectId = home.id;
@@ -200,9 +203,9 @@ export function TaskDetail({
     if (!(await update({ kind: "delete", id: task.id }))) return;
     toastManager.add({
       type: "success",
-      title: "Task deleted",
+      title: gt("Task deleted"),
       actionProps: {
-        children: "Undo",
+        children: gt("Undo", { $context: "verb, toast action" }),
         onClick: () => void update({ kind: "restore", id: task.id }),
       },
     });
@@ -220,7 +223,7 @@ export function TaskDetail({
     if (limit !== null) return false;
     setAttaching(true);
     const prepared = await prepare().catch((error: unknown) => {
-      setAttachError(error instanceof Error ? error.message : "Could not read the attachment.");
+      setAttachError(error instanceof Error ? error.message : gt("Could not read the attachment."));
       return null;
     });
     if (!prepared) {
@@ -257,7 +260,7 @@ export function TaskDetail({
     if (!canAttach || data.files.length === 0) return;
     preventDefault();
     if ([...data.items].some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
-      setAttachError("Add folders with Add file or folder path.");
+      setAttachError(gt("Add folders with Add file or folder path."));
       return;
     }
     attachFiles([...data.files]);
@@ -267,9 +270,9 @@ export function TaskDetail({
     if (!link) return;
     try {
       await navigator.clipboard.writeText(link);
-      toastManager.add({ type: "success", title: "Link copied" });
+      toastManager.add({ type: "success", title: gt("Link copied") });
     } catch {
-      toastManager.add({ type: "error", title: "Could not copy the link" });
+      toastManager.add({ type: "error", title: gt("Could not copy the link") });
     }
   };
   const busy = start.busy;
@@ -306,18 +309,18 @@ export function TaskDetail({
   const counter = (review ?? text).length;
   const polishTooLong = text.length > TASK_POLISH_MAX_LENGTH;
   const note = !allowed
-    ? "View only"
+    ? gt("View only")
     : failed
-      ? "Could not save"
+      ? gt("Could not save")
       : saving
-        ? "Saving…"
+        ? gt("Saving…")
         : dirty
-          ? "Unsaved changes"
-          : "Saved automatically";
+          ? gt("Unsaved changes")
+          : gt("Saved automatically");
 
   return (
     <section
-      aria-label="Task details"
+      aria-label={gt("Task details")}
       className={cn(
         "flex min-h-0 min-w-0 flex-col",
         compact ? "gap-2" : "h-full gap-3 overflow-y-auto p-4 pb-0",
@@ -325,7 +328,7 @@ export function TaskDetail({
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <input
-          aria-label="Task title"
+          aria-label={gt("Task title")}
           className={cn(
             "h-8 min-w-0 flex-1 basis-48 text-ellipsis rounded-md bg-transparent px-1 font-medium outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-64",
             compact ? "text-sm" : "text-base",
@@ -349,26 +352,32 @@ export function TaskDetail({
           <TaskStatusMenu status={entry.status} disabled={!allowed} onChange={changeStatus} />
           <Menu>
             <MenuTrigger
-              render={<Button size="icon-sm" variant="ghost-muted" aria-label="Task actions" />}
+              render={
+                <Button size="icon-sm" variant="ghost-muted" aria-label={gt("Task actions")} />
+              }
             >
               <MoreHorizontalIcon />
             </MenuTrigger>
             <MenuPopup align="end">
               <MenuItem disabled={link === null} onClick={() => void copyLink()}>
                 <LinkIcon />
-                Copy link
-                {link === null ? <MenuItemDetail>Too long for a link</MenuItemDetail> : null}
+                <T>Copy link</T>
+                {link === null ? (
+                  <MenuItemDetail>
+                    <T>Too long for a link</T>
+                  </MenuItemDetail>
+                ) : null}
               </MenuItem>
               {canAttach ? (
                 <MenuItem onClick={() => setAddingPath(true)}>
                   <FolderPlusIcon />
-                  Add file or folder path
+                  <T>Add file or folder path</T>
                 </MenuItem>
               ) : null}
               <MenuSeparator />
               <MenuItem variant="destructive" disabled={!allowed} onClick={() => void remove()}>
                 <Trash2Icon />
-                Delete task
+                <T>Delete task</T>
               </MenuItem>
             </MenuPopup>
           </Menu>
@@ -376,7 +385,7 @@ export function TaskDetail({
       </div>
       <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5">
         <TaskChoiceChip
-          label="Priority"
+          label={gt("Priority")}
           value={taskPriority(task)}
           variant={TASK_PRIORITY_BADGE[taskPriority(task)]}
           options={TASK_PRIORITIES.map((value) => ({ value, label: TASK_PRIORITY_LABELS[value] }))}
@@ -384,9 +393,12 @@ export function TaskDetail({
           onChange={(priority) => void update({ kind: "edit", id: task.id, priority })}
         />
         <TaskChoiceChip
-          label="When"
+          label={gt("When", { $context: "task schedule field label" })}
           value={taskWhen(task)}
-          options={TASK_WHEN_ORDER.map((value) => ({ value, label: TASK_WHEN_LABELS[value] }))}
+          options={TASK_WHEN_ORDER.map((value) => ({
+            value,
+            label: messages(TASK_WHEN_LABELS[value]),
+          }))}
           disabled={!allowed}
           onChange={(when) => void update({ kind: "edit", id: task.id, when })}
         />
@@ -406,7 +418,7 @@ export function TaskDetail({
       </div>
       {entry.status === "review" && task.review ? (
         <section
-          aria-label="Result"
+          aria-label={gt("Result", { $context: "task run result section" })}
           className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-3"
         >
           <TaskReviewSummary entry={entry} density="detail" />
@@ -423,10 +435,10 @@ export function TaskDetail({
           <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border pl-3 pr-1 text-xs">
             <WandIcon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate text-muted-foreground">
-              Polished version. Keep it or go back to yours.
+              <T>Polished version. Keep it or go back to yours.</T>
             </span>
             <Button size="compact" variant="ghost" onClick={() => setReview(null)}>
-              Revert
+              <T $context="verb, button">Revert</T>
             </Button>
             <Button
               size="compact"
@@ -438,12 +450,12 @@ export function TaskDetail({
                 setReview(null);
               }}
             >
-              Accept
+              <T $context="verb, button">Accept</T>
             </Button>
           </div>
         ) : null}
         <textarea
-          aria-label="Task prompt"
+          aria-label={gt("Task prompt")}
           className="min-h-0 flex-1 resize-none rounded-lg bg-transparent px-3 py-2.5 text-sm leading-6 outline-none read-only:text-muted-foreground"
           value={review ?? text}
           readOnly={review !== null}
@@ -471,7 +483,9 @@ export function TaskDetail({
         attachments.views.length > 0 ? (
           <div className="flex h-7 min-w-0 items-center gap-2 px-1 text-xs text-muted-foreground">
             <TaskAttachmentCount count={attachments.views.length} />
-            <span className="min-w-0 truncate">Manage attachments in Tasks</span>
+            <span className="min-w-0 truncate">
+              <T>Manage attachments in Tasks</T>
+            </span>
             <Button
               size="micro"
               variant="ghost"
@@ -479,7 +493,7 @@ export function TaskDetail({
                 void navigate({ to: "/tasks", search: { project: group.key, task: entry.key } })
               }
             >
-              Open
+              <T $context="verb, button">Open</T>
             </Button>
           </div>
         ) : null
@@ -503,7 +517,7 @@ export function TaskDetail({
           ) : null}
           {attaching && !addingPath ? (
             <p className="px-1 text-xs text-muted-foreground" role="status">
-              Attaching…
+              <T>Attaching…</T>
             </p>
           ) : null}
           {attachError ? (
@@ -528,7 +542,7 @@ export function TaskDetail({
                 void save();
               }}
             >
-              Retry
+              <T $context="verb, button">Retry</T>
             </Button>
           ) : null}
         </span>
@@ -592,11 +606,14 @@ export function TaskDetail({
             <TooltipTrigger render={<span tabIndex={0} className="rounded-md" />}>
               <Button size="compact" variant="ghost" disabled>
                 <WandIcon />
-                Polish
+                <T $context="verb, rewrite the prompt">Polish</T>
               </Button>
             </TooltipTrigger>
             <TooltipPopup>
-              Polish rewrites prompts up to {TASK_POLISH_MAX_LENGTH.toLocaleString()} characters.
+              <T>
+                Polish rewrites prompts up to <Var>{TASK_POLISH_MAX_LENGTH.toLocaleString()}</Var>{" "}
+                characters.
+              </T>
             </TooltipPopup>
           </Tooltip>
         ) : (
@@ -607,7 +624,9 @@ export function TaskDetail({
             onClick={runPolish}
           >
             <WandIcon />
-            {polish.running ? "Polishing…" : "Polish"}
+            {polish.running
+              ? gt("Polishing…")
+              : gt("Polish", { $context: "verb, rewrite the prompt" })}
           </Button>
         )}
         {beforePolish !== null ? (
@@ -619,24 +638,26 @@ export function TaskDetail({
               setBeforePolish(null);
             }}
           >
-            Undo polish
+            <T>Undo polish</T>
           </Button>
         ) : null}
         <div className="ml-auto flex items-center gap-1">
-          <Group aria-label="Run">
+          <Group aria-label={gt("Run", { $context: "verb, start the task" })}>
             <Button size="compact" disabled={!canStart} onClick={() => void startThread(true)}>
-              {busy ? "Starting…" : "Run"}
+              {busy ? gt("Starting…") : gt("Run", { $context: "verb, start the task" })}
             </Button>
             <GroupSeparator />
             <Menu>
               <MenuTrigger
                 disabled={!valid || busy || review !== null}
-                render={<Button size="compact" aria-label="More ways to run" />}
+                render={<Button size="compact" aria-label={gt("More ways to run")} />}
               >
                 <ChevronDownIcon />
               </MenuTrigger>
               <MenuPopup align="end" className="max-w-72">
-                <MenuItem onClick={() => void startThread(false)}>Open without sending</MenuItem>
+                <MenuItem onClick={() => void startThread(false)}>
+                  <T>Open without sending</T>
+                </MenuItem>
                 <MenuSeparator />
                 <StartMachineItems
                   group={group}
@@ -665,17 +686,21 @@ function StartMachineItems({
   labelOf: (environmentId: EnvironmentId) => string;
   onStart: (target: EnvironmentProject) => void;
 }) {
-  const targets = taskStartTargets(group, entry, labelOf);
+  const gt = useGT();
+  const messages = useMessages();
+  const targets = taskStartTargets(group, entry, labelOf, messages);
   if (targets.length < 2) return null;
   return (
     <MenuGroup>
-      <MenuGroupLabel>Run on</MenuGroupLabel>
+      <MenuGroupLabel>
+        <T>Run on</T>
+      </MenuGroupLabel>
       {targets.map((target) => (
         <StartMachineItem
           key={target.project.environmentId}
           label={labelOf(target.project.environmentId)}
           environmentId={target.project.environmentId}
-          detail={target.home ? "Task's machine" : target.disabledReason}
+          detail={target.home ? gt("Task's machine") : target.disabledReason}
           disabled={target.disabledReason !== null}
           onClick={() => onStart(target.project)}
         />
@@ -697,12 +722,15 @@ function StartMachineItem({
   disabled: boolean;
   onClick: () => void;
 }) {
+  const gt = useGT();
   const allowed = useAtomValue(projectEnvironment.tasks.launch.permissionAtom(environmentId));
   return (
     <MenuItem disabled={disabled || !allowed} onClick={onClick}>
       <span className="min-w-0 truncate">{label}</span>
       {detail !== null || !allowed ? (
-        <MenuItemDetail>{!allowed && detail === null ? "No permission" : detail}</MenuItemDetail>
+        <MenuItemDetail>
+          {!allowed && detail === null ? gt("No permission") : detail}
+        </MenuItemDetail>
       ) : null}
     </MenuItem>
   );
@@ -718,6 +746,7 @@ function PendingLinkRow({
   taskKey: string;
   machineLabel: string;
 }) {
+  const gt = useGT();
   const retry = useAtomCommand(projectEnvironment.tasks.retryLink);
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
@@ -725,7 +754,9 @@ function PendingLinkRow({
     <div className="flex h-8 min-w-0 items-center gap-2 px-2 text-xs" role="status">
       <AlertTriangleIcon className="size-3.5 shrink-0 text-warning-foreground" />
       <span className="min-w-0 flex-1 truncate text-muted-foreground">
-        Started on {machineLabel}, not linked to this task
+        <T>
+          Started on <Var>{machineLabel}</Var>, not linked to this task
+        </T>
       </span>
       <Button
         size="micro"
@@ -737,7 +768,7 @@ function PendingLinkRow({
           })
         }
       >
-        Open
+        <T $context="verb, button">Open</T>
       </Button>
       <Button
         size="micro"
@@ -750,7 +781,7 @@ function PendingLinkRow({
           if (result._tag === "Success") setTaskLinkReceipt(taskKey, null);
         }}
       >
-        {busy ? "Linking…" : "Retry link"}
+        {busy ? gt("Linking…") : gt("Retry link")}
       </Button>
     </div>
   );
@@ -759,6 +790,7 @@ function PendingLinkRow({
 /** The task's attachments, checked on its machine and on every connected machine with the project. */
 function useTaskAttachments(entry: TaskEntry, group: TaskProjectGroup) {
   const labelOf = useEnvironmentLabel();
+  const messages = useMessages();
   const inspect = useAtomCommand(projectEnvironment.tasks.attachments, { reportFailure: false });
   const [inspected, setInspected] = useState<{
     signature: string;
@@ -792,12 +824,15 @@ function useTaskAttachments(entry: TaskEntry, group: TaskProjectGroup) {
     };
   }, [inspect, empty, homeEnvironmentId, homeProjectId, taskId, checkKey, signature]);
   return {
-    views: taskAttachmentViews({
-      attachments: list,
-      inspected: inspected?.signature === signature ? inspected.items : null,
-      homeEnvironmentId,
-      labelOf,
-    }),
+    views: taskAttachmentViews(
+      {
+        attachments: list,
+        inspected: inspected?.signature === signature ? inspected.items : null,
+        homeEnvironmentId,
+        labelOf,
+      },
+      messages,
+    ),
   };
 }
 
@@ -812,14 +847,14 @@ function launchFailureToast(error: unknown, labelOf: (environmentId: Environment
     const home = labelOf(error.homeEnvironmentId as EnvironmentId);
     toastManager.add({
       type: "error",
-      title: `Start this task on ${home}`,
-      description: `Its attachments are stored on ${home}.`,
+      title: m(msg("Start this task on {machine}", { machine: home })),
+      description: m(msg("Its attachments are stored on {machine}.", { machine: home })),
     });
     return;
   }
   toastManager.add({
     type: "error",
-    title: "Could not start the thread",
+    title: m(msg("Could not start the thread")),
     description:
       typeof error === "object" && error !== null && "message" in error
         ? String(error.message)
@@ -829,6 +864,7 @@ function launchFailureToast(error: unknown, labelOf: (environmentId: Environment
 
 /** Start a thread from the task on any machine with its project, or open it as a composer draft. */
 function useTaskStart(entry: TaskEntry) {
+  const gt = useGT();
   const { home, task } = entry;
   const newThread = useNewThreadHandler();
   const launch = useAtomCommand(projectEnvironment.tasks.launch, { reportFailure: false });
@@ -858,7 +894,7 @@ function useTaskStart(entry: TaskEntry) {
     ).catch((error: unknown) => {
       toastManager.add({
         type: "error",
-        title: "Could not open the task's attachments",
+        title: gt("Could not open the task's attachments"),
         description: error instanceof Error ? error.message : undefined,
       });
       return null;
@@ -884,7 +920,7 @@ function useTaskStart(entry: TaskEntry) {
     if (!config) {
       toastManager.add({
         type: "error",
-        title: `${labelOf(target.environmentId)} is not connected`,
+        title: gt("{machine} is not connected", { machine: labelOf(target.environmentId) }),
       });
       return;
     }
@@ -902,7 +938,10 @@ function useTaskStart(entry: TaskEntry) {
     // The task's saved model wins on the server; the project's is only the fallback.
     const modelSelection = task.runSettings?.defaultModelSelection ?? selection;
     if (!modelSelection) {
-      toastManager.add({ type: "error", title: "Choose a default model in project settings" });
+      toastManager.add({
+        type: "error",
+        title: gt("Choose a default model in project settings"),
+      });
       return;
     }
     setBusy(true);
@@ -931,7 +970,7 @@ function useTaskStart(entry: TaskEntry) {
     }
     const { receipt } = result.value;
     const open = {
-      children: "Open",
+      children: gt("Open", { $context: "verb, button" }),
       onClick: () =>
         void navigate({
           to: "/$environmentId/$threadId",
@@ -942,13 +981,13 @@ function useTaskStart(entry: TaskEntry) {
       setTaskLinkReceipt(entry.key, receipt);
       toastManager.add({
         type: "warning",
-        title: "Thread started, not linked",
-        description: "The task could not record it. Retry the link from the task.",
+        title: gt("Thread started, not linked"),
+        description: gt("The task could not record it. Retry the link from the task."),
         actionProps: open,
       });
       return;
     }
-    toastManager.add({ type: "success", title: "Thread started", actionProps: open });
+    toastManager.add({ type: "success", title: gt("Thread started"), actionProps: open });
   };
   return { allowed, busy, run };
 }

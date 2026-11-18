@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
 import { SidebarColorMarker } from "../sidebar/SidebarColorPicker";
 import { KeepAwakeControl } from "../KeepAwakeControl";
@@ -8,6 +7,7 @@ import { formatWorkingDurationLabel } from "@t3tools/client-runtime/state/models
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
+import { T, useGT, useMessages } from "gt-react";
 import { FolderGit2Icon, FolderIcon, GitBranchIcon } from "lucide-react";
 import { useContext, useEffect } from "react";
 
@@ -61,6 +61,8 @@ const STATE_TONE: Record<ThreadActivityState, string> = {
 };
 
 export function ActivityBoardPage() {
+  const gt = useGT();
+  const m = useMessages();
   const environments = useEnvironmentConnectionSummaries();
   const threads = useQuietThreadShells();
   const projects = useProjects();
@@ -72,7 +74,7 @@ export function ActivityBoardPage() {
       ),
     ),
   );
-  const columns = buildActivityBoard({ environments, threads, projects });
+  const columns = buildActivityBoard({ environments, threads, projects }, m);
   const total = columns.reduce((count, column) => count + column.cardCount, 0);
   const connected = columns.filter((column) => column.connected).length;
 
@@ -80,14 +82,26 @@ export function ActivityBoardPage() {
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <h1 className="truncate text-sm font-medium">Activity</h1>
+          <h1 className="truncate text-sm font-medium">
+            <T>Activity</T>
+          </h1>
           <span className="truncate text-xs text-muted-foreground">
-            {total === 0 ? "Nothing running" : `${total} active`} · {connected} of {columns.length}{" "}
-            {columns.length === 1 ? "node" : "nodes"} connected
+            {total === 0
+              ? gt("Nothing running")
+              : gt("{count, plural, one {{count} active} other {{count} active}}", {
+                  count: total,
+                })}{" "}
+            ·{" "}
+            {gt(
+              "{count, plural, one {{connected} of {count} node connected} other {{connected} of {count} nodes connected}}",
+              { connected, count: columns.length },
+            )}
           </span>
         </WorkspacePageHeader>
         {columns.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">No environments are set up yet.</p>
+          <p className="p-6 text-sm text-muted-foreground">
+            <T>No environments are set up yet.</T>
+          </p>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:flex-row md:overflow-x-auto md:overflow-y-hidden">
             {columns.map((column) => (
@@ -111,16 +125,21 @@ function ActivityColumn({
   column: ActivityBoardColumn;
   projectColors: ReadonlyMap<string, string | null | undefined>;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const { environment } = column;
   const machine = useEnvironmentMachines().get(environment.environmentId) ?? "server";
   const providerEntries =
     useAtomValue(sidebarProviderEntriesAtom).get(environment.environmentId) ??
     EMPTY_PROVIDER_ENTRIES;
-  const statusTitle = connectionStatusTitle({
-    phase: environment.connectionState,
-    error: environment.connectionError,
-    traceId: environment.connectionErrorTraceId,
-  });
+  const statusTitle = connectionStatusTitle(
+    {
+      phase: environment.connectionState,
+      error: environment.connectionError,
+      traceId: environment.connectionErrorTraceId,
+    },
+    m,
+  );
 
   return (
     <section
@@ -135,7 +154,7 @@ function ActivityColumn({
           />
           <EnvironmentMachineIcon
             kind={machine}
-            aria-label={ENVIRONMENT_MACHINE_KIND_LABELS[machine]}
+            aria-label={m(ENVIRONMENT_MACHINE_KIND_LABELS[machine])}
             className="size-4 shrink-0 text-muted-foreground"
           />
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -157,10 +176,12 @@ function ActivityColumn({
       <div className="flex flex-col gap-4 p-3 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {!column.connected ? (
           <p className="text-sm text-muted-foreground">
-            Not connected, so its activity is unknown.
+            <T>Not connected, so its activity is unknown.</T>
           </p>
         ) : column.groups.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing is running here.</p>
+          <p className="text-sm text-muted-foreground">
+            <T>Nothing is running here.</T>
+          </p>
         ) : (
           column.groups.map((group) => (
             <div key={group.key} className="flex flex-col gap-2">
@@ -177,7 +198,7 @@ function ActivityColumn({
                       : null
                   }
                 />
-                <span className="truncate">{group.project?.title ?? "Unknown project"}</span>
+                <span className="truncate">{group.project?.title ?? gt("Unknown project")}</span>
               </h3>
               {group.cards.map((card) => (
                 <div
@@ -238,13 +259,14 @@ function ActivityColumn({
 }
 
 function ThreadLink({ entry, className }: { entry: ActivityBoardThread; className: string }) {
+  const gt = useGT();
   return (
     <Link
       to="/$environmentId/$threadId"
       params={buildThreadRouteParams(scopeThreadRef(entry.thread.environmentId, entry.thread.id))}
       className={className}
     >
-      {entry.thread.title || "Untitled thread"}
+      {entry.thread.title || gt("Untitled thread")}
     </Link>
   );
 }
@@ -291,13 +313,15 @@ function ActivityMeta({
 
 // Subscribes to the minute tick itself, so only the label re-renders.
 function SinceLabel({ since }: { since: string }) {
+  const m = useMessages();
   const nowMinute = useNowMinute();
   const elapsedMs = Date.parse(`${nowMinute}:00.000Z`) - Date.parse(since);
   if (!Number.isFinite(elapsedMs)) return null;
-  return elapsedMs < 60_000 ? "<1m" : formatWorkingDurationLabel(elapsedMs);
+  return elapsedMs < 60_000 ? "<1m" : formatWorkingDurationLabel(elapsedMs, m);
 }
 
 function NodeCapacity({ environmentId }: { environmentId: EnvironmentId }) {
+  const gt = useGT();
   const registry = useContext(RegistryContext);
   const atom = serverEnvironment.hostResources({ environmentId, input: {} });
   const query = useEnvironmentQuery(atom);
@@ -315,7 +339,7 @@ function NodeCapacity({ environmentId }: { environmentId: EnvironmentId }) {
   if (capacity === null) {
     return (
       <p className="text-xs text-muted-foreground">
-        {query.error === null ? "Reading capacity…" : "Capacity unavailable on this node."}
+        {query.error === null ? gt("Reading capacity…") : gt("Capacity unavailable on this node.")}
       </p>
     );
   }
@@ -323,23 +347,28 @@ function NodeCapacity({ environmentId }: { environmentId: EnvironmentId }) {
 }
 
 function CapacityMeters({ capacity }: { capacity: HostCapacity }) {
+  const gt = useGT();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">
-          {capacity.cpuCount} {capacity.cpuCount === 1 ? "core" : "cores"}
+          {gt("{count, plural, one {{count} core} other {{count} cores}}", {
+            count: capacity.cpuCount,
+          })}
         </span>
         {capacity.level === "ok" ? null : (
           <Tooltip>
             <TooltipTrigger
               render={<Badge variant={capacity.level === "busy" ? "warning" : "error"} size="sm" />}
             >
-              {capacity.level === "busy" ? "Busy" : "Strained"}
+              {capacity.level === "busy"
+                ? gt("Busy", { $context: "machine load level" })
+                : gt("Strained", { $context: "machine load level" })}
             </TooltipTrigger>
             <TooltipPopup side="bottom">
               {capacity.level === "busy"
-                ? "CPU or memory is running high."
-                : "Automatic machine selection skips this node until it frees up."}
+                ? gt("CPU or memory is running high.")
+                : gt("Automatic machine selection skips this node until it frees up.")}
             </TooltipPopup>
           </Tooltip>
         )}
@@ -347,11 +376,15 @@ function CapacityMeters({ capacity }: { capacity: HostCapacity }) {
       <MachineMeter
         label="CPU"
         share={capacity.cpu}
-        detail={capacity.cpu === null ? "unknown" : `${Math.round(capacity.cpu * 100)}%`}
+        detail={
+          capacity.cpu === null
+            ? gt("unknown", { $context: "CPU usage value" })
+            : `${Math.round(capacity.cpu * 100)}%`
+        }
         level={capacity.level}
       />
       <MachineMeter
-        label="Memory"
+        label={gt("Memory", { $context: "machine meter label" })}
         share={capacity.memoryUsed}
         detail={`${formatBytes(capacity.usedMemoryBytes)} / ${formatBytes(capacity.totalMemoryBytes)}`}
         level={capacity.level}

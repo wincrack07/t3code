@@ -1,8 +1,9 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { BrowserExtension, BrowserExtensionInstallInput } from "@t3tools/contracts";
+import { msg, T, useGT } from "gt-react";
 import { FolderOpen, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { m } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -14,9 +15,10 @@ import { useSearchableSetting } from "./settingsSearch";
 const previewBridge = () => window.desktopBridge?.preview;
 
 const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : "Something went wrong.";
+  error instanceof Error ? error.message : m(msg("Something went wrong."));
 
 export function BrowserExtensionsSetting({ disabled }: { readonly disabled: boolean }) {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const [extensions, setExtensions] = useState<ReadonlyArray<BrowserExtension> | null>(null);
   const [reference, setReference] = useState("");
@@ -46,15 +48,15 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
     if (result.status === "failed") {
       toastManager.add({
         type: "error",
-        title: "Extension not added",
+        title: gt("Extension not added"),
         description: result.message,
       });
     } else if (result.status === "installed") {
       setReference("");
       toastManager.add({
         type: "success",
-        title: `Added ${result.extension.name}`,
-        description: "Reload open pages for it to take effect.",
+        title: gt("Added {name}", { name: result.extension.name }),
+        description: gt("Reload open pages for it to take effect."),
       });
     }
     await refresh();
@@ -64,7 +66,7 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
     await Promise.resolve(run()).catch((error: unknown) => {
       toastManager.add({
         type: "error",
-        title: "Extension not updated",
+        title: gt("Extension not updated"),
         description: errorMessage(error),
       });
     });
@@ -77,7 +79,9 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
     <>
       <SettingsRow
         {...searchableSetting("browser-extension-list")}
-        description="Chrome extensions for the built-in browser, in every saved profile. T3 Code asks you to approve each one with its permissions."
+        description={gt(
+          "Chrome extensions for the built-in browser, in every saved profile. T3 Code asks you to approve each one with its permissions.",
+        )}
         control={
           <Button
             size="sm"
@@ -86,7 +90,7 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
             onClick={() => void install({ kind: "unpacked" })}
           >
             <FolderOpen />
-            Load unpacked
+            <T>Load unpacked</T>
           </Button>
         }
       >
@@ -104,13 +108,13 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
                   <span className="truncate text-sm text-foreground">{extension.name}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     {extension.loadError ??
-                      `${extension.version} · ${extension.source === "webStore" ? "Chrome Web Store" : "Unpacked"}`}
+                      `${extension.version} · ${extension.source === "webStore" ? "Chrome Web Store" : gt("Unpacked", { $context: "extension loaded from a local folder" })}`}
                   </span>
                 </span>
                 <Switch
                   disabled={disabled}
                   checked={extension.enabled}
-                  aria-label={`Enable ${extension.name}`}
+                  aria-label={gt("Enable {name}", { name: extension.name })}
                   onCheckedChange={(checked) =>
                     void update(() =>
                       previewBridge()?.setBrowserExtensionEnabled(extension.id, Boolean(checked)),
@@ -121,7 +125,7 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
                   size="icon-xs"
                   variant="ghost-muted"
                   disabled={disabled}
-                  aria-label={`Remove ${extension.name}`}
+                  aria-label={gt("Remove {name}", { name: extension.name })}
                   onClick={() =>
                     void update(() => previewBridge()?.removeBrowserExtension(extension.id))
                   }
@@ -135,7 +139,9 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
       </SettingsRow>
       <SettingsRow
         {...searchableSetting("browser-extension-web-store")}
-        description="Paste a Chrome Web Store link or extension ID. Extensions that rely on a desktop app, such as 1Password's app unlock, cannot connect to it here."
+        description={gt(
+          "Paste a Chrome Web Store link or extension ID. Extensions that rely on a desktop app, such as 1Password's app unlock, cannot connect to it here.",
+        )}
         control={
           <form
             className="flex w-full gap-2 sm:w-80"
@@ -147,7 +153,7 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
             <Input
               nativeInput
               size="sm"
-              aria-label="Chrome Web Store link or ID"
+              aria-label={gt("Chrome Web Store link or ID")}
               placeholder="chromewebstore.google.com/detail/…"
               autoCapitalize="none"
               spellCheck={false}
@@ -161,7 +167,7 @@ export function BrowserExtensionsSetting({ disabled }: { readonly disabled: bool
               variant="outline"
               disabled={controlsDisabled || reference.trim() === ""}
             >
-              Add
+              <T context="verb, adds an extension">Add</T>
             </Button>
           </form>
         }

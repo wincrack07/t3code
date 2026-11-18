@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import { FolderIcon, ArrowUpIcon } from "lucide-react";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -37,11 +37,13 @@ export function WorkspaceFolderPicker({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button size="sm" variant="outline" disabled={disabled} />}>
-        Browse…
+        <T>Browse…</T>
       </DialogTrigger>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Choose folder</DialogTitle>
+          <DialogTitle>
+            <T>Choose folder</T>
+          </DialogTitle>
         </DialogHeader>
         {open ? (
           <FolderBrowser
@@ -67,6 +69,7 @@ function FolderBrowser({
   initialPath: string;
   onChoose: (path: string) => void;
 }) {
+  const gt = useGT();
   const [path, setPath] = useState(initialPath.trim() || "~/");
   const requestedPath = ensureBrowseDirectoryPath(path.trim() || "~/");
   const browsePath = useDebouncedValue(requestedPath, 120);
@@ -84,7 +87,7 @@ function FolderBrowser({
           <Button
             size="icon-sm"
             variant="outline"
-            aria-label="Parent folder"
+            aria-label={gt("Parent folder")}
             disabled={!parent}
             onClick={() => {
               if (parent) setPath(parent);
@@ -93,12 +96,12 @@ function FolderBrowser({
             <ArrowUpIcon />
           </Button>
           <Input
-            aria-label="Folder path"
+            aria-label={gt("Folder path")}
             value={path}
             onChange={(event) => setPath(event.target.value)}
           />
         </div>
-        <div className="mt-3 max-h-72 overflow-y-auto" aria-label="Folders">
+        <div className="mt-3 max-h-72 overflow-y-auto" aria-label={gt("Folders")}>
           {query.data?.entries.map((entry) => (
             <div key={entry.fullPath}>
               <Button variant="ghost" size="sm" onClick={() => setPath(entry.fullPath)}>
@@ -109,15 +112,21 @@ function FolderBrowser({
           ))}
           {query.error ? (
             <p role="alert" className="py-3 text-sm text-muted-foreground">
-              Could not read this folder. Enter an existing path on the destination environment.
+              <T>
+                Could not read this folder. Enter an existing path on the destination environment.
+              </T>
             </p>
           ) : query.data?.entries.length === 0 ? (
-            <p className="py-3 text-sm text-muted-foreground">No subfolders</p>
+            <p className="py-3 text-sm text-muted-foreground">
+              <T>No subfolders</T>
+            </p>
           ) : null}
         </div>
       </DialogPanel>
       <DialogFooter variant="bare">
-        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+        <DialogClose render={<Button variant="outline" />}>
+          <T>Cancel</T>
+        </DialogClose>
         <Button
           disabled={
             !query.data || query.error !== null || query.isPending || browsePath !== requestedPath
@@ -126,7 +135,7 @@ function FolderBrowser({
             if (query.data) onChoose(query.data.parentPath);
           }}
         >
-          Use this folder
+          <T>Use this folder</T>
         </Button>
       </DialogFooter>
     </>

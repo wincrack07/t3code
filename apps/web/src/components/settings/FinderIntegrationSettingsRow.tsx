@@ -1,5 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { msg, useGT } from "gt-react";
 import { useEffect, useState } from "react";
+import { m } from "~/i18n/messages";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { SettingsRow } from "./settingsLayout";
@@ -7,11 +8,12 @@ import { SettingsRow } from "./settingsLayout";
 const reportFailure = (error: unknown) =>
   toastManager.add({
     type: "error",
-    title: "Finder integration failed",
+    title: m(msg("Finder integration failed")),
     description: error instanceof Error ? error.message : String(error),
   });
 
 export function FinderIntegrationSettingsRow() {
+  const gt = useGT();
   const bridge = window.desktopBridge?.finderIntegration;
   const [state, setState] = useState<{ supported: boolean; installed: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,9 +25,11 @@ export function FinderIntegrationSettingsRow() {
   return (
     <SettingsRow
       id="finder-integration"
-      title="Finder integration"
-      status={state.installed ? "Installed" : "Not installed"}
-      description="Adds Send to T3 Code for files and folders. You may need to enable it in System Settings → Keyboard → Keyboard Shortcuts → Services."
+      title={gt("Finder integration")}
+      status={state.installed ? gt("Installed") : gt("Not installed")}
+      description={gt(
+        "Adds Send to T3 Code for files and folders. You may need to enable it in System Settings → Keyboard → Keyboard Shortcuts → Services.",
+      )}
       control={
         <Button
           size="sm"
@@ -40,7 +44,7 @@ export function FinderIntegrationSettingsRow() {
               .finally(() => setBusy(false));
           }}
         >
-          {state.installed ? "Remove" : "Install"}
+          {state.installed ? gt("Remove") : gt("Install")}
         </Button>
       }
     />

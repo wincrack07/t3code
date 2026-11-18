@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   scopedThreadKey,
   scopeProjectRef,
@@ -19,9 +18,11 @@ import {
 import { newlyObservedProjectMove } from "@t3tools/client-runtime/state/thread-relationships";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { ProjectId, ScopedThreadRef } from "@t3tools/contracts";
+import { msg } from "gt-react";
 
 import { stackedThreadToast, toastManager } from "./components/ui/toast";
 import { detachConfirmationMessage } from "./threadProjectMove.logic";
+import { m } from "./i18n/messages";
 import { readLocalApi } from "./localApi";
 import { appAtomRegistry } from "./rpc/atomRegistry";
 import { readProject, readThreadShell } from "./state/entities";
@@ -50,7 +51,7 @@ function projectTitle(threadRef: ScopedThreadRef, projectId: ProjectId): string 
 
 function failureToast(description: string) {
   toastManager.add(
-    stackedThreadToast({ type: "error", title: "Could not move thread", description }),
+    stackedThreadToast({ type: "error", title: m(msg("Could not move thread")), description }),
   );
 }
 
@@ -117,10 +118,10 @@ export async function moveThreadToProject(
     const typed = threadProjectMoveRejection(error);
     failureToast(
       typed
-        ? threadProjectMoveRejectionMessage(typed, targetTitle)
+        ? threadProjectMoveRejectionMessage(typed, targetTitle, m)
         : error instanceof Error
           ? error.message
-          : "An error occurred.",
+          : m(msg("An error occurred.")),
     );
     return;
   }
@@ -141,14 +142,17 @@ export async function moveThreadToProject(
     forgetLocalMove();
     toastManager.add({
       type: "info",
-      title: `Moves to ${targetTitle} when this turn finishes`,
+      title: m(msg("Moves to {targetTitle} when this turn finishes", { targetTitle })),
       description: before.title,
     });
     return;
   }
   if (outcome !== "moved") return;
   if (options.undo) {
-    toastManager.add({ type: "success", title: `Moved back to ${targetTitle}` });
+    toastManager.add({
+      type: "success",
+      title: m(msg("Moved back to {targetTitle}", { targetTitle })),
+    });
     return;
   }
   const move = readThreadShell(threadRef)?.projectMoves?.at(-1);
@@ -170,18 +174,22 @@ function showProjectMoveToast(
     readProject(scopeProjectRef(threadRef.environmentId, move.previousProjectId))?.workspaceRoot ??
       null,
   );
-  const left = undo?.leftWorktree ? "worktree" : options.leftBranch ? "branch" : null;
+  const previousTitle = projectTitle(threadRef, move.previousProjectId);
   const toastId = toastManager.add({
     type: "success",
-    title: `Moved to ${projectTitle(threadRef, move.projectId)}`,
-    description: left
-      ? `Undo returns it to ${projectTitle(threadRef, move.previousProjectId)}, not to its ${left}.`
-      : options.threadTitle,
+    title: m(
+      msg("Moved to {projectTitle}", { projectTitle: projectTitle(threadRef, move.projectId) }),
+    ),
+    description: undo?.leftWorktree
+      ? m(msg("Undo returns it to {previousTitle}, not to its worktree.", { previousTitle }))
+      : options.leftBranch
+        ? m(msg("Undo returns it to {previousTitle}, not to its branch.", { previousTitle }))
+        : options.threadTitle,
     ...(undo === null
       ? {}
       : {
           actionProps: {
-            children: "Undo",
+            children: m(msg("Undo")),
             onClick: () => {
               toastManager.close(toastId);
               void moveThreadToProject(threadRef, undo.projectId, { undo: true });
@@ -230,8 +238,8 @@ export async function cancelThreadProjectMove(threadRef: ScopedThreadRef): Promi
     toastManager.add(
       stackedThreadToast({
         type: "error",
-        title: "Could not cancel the move",
-        description: error instanceof Error ? error.message : "An error occurred.",
+        title: m(msg("Could not cancel the move")),
+        description: error instanceof Error ? error.message : m(msg("An error occurred.")),
       }),
     );
   }

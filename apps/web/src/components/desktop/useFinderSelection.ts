@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { projectEnvironment } from "../../state/projects";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -10,6 +9,7 @@ import {
 } from "@t3tools/contracts";
 import { finderProjectForPaths } from "@t3tools/shared/finderIntegration";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import { msg } from "gt-react";
 import { useRouter } from "@tanstack/react-router";
 import { useEffectEvent } from "react";
 import { openCommandPalette } from "../../commandPaletteBus";
@@ -29,6 +29,7 @@ import {
   normalizeComposerImageFileMimeType,
   composerFileAttachmentMimeType,
 } from "../chat/composerAttachmentFiles";
+import { m } from "~/i18n/messages";
 import { toastManager } from "../ui/toast";
 
 function waitForPaletteClose() {
@@ -205,7 +206,7 @@ export function useFinderSelection() {
     return prepare().catch((error: unknown) => {
       toastManager.add({
         type: "error",
-        title: "Could not receive Finder selection",
+        title: m(msg("Could not receive Finder selection")),
         description: error instanceof Error ? error.message : String(error),
       });
     });

@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   DndContext,
   type DragEndEvent,
@@ -9,6 +8,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { CommandId, type SavedPromptStatus } from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react";
 import { ChevronsRightIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -132,8 +132,10 @@ function BoardColumn({
   onFold: ((open: boolean) => void) | undefined;
   children: ReactNode;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { isOver, setNodeRef } = useDroppable({ id: status });
-  const label = TASK_STATUS_LABELS[status];
+  const label = messages(TASK_STATUS_LABELS[status]);
   if (folded)
     return (
       <section
@@ -146,7 +148,7 @@ function BoardColumn({
       >
         <button
           type="button"
-          aria-label={`Show ${label} (${count})`}
+          aria-label={gt("Show {label} ({count})", { label, count })}
           aria-expanded={false}
           className="flex h-10 w-full items-center gap-2 px-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:h-auto md:flex-col md:px-0 md:py-3"
           onClick={() => onFold?.(true)}
@@ -177,7 +179,7 @@ function BoardColumn({
           <Button
             size="icon-micro"
             variant="ghost-muted"
-            aria-label={`Fold ${label}`}
+            aria-label={gt("Fold {label}", { label })}
             onClick={() => onFold(false)}
           >
             <ChevronsRightIcon />
@@ -187,7 +189,11 @@ function BoardColumn({
       <div className="flex flex-col gap-2 p-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {count === 0 ? (
           <p className="px-1 py-2 text-xs text-muted-foreground">
-            {status === "review" ? "Finished threads land here for review." : "Drop a task here."}
+            {status === "review" ? (
+              <T>Finished threads land here for review.</T>
+            ) : (
+              <T>Drop a task here.</T>
+            )}
           </p>
         ) : (
           children
@@ -214,6 +220,7 @@ function TaskCard({
   selection: TaskSelection;
   onSelect: () => void;
 }) {
+  const gt = useGT();
   const queue = useTaskQueue(entry);
   const pickable = entry.status !== "done";
   const picked = selection.keys.has(entry.key);
@@ -240,13 +247,13 @@ function TaskCard({
       {...attributes}
       tabIndex={-1}
       role="group"
-      aria-roledescription="Task card"
+      aria-roledescription={gt("Task card")}
     >
       <div className="flex min-w-0 items-center gap-2">
         {selection.active && pickable ? (
           <span className="relative z-1 flex">
             <Checkbox
-              aria-label={picked ? "Deselect task" : "Select task"}
+              aria-label={picked ? gt("Deselect task") : gt("Select task")}
               checked={picked}
               onCheckedChange={() => selection.onToggle(entry.key, false)}
             />

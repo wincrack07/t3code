@@ -1,7 +1,7 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { findPromptLinkProjects } from "@t3tools/client-runtime/prompt-links";
 import { parseNewTaskLink } from "@t3tools/shared/promptLinks";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
+import { T } from "gt-react";
 
 import { TasksPage } from "../components/tasks/TasksPage";
 import { findTaskGroupForProject } from "../components/tasks/tasks.logic";
@@ -30,7 +30,9 @@ function NewTaskLinkRoute() {
       <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
         <Empty className="flex-1">
           <EmptyHeader className="max-w-md">
-            <EmptyTitle>Could not open the link</EmptyTitle>
+            <EmptyTitle>
+              <T>Could not open the link</T>
+            </EmptyTitle>
             <EmptyDescription>{parsed.error}</EmptyDescription>
           </EmptyHeader>
         </Empty>

@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   assembleOpenQuestionAnswers,
@@ -18,6 +17,7 @@ import {
   type RunId,
   type ThreadId,
 } from "@t3tools/contracts";
+import { T, useGT, Var } from "gt-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -49,6 +49,7 @@ function OpenQuestionCardList(props: {
   readonly threadId: ThreadId;
   readonly questions: ReadonlyArray<OpenQuestion>;
 }) {
+  const gt = useGT();
   const canOperate = useEnvironmentScope(props.environmentId, AuthOrchestrationOperateScope);
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: true,
@@ -87,7 +88,7 @@ function OpenQuestionCardList(props: {
   };
 
   return (
-    <View className="mt-2 gap-2" accessibilityLabel="Open questions">
+    <View className="mt-2 gap-2" accessibilityLabel={gt("Open questions")}>
       {props.questions.map((question, index) => (
         <OpenQuestionCard
           key={question.id}
@@ -104,12 +105,16 @@ function OpenQuestionCardList(props: {
       {canOperate && open.length > 0 ? (
         <View className="flex-row items-center justify-end gap-3">
           <Text className="font-sans text-xs text-foreground-muted">
-            {answeredCount} of {open.length} answered
+            <T>
+              <Var>{answeredCount}</Var> of <Var>{open.length}</Var> answered
+            </T>
           </Text>
           <Button
             size="compact"
             tone="primary"
-            label={answeredCount === 1 ? "Send 1 answer" : `Send ${answeredCount} answers`}
+            label={gt("{count, plural, one {Send {count} answer} other {Send {count} answers}}", {
+              count: answeredCount,
+            })}
             disabled={answeredCount === 0}
             loading={sending}
             onPress={() => void send()}
@@ -128,6 +133,7 @@ function OpenQuestionCard(props: {
   readonly onDraftChange: (draft: OpenQuestionDraft) => void;
   readonly onStatus: (status: "open" | "dismissed") => void;
 }) {
+  const gt = useGT();
   const { question, draft } = props;
   const isOpen = question.status === "open";
   const answered = question.status === "answered" || (isOpen && openQuestionAnswer(draft) !== null);
@@ -151,10 +157,10 @@ function OpenQuestionCard(props: {
         {!isOpen ? (
           <Text className="font-sans text-xs text-foreground-muted">
             {question.status === "answered"
-              ? "Answered"
+              ? gt("Answered", { $context: "open question status" })
               : question.status === "dismissed"
-                ? "Dismissed"
-                : "Resolved"}
+                ? gt("Dismissed", { $context: "open question status" })
+                : gt("Resolved", { $context: "open question status" })}
           </Text>
         ) : null}
       </View>
@@ -184,15 +190,17 @@ function OpenQuestionCard(props: {
             ))}
             <Chip
               size="small"
-              label="Later"
+              label={gt("Later", { $context: "answer an open question later" })}
               selected={draft?.later === true}
               onPress={() => props.onDraftChange({ ...draft, later: !draft?.later })}
             />
-            <Chip size="small" label="Dismiss" onPress={() => props.onStatus("dismissed")} />
+            <Chip size="small" label={gt("Dismiss")} onPress={() => props.onStatus("dismissed")} />
           </View>
           <TextInput
-            accessibilityLabel={`Detail or custom answer for question ${props.number}`}
-            placeholder="Add a detail or your own answer"
+            accessibilityLabel={gt("Detail or custom answer for question {number}", {
+              number: props.number,
+            })}
+            placeholder={gt("Add a detail or your own answer")}
             value={draft?.detail ?? ""}
             editable={draft?.later !== true}
             onChangeText={(detail) => props.onDraftChange({ ...draft, detail })}
@@ -200,7 +208,12 @@ function OpenQuestionCard(props: {
         </>
       ) : null}
       {props.interactive && !isOpen ? (
-        <Button size="compact" tone="text" label="Reopen" onPress={() => props.onStatus("open")} />
+        <Button
+          size="compact"
+          tone="text"
+          label={gt("Reopen")}
+          onPress={() => props.onStatus("open")}
+        />
       ) : null}
     </View>
   );

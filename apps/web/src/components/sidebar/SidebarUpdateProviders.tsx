@@ -1,7 +1,7 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { Link } from "@tanstack/react-router";
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 
 import { isProviderUpdateActive } from "../ProviderUpdateLaunchNotification.logic";
@@ -44,6 +44,7 @@ export function SidebarUpdateProviders({
   readonly updates: ProviderUpdates;
   readonly checking: boolean;
 }) {
+  const gt = useGT();
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   const { groups, hiddenCount, grouped } = resolveProviderUpdateRows(updates.listed);
   const unchecked = updates.uncheckedMachineCount;
@@ -51,9 +52,9 @@ export function SidebarUpdateProviders({
     groups.length > 0
       ? null
       : checking
-        ? "Checking providers…"
+        ? gt("Checking providers…")
         : unchecked === 0 && updates.checkedAt !== null
-          ? "Providers are up to date"
+          ? gt("Providers are up to date")
           : null;
   if (groups.length === 0 && status === null && unchecked === 0) return null;
 
@@ -74,11 +75,13 @@ export function SidebarUpdateProviders({
 
   return (
     <section
-      aria-label="Provider updates"
+      aria-label={gt("Provider updates")}
       className="mt-2 shrink-0 border-t border-border/60 px-1 pt-2"
     >
       <div className="flex items-center justify-between gap-3 text-xs leading-5">
-        <h3 className="font-medium text-muted-foreground">Providers</h3>
+        <h3 className="font-medium text-muted-foreground">
+          <T>Providers</T>
+        </h3>
         {!grouped && groups[0] ? (
           <span className="min-w-0 truncate text-muted-foreground">{groups[0].machine.label}</span>
         ) : null}
@@ -108,22 +111,27 @@ export function SidebarUpdateProviders({
                   {from ? `${from} → ${to}` : to}
                 </span>
                 {isPending || isProviderUpdateActive(candidate) ? (
-                  <span className="shrink-0 text-muted-foreground">Updating…</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    <T>Updating…</T>
+                  </span>
                 ) : row.oneClick ? (
                   <Button
-                    aria-label={`Update ${name} on ${row.machine.label}`}
+                    aria-label={gt("Update {name} on {machine}", {
+                      name,
+                      machine: row.machine.label,
+                    })}
                     size="micro"
                     variant="ghost-muted"
                     onClick={() => void update(row)}
                   >
-                    Update
+                    <T context="verb, installs a provider update">Update</T>
                   </Button>
                 ) : (
                   <Tooltip>
                     <TooltipTrigger
                       render={<span className="shrink-0 cursor-default text-muted-foreground" />}
                     >
-                      Update manually
+                      <T>Update manually</T>
                     </TooltipTrigger>
                     {reason ? <TooltipPopup side="top">{reason}</TooltipPopup> : null}
                   </Tooltip>
@@ -138,13 +146,16 @@ export function SidebarUpdateProviders({
           className="inline-flex h-6 items-center rounded-sm text-xs text-muted-foreground underline-offset-2 outline-none transition-colors hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           to="/settings/providers"
         >
-          {`${hiddenCount} more in Settings → Providers`}
+          {gt("{hiddenCount} more in Settings → Providers", { hiddenCount })}
         </Link>
       ) : null}
       {status ? <p className="py-1 text-xs leading-5 text-muted-foreground">{status}</p> : null}
       {unchecked > 0 ? (
         <p className="py-1 text-xs leading-5 text-muted-foreground">
-          {`${unchecked} ${unchecked === 1 ? "machine" : "machines"} not checked`}
+          {gt(
+            "{unchecked, plural, one {{unchecked} machine not checked} other {{unchecked} machines not checked}}",
+            { unchecked },
+          )}
         </p>
       ) : null}
     </section>

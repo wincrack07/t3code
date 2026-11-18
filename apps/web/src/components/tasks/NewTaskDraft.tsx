@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { useSavedPrompts } from "../../hooks/useSavedPrompts";
@@ -35,6 +35,7 @@ export function NewTaskDraft({
   onSaved: (key: string) => void;
   onDiscard: () => void;
 }) {
+  const gt = useGT();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const labelOf = useEnvironmentLabel();
   const storable = groups.filter((group) =>
@@ -60,11 +61,11 @@ export function NewTaskDraft({
   const draft = { text: text.trim(), title: title.trim() || null };
   const saveRef = useRef<(() => void) | null>(null);
   return (
-    <section aria-label="New task" className="flex h-full min-h-0 min-w-0 flex-col gap-3 p-4">
+    <section aria-label={gt("New task")} className="flex h-full min-h-0 min-w-0 flex-col gap-3 p-4">
       <input
-        aria-label="Task title"
+        aria-label={gt("Task title")}
         className="h-8 min-w-0 rounded-md bg-transparent px-1 text-base font-medium outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
-        placeholder="New task"
+        placeholder={gt("New task")}
         maxLength={TASK_TITLE_MAX_LENGTH}
         value={title}
         onChange={(event) => setTitle(event.target.value)}
@@ -78,10 +79,11 @@ export function NewTaskDraft({
               setMachine(null);
             }}
           >
-            <SelectTrigger size="compact" aria-label="Project">
+            <SelectTrigger size="compact" aria-label={gt("Project")}>
               <SelectValue>
                 {(value: string) =>
-                  storable.find((candidate) => candidate.key === value)?.label ?? "Choose a project"
+                  storable.find((candidate) => candidate.key === value)?.label ??
+                  gt("Choose a project")
                 }
               </SelectValue>
             </SelectTrigger>
@@ -101,9 +103,9 @@ export function NewTaskDraft({
               disabled={machines.length < 2}
               onValueChange={(value) => setMachine((value as EnvironmentId) || null)}
             >
-              <SelectTrigger size="compact" aria-label="Machine that stores the task">
+              <SelectTrigger size="compact" aria-label={gt("Machine that stores the task")}>
                 <SelectValue>
-                  {(value: string) => (value ? labelOf(value as EnvironmentId) : "No machine")}
+                  {(value: string) => (value ? labelOf(value as EnvironmentId) : gt("No machine"))}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup>
@@ -122,10 +124,10 @@ export function NewTaskDraft({
       </div>
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border has-focus-visible:border-ring">
         <textarea
-          aria-label="Task prompt"
+          aria-label={gt("Task prompt")}
           autoFocus
           className="min-h-0 flex-1 resize-none rounded-lg bg-transparent px-3 py-2.5 text-sm leading-6 outline-none"
-          placeholder="What should the agent do?"
+          placeholder={gt("What should the agent do?")}
           value={text}
           maxLength={TASK_TEXT_MAX_LENGTH}
           onChange={(event) => setText(event.target.value)}
@@ -140,10 +142,12 @@ export function NewTaskDraft({
       <div className="flex h-4 items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
         <span className={cn("truncate", group && !home && "text-destructive-foreground")}>
           {!group
-            ? "Choose a project to save this task."
+            ? gt("Choose a project to save this task.")
             : !home
-              ? "None of this project's machines is reachable."
-              : `Not saved yet · stored on ${labelOf(home.environmentId)}`}
+              ? gt("None of this project's machines is reachable.")
+              : gt("Not saved yet · stored on {machine}", {
+                  machine: labelOf(home.environmentId),
+                })}
         </span>
         <span className="shrink-0 tabular-nums">
           {text.length.toLocaleString()} / {TASK_TEXT_MAX_LENGTH.toLocaleString()}
@@ -151,7 +155,7 @@ export function NewTaskDraft({
       </div>
       <div className="flex items-center justify-end gap-1">
         <Button size="compact" variant="ghost" onClick={onDiscard}>
-          Discard
+          <T>Discard</T>
         </Button>
         {home ? (
           <SaveTaskButton
@@ -163,7 +167,7 @@ export function NewTaskDraft({
           />
         ) : (
           <Button size="compact" disabled>
-            Save task
+            <T>Save task</T>
           </Button>
         )}
       </div>
@@ -184,6 +188,7 @@ function SaveTaskButton({
   saveRef: RefObject<(() => void) | null>;
   onSaved: (key: string) => void;
 }) {
+  const gt = useGT();
   const { allowed, update } = useSavedPrompts(home.environmentId, home.id);
   const [busy, setBusy] = useState(false);
   const save = async () => {
@@ -200,7 +205,7 @@ function SaveTaskButton({
   });
   return (
     <Button size="compact" disabled={!valid || !allowed || busy} onClick={() => void save()}>
-      {busy ? "Saving…" : "Save task"}
+      {busy ? gt("Saving…") : gt("Save task")}
     </Button>
   );
 }

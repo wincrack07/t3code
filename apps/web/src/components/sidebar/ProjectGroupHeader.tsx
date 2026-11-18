@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import { SidebarColorSubmenu } from "./SidebarColorPicker";
 import {
@@ -62,6 +62,7 @@ export function ProjectGroupHeader({
   onMove: (parentId: string | null) => void;
   onDelete: () => void;
 }) {
+  const gt = useGT();
   const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
   const rowColor = projectFolderColor(folders, folder.id);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -104,7 +105,11 @@ export function ProjectGroupHeader({
         {collapsed || projectCount !== undefined ? (
           <>
             <span className="sr-only">
-              {dot === "attention" ? "Needs you" : dot === "working" ? "Working" : (dot ?? "")}
+              {dot === "attention"
+                ? gt("Needs you")
+                : dot === "working"
+                  ? gt("Working")
+                  : (dot ?? "")}
             </span>
             {dot ? (
               <span
@@ -142,7 +147,7 @@ export function ProjectGroupHeader({
                 <Button
                   size="icon-xs"
                   variant="ghost-muted"
-                  aria-label={`Group actions for ${folder.name}`}
+                  aria-label={gt("Group actions for {name}", { name: folder.name })}
                 />
               }
             >
@@ -160,8 +165,12 @@ export function ProjectGroupHeader({
                 })
               }
             />
-            <MenuItem onClick={onRename}>Rename group</MenuItem>
-            <MenuItem onClick={onCreateInside}>New group inside…</MenuItem>
+            <MenuItem onClick={onRename}>
+              <T>Rename group</T>
+            </MenuItem>
+            <MenuItem onClick={onCreateInside}>
+              <T>New group inside…</T>
+            </MenuItem>
             <ProjectFolderMenu
               folders={folders}
               currentFolderId={parentId}
@@ -169,7 +178,9 @@ export function ProjectGroupHeader({
               onMove={onMove}
             />
             <MenuSeparator />
-            <MenuItem onClick={onDelete}>Delete group</MenuItem>
+            <MenuItem onClick={onDelete}>
+              <T>Delete group</T>
+            </MenuItem>
           </MenuPopup>
         </Menu>
       )}

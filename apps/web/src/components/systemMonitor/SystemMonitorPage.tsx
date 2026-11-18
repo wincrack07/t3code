@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   formatMachineBytes,
   formatMachinePercent,
@@ -15,6 +14,7 @@ import type {
   MachineSample,
 } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { InfoIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -30,9 +30,9 @@ import { MachineHealthDot, MachineShareBar } from "./MachineMeter";
 import { useMachineMonitor } from "./useMachineMonitor";
 
 const WINDOWS = [
-  { label: "15 min", ms: 15 * 60_000 },
-  { label: "1 h", ms: 60 * 60_000 },
-  { label: "24 h", ms: 24 * 60 * 60_000 },
+  { label: msg("15 min"), ms: 15 * 60_000 },
+  { label: msg("1 h"), ms: 60 * 60_000 },
+  { label: msg("24 h"), ms: 24 * 60 * 60_000 },
 ] as const;
 
 const clock = (at: number) =>
@@ -53,20 +53,23 @@ function SystemMonitorBody() {
   const id = environment?.environmentId ?? null;
   const connected = environment ? environment.connection.phase === "connected" : false;
   const { data, error, allowed } = useMachineMonitor(id, true);
+  const gt = useGT();
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="machine-monitor" title="Machine monitor">
+      <SettingsSection id="machine-monitor" title={gt("Machine monitor")}>
         {environment === null ? (
-          <Notice title="No environment selected">
-            Connect an environment to see what its machine is doing
+          <Notice title={gt("No environment selected")}>
+            <T>Connect an environment to see what its machine is doing</T>
           </Notice>
         ) : !allowed ? (
-          <Notice title="No access to this machine">
-            This connection can’t read machine activity for {environment.label}
+          <Notice title={gt("No access to this machine")}>
+            <T>
+              This connection can’t read machine activity for <Var>{environment.label}</Var>
+            </T>
           </Notice>
         ) : data === null && error !== null ? (
-          <Notice title="Monitor unavailable">{error}</Notice>
+          <Notice title={gt("Monitor unavailable")}>{error}</Notice>
         ) : (
           <NowPanel snapshot={data} connected={connected} />
         )}
@@ -98,20 +101,26 @@ function NowPanel({
   snapshot: MachineMonitorSnapshot | null;
   connected: boolean;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const sample = snapshot?.sample ?? null;
-  const health = sample ? presentMachineHealth(sample) : null;
+  const health = sample ? presentMachineHealth(sample, messages) : null;
   const level = health && connected ? health.level : "unknown";
   const headline =
-    health === null ? "Reading machine" : connected ? health.headline : "Disconnected";
+    health === null
+      ? gt("Reading machine")
+      : connected
+        ? health.headline
+        : gt("Disconnected", { $context: "machine connection state" });
   const alsoStrained = health?.reasons.slice(1).map((reason) => reason.label) ?? [];
   const detail =
     sample === null
-      ? "Waiting for the first sample"
+      ? gt("Waiting for the first sample")
       : !connected
-        ? `Showing the last sample, from ${clock(sample.at)}`
+        ? gt("Showing the last sample, from {time}", { time: clock(sample.at) })
         : alsoStrained.length > 0
-          ? `Also: ${alsoStrained.join(", ")}`
-          : `Up ${formatMachineUptime(sample.uptime)} · sampled every 2 s`;
+          ? gt("Also: {reasons}", { reasons: alsoStrained.join(", ") })
+          : gt("Up {uptime} · sampled every 2 s", { uptime: formatMachineUptime(sample.uptime) });
   return (
     <div className="flex flex-col">
       <div className="flex items-center gap-3 px-4 py-4">
@@ -127,37 +136,48 @@ function NowPanel({
           value={formatMachinePercent(health?.cpu ?? null)}
           share={health?.cpu ?? null}
           level={health?.cpuLevel ?? "ok"}
-          detail={sample ? `Load ${sample.load.map((v) => v.toFixed(2)).join(" · ")}` : null}
+          detail={
+            sample
+              ? gt("Load {values}", { values: sample.load.map((v) => v.toFixed(2)).join(" · ") })
+              : null
+          }
         />
         <Stat
-          label="Memory"
+          label={gt("Memory", { $context: "RAM" })}
           value={formatMachinePercent(health?.memory ?? null)}
           share={health?.memory ?? null}
           level={health?.memoryLevel ?? "ok"}
-          detail={sample ? memoryDetail(sample) : null}
+          detail={sample ? memoryDetail(sample, gt) : null}
         />
         <Stat
-          label="Disk"
-          value={health?.disk == null ? "n/a" : `${formatMachinePercent(health.disk)} used`}
+          label={gt("Disk")}
+          value={
+            health?.disk == null
+              ? "n/a"
+              : gt("{percent} used", { percent: formatMachinePercent(health.disk) })
+          }
           share={health?.disk ?? null}
           level={health?.diskLevel ?? "ok"}
           detail={
             sample?.diskFree != null && sample.diskTotal !== null
-              ? `${formatMachineBytes(sample.diskFree)} free of ${formatMachineBytes(sample.diskTotal)}`
+              ? gt("{free} free of {total}", {
+                  free: formatMachineBytes(sample.diskFree),
+                  total: formatMachineBytes(sample.diskTotal),
+                })
               : sample
-                ? "Not reported"
+                ? gt("Not reported")
                 : null
           }
         />
         <Stat
-          label="Network"
+          label={gt("Network")}
           value={sample?.networkDown == null ? "n/a" : `↓ ${formatMachineRate(sample.networkDown)}`}
           detail={
             sample?.networkUp == null
               ? sample
-                ? "Not reported yet"
+                ? gt("Not reported yet")
                 : null
-              : `↑ ${formatMachineRate(sample.networkUp)} upload`
+              : gt("↑ {rate} upload", { rate: formatMachineRate(sample.networkUp) })
           }
         />
       </div>
@@ -168,11 +188,16 @@ function NowPanel({
   );
 }
 
-function memoryDetail(sample: MachineSample) {
-  const used = `${formatMachineBytes(sample.memoryUsed)} of ${formatMachineBytes(sample.memoryTotal)}`;
+function memoryDetail(sample: MachineSample, gt: ReturnType<typeof useGT>) {
+  const used = formatMachineBytes(sample.memoryUsed);
+  const total = formatMachineBytes(sample.memoryTotal);
   return sample.swapUsed !== null && sample.swapTotal
-    ? `${used} · swap ${formatMachineBytes(sample.swapUsed)}`
-    : used;
+    ? gt("{used} of {total} · swap {swap}", {
+        used,
+        total,
+        swap: formatMachineBytes(sample.swapUsed),
+      })
+    : gt("{used} of {total}", { used, total });
 }
 
 function Stat(props: {
@@ -232,12 +257,14 @@ function Limitations({ messages }: { messages: readonly string[] }) {
 function HistorySection({ history, now }: { history: readonly MachineSample[]; now: number }) {
   const [metric, setMetric] = useState<MachineHistoryMetric>("usage");
   const [windowMs, setWindowMs] = useState<number>(WINDOWS[0].ms);
+  const gt = useGT();
+  const m = useMessages();
   return (
     <SettingsSection
-      title="Recent history"
+      title={gt("Recent history")}
       headerAction={
         <ToggleGroup
-          aria-label="History window"
+          aria-label={gt("History window")}
           value={[String(windowMs)]}
           onValueChange={(value) => {
             const next = Number(value[0]);
@@ -246,7 +273,7 @@ function HistorySection({ history, now }: { history: readonly MachineSample[]; n
         >
           {WINDOWS.map((option) => (
             <Toggle key={option.ms} value={String(option.ms)}>
-              {option.label}
+              {m(option.label)}
             </Toggle>
           ))}
         </ToggleGroup>
@@ -254,14 +281,18 @@ function HistorySection({ history, now }: { history: readonly MachineSample[]; n
     >
       <div className="flex flex-col gap-4 px-4 py-4">
         <ToggleGroup
-          aria-label="History metric"
+          aria-label={gt("History metric")}
           value={[metric]}
           onValueChange={(value) => {
             if (value[0] === "usage" || value[0] === "network") setMetric(value[0]);
           }}
         >
-          <Toggle value="usage">CPU and memory</Toggle>
-          <Toggle value="network">Network</Toggle>
+          <Toggle value="usage">
+            <T>CPU and memory</T>
+          </Toggle>
+          <Toggle value="network">
+            <T>Network</T>
+          </Toggle>
         </ToggleGroup>
         <MachineHistoryChart history={history} metric={metric} windowMs={windowMs} now={now} />
       </div>
@@ -280,45 +311,52 @@ function UsageSection({
 }) {
   const [sort, setSort] = useState<Sort>("memory");
   const [search, setSearch] = useState("");
+  const gt = useGT();
   return (
     <SettingsSection
-      title="What’s using it"
+      title={gt("What’s using it")}
       headerAction={
         details ? (
           <span className="text-xs text-muted-foreground tabular-nums">
-            Sampled {clock(details.sampledAt)} · every 10 s
+            <T>
+              Sampled <Var>{clock(details.sampledAt)}</Var> · every 10 s
+            </T>
           </span>
         ) : null
       }
     >
       {details === undefined ? (
-        <Notice title="Sampling processes">
-          The first process list arrives within a few seconds
+        <Notice title={gt("Sampling processes")}>
+          <T>The first process list arrives within a few seconds</T>
         </Notice>
       ) : (
         <>
           <ProjectList details={details} environmentId={environmentId} />
           <div className="flex flex-col gap-3 px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-medium text-foreground">Top processes</h3>
+              <h3 className="text-sm font-medium text-foreground">
+                <T>Top processes</T>
+              </h3>
               <div className="flex items-center gap-2">
                 <div className="w-48">
                   <Input
                     size="sm"
-                    aria-label="Filter processes"
-                    placeholder="Filter"
+                    aria-label={gt("Filter processes")}
+                    placeholder={gt("Filter", { $context: "search input placeholder" })}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
                 </div>
                 <ToggleGroup
-                  aria-label="Sort processes"
+                  aria-label={gt("Sort processes")}
                   value={[sort]}
                   onValueChange={(value) => {
                     if (value[0] === "memory" || value[0] === "cpu") setSort(value[0]);
                   }}
                 >
-                  <Toggle value="memory">Memory</Toggle>
+                  <Toggle value="memory">
+                    <T context="RAM">Memory</T>
+                  </Toggle>
                   <Toggle value="cpu">CPU</Toggle>
                 </ToggleGroup>
               </div>
@@ -343,12 +381,15 @@ function ProjectList({
   details: MachineProcessSnapshot;
   environmentId: EnvironmentId | null;
 }) {
+  const gt = useGT();
   return (
     <div className="flex flex-col gap-2 px-4 py-4">
-      <h3 className="text-sm font-medium text-foreground">T3 projects and threads</h3>
+      <h3 className="text-sm font-medium text-foreground">
+        <T>T3 projects and threads</T>
+      </h3>
       {details.projects.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No processes are running inside a T3 project right now
+          <T>No processes are running inside a T3 project right now</T>
         </p>
       ) : (
         <ul className="flex flex-col">
@@ -356,7 +397,9 @@ function ProjectList({
             <li key={project.id} className="flex flex-col">
               <UsageRow
                 name={project.title}
-                meta={`${project.count} ${project.count === 1 ? "process" : "processes"}`}
+                meta={gt("{count, plural, one {{count} process} other {{count} processes}}", {
+                  count: project.count,
+                })}
                 rss={project.rss}
                 cpu={project.cpu}
               />
@@ -381,8 +424,10 @@ function ProjectList({
                     }
                     meta={
                       thread.attribution === "shared-directory"
-                        ? "Shares the project folder, counted in the project total"
-                        : `${thread.count ?? 0} ${thread.count === 1 ? "process" : "processes"}`
+                        ? gt("Shares the project folder, counted in the project total")
+                        : gt("{count, plural, one {{count} process} other {{count} processes}}", {
+                            count: thread.count ?? 0,
+                          })
                     }
                     rss={thread.rss}
                     cpu={thread.cpu}
@@ -441,7 +486,9 @@ function ProcessList(props: {
     return props.limitations.length > 0 ? (
       <Limitations messages={props.limitations} />
     ) : (
-      <p className="text-sm text-muted-foreground">No processes reported</p>
+      <p className="text-sm text-muted-foreground">
+        <T>No processes reported</T>
+      </p>
     );
   }
   const query = props.search.trim().toLowerCase();
@@ -456,13 +503,21 @@ function ProcessList(props: {
   return (
     <div className="flex flex-col">
       <div className="grid grid-cols-[minmax(0,1fr)_4rem_5rem_4rem] gap-3 border-b border-border/50 pb-2 text-xs">
-        <span className="text-muted-foreground">Process</span>
+        <span className="text-muted-foreground">
+          <T>Process</T>
+        </span>
         <span className="text-right text-muted-foreground">PID</span>
-        <span className={cn("text-right", headClass("memory"))}>Memory</span>
+        <span className={cn("text-right", headClass("memory"))}>
+          <T context="RAM">Memory</T>
+        </span>
         <span className={cn("text-right", headClass("cpu"))}>CPU</span>
       </div>
       {rows.length === 0 ? (
-        <p className="py-4 text-sm text-muted-foreground">No process matches “{props.search}”</p>
+        <p className="py-4 text-sm text-muted-foreground">
+          <T>
+            No process matches “<Var>{props.search}</Var>”
+          </T>
+        </p>
       ) : (
         <ul className="flex flex-col">
           {rows.map((p) => (
@@ -506,8 +561,12 @@ function ProcessList(props: {
         </ul>
       )}
       <p className="pt-3 text-xs text-muted-foreground">
-        Top 30 by {props.sort === "memory" ? "memory" : "CPU"}. CPU can pass 100% on multi-core
-        machines. {props.limitations.join(" ")}
+        {props.sort === "memory" ? (
+          <T>Top 30 by memory. CPU can pass 100% on multi-core machines.</T>
+        ) : (
+          <T>Top 30 by CPU. CPU can pass 100% on multi-core machines.</T>
+        )}{" "}
+        {props.limitations.join(" ")}
       </p>
     </div>
   );
@@ -516,16 +575,19 @@ function ProcessList(props: {
 function SidebarSettingSection() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
+  const gt = useGT();
   return (
-    <SettingsSection id="system-monitor" title="Sidebar">
+    <SettingsSection id="system-monitor" title={gt("Sidebar")}>
       <SettingsRow
-        title="Show machine health in the sidebar"
-        description="Adds a health dot to the monitor icon and the live numbers to its tooltip. Off, the icon only opens this page."
+        title={gt("Show machine health in the sidebar")}
+        description={gt(
+          "Adds a health dot to the monitor icon and the live numbers to its tooltip. Off, the icon only opens this page.",
+        )}
         control={
           <Switch
             checked={settings.showSystemMonitor}
             onCheckedChange={(checked) => updateSettings({ showSystemMonitor: checked })}
-            aria-label="Show machine health in the sidebar"
+            aria-label={gt("Show machine health in the sidebar")}
           />
         }
       />

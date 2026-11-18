@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { Link } from "@tanstack/react-router";
+import { T, useGT } from "gt-react";
 
 import { Button } from "../../ui/button";
 import { ChatBackupSettings } from "../ChatBackupSettings";
@@ -7,26 +7,27 @@ import { ChatHubSettings } from "../ChatHubSettings";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settingsLayout";
 
 export function ForkChatsSettings() {
+  const gt = useGT();
   return (
     <SettingsPageContainer>
       <ChatBackupSettings />
       <ChatHubSettings />
-      <SettingsSection title="Pages">
+      <SettingsSection title={gt("Pages", { $context: "settings section listing app pages" })}>
         <SettingsRow
-          title="All chats"
-          description="Search and read chats from every machine through your chat hub."
+          title={gt("All chats")}
+          description={gt("Search and read chats from every machine through your chat hub.")}
           control={
             <Button size="sm" variant="outline" render={<Link to="/all-chats" />}>
-              Open
+              <T context="verb, opens a page">Open</T>
             </Button>
           }
         />
         <SettingsRow
-          title="Artifacts"
-          description="Pages your Claude providers published on claude.ai."
+          title={gt("Artifacts")}
+          description={gt("Pages your Claude providers published on claude.ai.")}
           control={
             <Button size="sm" variant="outline" render={<Link to="/artifacts" />}>
-              Open
+              <T context="verb, opens a page">Open</T>
             </Button>
           }
         />

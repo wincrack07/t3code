@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
@@ -6,10 +5,12 @@ import type {
   KeepAwakeSession,
   KeepAwakeStatus,
 } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { ChevronDownIcon, CoffeeIcon, SlashIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { isElectron } from "../env";
+import type { MessageResolver } from "../i18n/messages";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
@@ -29,13 +30,24 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./ui/collapsi
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 
-function keepAwakeLabel(status: KeepAwakeStatus) {
-  if (!status.supported) return "Not supported";
-  if (!status.active) return status.mode === "agents" ? "Waiting for agents" : "Off";
-  if (status.mode === "agents") return `Awake · ${status.agents} agents`;
+function keepAwakeLabel(status: KeepAwakeStatus, resolve: MessageResolver) {
+  if (!status.supported) return resolve(msg("Not supported"));
+  if (!status.active)
+    return status.mode === "agents"
+      ? resolve(msg("Waiting for agents"))
+      : resolve(msg("Off", { $context: "keep awake state" }));
+  if (status.mode === "agents")
+    return resolve(msg("Awake · {agents} agents", { agents: status.agents }));
   return status.endsAt
-    ? `Awake until ${new Date(status.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-    : "Awake indefinitely";
+    ? resolve(
+        msg("Awake until {time}", {
+          time: new Date(status.endsAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }),
+      )
+    : resolve(msg("Awake indefinitely"));
 }
 
 /** Keep-awake state and actions for one environment, shared by the popover and Settings. */
@@ -73,6 +85,8 @@ export function useKeepAwake(provided?: EnvironmentId) {
 }
 
 export function KeepAwakeControl({ environmentId: provided }: { environmentId?: EnvironmentId }) {
+  const gt = useGT();
+  const m = useMessages();
   const { environmentId, status, error, disabled, localDesktop, send, authorize } =
     useKeepAwake(provided);
   if (status && !status.supported) {
@@ -81,7 +95,7 @@ export function KeepAwakeControl({ environmentId: provided }: { environmentId?: 
         <TooltipTrigger
           render={
             <span
-              aria-label="Keep awake is not supported on this machine"
+              aria-label={gt("Keep awake is not supported on this machine")}
               className="relative inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground"
             />
           }
@@ -89,18 +103,26 @@ export function KeepAwakeControl({ environmentId: provided }: { environmentId?: 
           <CoffeeIcon className="size-4 opacity-50" />
           <SlashIcon className="absolute size-4" aria-hidden="true" />
         </TooltipTrigger>
-        <TooltipPopup>Keep awake is not supported on this machine</TooltipPopup>
+        <TooltipPopup>
+          <T>Keep awake is not supported on this machine</T>
+        </TooltipPopup>
       </Tooltip>
     );
   }
-  const label = status ? keepAwakeLabel(status) : "Keep awake";
+  const label = status ? keepAwakeLabel(status, m) : gt("Keep awake");
   return (
     <Tooltip>
       <Popover>
         <TooltipTrigger
           render={
             <PopoverTrigger
-              render={<Button variant="ghost" size="icon-sm" aria-label={`Keep awake: ${label}`} />}
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={gt("Keep awake: {label}", { label })}
+                />
+              }
             />
           }
         >
@@ -122,7 +144,7 @@ export function KeepAwakeControl({ environmentId: provided }: { environmentId?: 
               localDesktop={localDesktop}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">{error ?? "Connecting…"}</p>
+            <p className="text-sm text-muted-foreground">{error ?? gt("Connecting…")}</p>
           )}
         </PopoverPopup>
       </Popover>
@@ -156,6 +178,8 @@ export function KeepAwakeForm({
   authorize: (action: "install" | "remove" | "refresh") => void;
   localDesktop: boolean;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const [pending, setPending] = useState<PendingMode | null>(null);
   const [minutes, setMinutes] = useState(status.defaults.durationMinutes);
   const [day, setDay] = useState("today");
@@ -198,9 +222,11 @@ export function KeepAwakeForm({
   return (
     <div className="flex flex-col gap-4 text-sm">
       <div className="flex flex-col gap-1">
-        <h3 className="font-medium">Keep awake</h3>
+        <h3 className="font-medium">
+          <T>Keep awake</T>
+        </h3>
         <p role="status" className="text-xs text-muted-foreground">
-          {pending ? "Off until you start" : keepAwakeLabel(status)}
+          {pending ? gt("Off until you start") : keepAwakeLabel(status, m)}
         </p>
         {status.reason ? (
           <p role="alert" className="text-xs text-muted-foreground">
@@ -208,28 +234,38 @@ export function KeepAwakeForm({
           </p>
         ) : null}
       </div>
-      <section className="flex flex-col gap-2" aria-label="Session">
-        <FormRow label="Session">
+      <section
+        className="flex flex-col gap-2"
+        aria-label={gt("Session", { $context: "keep awake session" })}
+      >
+        <FormRow label={gt("Session", { $context: "keep awake session" })}>
           <Select
             value={mode}
             onValueChange={(value) => {
               if (value) choose(value as KeepAwakeSession["mode"]);
             }}
           >
-            <SelectTrigger size="sm" className="w-44" disabled={locked} aria-label="Session">
-              <SelectValue>{KEEP_AWAKE_MODES.find(([value]) => value === mode)?.[1]}</SelectValue>
+            <SelectTrigger
+              size="sm"
+              className="w-44"
+              disabled={locked}
+              aria-label={gt("Session", { $context: "keep awake session" })}
+            >
+              <SelectValue>
+                {m(KEEP_AWAKE_MODES.find(([value]) => value === mode)?.[1] ?? "")}
+              </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               {KEEP_AWAKE_MODES.map(([value, label]) => (
                 <SelectItem hideIndicator key={value} value={value}>
-                  {label}
+                  {m(label)}
                 </SelectItem>
               ))}
             </SelectPopup>
           </Select>
         </FormRow>
         {pending === "duration" ? (
-          <FormRow label="Minutes">
+          <FormRow label={gt("Minutes", { $context: "duration field label" })}>
             <div className="w-44">
               <NumberField
                 size="sm"
@@ -243,7 +279,7 @@ export function KeepAwakeForm({
               >
                 <NumberFieldGroup>
                   <NumberFieldDecrement />
-                  <NumberFieldInput aria-label="Duration in minutes" />
+                  <NumberFieldInput aria-label={gt("Duration in minutes")} />
                   <NumberFieldIncrement />
                 </NumberFieldGroup>
               </NumberField>
@@ -251,7 +287,7 @@ export function KeepAwakeForm({
           </FormRow>
         ) : null}
         {pending === "until" ? (
-          <FormRow label="Until">
+          <FormRow label={gt("Until", { $context: "end time field label" })}>
             <div className="flex w-44 gap-2">
               <Select
                 value={day}
@@ -262,15 +298,15 @@ export function KeepAwakeForm({
                   }
                 }}
               >
-                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="End day">
-                  <SelectValue>{day === "tomorrow" ? "Tomorrow" : "Today"}</SelectValue>
+                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label={gt("End day")}>
+                  <SelectValue>{day === "tomorrow" ? gt("Tomorrow") : gt("Today")}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
                   <SelectItem hideIndicator value="today">
-                    Today
+                    <T>Today</T>
                   </SelectItem>
                   <SelectItem hideIndicator value="tomorrow">
-                    Tomorrow
+                    <T>Tomorrow</T>
                   </SelectItem>
                 </SelectPopup>
               </Select>
@@ -283,7 +319,7 @@ export function KeepAwakeForm({
                   }
                 }}
               >
-                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="End time">
+                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label={gt("End time")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -298,33 +334,44 @@ export function KeepAwakeForm({
           </FormRow>
         ) : null}
         {untilError ? (
-          <p className="text-xs text-muted-foreground">Choose a later time or tomorrow</p>
+          <p className="text-xs text-muted-foreground">
+            <T>Choose a later time or tomorrow</T>
+          </p>
         ) : null}
         {pending ? (
           <Button size="sm" className="self-end" disabled={locked} onClick={start}>
-            Start session
+            <T>Start session</T>
           </Button>
         ) : null}
       </section>
-      <section className="flex flex-col gap-2 border-t border-border pt-4" aria-label="Options">
-        <FormRow label="Allow display sleep">
+      <section
+        className="flex flex-col gap-2 border-t border-border pt-4"
+        aria-label={gt("Options")}
+      >
+        <FormRow label={gt("Allow display sleep")}>
           <Switch
             disabled={disabled}
-            aria-label="Allow display sleep"
+            aria-label={gt("Allow display sleep")}
             checked={options.allowDisplaySleep}
             onCheckedChange={(checked) => updateOptions({ allowDisplaySleep: checked })}
           />
         </FormRow>
-        <FormRow label="Stop on low battery">
+        <FormRow label={gt("Stop on low battery")}>
           <Switch
             disabled={disabled}
-            aria-label="Stop on low battery"
+            aria-label={gt("Stop on low battery")}
             checked={options.batteryCutoff !== null}
             onCheckedChange={(checked) => updateOptions({ batteryCutoff: checked ? 20 : null })}
           />
         </FormRow>
         {options.batteryCutoff !== null ? (
-          <FormRow label={<span className="text-muted-foreground">Stop at (%)</span>}>
+          <FormRow
+            label={
+              <span className="text-muted-foreground">
+                <T>Stop at (%)</T>
+              </span>
+            }
+          >
             <div className="w-44">
               <NumberField
                 key={options.batteryCutoff}
@@ -339,7 +386,7 @@ export function KeepAwakeForm({
               >
                 <NumberFieldGroup>
                   <NumberFieldDecrement />
-                  <NumberFieldInput aria-label="Battery threshold percent" />
+                  <NumberFieldInput aria-label={gt("Battery threshold percent")} />
                   <NumberFieldIncrement />
                 </NumberFieldGroup>
               </NumberField>
@@ -348,10 +395,10 @@ export function KeepAwakeForm({
         ) : null}
         {status.lidClosedSupported ? (
           <>
-            <FormRow label="Keep awake with lid closed">
+            <FormRow label={gt("Keep awake with lid closed")}>
               <Switch
                 disabled={disabled || (!lid?.authorized && !options.lidClosed)}
-                aria-label="Keep awake with lid closed"
+                aria-label={gt("Keep awake with lid closed")}
                 checked={options.lidClosed}
                 onCheckedChange={(checked) => updateOptions({ lidClosed: checked })}
               />
@@ -362,10 +409,10 @@ export function KeepAwakeForm({
                   label={
                     <span className="text-xs text-muted-foreground">
                       {lid.active
-                        ? "Active"
+                        ? gt("Active", { $context: "lid-closed authorization state" })
                         : lid.authorized
-                          ? "Authorized"
-                          : "Needs authorization"}
+                          ? gt("Authorized", { $context: "lid-closed authorization state" })
+                          : gt("Needs authorization")}
                     </span>
                   }
                 >
@@ -376,7 +423,9 @@ export function KeepAwakeForm({
                       disabled={disabled}
                       onClick={() => authorize(lid.authorized ? "remove" : "install")}
                     >
-                      {lid.authorized ? "Remove authorization" : "Authorize"}
+                      {lid.authorized
+                        ? gt("Remove authorization")
+                        : gt("Authorize", { $context: "verb, button" })}
                     </Button>
                   ) : (
                     <Button
@@ -385,7 +434,7 @@ export function KeepAwakeForm({
                       disabled={disabled}
                       onClick={() => authorize("refresh")}
                     >
-                      Check authorization
+                      <T>Check authorization</T>
                     </Button>
                   )}
                 </FormRow>
@@ -394,16 +443,20 @@ export function KeepAwakeForm({
                     <CollapsibleTrigger
                       render={<Button size="xs" variant="ghost-muted" className="group -ms-2" />}
                     >
-                      Commands to run on this Mac
+                      <T>Commands to run on this Mac</T>
                       <ChevronDownIcon className="transition-transform group-data-panel-open:rotate-180" />
                     </CollapsibleTrigger>
                     <CollapsiblePanel>
                       <div className="flex flex-col gap-2 pt-2 text-xs text-muted-foreground">
-                        <p>Authorize</p>
+                        <p>
+                          <T $context="heading for the authorize command">Authorize</T>
+                        </p>
                         <pre className="max-h-32 overflow-auto rounded-lg bg-muted p-3 font-mono text-foreground">
                           {lid.installCommand}
                         </pre>
-                        <p>Remove, after ending lid-closed sessions</p>
+                        <p>
+                          <T>Remove, after ending lid-closed sessions</T>
+                        </p>
                         <pre className="overflow-auto rounded-lg bg-muted p-3 font-mono text-foreground">
                           {lid.removeCommand}
                         </pre>

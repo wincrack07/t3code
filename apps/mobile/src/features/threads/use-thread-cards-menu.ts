@@ -1,9 +1,9 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useEnvironmentScope } from "../../state/session";
 import { useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { AuthOrchestrationOperateScope, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { htmlRenderFileName } from "@t3tools/shared/htmlRender";
+import { useGT } from "gt-react-native";
 
 import type { AppBarMenu } from "../../components/ui/AppBar.types";
 import { useThreadShell } from "../../state/entities";
@@ -17,9 +17,10 @@ export function useThreadCardsMenu(environment: string, thread: string): AppBarM
   const navigation = useNavigation();
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
   const canRemove = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
+  const gt = useGT();
   if (!cards?.length) return null;
   return {
-    title: "Agent cards",
+    title: gt("Agent cards"),
     icon: "doc.on.doc",
     items: cards.map((card) => ({
       id: card.id,
@@ -27,10 +28,10 @@ export function useThreadCardsMenu(environment: string, thread: string): AppBarM
       items: [
         {
           id: `${card.id}:open`,
-          title: "Open card",
+          title: gt("Open card"),
           subtitle: card.updatedAt
-            ? `Updated ${new Date(card.updatedAt).toLocaleString()}`
-            : "Updated before card timestamps were recorded",
+            ? gt("Updated {date}", { date: new Date(card.updatedAt).toLocaleString() })
+            : gt("Updated before card timestamps were recorded"),
           onPress: () =>
             navigation.navigate("ThreadAttachment", {
               environmentId,
@@ -44,7 +45,7 @@ export function useThreadCardsMenu(environment: string, thread: string): AppBarM
         },
         {
           id: `${card.id}:remove`,
-          title: "Remove card",
+          title: gt("Remove card"),
           destructive: true,
           disabled: !canRemove,
           onPress: () => {

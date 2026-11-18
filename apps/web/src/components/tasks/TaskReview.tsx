@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { CommandId, type ScopedThreadRef } from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpRightIcon, FileDiffIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -33,9 +33,11 @@ export function TaskReviewSummary({
   entry: TaskEntry;
   density: "card" | "detail";
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const snapshot = entry.task.review;
   if (!snapshot) return null;
-  const view = taskReviewView(snapshot);
+  const view = taskReviewView(snapshot, messages);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -46,7 +48,10 @@ export function TaskReviewSummary({
           <Badge
             variant="outline"
             size="sm"
-            aria-label={`${view.changes.files} files changed, ${view.changes.label}`}
+            aria-label={gt("{files} files changed, {changes}", {
+              files: view.changes.files,
+              changes: view.changes.label,
+            })}
           >
             <FileDiffIcon />
             <span className="tabular-nums">{view.changes.label}</span>
@@ -62,7 +67,11 @@ export function TaskReviewSummary({
                 href={pr.url}
                 target="_blank"
                 rel="noreferrer"
-                aria-label={`Pull request #${pr.number}${pr.state ? `, ${pr.state}` : ""}`}
+                aria-label={
+                  pr.state
+                    ? gt("Pull request #{number}, {state}", { number: pr.number, state: pr.state })
+                    : gt("Pull request #{number}", { number: pr.number })
+                }
               />
             }
           >
@@ -120,7 +129,7 @@ export function TaskReviewActions({
             })
           }
         >
-          Open thread
+          <T>Open thread</T>
           <ArrowUpRightIcon />
         </Button>
       ) : null}
@@ -131,10 +140,10 @@ export function TaskReviewActions({
           disabled={!allowed || busy || !thread}
           onClick={() => setNoting(true)}
         >
-          Request changes
+          <T>Request changes</T>
         </Button>
         <Button size="compact" disabled={!allowed || busy} onClick={() => void approve()}>
-          Approve
+          <T>Approve</T>
         </Button>
       </div>
     </div>
@@ -150,6 +159,7 @@ function RequestChangesForm({
   thread: ScopedThreadRef;
   onDone: () => void;
 }) {
+  const gt = useGT();
   const shell = useQuietThreadShell(thread);
   const send = useAtomCommand(projectEnvironment.tasks.requestChanges);
   const [note, setNote] = useState("");
@@ -180,8 +190,8 @@ function RequestChangesForm({
       <Textarea
         size="sm"
         autoFocus
-        aria-label="What should change"
-        placeholder="What should change? Sent to the same thread."
+        aria-label={gt("What should change")}
+        placeholder={gt("What should change? Sent to the same thread.")}
         value={note}
         maxLength={TASK_TEXT_MAX_LENGTH}
         onChange={(event) => setNote(event.target.value)}
@@ -197,13 +207,15 @@ function RequestChangesForm({
       />
       <div className="flex items-center justify-end gap-1">
         {!shell ? (
-          <span className="mr-auto truncate text-xs text-muted-foreground">Thread not loaded</span>
+          <span className="mr-auto truncate text-xs text-muted-foreground">
+            <T>Thread not loaded</T>
+          </span>
         ) : null}
         <Button size="compact" variant="ghost" onClick={onDone}>
-          Cancel
+          <T>Cancel</T>
         </Button>
         <Button size="compact" disabled={!valid || busy || !shell} onClick={() => void submit()}>
-          {busy ? "Sending…" : "Send"}
+          {busy ? gt("Sending…") : gt("Send", { $context: "verb, sends a note" })}
         </Button>
       </div>
     </div>

@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentConnectionSummary } from "@t3tools/client-runtime/state/presentation";
 import type {
@@ -12,7 +11,9 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { msg } from "gt-react";
 
+import { m, type MessageResolver } from "../../i18n/messages";
 import { resolveSidebarThreadStatus } from "../Sidebar.logic";
 
 export type ThreadActivityState =
@@ -65,38 +66,55 @@ const STATE_ORDER: Record<ThreadActivityState, number> = {
 };
 
 /** What a thread is doing that keeps it on the board, or null when it is at rest. */
-function resolveThreadActivity(thread: EnvironmentThreadShell): ThreadActivity | null {
+function resolveThreadActivity(
+  thread: EnvironmentThreadShell,
+  resolve: MessageResolver,
+): ThreadActivity | null {
   const tasks = thread.pendingBackgroundTasks;
   const settledAt = thread.latestRun?.completedAt ?? null;
   switch (resolveSidebarThreadStatus(thread)) {
     case "approval":
       return {
         state: "approval",
-        label: thread.hasPendingApprovals ? "Needs approval" : "Subagent needs approval",
+        label: thread.hasPendingApprovals
+          ? resolve(msg("Needs approval"))
+          : resolve(msg("Subagent needs approval")),
         since: pendingRequestAt(thread),
       };
     case "input":
       return {
         state: "input",
-        label: thread.hasPendingUserInput ? "Waiting for your answer" : "Subagent has a question",
+        label: thread.hasPendingUserInput
+          ? resolve(msg("Waiting for your answer"))
+          : resolve(msg("Subagent has a question")),
         since: thread.pendingUserInputAt ?? pendingRequestAt(thread),
       };
     case "request":
-      return { state: "request", label: "Guest request", since: null };
+      return { state: "request", label: resolve(msg("Guest request")), since: null };
     case "preparing":
-      return { state: "starting", label: "Starting", since: resolveThreadWorkingStartedAt(thread) };
+      return {
+        state: "starting",
+        label: resolve(msg("Starting", { $context: "status, a thread is starting up" })),
+        since: resolveThreadWorkingStartedAt(thread),
+      };
     case "working":
-      return { state: "working", label: "Working", since: resolveThreadWorkingStartedAt(thread) };
+      return {
+        state: "working",
+        label: resolve(msg("Working")),
+        since: resolveThreadWorkingStartedAt(thread),
+      };
     case "waiting":
       return {
         state: "waiting",
-        label: presentPendingBackgroundWork(tasks)?.title ?? "Waiting on other threads",
+        label:
+          presentPendingBackgroundWork(tasks, resolve)?.title ??
+          resolve(msg("Waiting on other threads")),
         since: settledAt ?? resolveThreadWorkingStartedAt(thread),
       };
     case "failed":
     case "limited":
     case "ready": {
-      const background = presentPendingBackgroundWork(tasks);
+      const background = presentPendingBackgroundWork(tasks, resolve);
       return background === null
         ? null
         : { state: "background", label: background.title, since: settledAt };
@@ -140,6 +158,7 @@ function resolveListedAncestor(
 function buildColumnGroups(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   projectByKey: ReadonlyMap<string, EnvironmentProject>,
+  resolve: MessageResolver,
 ): ReadonlyArray<ActivityBoardProjectGroup> {
   const live = threads.filter((thread) => thread.archivedAt === null && thread.deletedAt === null);
   const byId = new Map(live.map((thread) => [thread.id, thread] as const));
@@ -165,17 +184,21 @@ function buildColumnGroups(
     const subagents = (childrenByParent.get(thread.id) ?? [])
       .flatMap((child): Array<ActivityBoardThread> => {
         const activity =
-          resolveThreadActivity(child) ??
+          resolveThreadActivity(child, resolve) ??
           (rosterChildIds.has(child.id)
-            ? { state: "working", label: "Working", since: null }
+            ? {
+                state: "working",
+                label: resolve(msg("Working")),
+                since: null,
+              }
             : null);
         return activity === null ? [] : [{ thread: child, ...activity }];
       })
       .sort(compareActivity);
     const activity =
-      resolveThreadActivity(thread) ??
+      resolveThreadActivity(thread, resolve) ??
       (subagents.length > 0
-        ? { state: "subagents" as const, label: "Subagents running", since: null }
+        ? { state: "subagents" as const, label: resolve(msg("Subagents running")), since: null }
         : null);
     if (activity === null) continue;
     const projectKey = `${thread.environmentId}:${thread.projectId}`;
@@ -203,11 +226,14 @@ function buildColumnGroups(
  * connected lists nothing: its last shells may be stale, and showing them as
  * running would mislead.
  */
-export function buildActivityBoard(input: {
-  readonly environments: ReadonlyArray<EnvironmentConnectionSummary>;
-  readonly threads: ReadonlyArray<EnvironmentThreadShell>;
-  readonly projects: ReadonlyArray<EnvironmentProject>;
-}): ReadonlyArray<ActivityBoardColumn> {
+export function buildActivityBoard(
+  input: {
+    readonly environments: ReadonlyArray<EnvironmentConnectionSummary>;
+    readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+    readonly projects: ReadonlyArray<EnvironmentProject>;
+  },
+  resolve: MessageResolver = m,
+): ReadonlyArray<ActivityBoardColumn> {
   const projectByKey = new Map(
     input.projects.map((project) => [`${project.environmentId}:${project.id}`, project] as const),
   );
@@ -222,7 +248,11 @@ export function buildActivityBoard(input: {
     .map((environment) => {
       const connected = environment.connectionState === "connected";
       const groups = connected
-        ? buildColumnGroups(threadsByEnvironment.get(environment.environmentId) ?? [], projectByKey)
+        ? buildColumnGroups(
+            threadsByEnvironment.get(environment.environmentId) ?? [],
+            projectByKey,
+            resolve,
+          )
         : [];
       return {
         environment,

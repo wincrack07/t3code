@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { openQuestionLabel, runOpenQuestions } from "@t3tools/client-runtime/state/open-questions";
 import {
   AuthOrchestrationOperateScope,
@@ -6,6 +5,7 @@ import {
   type RunId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { CheckIcon, CircleDotIcon, MinusIcon } from "lucide-react";
 import { use } from "react";
 
@@ -28,21 +28,23 @@ export function OpenQuestionCards({ runId }: { readonly runId: RunId }) {
 }
 
 const STATUS_LABEL: Record<Exclude<OpenQuestion["status"], "open">, string> = {
-  answered: "Answered",
-  dismissed: "Dismissed",
-  resolved: "Resolved",
+  answered: msg("Answered", { $context: "open question status" }),
+  dismissed: msg("Dismissed", { $context: "open question status" }),
+  resolved: msg("Resolved", { $context: "open question status" }),
 };
 
 function OpenQuestionList(props: {
   readonly threadRef: ScopedThreadRef;
   readonly questions: ReadonlyArray<OpenQuestion>;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const { threadRef } = props;
   const canOperate = useEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope);
   const setStatus = useSetOpenQuestionStatus();
 
   return (
-    <ul aria-label="Open questions" className="mt-2 flex flex-col gap-0.5 text-sm">
+    <ul aria-label={gt("Open questions")} className="mt-2 flex flex-col gap-0.5 text-sm">
       {props.questions.map((question) => {
         const open = question.status === "open";
         const label = openQuestionLabel(question.text);
@@ -76,10 +78,10 @@ function OpenQuestionList(props: {
             )}
             <span className="min-w-0 shrink truncate text-xs">
               {open
-                ? "Open"
+                ? gt("Open", { $context: "open question status" })
                 : question.status === "answered" && question.answer
                   ? `→ ${question.answer}`
-                  : STATUS_LABEL[question.status]}
+                  : m(STATUS_LABEL[question.status])}
             </span>
             {!open && canOperate ? (
               <Button
@@ -90,11 +92,11 @@ function OpenQuestionList(props: {
                   void setStatus(
                     threadRef,
                     { action: "set_status", updates: [{ id: question.id, status: "open" }] },
-                    "Could not reopen the question",
+                    gt("Could not reopen the question"),
                   )
                 }
               >
-                Reopen
+                <T>Reopen</T>
               </Button>
             ) : null}
           </li>

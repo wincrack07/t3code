@@ -1,9 +1,11 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type {
   McpCatalogServer,
   McpCatalogServerStatus,
   McpCatalogVariable,
 } from "@t3tools/contracts";
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "../../i18n/messages";
 
 export interface VariableDraft {
   readonly key: string;
@@ -118,12 +120,15 @@ export const draftId = (draft: ServerDraft) => draft.id ?? serverIdFor(draft.nam
 export const serverFromDraft = (
   draft: ServerDraft,
   enabled: boolean,
+  resolve: MessageResolver = m,
 ): { readonly server: McpCatalogServer } | { readonly error: string } => {
   const name = draft.name.trim();
-  if (name === "") return { error: "Give the server a name." };
+  if (name === "") return { error: resolve(msg("Give the server a name.")) };
   const id = draftId(draft);
   if (!SERVER_ID_PATTERN.test(id)) {
-    return { error: "The id takes lowercase letters, numbers, - and _, up to 40 characters." };
+    return {
+      error: resolve(msg("The id takes lowercase letters, numbers, - and _, up to 40 characters.")),
+    };
   }
   const variables = (drafts: ReadonlyArray<VariableDraft>) =>
     drafts
@@ -136,7 +141,9 @@ export const serverFromDraft = (
       }));
   if (draft.type === "stdio") {
     const [command, ...args] = splitCommandLine(draft.commandLine.trim());
-    if (command === undefined) return { error: "Enter the command that starts the server." };
+    if (command === undefined) {
+      return { error: resolve(msg("Enter the command that starts the server.")) };
+    }
     const cwd = draft.cwd.trim();
     return {
       server: {
@@ -151,7 +158,7 @@ export const serverFromDraft = (
   }
   const url = draft.url.trim();
   if (!/^https?:\/\/\S+$/u.test(url))
-    return { error: "Enter a full URL, such as https://example.com/mcp." };
+    return { error: resolve(msg("Enter a full URL, such as https://example.com/mcp.")) };
   return {
     server: {
       id,
@@ -164,18 +171,25 @@ export const serverFromDraft = (
   };
 };
 
-export const statusLabel = (status: McpCatalogServerStatus | undefined): string => {
+export const statusLabel = (
+  status: McpCatalogServerStatus | undefined,
+  resolve: MessageResolver = m,
+): string => {
   switch (status?.state) {
     case "connected":
-      return status.tools.length === 1 ? "1 tool" : `${status.tools.length} tools`;
+      return resolve(
+        msg("{count, plural, one {{count} tool} other {{count} tools}}", {
+          count: status.tools.length,
+        }),
+      );
     case "connecting":
-      return "Connecting…";
+      return resolve(msg("Connecting…"));
     case "error":
-      return "Not connected";
+      return resolve(msg("Not connected"));
     case "disabled":
-      return "Off";
+      return resolve(msg("Off", { $context: "status, the server is disabled" }));
     default:
-      return "Not connected yet";
+      return resolve(msg("Not connected yet"));
   }
 };
 

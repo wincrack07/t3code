@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { T } from "gt-react";
 import { projectFolderTree, type ProjectFolder } from "../../projectFolders";
 import { MenuItem, MenuSub, MenuSubTrigger, MenuSubPopup } from "../ui/menu";
 import { sidebarTreeIndent } from "./sidebarTreeDrag";
@@ -25,7 +25,9 @@ export function ProjectFolderMenu({
     <>
       {options.length > 0 || onCreate ? (
         <MenuSub>
-          <MenuSubTrigger>Move to group</MenuSubTrigger>
+          <MenuSubTrigger>
+            <T>Move to group</T>
+          </MenuSubTrigger>
           <MenuSubPopup>
             {options.map(({ folder, depth }) => (
               <MenuItem
@@ -38,12 +40,18 @@ export function ProjectFolderMenu({
                 </span>
               </MenuItem>
             ))}
-            {onCreate ? <MenuItem onClick={onCreate}>New group…</MenuItem> : null}
+            {onCreate ? (
+              <MenuItem onClick={onCreate}>
+                <T>New group…</T>
+              </MenuItem>
+            ) : null}
           </MenuSubPopup>
         </MenuSub>
       ) : null}
       {currentFolderId !== null ? (
-        <MenuItem onClick={() => onMove(null)}>Move to top level</MenuItem>
+        <MenuItem onClick={() => onMove(null)}>
+          <T>Move to top level</T>
+        </MenuItem>
       ) : null}
     </>
   );

@@ -33,6 +33,7 @@ import { environmentPresentations } from "./presentation";
 import { relayEnvironmentDiscovery } from "./relay";
 import { peerLinkEnvironment } from "./peerLinks";
 import { mintPairingCodeOn } from "./peerPairingCode";
+import { m } from "../i18n/messages";
 
 const MeshSettings = Schema.Struct({
   enabled: Schema.Boolean,
@@ -133,7 +134,7 @@ async function runMesh(automatic: boolean, access: AuthMcpClientAccess, unlink: 
         progress(
           machine.environmentId,
           machine.label,
-          peerMeshFailure(squashAtomCommandFailure(result)),
+          peerMeshFailure(squashAtomCommandFailure(result), m),
         );
     }
     if (unlink) {
@@ -152,7 +153,7 @@ async function runMesh(automatic: boolean, access: AuthMcpClientAccess, unlink: 
             label,
             result._tag === "Success"
               ? "Unlinked"
-              : peerMeshFailure(squashAtomCommandFailure(result)),
+              : peerMeshFailure(squashAtomCommandFailure(result), m),
           );
         }
       return;
@@ -210,13 +211,13 @@ async function runMesh(automatic: boolean, access: AuthMcpClientAccess, unlink: 
         );
         progress(key, label, pair.renewExisting ? "Renewed" : "Linked");
       } catch (error) {
-        progress(key, label, peerMeshFailure(error));
+        progress(key, label, peerMeshFailure(error, m));
       }
     }
     if (plan.length === 0 && links.size === known.length)
       progress("complete", "All connected environments", "No links need linking or renewal.");
   } catch (error) {
-    progress("broker", "Linking environments", peerMeshFailure(error));
+    progress("broker", "Linking environments", peerMeshFailure(error, m));
   } finally {
     appAtomRegistry.set(peerMeshBusyAtom, false);
   }

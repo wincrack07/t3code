@@ -1,12 +1,13 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { OpenQuestionsUpdate, ScopedThreadRef } from "@t3tools/contracts";
+import { msg } from "gt-react";
 
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
+import { m } from "../../i18n/messages";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 
 /** Records answered, dismissed, or reopened questions; toasts and returns false on failure. */
@@ -29,7 +30,7 @@ export function useSetOpenQuestionStatus() {
         stackedThreadToast({
           type: "error",
           title: failureTitle,
-          description: error instanceof Error ? error.message : "An error occurred.",
+          description: error instanceof Error ? error.message : m(msg("An error occurred.")),
         }),
       );
       return false;

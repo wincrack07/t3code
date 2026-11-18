@@ -1,5 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { MachineMonitorSnapshot, MachineSample } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 export function mergeMachineMonitorSnapshot(
   previous: MachineMonitorSnapshot | undefined,
@@ -58,7 +59,10 @@ const byLimit = (value: number | null, busy: number, strained: number): MachineH
 const worse = (a: MachineHealthLevel, b: MachineHealthLevel) =>
   a === "strained" || b === "strained" ? "strained" : a === "busy" || b === "busy" ? "busy" : "ok";
 
-export function presentMachineHealth(sample: MachineSample): MachineHealth {
+export function presentMachineHealth(
+  sample: MachineSample,
+  resolve: MFunctionType = mFallback,
+): MachineHealth {
   const cpu = sample.cpu === null ? null : Math.min(1, Math.max(0, sample.cpu / 100));
   const memory = share(sample.memoryUsed, sample.memoryTotal);
   const disk =
@@ -79,16 +83,19 @@ export function presentMachineHealth(sample: MachineSample): MachineHealth {
           ? "busy"
           : "ok";
   const candidates: [MachineHealthLevel, string][] = [
-    [memoryLevel, shareLevel === memoryLevel ? "Memory high" : "Memory pressure"],
-    [cpuLevel, "CPU busy"],
-    [diskLevel, "Disk almost full"],
+    [
+      memoryLevel,
+      shareLevel === memoryLevel ? resolve(msg("Memory high")) : resolve(msg("Memory pressure")),
+    ],
+    [cpuLevel, resolve(msg("CPU busy"))],
+    [diskLevel, resolve(msg("Disk almost full"))],
   ];
   const reasons = candidates
     .flatMap(([level, label]): MachineHealthReason[] => (level === "ok" ? [] : [{ level, label }]))
     .sort((a, b) => (a.level === b.level ? 0 : a.level === "strained" ? -1 : 1));
   return {
     level: reasons[0]?.level ?? "ok",
-    headline: reasons[0]?.label ?? "Healthy",
+    headline: reasons[0]?.label ?? resolve(msg("Healthy")),
     reasons,
     cpu,
     memory,

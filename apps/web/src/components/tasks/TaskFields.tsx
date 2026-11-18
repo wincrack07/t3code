@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { SavedPromptAction } from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react";
 import { ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
 import { type KeyboardEvent, useId, useState } from "react";
 
@@ -44,8 +44,13 @@ export const TASK_PRIORITY_BADGE = {
 } as const satisfies Record<TaskPriority, "error" | "secondary" | "quiet">;
 
 export function TaskPriorityChip({ priority }: { priority: TaskPriority }) {
+  const gt = useGT();
   return (
-    <Badge variant={TASK_PRIORITY_BADGE[priority]} size="sm" aria-label={`Priority ${priority}`}>
+    <Badge
+      variant={TASK_PRIORITY_BADGE[priority]}
+      size="sm"
+      aria-label={gt("Priority {priority}", { priority })}
+    >
       {TASK_PRIORITY_LABELS[priority]}
     </Badge>
   );
@@ -85,13 +90,16 @@ export function TaskFieldMenuItems({
   onUpdate: (action: SavedPromptAction) => void;
   onEditTags: (() => void) | null;
 }) {
+  const messages = useMessages();
   const { task } = entry;
   const tags = task.tags ?? [];
   const options = [...new Set([...tags, ...tagsInUse])].toSorted();
   return (
     <>
       <MenuGroup>
-        <MenuGroupLabel>Priority</MenuGroupLabel>
+        <MenuGroupLabel>
+          <T>Priority</T>
+        </MenuGroupLabel>
         <MenuRadioGroup
           value={taskPriority(task)}
           onValueChange={(value: TaskPriority) =>
@@ -111,7 +119,9 @@ export function TaskFieldMenuItems({
       </MenuGroup>
       <MenuSeparator />
       <MenuGroup>
-        <MenuGroupLabel>When</MenuGroupLabel>
+        <MenuGroupLabel>
+          <T context="task schedule field">When</T>
+        </MenuGroupLabel>
         <MenuRadioGroup
           value={taskWhen(task)}
           onValueChange={(value: TaskWhen) => onUpdate({ kind: "edit", id: task.id, when: value })}
@@ -120,7 +130,7 @@ export function TaskFieldMenuItems({
             <MenuRadioItem key={value} value={value} closeOnClick>
               <span className="flex items-center gap-2">
                 <MenuRadioItemIndicator className="w-3.5" />
-                {TASK_WHEN_LABELS[value]}
+                {messages(TASK_WHEN_LABELS[value])}
                 {value === "today" ? <MenuShortcut>T</MenuShortcut> : null}
               </span>
             </MenuRadioItem>
@@ -129,7 +139,9 @@ export function TaskFieldMenuItems({
       </MenuGroup>
       <MenuSeparator />
       <MenuSub>
-        <MenuSubTrigger>Tags</MenuSubTrigger>
+        <MenuSubTrigger>
+          <T>Tags</T>
+        </MenuSubTrigger>
         <MenuSubPopup>
           {options.map((tag) => (
             <MenuCheckboxItem
@@ -148,7 +160,11 @@ export function TaskFieldMenuItems({
             </MenuCheckboxItem>
           ))}
           {options.length > 0 && onEditTags ? <MenuSeparator /> : null}
-          {onEditTags ? <MenuItem onClick={onEditTags}>New tag…</MenuItem> : null}
+          {onEditTags ? (
+            <MenuItem onClick={onEditTags}>
+              <T>New tag…</T>
+            </MenuItem>
+          ) : null}
         </MenuSubPopup>
       </MenuSub>
     </>
@@ -219,6 +235,7 @@ export function TaskTagsEditor({
   onAddingChange: (adding: boolean) => void;
   onChange: (tags: string[]) => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState("");
   const listId = useId();
   const commit = () => {
@@ -235,7 +252,7 @@ export function TaskTagsEditor({
             <Button
               size="icon-micro"
               variant="ghost-muted"
-              aria-label={`Remove tag ${tag}`}
+              aria-label={gt("Remove tag {tag}", { tag })}
               onClick={() => onChange(tags.filter((value) => value !== tag))}
             >
               <XIcon />
@@ -248,8 +265,8 @@ export function TaskTagsEditor({
           <Input
             size="compact"
             autoFocus
-            aria-label="New tag"
-            placeholder="Tag"
+            aria-label={gt("New tag")}
+            placeholder={gt("Tag", { $context: "noun, task label" })}
             maxLength={TASK_TAG_MAX_LENGTH}
             list={listId}
             value={draft}
@@ -282,7 +299,7 @@ export function TaskTagsEditor({
       ) : disabled || tags.length >= TASK_TAG_MAX_COUNT ? null : (
         <Button size="micro" variant="ghost-muted" onClick={() => onAddingChange(true)}>
           <PlusIcon />
-          Tag
+          <T context="noun, task label">Tag</T>
         </Button>
       )}
     </div>

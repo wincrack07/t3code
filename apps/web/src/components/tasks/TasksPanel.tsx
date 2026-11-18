@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { T, useGT, Var } from "gt-react";
 import { ArrowUpRightIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -24,6 +24,7 @@ export function TasksPanel({
   environmentId: EnvironmentId;
   projectId: ProjectId;
 }) {
+  const gt = useGT();
   const navigate = useNavigate();
   const groups = useTaskProjectGroups();
   const group = findTaskGroupForProject(groups, environmentId, projectId);
@@ -31,17 +32,19 @@ export function TasksPanel({
   if (!group) return null;
   const model = buildTaskList([group], { ...NO_TASK_FILTER, projectKey: group.key });
   return (
-    <section aria-label="Tasks" className="flex h-full min-h-0 flex-col">
+    <section aria-label={gt("Tasks")} className="flex h-full min-h-0 flex-col">
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
         <h2 className="min-w-0 truncate text-sm font-medium">{group.label}</h2>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {model.openCount} open
+          <T>
+            <Var>{model.openCount}</Var> open
+          </T>
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             size="icon-sm"
             variant="ghost-muted"
-            aria-label="New task"
+            aria-label={gt("New task")}
             onClick={() => void navigate({ to: "/tasks/new", search: { project: group.key } })}
           >
             <PlusIcon />
@@ -56,7 +59,7 @@ export function TasksPanel({
               })
             }
           >
-            Open in Tasks
+            <T>Open in Tasks</T>
             <ArrowUpRightIcon />
           </Button>
         </div>
@@ -83,9 +86,13 @@ export function TasksPanel({
         empty={
           <Empty size="compact">
             <EmptyHeader>
-              <EmptyTitle>No tasks in {group.label}</EmptyTitle>
+              <EmptyTitle>
+                <T>
+                  No tasks in <Var>{group.label}</Var>
+                </T>
+              </EmptyTitle>
               <EmptyDescription>
-                Save a prompt for later from the composer, or add one with +.
+                <T>Save a prompt for later from the composer, or add one with +.</T>
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

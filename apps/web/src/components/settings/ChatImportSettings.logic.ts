@@ -1,13 +1,19 @@
 import type { EnvironmentId, T3ThreadExport } from "@t3tools/contracts";
 import { isWindowsAbsolutePath } from "@t3tools/shared/path";
+import { msg } from "gt-react";
 import {
   importBackupFingerprint,
   importProjectKey,
   portableImportThreadId,
 } from "@t3tools/shared/threadExport";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 export const NEW_PROJECT = "new";
-export const IMPORT_STEPS = ["Chats", "Folders", "Import"] as const;
+export const IMPORT_STEPS = [
+  msg("Chats", { $context: "import wizard step" }),
+  msg("Folders", { $context: "import wizard step" }),
+  msg("Import", { $context: "import wizard step" }),
+] as const;
 const DRAFT_KEY = "t3code:chat-import-draft";
 
 export interface ImportChatRef {
@@ -212,15 +218,20 @@ export function projectQueryMatches(
   return chatTitles.some((chatTitle) => chatTitle.toLowerCase().includes(needle));
 }
 
-export function importProgressLabel(counts: {
-  readonly imported: number;
-  readonly present: number;
-  readonly moved: number;
-}): string {
+export function importProgressLabel(
+  counts: {
+    readonly imported: number;
+    readonly present: number;
+    readonly moved: number;
+  },
+  resolve: MessageResolver = m,
+): string {
   return [
-    `Imported ${counts.imported}`,
-    counts.present > 0 ? `${counts.present} already present` : null,
-    counts.moved > 0 ? `${counts.moved} moved to their project` : null,
+    resolve(msg("Imported {count}", { count: counts.imported })),
+    counts.present > 0 ? resolve(msg("{count} already present", { count: counts.present })) : null,
+    counts.moved > 0
+      ? resolve(msg("{count} moved to their project", { count: counts.moved }))
+      : null,
   ]
     .filter((part) => part !== null)
     .join(" · ");

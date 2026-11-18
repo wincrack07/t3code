@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
@@ -8,6 +7,7 @@ import type {
 } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
+import { T, useGT, useMessages } from "gt-react";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
@@ -50,6 +50,7 @@ const failureMessage = (result: AsyncResult.Failure<unknown, unknown>, fallback:
 };
 
 export function McpCatalogSettings() {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const { environment } = useSettingsScope();
   return (
@@ -59,8 +60,8 @@ export function McpCatalogSettings() {
       ) : (
         <SettingsSection {...searchableSetting("mcp-servers")}>
           <SettingsRow
-            title="Choose one environment"
-            description="MCP servers belong to a single machine. Choose one above."
+            title={gt("Choose one environment")}
+            description={gt("MCP servers belong to a single machine. Choose one above.")}
           />
         </SettingsSection>
       )}
@@ -69,6 +70,7 @@ export function McpCatalogSettings() {
 }
 
 function McpCatalogSection({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const query = useEnvironmentQuery(serverEnvironment.mcpCatalog({ environmentId, input: {} }));
   const allowed = useAtomValue(
@@ -95,7 +97,7 @@ function McpCatalogSection({ environmentId }: { readonly environmentId: Environm
     if (AsyncResult.isFailure(result)) {
       setRowError({
         id: server.id,
-        message: failureMessage(result, "Could not save this change."),
+        message: failureMessage(result, gt("Could not save this change.")),
       });
     }
   };
@@ -111,19 +113,21 @@ function McpCatalogSection({ environmentId }: { readonly environmentId: Environm
             disabled={!allowed || snapshot === undefined}
             onClick={() => setImporting(true)}
           >
-            Import
+            <T context="verb, opens the import dialog">Import</T>
           </Button>
         }
       >
         {snapshot === undefined ? (
           <SettingsRow
-            title={query.error ? "MCP servers are unavailable" : "Loading…"}
+            title={query.error ? gt("MCP servers are unavailable") : gt("Loading…")}
             description={query.error ?? undefined}
           />
         ) : snapshot.servers.length === 0 ? (
           <SettingsRow
-            title="No servers yet"
-            description="Add one, or import the ones Claude, Codex, and Cursor already use. Every agent here, on any account, then reaches them through T3 Code without its own copy."
+            title={gt("No servers yet")}
+            description={gt(
+              "Add one, or import the ones Claude, Codex, and Cursor already use. Every agent here, on any account, then reaches them through T3 Code without its own copy.",
+            )}
           />
         ) : (
           snapshot.servers.map((server) => (
@@ -146,7 +150,7 @@ function McpCatalogSection({ environmentId }: { readonly environmentId: Environm
           onClick={() => setEditing({ server: null })}
         >
           <PlusIcon className="size-4 shrink-0" />
-          Add MCP server
+          <T>Add MCP server</T>
         </button>
       </SettingsSection>
       {editing ? (
@@ -173,6 +177,8 @@ function ServerRow(props: {
   readonly onEdit: () => void;
   readonly onRetry: () => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { server, status } = props;
   const state = status?.state;
   const failed = state === "error";
@@ -192,7 +198,7 @@ function ServerRow(props: {
                     : "quiet"
             }
           >
-            {statusLabel(status)}
+            {statusLabel(status, messages)}
           </Badge>
         </span>
       }
@@ -215,14 +221,14 @@ function ServerRow(props: {
         <div className="flex items-center gap-2">
           {failed ? (
             <Button size="xs" variant="outline" disabled={!props.allowed} onClick={props.onRetry}>
-              Retry
+              <T>Retry</T>
             </Button>
           ) : null}
           <Button size="xs" variant="ghost" disabled={!props.allowed} onClick={props.onEdit}>
-            Edit
+            <T context="verb">Edit</T>
           </Button>
           <Switch
-            aria-label={`Use ${server.name}`}
+            aria-label={gt("Use {name}", { name: server.name })}
             checked={server.enabled}
             disabled={!props.allowed}
             onCheckedChange={props.onEnabledChange}
@@ -235,11 +241,13 @@ function ServerRow(props: {
 
 function VariablesEditor(props: {
   readonly label: string;
-  readonly noun: string;
+  readonly noun: "variable" | "header";
   readonly variables: ReadonlyArray<VariableDraft>;
   readonly disabled: boolean;
   readonly onChange: (variables: ReadonlyArray<VariableDraft>) => void;
 }) {
+  const gt = useGT();
+  const isVariable = props.noun === "variable";
   const update = (key: string, patch: Partial<VariableDraft>) =>
     props.onChange(
       props.variables.map((variable) =>
@@ -262,14 +270,14 @@ function VariablesEditor(props: {
           }
         >
           <PlusIcon />
-          Add {props.noun}
+          {isVariable ? <T>Add variable</T> : <T>Add header</T>}
         </Button>
       </div>
       {props.variables.map((variable) => (
         <div key={variable.key} className="grid grid-cols-[1fr_1.4fr_auto_auto] items-center gap-2">
           <Input
             size="sm"
-            aria-label={`${props.noun} name`}
+            aria-label={isVariable ? gt("variable name") : gt("header name")}
             placeholder="NAME"
             value={variable.name}
             disabled={props.disabled}
@@ -277,9 +285,13 @@ function VariablesEditor(props: {
           />
           <Input
             size="sm"
-            aria-label={`${props.noun} value`}
+            aria-label={isVariable ? gt("variable value") : gt("header value")}
             type={variable.secret ? "password" : "text"}
-            placeholder={variable.secret && variable.stored ? "Saved" : "value"}
+            placeholder={
+              variable.secret && variable.stored
+                ? gt("Saved", { $context: "a stored secret value" })
+                : gt("value", { $context: "placeholder for a variable or header value" })
+            }
             value={variable.value}
             disabled={props.disabled}
             onChange={(event) => update(variable.key, { value: event.target.value })}
@@ -292,12 +304,18 @@ function VariablesEditor(props: {
                 update(variable.key, { secret: checked === true, stored: false })
               }
             />
-            Secret
+            <T context="marks a value as secret">Secret</T>
           </label>
           <Button
             size="icon-xs"
             variant="ghost-muted"
-            aria-label={`Remove ${variable.name || props.noun}`}
+            aria-label={
+              variable.name
+                ? gt("Remove {name}", { name: variable.name })
+                : isVariable
+                  ? gt("Remove variable")
+                  : gt("Remove header")
+            }
             disabled={props.disabled}
             onClick={() =>
               props.onChange(props.variables.filter((candidate) => candidate.key !== variable.key))
@@ -317,6 +335,7 @@ function ServerDialog(props: {
   readonly status: McpCatalogServerStatus | undefined;
   readonly onClose: () => void;
 }) {
+  const gt = useGT();
   const { environmentId, server } = props;
   const upsert = useAtomCommand(serverEnvironment.upsertMcpCatalogServer, {
     reportFailure: false,
@@ -345,7 +364,7 @@ function ServerDialog(props: {
     });
     setBusy(false);
     if (AsyncResult.isFailure(result)) {
-      setError(failureMessage(result, "Could not save this server."));
+      setError(failureMessage(result, gt("Could not save this server.")));
       return;
     }
     props.onClose();
@@ -357,7 +376,7 @@ function ServerDialog(props: {
     const result = await remove({ environmentId, input: { id: server.id } });
     setBusy(false);
     if (AsyncResult.isFailure(result)) {
-      setError(failureMessage(result, "Could not remove this server."));
+      setError(failureMessage(result, gt("Could not remove this server.")));
       return;
     }
     props.onClose();
@@ -373,8 +392,10 @@ function ServerDialog(props: {
     >
       <WizardPopup>
         <WizardHeader
-          title={server ? `Edit ${server.name}` : "Add MCP server"}
-          description="It runs on this machine. Every agent here can use its tools, whichever account or provider it runs on."
+          title={server ? gt("Edit {name}", { name: server.name }) : gt("Add MCP server")}
+          description={gt(
+            "It runs on this machine. Every agent here can use its tools, whichever account or provider it runs on.",
+          )}
         />
         <WizardPanel>
           <form
@@ -386,35 +407,35 @@ function ServerDialog(props: {
             }}
           >
             <SettingsRow
-              title="Name"
+              title={gt("Name")}
               control={
                 <Input
-                  aria-label="Name"
+                  aria-label={gt("Name")}
                   value={draft.name}
                   disabled={busy}
-                  placeholder="e.g. GitHub"
+                  placeholder={gt("e.g. GitHub")}
                   onChange={(event) => edit({ name: event.target.value })}
                 />
               }
             />
             <SettingsRow
-              title="Id"
-              description="How agents name this server."
+              title={gt("Id")}
+              description={gt("How agents name this server.")}
               control={
                 <Input
-                  aria-label="Id"
+                  aria-label={gt("Id")}
                   value={draft.id ?? (draft.name.trim() === "" ? "" : draftId(draft))}
                   disabled={busy}
-                  placeholder="e.g. github"
+                  placeholder={gt("e.g. github")}
                   onChange={(event) => edit({ id: event.target.value })}
                 />
               }
             />
             <SettingsRow
-              title="Connection"
+              title={gt("Connection")}
               control={
                 <ToggleGroup
-                  aria-label="Connection"
+                  aria-label={gt("Connection")}
                   variant="segmented"
                   value={[draft.type]}
                   disabled={busy}
@@ -423,7 +444,9 @@ function ServerDialog(props: {
                     if (value === "stdio" || value === "http") edit({ type: value });
                   }}
                 >
-                  <ToggleGroupItem value="stdio">Command</ToggleGroupItem>
+                  <ToggleGroupItem value="stdio">
+                    <T>Command</T>
+                  </ToggleGroupItem>
                   <ToggleGroupItem value="http">URL</ToggleGroupItem>
                 </ToggleGroup>
               }
@@ -431,24 +454,25 @@ function ServerDialog(props: {
             {draft.type === "stdio" ? (
               <>
                 <SettingsRow
-                  title="Command"
-                  description="With its arguments, as you would type it in a terminal."
+                  title={gt("Command")}
+                  description={gt("With its arguments, as you would type it in a terminal.")}
                   control={
                     <Input
-                      aria-label="Command"
+                      aria-label={gt("Command")}
                       value={draft.commandLine}
                       disabled={busy}
+                      // oxlint-disable-next-line t3code/no-untranslated-copy -- an example shell command
                       placeholder="npx -y @modelcontextprotocol/server-github"
                       onChange={(event) => edit({ commandLine: event.target.value })}
                     />
                   }
                 />
                 <SettingsRow
-                  title="Folder"
-                  description="Optional. Where the command starts."
+                  title={gt("Folder")}
+                  description={gt("Optional. Where the command starts.")}
                   control={
                     <Input
-                      aria-label="Folder"
+                      aria-label={gt("Folder")}
                       value={draft.cwd}
                       disabled={busy}
                       placeholder="~/"
@@ -457,7 +481,7 @@ function ServerDialog(props: {
                   }
                 />
                 <VariablesEditor
-                  label="Environment variables"
+                  label={gt("Environment variables")}
                   noun="variable"
                   variables={draft.env}
                   disabled={busy}
@@ -468,7 +492,7 @@ function ServerDialog(props: {
               <>
                 <SettingsRow
                   title="URL"
-                  description="A streamable HTTP endpoint."
+                  description={gt("A streamable HTTP endpoint.")}
                   control={
                     <Input
                       aria-label="URL"
@@ -480,7 +504,7 @@ function ServerDialog(props: {
                   }
                 />
                 <VariablesEditor
-                  label="Headers"
+                  label={gt("Headers")}
                   noun="header"
                   variables={draft.headers}
                   disabled={busy}
@@ -489,7 +513,10 @@ function ServerDialog(props: {
               </>
             )}
             {tools.length > 0 ? (
-              <SettingsRow title="Tools" description={tools.map((tool) => tool.name).join(", ")} />
+              <SettingsRow
+                title={gt("Tools")}
+                description={tools.map((tool) => tool.name).join(", ")}
+              />
             ) : null}
             {error ? (
               <p role="alert" className="px-3 text-sm text-destructive-foreground sm:px-4">
@@ -505,14 +532,14 @@ function ServerDialog(props: {
               disabled={busy}
               onClick={() => (confirmingRemove ? void removeServer() : setConfirmingRemove(true))}
             >
-              {confirmingRemove ? "Remove for every agent" : "Remove"}
+              {confirmingRemove ? gt("Remove for every agent") : gt("Remove")}
             </Button>
           ) : null}
           <Button variant="outline" disabled={busy} onClick={props.onClose}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button type="submit" form={formId} disabled={busy}>
-            {busy ? "Saving…" : "Save"}
+            {busy ? gt("Saving…") : gt("Save")}
           </Button>
         </WizardFooter>
       </WizardPopup>
@@ -524,6 +551,7 @@ function ImportDialog(props: {
   readonly environmentId: EnvironmentId;
   readonly onClose: () => void;
 }) {
+  const gt = useGT();
   const { environmentId } = props;
   const readCandidates = useAtomCommand(serverEnvironment.mcpCatalogImportCandidates, {
     reportFailure: false,
@@ -548,7 +576,7 @@ function ImportDialog(props: {
         setSelected(new Set(result.value.filter((candidate) => !candidate.exists).map(keyOf)));
       } else if (AsyncResult.isFailure(result)) {
         setCandidates([]);
-        setError(failureMessage(result, "Could not read the CLI config files."));
+        setError(failureMessage(result, gt("Could not read the CLI config files.")));
       }
     });
   });
@@ -571,7 +599,7 @@ function ImportDialog(props: {
     const result = await importServers({ environmentId, input: { items } });
     setBusy(false);
     if (AsyncResult.isFailure(result)) {
-      setError(failureMessage(result, "Could not import these servers."));
+      setError(failureMessage(result, gt("Could not import these servers.")));
       return;
     }
     props.onClose();
@@ -586,16 +614,18 @@ function ImportDialog(props: {
     >
       <WizardPopup>
         <WizardHeader
-          title="Import MCP servers"
-          description="From the config files of Claude Code, the Claude app, Codex, and Cursor on this machine, including your other Claude and Codex accounts. Secrets stay on this machine."
+          title={gt("Import MCP servers")}
+          description={gt(
+            "From the config files of Claude Code, the Claude app, Codex, and Cursor on this machine, including your other Claude and Codex accounts. Secrets stay on this machine.",
+          )}
         />
         <WizardPanel>
           {candidates === null ? (
-            <SettingsRow title="Reading config files…" />
+            <SettingsRow title={gt("Reading config files…")} />
           ) : candidates.length === 0 ? (
             <SettingsRow
-              title="Nothing to import"
-              description="None of those config files lists an MCP server."
+              title={gt("Nothing to import")}
+              description={gt("None of those config files lists an MCP server.")}
             />
           ) : (
             candidates.map((candidate) => {
@@ -608,12 +638,12 @@ function ImportDialog(props: {
                     <span className="block break-all">
                       {IMPORT_SOURCE_LABELS[candidate.source]} ·{" "}
                       {transportSummary(candidate.server)}
-                      {candidate.exists ? " · Already added" : ""}
+                      {candidate.exists ? ` · ${gt("Already added")}` : ""}
                     </span>
                   }
                   control={
                     <Checkbox
-                      aria-label={`Import ${candidate.server.name}`}
+                      aria-label={gt("Import {name}", { name: candidate.server.name })}
                       checked={selected.has(key)}
                       disabled={candidate.exists || busy}
                       onCheckedChange={(checked) =>
@@ -638,16 +668,16 @@ function ImportDialog(props: {
         </WizardPanel>
         <WizardFooter>
           <Button variant="outline" disabled={busy} onClick={props.onClose}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button disabled={busy || selected.size === 0} onClick={() => void run()}>
             {busy
-              ? "Importing…"
+              ? gt("Importing…")
               : selected.size === 0
-                ? "Import"
-                : selected.size === 1
-                  ? "Import 1 server"
-                  : `Import ${selected.size} servers`}
+                ? gt("Import", { $context: "verb, imports the selected servers" })
+                : gt("{count, plural, =1 {Import 1 server} other {Import {count} servers}}", {
+                    count: selected.size,
+                  })}
           </Button>
         </WizardFooter>
       </WizardPopup>

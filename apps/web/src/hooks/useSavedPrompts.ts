@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { randomUUID } from "../lib/utils";
+import { msg } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { environmentProjects, projectEnvironment } from "../state/projects";
 import { useAtomCommand } from "../state/use-atom-command";
+import { m } from "~/i18n/messages";
 
 export function useSavedPrompts(environmentId: EnvironmentId, projectId: ProjectId) {
   const allowed = useAtomValue(projectEnvironment.savedPromptUpdate.permissionAtom(environmentId));
@@ -35,7 +36,9 @@ export function useSavedPrompts(environmentId: EnvironmentId, projectId: Project
       const result = await runQuietly(input(savedPrompt));
       if (result._tag === "Success") return null;
       const error = squashAtomCommandFailure(result);
-      return error instanceof Error && error.message ? error.message : "Could not save. Try again.";
+      return error instanceof Error && error.message
+        ? error.message
+        : m(msg("Could not save. Try again."));
     },
   };
 }

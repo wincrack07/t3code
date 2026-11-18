@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { msg } from "gt-react";
 import { AuthSettingsWriteScope, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import { useServerConfigs } from "../state/entities";
 import { readEnvironment } from "../state/environments";
@@ -7,6 +7,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { serverEnvironment } from "../state/server";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { toastManager } from "../components/ui/toast";
+import { m } from "../i18n/messages";
 
 export function useProjectSidebarColor() {
   const configs = useServerConfigs();
@@ -26,8 +27,11 @@ export function useProjectSidebarColor() {
     if (!canSet(members)) {
       toastManager.add({
         type: "warning",
-        title:
-          "Connect the project environments with settings permission to change its sidebar color.",
+        title: m(
+          msg(
+            "Connect the project environments with settings permission to change its sidebar color.",
+          ),
+        ),
       });
       return;
     }

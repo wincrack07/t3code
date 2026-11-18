@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { useGT } from "gt-react";
 import { XIcon } from "lucide-react";
 import { createContext, type DragEvent } from "react";
 
@@ -40,6 +40,7 @@ export function ThreadColumnCloseButton({
   column: Pick<ThreadColumnHeader, "id" | "title">;
   separated?: boolean;
 }) {
+  const gt = useGT();
   return (
     <>
       {separated ? <Separator orientation="vertical" className="mx-1 h-4" /> : null}
@@ -48,7 +49,7 @@ export function ThreadColumnCloseButton({
         variant="ghost"
         size="icon-sm"
         className="shrink-0"
-        aria-label={`Close column: ${column.title}`}
+        aria-label={gt("Close column: {title}", { title: column.title })}
         onClick={(event) => {
           event.stopPropagation();
           useThreadColumnsStore.getState().close(column.id);

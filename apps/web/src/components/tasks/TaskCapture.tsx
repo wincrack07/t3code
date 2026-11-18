@@ -1,9 +1,9 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { CommandId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import { useGT } from "gt-react";
 import { PlusIcon } from "lucide-react";
 import { type RefObject, useState } from "react";
 
@@ -37,6 +37,7 @@ export function TaskCapture({
   inputRef: RefObject<HTMLInputElement | null>;
   onCreated: (key: string) => void;
 }) {
+  const gt = useGT();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const labelOf = useEnvironmentLabel();
   const [lastProject, setLastProject] = useLocalStorage(
@@ -68,8 +69,8 @@ export function TaskCapture({
           <Input
             ref={inputRef}
             size="compact"
-            aria-label="New task"
-            placeholder="Connect a machine with a project to add tasks"
+            aria-label={gt("New task")}
+            placeholder={gt("Connect a machine with a project to add tasks")}
             disabled
           />
         )}
@@ -82,10 +83,10 @@ export function TaskCapture({
             inputRef.current?.focus();
           }}
         >
-          <SelectTrigger size="compact" aria-label="Project for new tasks">
+          <SelectTrigger size="compact" aria-label={gt("Project for new tasks")}>
             <SelectValue>
               {(value: string) =>
-                storable.find((candidate) => candidate.key === value)?.label ?? "Project"
+                storable.find((candidate) => candidate.key === value)?.label ?? gt("Project")
               }
             </SelectValue>
           </SelectTrigger>
@@ -111,6 +112,7 @@ function CaptureInput({
   inputRef: RefObject<HTMLInputElement | null>;
   onCreated: (key: string) => void;
 }) {
+  const gt = useGT();
   const allowed = useAtomValue(
     projectEnvironment.tasks.quickCreate.permissionAtom(home.environmentId),
   );
@@ -137,8 +139,8 @@ function CaptureInput({
     <Input
       ref={inputRef}
       size="compact"
-      aria-label="New task"
-      placeholder={allowed ? "Add a task and press Enter" : "View only"}
+      aria-label={gt("New task")}
+      placeholder={allowed ? gt("Add a task and press Enter") : gt("View only")}
       disabled={!allowed}
       maxLength={TASK_TEXT_MAX_LENGTH}
       value={text}

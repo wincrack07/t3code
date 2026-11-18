@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
@@ -6,7 +5,9 @@ import { AsyncResult } from "effect/reactivity";
 import * as Schema from "effect/Schema";
 import { type EnvironmentId, T3ThreadExport } from "@t3tools/contracts";
 import type { ChatHubList, ChatHubThread } from "@t3tools/contracts/chat-hub";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 
+import { m } from "../../i18n/messages";
 import { serverEnvironment } from "../../state/server";
 import { primaryEnvironmentIdAtom } from "../../state/primaryEnvironment";
 import {
@@ -38,6 +39,8 @@ const decodeBundle = Schema.decodeUnknownSync(T3ThreadExport);
 type Item = (typeof ChatHubList.Type.items)[number];
 type Detail = typeof ChatHubThread.Type & { markdown: string };
 export function AllChatsPage() {
+  const gt = useGT();
+  const messages = useMessages();
   const connected = useConnectedEnvironmentIds();
   const primary = useAtomValue(primaryEnvironmentIdAtom);
   const status = useAtomCommand(serverEnvironment.chatHubStatus, { reportFailure: false });
@@ -125,7 +128,8 @@ export function AllChatsPage() {
             setItems(r.value.items);
             setCursor(r.value.nextCursor);
             setMessage("");
-          } else setMessage("Could not load chats. Check the proxy machine's hub settings.");
+          } else
+            setMessage(m(msg("Could not load chats. Check the proxy machine's hub settings.")));
         })
         .finally(() => {
           if (current === generation.current) setBusy(false);
@@ -191,7 +195,7 @@ export function AllChatsPage() {
       input: { environmentId: item.environmentId, threadId: item.threadId },
     }).then((r) => {
       if (AsyncResult.isSuccess(r)) setDetail(r.value);
-      else setMessage("Could not open chat.");
+      else setMessage(m(msg("Could not open chat.")));
     });
   };
   const importDetail = (current: Detail) => {
@@ -213,17 +217,29 @@ export function AllChatsPage() {
         environmentId: destination.environmentId,
         input: { bundle, projectId: destination.id, modelSelection },
       });
-      setMessage(AsyncResult.isSuccess(r) ? "Imported (existing imports kept)." : "Import failed.");
-    })().catch(() => setMessage("Import failed. Configure a destination provider first."));
+      setMessage(
+        AsyncResult.isSuccess(r)
+          ? m(msg("Imported (existing imports kept)."))
+          : m(msg("Import failed.")),
+      );
+    })().catch(() => setMessage(m(msg("Import failed. Configure a destination provider first."))));
   };
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <h1 className="truncate text-sm font-medium">All chats</h1>
+          <h1 className="truncate text-sm font-medium">
+            <T>All chats</T>
+          </h1>
           {proxy ? (
             <span className="truncate text-xs text-muted-foreground">
-              Through {readEnvironment(proxy)?.label ?? "your hub"}
+              {readEnvironment(proxy)?.label ? (
+                <T>
+                  Through <Var>{readEnvironment(proxy)?.label}</Var>
+                </T>
+              ) : (
+                <T>Through your hub</T>
+              )}
             </span>
           ) : null}
         </WorkspacePageHeader>
@@ -239,13 +255,17 @@ export function AllChatsPage() {
               <EmptyMedia variant="icon">
                 <MessagesSquareIcon />
               </EmptyMedia>
-              <EmptyTitle>No chat hub yet</EmptyTitle>
+              <EmptyTitle>
+                <T>No chat hub yet</T>
+              </EmptyTitle>
               <EmptyDescription>
-                Connect a machine to your chat hub to search chats from all your environments.
+                <T>
+                  Connect a machine to your chat hub to search chats from all your environments.
+                </T>
               </EmptyDescription>
             </EmptyHeader>
             <Button variant="outline" render={<Link to="/settings/fork/chats" hash="chat-hub" />}>
-              Set up chat hub
+              <T>Set up chat hub</T>
             </Button>
           </Empty>
         ) : (
@@ -262,25 +282,29 @@ export function AllChatsPage() {
                     <SearchIcon />
                   </InputGroupAddon>
                   <InputGroupInput
-                    aria-label="Search all chats"
-                    placeholder="Search"
+                    aria-label={gt("Search all chats")}
+                    placeholder={gt("Search", { $context: "search field placeholder" })}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
                 </InputGroup>
                 <div className="flex items-center gap-2">
                   <Select value={machine} onValueChange={(value) => setMachine(value ?? "")}>
-                    <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="Machine">
+                    <SelectTrigger
+                      size="sm"
+                      className="min-w-0 flex-1"
+                      aria-label={gt("Machine", { $context: "filter label" })}
+                    >
                       <SelectValue>
                         {() =>
                           machines.find((m) => m.environmentId === machine)?.environmentLabel ??
-                          "All machines"
+                          gt("All machines")
                         }
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup align="start" alignItemWithTrigger={false}>
                       <SelectItem hideIndicator value="">
-                        All machines
+                        <T>All machines</T>
                       </SelectItem>
                       {machines.map((m) => (
                         <SelectItem hideIndicator key={m.environmentId} value={m.environmentId}>
@@ -292,14 +316,14 @@ export function AllChatsPage() {
                   <Input
                     size="sm"
                     className="min-w-0 flex-1"
-                    aria-label="Project filter"
-                    placeholder="Project title"
+                    aria-label={gt("Project filter")}
+                    placeholder={gt("Project title")}
                     value={project}
                     onChange={(e) => setProject(e.target.value)}
                   />
                 </div>
                 <label className="flex min-h-8 items-center justify-between gap-2 text-sm text-muted-foreground">
-                  Include archived
+                  <T>Include archived</T>
                   <Switch
                     size="sm"
                     checked={archived}
@@ -310,7 +334,7 @@ export function AllChatsPage() {
               <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
                 {message || busy ? (
                   <p role="status" className="px-2 pb-1 text-xs text-muted-foreground">
-                    {message || "Loading…"}
+                    {message || gt("Loading…")}
                   </p>
                 ) : null}
                 {items.map((item) => {
@@ -328,7 +352,7 @@ export function AllChatsPage() {
                       <span className="truncate text-sm font-medium">{item.title}</span>
                       <span className="truncate text-xs text-muted-foreground">
                         {item.environmentLabel} · {item.projectTitle} ·{" "}
-                        {formatRelativeTimeLabel(item.updatedAt)}
+                        {formatRelativeTimeLabel(item.updatedAt, undefined, messages)}
                       </span>
                       {item.snippet ? (
                         <span className="line-clamp-2 text-xs text-muted-foreground">
@@ -347,12 +371,12 @@ export function AllChatsPage() {
                     disabled={busy}
                     onClick={loadMore}
                   >
-                    Load more
+                    <T>Load more</T>
                   </Button>
                 ) : null}
                 {!busy && !items.length ? (
                   <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                    No chats found
+                    <T>No chats found</T>
                   </p>
                 ) : null}
               </div>
@@ -365,7 +389,7 @@ export function AllChatsPage() {
                       size="icon-sm"
                       variant="ghost"
                       className="md:hidden"
-                      aria-label="Back to chats"
+                      aria-label={gt("Back to chats")}
                       onClick={() => setDetail(undefined)}
                     >
                       <ArrowLeftIcon />
@@ -374,8 +398,13 @@ export function AllChatsPage() {
                       <h2 className="truncate text-base font-medium">{detail.meta.title}</h2>
                       <p className="truncate text-xs text-muted-foreground">
                         {detail.meta.environmentLabel} · {detail.meta.projectTitle} ·{" "}
-                        {detail.meta.model} · updated{" "}
-                        {formatRelativeTimeLabel(detail.meta.updatedAt)}
+                        {detail.meta.model} ·{" "}
+                        <T>
+                          updated{" "}
+                          <Var>
+                            {formatRelativeTimeLabel(detail.meta.updatedAt, undefined, messages)}
+                          </Var>
+                        </T>
                       </p>
                     </div>
                   </div>
@@ -394,7 +423,7 @@ export function AllChatsPage() {
                           })
                         }
                       >
-                        Open original
+                        <T>Open original</T>
                       </Button>
                     ) : null}
                     <div className="ms-auto flex min-w-0 items-center gap-2">
@@ -407,11 +436,13 @@ export function AllChatsPage() {
                         <SelectTrigger
                           size="sm"
                           className="w-full sm:w-56"
-                          aria-label="Import destination"
+                          aria-label={gt("Import destination")}
                           disabled={projects.length === 0}
                         >
                           <SelectValue>
-                            {() => (destination ? destinationLabel(destination) : "No projects")}
+                            {() =>
+                              destination ? destinationLabel(destination) : gt("No projects")
+                            }
                           </SelectValue>
                         </SelectTrigger>
                         <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -431,7 +462,7 @@ export function AllChatsPage() {
                         disabled={!destination || !allowed}
                         onClick={() => importDetail(detail)}
                       >
-                        Import
+                        <T $context="verb, button">Import</T>
                       </Button>
                     </div>
                   </div>
@@ -449,9 +480,11 @@ export function AllChatsPage() {
                     <EmptyMedia variant="icon">
                       <MessagesSquareIcon />
                     </EmptyMedia>
-                    <EmptyTitle>Select a chat</EmptyTitle>
+                    <EmptyTitle>
+                      <T>Select a chat</T>
+                    </EmptyTitle>
                     <EmptyDescription>
-                      It opens here. Import it to continue it on one of your projects.
+                      <T>It opens here. Import it to continue it on one of your projects.</T>
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>

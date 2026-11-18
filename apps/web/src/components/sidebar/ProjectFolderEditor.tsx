@@ -1,6 +1,6 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { SidebarColorPicker } from "./SidebarColorPicker";
 import { randomUUID } from "../../lib/utils";
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import { useClientSettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { moveProjectsToFolder, type ProjectFolder } from "../../projectFolders";
@@ -28,6 +28,8 @@ export function ProjectFolderEditor({
   onClose: () => void;
 }) {
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const gt = useGT();
+  const parentName = parentId ? folders.find((entry) => entry.id === parentId)?.name : undefined;
   const update = useUpdatePrimarySettings();
   const [name, setName] = useState(folder?.name ?? "");
   const [sidebarColor, setSidebarColor] = useState(folder?.sidebarColor ?? null);
@@ -43,26 +45,28 @@ export function ProjectFolderEditor({
         <DialogHeader>
           <DialogTitle>
             {folder
-              ? "Rename group"
-              : parentId
-                ? `New group inside ${folders.find((entry) => entry.id === parentId)?.name ?? "group"}`
-                : "New project group"}
+              ? gt("Rename group")
+              : parentName
+                ? gt("New group inside {name}", { name: parentName })
+                : parentId
+                  ? gt("New group inside a group")
+                  : gt("New project group")}
           </DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <label className="block space-y-2 text-sm">
-            Name
+            <T>Name</T>
             <Input
-              aria-label="Group name"
+              aria-label={gt("Group name")}
               value={name}
               onChange={(event) => setName(event.target.value)}
               autoFocus
             />
           </label>
           <label className="block space-y-2 text-sm">
-            Emoji (optional)
+            <T>Emoji (optional)</T>
             <Input
-              aria-label="Group emoji"
+              aria-label={gt("Group emoji")}
               value={emoji}
               onChange={(event) => setEmoji(event.target.value)}
             />
@@ -71,7 +75,7 @@ export function ProjectFolderEditor({
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button
             disabled={!name.trim()}
@@ -95,7 +99,7 @@ export function ProjectFolderEditor({
               onClose();
             }}
           >
-            Save group
+            <T>Save group</T>
           </Button>
         </DialogFooter>
       </DialogPopup>

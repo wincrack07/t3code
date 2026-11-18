@@ -1,5 +1,5 @@
-/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useState } from "react";
+import { msg, T, Var, useGT, useMessages } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
@@ -67,6 +67,8 @@ function EnvironmentCleanup({
   label: string;
   settings: CleanupSettings;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const query = useAtomValue(serverEnvironment.machineCleanupState({ environmentId, input: {} }));
   const allowed = useAtomValue(serverEnvironment.scanMachineCleanup.permissionAtom(environmentId));
   const canConfigure = useAtomValue(serverEnvironment.updateSettings.permissionAtom(environmentId));
@@ -112,26 +114,31 @@ function EnvironmentCleanup({
     )
     .join(" ");
   return (
-    <SettingsSection id={`machine-cleanup-${environmentId}`} title={`Machine cleanup · ${label}`}>
+    <SettingsSection
+      id={`machine-cleanup-${environmentId}`}
+      title={gt("Machine cleanup · {label}", { label })}
+    >
       <SettingsRow
-        title="Free space"
+        title={gt("Free space")}
         description={
           report && lastRunAt ? (
-            <>
+            <T>
               Last run{" "}
               <Tooltip>
                 <TooltipTrigger render={<time dateTime={lastRunAt} />}>
-                  {formatRelativeTimeLabel(lastRunAt, Date.parse(`${nowMinute}:00.000Z`))}
+                  <Var>
+                    {formatRelativeTimeLabel(lastRunAt, Date.parse(`${nowMinute}:00.000Z`), m)}
+                  </Var>
                 </TooltipTrigger>
                 <TooltipPopup>
-                  {formatChatTimestampTooltip(lastRunAt, timestampFormat)}
+                  <Var>{formatChatTimestampTooltip(lastRunAt, timestampFormat)}</Var>
                 </TooltipPopup>
               </Tooltip>
-              . {formatBytes(report.freeBefore)} → {formatBytes(report.freeAfter)} free on{" "}
-              {report.measurementPath}
-            </>
+              . <Var>{formatBytes(report.freeBefore)}</Var> →{" "}
+              <Var>{formatBytes(report.freeAfter)}</Var> free on <Var>{report.measurementPath}</Var>
+            </T>
           ) : (
-            "Scan to measure this environment and review cleanup candidates."
+            gt("Scan to measure this environment and review cleanup candidates.")
           )
         }
         control={
@@ -145,14 +152,14 @@ function EnvironmentCleanup({
                 void scan({ environmentId, input: {} });
               }}
             >
-              Scan
+              <T $context="verb, button that scans the machine">Scan</T>
             </Button>
             <Button
               size="sm"
               disabled={!allowed || busy}
               onClick={() => void phaseA({ environmentId, input: {} })}
             >
-              Clean regenerable files now
+              <T>Clean regenerable files now</T>
             </Button>
             {busy && (
               <Button
@@ -160,7 +167,7 @@ function EnvironmentCleanup({
                 variant="outline"
                 onClick={() => void cancel({ environmentId, input: {} })}
               >
-                Cancel
+                <T>Cancel</T>
               </Button>
             )}
           </div>
@@ -169,15 +176,17 @@ function EnvironmentCleanup({
         <div className={ROW_DETAIL_CLASSNAME}>
           {state?.freeNow !== undefined && (
             <p className="text-foreground tabular-nums">
-              {formatBytes(state.freeNow)} available now
+              <T>
+                <Var>{formatBytes(state.freeNow)}</Var> available now
+              </T>
             </p>
           )}
-          {busy && <p role="status">{state?.progress || "Scanning…"}</p>}
+          {busy && <p role="status">{state?.progress || gt("Scanning…")}</p>}
           {!busy && state?.progress && <p role="status">{state.progress}</p>}
           {history.length > 1 && (
             <svg
               role="img"
-              aria-label="Free disk space over cleanup history"
+              aria-label={gt("Free disk space over cleanup history")}
               viewBox="0 0 400 100"
               preserveAspectRatio="none"
               className="h-12 w-full"
@@ -195,8 +204,8 @@ function EnvironmentCleanup({
       </SettingsRow>
       {report && (
         <SettingsRow
-          title="Cleanup report"
-          description="Measured space freed, plus estimates for items you can review."
+          title={gt("Cleanup report")}
+          description={gt("Measured space freed, plus estimates for items you can review.")}
         >
           <div className={ROW_DETAIL_CLASSNAME}>
             <div className="-mx-2 tabular-nums">
@@ -206,7 +215,9 @@ function EnvironmentCleanup({
               <TaskAttachmentUsageSummary usage={report.taskAttachments} />
             ) : null}
             <details>
-              <summary className={SUMMARY_CLASSNAME}>Regenerable files and skips</summary>
+              <summary className={SUMMARY_CLASSNAME}>
+                <T>Regenerable files and skips</T>
+              </summary>
               <ul className="space-y-1 pt-1">
                 {report.items
                   .filter((item) => item.phase === "A")
@@ -221,8 +232,10 @@ function EnvironmentCleanup({
         </SettingsRow>
       )}
       <SettingsRow
-        title="History JSON"
-        description="The latest 100 reports are retained on this environment. Full history is loaded only when requested."
+        title={gt("History JSON")}
+        description={gt(
+          "The latest 100 reports are retained on this environment. Full history is loaded only when requested.",
+        )}
         control={
           <Button
             size="sm"
@@ -233,7 +246,7 @@ function EnvironmentCleanup({
               if (result._tag === "Success") setHistoryJson(JSON.stringify(result.value, null, 2));
             }}
           >
-            View history JSON
+            <T>View history JSON</T>
           </Button>
         }
       >
@@ -244,12 +257,12 @@ function EnvironmentCleanup({
         )}
       </SettingsRow>
       <SettingsRow
-        title="Project roots"
-        description="One absolute path or ~/path per line. Scanned to depth seven."
+        title={gt("Project roots")}
+        description={gt("One absolute path or ~/path per line. Scanned to depth seven.")}
         control={
           <Textarea
             className="w-full sm:w-64"
-            aria-label="Cleanup project roots"
+            aria-label={gt("Cleanup project roots")}
             disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.projectRoots.join("\n")}
             key={settings.projectRoots.join("\n")}
@@ -265,12 +278,12 @@ function EnvironmentCleanup({
         }
       />
       <SettingsRow
-        title="Protected paths"
-        description="These paths and everything inside them are always retained."
+        title={gt("Protected paths")}
+        description={gt("These paths and everything inside them are always retained.")}
         control={
           <Textarea
             className="w-full sm:w-64"
-            aria-label="Cleanup protected paths"
+            aria-label={gt("Cleanup protected paths")}
             disabled={!canConfigure || !allowed || busy}
             defaultValue={settings.protectedPaths.join("\n")}
             key={settings.protectedPaths.join("\n")}
@@ -286,13 +299,13 @@ function EnvironmentCleanup({
         }
       />
       <SettingsRow
-        title="Inactivity days"
-        description="Both source files and the last commit must be older than this."
+        title={gt("Inactivity days")}
+        description={gt("Both source files and the last commit must be older than this.")}
         control={
           <Input
             size="sm"
             className="w-full sm:w-32"
-            aria-label="Cleanup inactivity days"
+            aria-label={gt("Cleanup inactivity days")}
             type="number"
             min={1}
             max={3650}
@@ -308,11 +321,13 @@ function EnvironmentCleanup({
         }
       />
       <SettingsRow
-        title="Daily unattended cleanup"
-        description="Run regenerable cleanup only, once per local day. Approval candidates remain untouched."
+        title={gt("Daily unattended cleanup")}
+        description={gt(
+          "Run regenerable cleanup only, once per local day. Approval candidates remain untouched.",
+        )}
         control={
           <Switch
-            aria-label="Daily machine cleanup"
+            aria-label={gt("Daily machine cleanup")}
             checked={settings.scheduleEnabled}
             disabled={!canConfigure || !allowed || busy}
             onCheckedChange={(checked) => patch({ scheduleEnabled: checked })}
@@ -320,14 +335,16 @@ function EnvironmentCleanup({
         }
       />
       <SettingsRow
-        title="Daily cleanup time"
-        description="Local time on this environment. A missed run starts when the server next becomes available."
+        title={gt("Daily cleanup time")}
+        description={gt(
+          "Local time on this environment. A missed run starts when the server next becomes available.",
+        )}
         control={
           <Input
             size="sm"
             className="w-full sm:w-32"
             type="time"
-            aria-label="Daily cleanup time"
+            aria-label={gt("Daily cleanup time")}
             value={settings.scheduleTime}
             disabled={!canConfigure || !allowed || busy}
             onChange={(event) => {
@@ -338,14 +355,16 @@ function EnvironmentCleanup({
         }
       />
       <SettingsRow
-        title="Low-space alert"
-        description="Notify below this many GiB, even when no approval candidates exist. Notification delivery depends on the environment's native notification service."
+        title={gt("Low-space alert")}
+        description={gt(
+          "Notify below this many GiB, even when no approval candidates exist. Notification delivery depends on the environment's native notification service.",
+        )}
         control={
           <Input
             size="sm"
             className="w-full sm:w-32"
             type="number"
-            aria-label="Low-space threshold GiB"
+            aria-label={gt("Low-space threshold GiB")}
             min={0}
             max={10000}
             defaultValue={settings.lowSpaceGiB}
@@ -363,10 +382,10 @@ function EnvironmentCleanup({
         <SettingsRow
           key={rule}
           title={rule}
-          description="Regenerable files only. Active builds are retained."
+          description={gt("Regenerable files only. Active builds are retained.")}
           control={
             <Switch
-              aria-label={`Enable cleanup rule ${rule}`}
+              aria-label={gt("Enable cleanup rule {rule}", { rule })}
               disabled={!canConfigure || !allowed || busy}
               checked={
                 !settings.enabledRules.includes(`!${rule}`) &&
@@ -394,8 +413,10 @@ function EnvironmentCleanup({
         />
       ))}
       <SettingsRow
-        title="Awaiting your approval"
-        description="Select exact paths to remove. Probably active worktrees are best kept. Every selection is checked again before deletion."
+        title={gt("Awaiting your approval")}
+        description={gt(
+          "Select exact paths to remove. Probably active worktrees are best kept. Every selection is checked again before deletion.",
+        )}
         control={
           <Button
             size="sm"
@@ -410,7 +431,7 @@ function EnvironmentCleanup({
               });
             }}
           >
-            Delete selected
+            <T>Delete selected</T>
           </Button>
         }
       >
@@ -418,10 +439,23 @@ function EnvironmentCleanup({
           <SettingsRow
             key={item.id}
             title={item.path}
-            description={`${formatBytes(item.bytes)}${isTaskAttachmentItem(item) ? ` · ${TASK_ATTACHMENT_RULE_LABELS[item.rule] ?? "Task attachment copy"}${item.project ? ` in ${item.project}` : ""}` : ""}${item.probablyActive ? " · Probably active. Recommend keeping" : ""}`}
+            description={[
+              formatBytes(item.bytes),
+              isTaskAttachmentItem(item)
+                ? item.project
+                  ? gt("{label} in {project}", {
+                      label: m(taskAttachmentLabel(item)),
+                      project: item.project,
+                    })
+                  : m(taskAttachmentLabel(item))
+                : null,
+              item.probablyActive ? gt("Probably active. Recommend keeping") : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             control={
               <Checkbox
-                aria-label={`Select ${item.path}`}
+                aria-label={gt("Select {path}", { path: item.path })}
                 checked={selected.includes(item.id)}
                 disabled={!allowed || busy}
                 onCheckedChange={(checked) =>
@@ -441,7 +475,7 @@ function EnvironmentCleanup({
             key={item.id}
             title={
               isTaskAttachmentItem(item)
-                ? `${TASK_ATTACHMENT_RULE_LABELS[item.rule] ?? "Task attachment copy"}${item.project ? ` · ${item.project}` : ""}`
+                ? `${m(taskAttachmentLabel(item))}${item.project ? ` · ${item.project}` : ""}`
                 : item.rule
             }
             description={`${item.path} · ${formatBytes(item.bytes)}. ${isTaskAttachmentItem(item) ? `${item.reason}. ` : ""}${item.effect}`}
@@ -454,22 +488,25 @@ function EnvironmentCleanup({
                   if (report) setConfirming({ phase: "C", reportId: report.id, items: [item] });
                 }}
               >
-                Review aggressive cleanup
+                <T>Review aggressive cleanup</T>
               </Button>
             }
           />
         ))}
       {protectedItems.length > 0 && (
         <SettingsRow
-          title="Retained files and worktrees"
-          description="Dirty worktrees and protected or active paths are never removed."
+          title={gt("Retained files and worktrees")}
+          description={gt("Dirty worktrees and protected or active paths are never removed.")}
         >
           <ul className={ROW_DETAIL_CLASSNAME}>
             {protectedItems.map((item) => (
               <li key={item.id} className="break-all">
                 {item.path}
                 {item.branch ? ` · ${item.branch}` : ""}
-                {item.changes ? ` · ${item.changes} changes` : ""} · {item.reason}
+                {item.changes
+                  ? ` · ${gt("{count, plural, one {{count} changes} other {{count} changes}}", { count: item.changes })}`
+                  : ""}{" "}
+                · {item.reason}
               </li>
             ))}
           </ul>
@@ -482,11 +519,13 @@ function EnvironmentCleanup({
       ))}
       {report && (
         <SettingsRow
-          title="Report JSON"
-          description="Includes exact paths, measurements, outcomes and operational notes."
+          title={gt("Report JSON")}
+          description={gt("Includes exact paths, measurements, outcomes and operational notes.")}
         >
           <details className={ROW_DETAIL_CLASSNAME}>
-            <summary className={SUMMARY_CLASSNAME}>View JSON</summary>
+            <summary className={SUMMARY_CLASSNAME}>
+              <T>View JSON</T>
+            </summary>
             <pre className={JSON_CLASSNAME}>{JSON.stringify(report, null, 2)}</pre>
           </details>
         </SettingsRow>
@@ -499,10 +538,16 @@ function EnvironmentCleanup({
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove these files on {label}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              <T>
+                Remove these files on <Var>{label}</Var>?
+              </T>
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Only the paths below are approved. Changed, active, dirty or protected items will be
-              retained.
+              <T>
+                Only the paths below are approved. Changed, active, dirty or protected items will be
+                retained.
+              </T>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ul className="space-y-1 px-6 pb-4 text-sm text-muted-foreground">
@@ -513,7 +558,9 @@ function EnvironmentCleanup({
             ))}
           </ul>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              <T>Cancel</T>
+            </AlertDialogClose>
             <Button
               variant="destructive"
               disabled={!allowed || busy}
@@ -531,7 +578,7 @@ function EnvironmentCleanup({
                 setSelected([]);
               }}
             >
-              Remove approved files
+              <T>Remove approved files</T>
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>
@@ -543,10 +590,12 @@ function EnvironmentCleanup({
 const isTaskAttachmentItem = (item: MachineCleanupItem) =>
   item.rule.startsWith("task-attachments-");
 const TASK_ATTACHMENT_RULE_LABELS: Record<string, string> = {
-  "task-attachments-open": "Open task's attachment copy",
-  "task-attachments-done": "Done task's attachment copy",
-  "task-attachments-orphaned": "Deleted task's attachment copy",
+  "task-attachments-open": msg("Open task's attachment copy"),
+  "task-attachments-done": msg("Done task's attachment copy"),
+  "task-attachments-orphaned": msg("Deleted task's attachment copy"),
 };
+const taskAttachmentLabel = (item: MachineCleanupItem) =>
+  TASK_ATTACHMENT_RULE_LABELS[item.rule] ?? msg("Task attachment copy");
 
 /** Stored copies of task attachments: done and deleted tasks' copies wait for approval; open ones are reviewed one by one. */
 function TaskAttachmentUsageSummary({
@@ -554,20 +603,29 @@ function TaskAttachmentUsageSummary({
 }: {
   usage: NonNullable<MachineCleanupReport["taskAttachments"]>;
 }) {
+  const gt = useGT();
   const rows = [
-    { label: "Open tasks", bucket: usage.open, note: "Reviewed one at a time" },
-    { label: "Done tasks", bucket: usage.done, note: "Awaiting your approval" },
-    { label: "Deleted tasks", bucket: usage.orphaned, note: "Awaiting your approval" },
+    { label: gt("Open tasks"), bucket: usage.open, note: gt("Reviewed one at a time") },
+    { label: gt("Done tasks"), bucket: usage.done, note: gt("Awaiting your approval") },
+    { label: gt("Deleted tasks"), bucket: usage.orphaned, note: gt("Awaiting your approval") },
   ];
   return (
     <div className="-mx-2 tabular-nums">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Task attachments</TableHead>
-            <TableHead className="text-right">Copies</TableHead>
-            <TableHead className="text-right">Size</TableHead>
-            <TableHead>Cleanup</TableHead>
+            <TableHead>
+              <T>Task attachments</T>
+            </TableHead>
+            <TableHead className="text-right">
+              <T $context="table column: number of stored copies">Copies</T>
+            </TableHead>
+            <TableHead className="text-right">
+              <T $context="table column: disk size">Size</T>
+            </TableHead>
+            <TableHead>
+              <T $context="table column: what cleanup does with these copies">Cleanup</T>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -576,7 +634,11 @@ function TaskAttachmentUsageSummary({
               <TableCell>{row.label}</TableCell>
               <TableCell className="text-right">{row.bucket.count}</TableCell>
               <TableCell className="text-right">{formatBytes(row.bucket.bytes)}</TableCell>
-              <TableCell>{row.bucket.count > 0 ? row.note : "None"}</TableCell>
+              <TableCell>
+                {row.bucket.count > 0
+                  ? row.note
+                  : gt("None", { $context: "no copies to clean up" })}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -586,25 +648,34 @@ function TaskAttachmentUsageSummary({
 }
 
 function cleanupCategory(item: MachineCleanupItem) {
-  if (isTaskAttachmentItem(item)) return "Task attachments";
+  if (isTaskAttachmentItem(item)) return msg("Task attachments");
   return item.rule === "worktree"
-    ? "Worktrees"
+    ? msg("Worktrees")
     : item.rule === "node-modules" || item.rule === "pods"
-      ? "Dependencies"
+      ? msg("Dependencies")
       : item.project
-        ? "Builds"
-        : "Caches";
+        ? msg("Builds", { $context: "cleanup category: build output" })
+        : msg("Caches");
 }
 function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
+  const m = useMessages();
   const categories = [...new Set(report.items.map(cleanupCategory))];
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Category</TableHead>
-          <TableHead className="text-right">Freed in A</TableHead>
-          <TableHead className="text-right">Pending in B</TableHead>
-          <TableHead className="text-right">In C</TableHead>
+          <TableHead>
+            <T $context="table column">Category</T>
+          </TableHead>
+          <TableHead className="text-right">
+            <T>Freed in A</T>
+          </TableHead>
+          <TableHead className="text-right">
+            <T>Pending in B</T>
+          </TableHead>
+          <TableHead className="text-right">
+            <T $context="table column: items in aggressive phase C">In C</T>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -620,7 +691,7 @@ function CleanupReportSummary({ report }: { report: MachineCleanupReport }) {
               .reduce((sum, item) => sum + item.bytes, 0);
           return (
             <TableRow key={category}>
-              <TableCell>{category}</TableCell>
+              <TableCell>{m(category)}</TableCell>
               <TableCell className="text-right">{formatBytes(freed)}</TableCell>
               <TableCell className="text-right">{formatBytes(bytes("B"))}</TableCell>
               <TableCell className="text-right">{formatBytes(bytes("C"))}</TableCell>
