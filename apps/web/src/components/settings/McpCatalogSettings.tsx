@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
@@ -34,7 +35,7 @@ import {
 } from "./McpCatalogSettings.logic";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 const IMPORT_SOURCE_LABELS: Record<McpCatalogImportCandidate["source"], string> = {
   claude: "Claude Code",
@@ -49,6 +50,7 @@ const failureMessage = (result: AsyncResult.Failure<unknown, unknown>, fallback:
 };
 
 export function McpCatalogSettings() {
+  const searchableSetting = useSearchableSetting();
   const { environment } = useSettingsScope();
   return (
     <SettingsPageContainer>
@@ -67,6 +69,7 @@ export function McpCatalogSettings() {
 }
 
 function McpCatalogSection({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const searchableSetting = useSearchableSetting();
   const query = useEnvironmentQuery(serverEnvironment.mcpCatalog({ environmentId, input: {} }));
   const allowed = useAtomValue(
     serverEnvironment.upsertMcpCatalogServer.permissionAtom(environmentId),

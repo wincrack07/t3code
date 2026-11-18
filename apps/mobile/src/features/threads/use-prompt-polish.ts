@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";

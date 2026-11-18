@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { createModelSelection } from "@t3tools/shared/model";
 import { resolvePromptCompletionModelSelection } from "@t3tools/shared/serverSettings";
 
@@ -14,7 +15,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { toastManager } from "../ui/toast";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME, SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
@@ -23,6 +24,7 @@ const DELAY_OPTIONS = [400, 700, 1_000, 1_500, 2_500] as const;
 
 /** Model-written prompt suggestions in the composer. They run on the draft's environment. */
 export function PromptSuggestionsSettings() {
+  const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
@@ -99,6 +101,7 @@ function formatDelay(delayMs: number): string {
 }
 
 function SuggestionModelRow() {
+  const searchableSetting = useSearchableSetting();
   const { environment, connectedEnvironments } = useSettingsScope();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();

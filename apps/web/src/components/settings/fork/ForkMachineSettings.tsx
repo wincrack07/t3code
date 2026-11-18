@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import { useKeepAwake } from "../../KeepAwakeControl";
@@ -10,9 +11,10 @@ import {
   SettingsSearchTarget,
   SettingsSection,
 } from "../settingsLayout";
-import { searchableSetting } from "../settingsSearch";
+import { useSearchableSetting } from "../settingsSearch";
 
 export function ForkMachineSettings() {
+  const searchableSetting = useSearchableSetting();
   const { environment } = useSettingsScope();
   return (
     <SettingsPageContainer>
@@ -37,6 +39,7 @@ export function ForkMachineSettings() {
 }
 
 function KeepAwakeSections({ environmentId }: { environmentId: EnvironmentId }) {
+  const searchableSetting = useSearchableSetting();
   const { status, error, disabled, send, authorize, localDesktop } = useKeepAwake(environmentId);
   return (
     <>

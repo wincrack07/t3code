@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useEffect, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -10,7 +11,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { SettingsRow, SettingsSearchTarget, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 type Status = typeof ChatHubStatus.Type;
 function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId }) {
@@ -149,6 +150,7 @@ function MachineHubSettings({ environmentId }: { environmentId: EnvironmentId })
   );
 }
 export function ChatHubSettings() {
+  const searchableSetting = useSearchableSetting();
   const connected = useConnectedEnvironmentIds();
   return (
     <SettingsSearchTarget {...searchableSetting("chat-hub")} className="flex flex-col gap-8">

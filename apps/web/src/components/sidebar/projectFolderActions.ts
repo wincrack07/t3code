@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
 import type { ClientSettings } from "@t3tools/contracts";
 import { persistClientSettingsUpdate } from "../../hooks/useSettings";

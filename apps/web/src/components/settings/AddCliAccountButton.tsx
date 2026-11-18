@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { msg } from "gt-react";
 import { useState } from "react";
 import { AsyncResult } from "effect/reactivity";
 import { PlusIcon } from "lucide-react";
@@ -56,7 +58,13 @@ export function AddCliAccountButton({
   const [created, setCreated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "command" });
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: {
+      target: "command",
+      unavailableMessage: msg("Clipboard API is unavailable while copying command."),
+      failureMessage: msg("Failed to copy command to the clipboard."),
+    },
+  });
   const folder = home ?? defaultCliAccountHome(driver, name);
   const accentColor = color ?? suggestCliAccountColor(providerInstances, name);
   const command = cliAccountLoginCommand(driver, folder);

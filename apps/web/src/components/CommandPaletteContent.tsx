@@ -1,3 +1,4 @@
+import { T, useGT, useMessages } from "gt-react";
 import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "lucide-react";
 import { type ComponentProps, type ReactNode, type RefObject } from "react";
 
@@ -11,10 +12,12 @@ export function CommandPaletteFilterTabs(props: {
   readonly value: CommandPaletteFilter;
   readonly onSelect: (filter: CommandPaletteFilter) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   return (
     <div
       role="tablist"
-      aria-label="Result type"
+      aria-label={gt("Result type")}
       className="flex flex-wrap items-center gap-1 px-2 pb-2"
     >
       {COMMAND_PALETTE_FILTERS.map((filter) => {
@@ -30,7 +33,7 @@ export function CommandPaletteFilterTabs(props: {
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => props.onSelect(filter.value)}
           >
-            {filter.label}
+            {messages(filter.label)}
           </Button>
         );
       })}
@@ -89,7 +92,7 @@ type CommandPaletteContentProps = Omit<ComponentProps<typeof Command>, "children
 
 export function CommandPaletteContent({
   children,
-  escapeLabel = "Close",
+  escapeLabel,
   filterBar,
   footerActionLabel,
   footerTrailing,
@@ -137,7 +140,9 @@ export function CommandPaletteContent({
               <Kbd>
                 <ArrowDownIcon />
               </Kbd>
-              <span>Navigate</span>
+              <span>
+                <T>Navigate</T>
+              </span>
             </KbdGroup>
             {footerActionLabel !== undefined ? (
               <KbdGroup>
@@ -159,12 +164,14 @@ export function CommandPaletteContent({
             {showBackHint ? (
               <KbdGroup>
                 <Kbd>Backspace</Kbd>
-                <span>Back</span>
+                <span>
+                  <T>Back</T>
+                </span>
               </KbdGroup>
             ) : null}
             <KbdGroup>
               <Kbd>Esc</Kbd>
-              <span>{escapeLabel}</span>
+              <span>{escapeLabel ?? <T>Close</T>}</span>
             </KbdGroup>
           </div>
           {footerTrailing}

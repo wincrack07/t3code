@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { Kbd } from "../ui/kbd";
 
 /** Key hint after an empty-composer suggestion, with its place among several at the bar's edge. */

@@ -25,6 +25,8 @@ import {
   prefersReducedMotion,
   subscribeReducedMotion,
 } from "@t3tools/client-runtime/reduced-motion";
+import { msg } from "gt-react";
+import { m } from "../../i18n/messages";
 
 const DEFAULT_TERMINAL_FONT_SIZE = 12;
 const MIN_TERMINAL_FONT_SIZE = 6;
@@ -705,7 +707,7 @@ export class GhosttyTerminalSurface {
 
     const input = document.createElement("textarea");
     input.className = "t3-ghostty-input";
-    input.setAttribute("aria-label", "Terminal input");
+    input.setAttribute("aria-label", m(msg("Terminal input")));
     input.autocapitalize = "off";
     input.autocomplete = "off";
     input.spellcheck = false;
@@ -716,7 +718,7 @@ export class GhosttyTerminalSurface {
     scrollbar.className =
       "group absolute top-1 right-px bottom-1 z-1 w-[var(--app-scrollbar-width)] cursor-default touch-none";
     scrollbar.setAttribute("role", "scrollbar");
-    scrollbar.setAttribute("aria-label", "Terminal scrollback");
+    scrollbar.setAttribute("aria-label", m(msg("Terminal scrollback")));
     scrollbar.setAttribute("aria-orientation", "vertical");
     scrollbar.tabIndex = 0;
     scrollbar.hidden = true;

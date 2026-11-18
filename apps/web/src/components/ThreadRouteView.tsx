@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { T, Var } from "gt-react";
 import { parseScopedThreadKey, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entities";
 import { visibilityParentKey } from "@t3tools/client-runtime/state/threads";
@@ -228,7 +229,13 @@ export function ThreadRouteView({
   const pendingView =
     renderState === "loading" && redirect === null ? (
       <p className="p-4 text-sm text-muted-foreground" role="status">
-        Reconnecting to {environment?.label ?? "this environment"}…
+        {environment ? (
+          <T>
+            Reconnecting to <Var>{environment.label}</Var>…
+          </T>
+        ) : (
+          <T>Reconnecting to this environment…</T>
+        )}
       </p>
     ) : null;
 

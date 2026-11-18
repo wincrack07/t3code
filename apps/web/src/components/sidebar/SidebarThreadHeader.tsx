@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import { FolderPlusIcon, SearchIcon, SquareKanbanIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -51,12 +52,13 @@ export function SidebarThreadHeader({
   activeSearchResultIndex,
   onClearSearch,
 }: SidebarThreadHeaderProps) {
+  const gt = useGT();
   const resultsVisible = isSearching && searchResultCount > 0;
   // Shrinking results can remove the active option; never leave aria-activedescendant pointing at it.
   const activeResultExists = resultsVisible && activeSearchResultIndex < searchResultCount;
   const newThreadLabel = newThreadShortcutLabel
-    ? `New thread (${newThreadShortcutLabel})`
-    : "New thread";
+    ? gt("New thread ({shortcut})", { shortcut: newThreadShortcutLabel })
+    : gt("New thread");
 
   return (
     // Narrow headers collapse an idle, empty search to an icon button; while focused or holding a query it
@@ -73,7 +75,9 @@ export function SidebarThreadHeader({
           <TooltipTrigger
             render={<SearchIcon className="size-4 shrink-0 text-(--sidebar-icon-color)" />}
           />
-          <TooltipPopup side="top">Search threads</TooltipPopup>
+          <TooltipPopup side="top">
+            <T>Search threads</T>
+          </TooltipPopup>
         </Tooltip>
         <SidebarInput
           ref={searchInputRef}
@@ -82,8 +86,8 @@ export function SidebarThreadHeader({
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
           onKeyDown={onSearchKeyDown}
-          placeholder="Search"
-          aria-label="Search threads"
+          placeholder={gt("Search", { $context: "search field placeholder" })}
+          aria-label={gt("Search threads")}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={resultsVisible}
@@ -101,7 +105,7 @@ export function SidebarThreadHeader({
             size="icon-micro"
             variant="ghost-muted"
             className="shrink-0"
-            aria-label="Clear thread search"
+            aria-label={gt("Clear thread search")}
             onClick={() => {
               onClearSearch();
               searchInputRef.current?.focus();
@@ -112,26 +116,29 @@ export function SidebarThreadHeader({
         ) : null}
       </label>
       <div className="ml-auto flex shrink-0 items-center @max-[16rem]/sidebar-header:group-has-[input[type=search]:focus]/sidebar-header:hidden @max-[16rem]/sidebar-header:group-has-[input[type=search]:not(:placeholder-shown)]/sidebar-header:hidden">
-        <SidebarHeaderIconButton label="Activity board" onClick={onOpenActivity}>
+        <SidebarHeaderIconButton label={gt("Activity board")} onClick={onOpenActivity}>
           <SquareKanbanIcon />
         </SidebarHeaderIconButton>
         {hasProjects ? (
           <>
             {projectScope}
-            <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
+            <SidebarHeaderIconButton label={gt("Add project")} onClick={onNewProject}>
               <FolderPlusIcon />
             </SidebarHeaderIconButton>
           </>
         ) : null}
         <SidebarHeaderIconButton
-          label="New thread"
+          label={gt("New thread")}
           tooltip={
             showNewThreadInProjectHint ? (
               <span className="flex flex-col gap-0.5">
                 <span>{newThreadLabel}</span>
                 <span className="text-muted-foreground">
-                  New thread in current project: Shift+click
-                  {newThreadInProjectShortcutLabel ? ` (${newThreadInProjectShortcutLabel})` : ""}
+                  {newThreadInProjectShortcutLabel
+                    ? gt("New thread in current project: Shift+click ({shortcut})", {
+                        shortcut: newThreadInProjectShortcutLabel,
+                      })
+                    : gt("New thread in current project: Shift+click")}
                 </span>
               </span>
             ) : (

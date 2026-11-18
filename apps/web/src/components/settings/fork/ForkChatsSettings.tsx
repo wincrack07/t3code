@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { Link } from "@tanstack/react-router";
 
 import { Button } from "../../ui/button";

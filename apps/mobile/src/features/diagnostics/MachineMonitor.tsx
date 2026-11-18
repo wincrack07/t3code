@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useIsFocused } from "@react-navigation/native";
 import {
   formatMachineBytes,

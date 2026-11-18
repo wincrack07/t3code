@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useState } from "react";
 import {
   MAX_SAVED_PROMPT_LENGTH,
@@ -21,13 +22,14 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
 type Draft = { readonly id: string | null; readonly name: string; readonly prompt: string };
 
 /** Edits the prompts the composer's / menu inserts. */
 export function SavedPromptsRow() {
+  const searchableSetting = useSearchableSetting();
   const savedPrompts = useScopedSettings((settings) => settings.savedPrompts);
   const updateSettings = useUpdateScopedSettings();
   const [draft, setDraft] = useState<Draft | null>(null);

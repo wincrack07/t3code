@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { AuthMcpClientAccess, EnvironmentId, PeerLinkSummary } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { isLocalLoopbackHost } from "@t3tools/shared/hostClassification";

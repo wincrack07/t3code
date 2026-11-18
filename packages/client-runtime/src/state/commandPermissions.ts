@@ -1,8 +1,6 @@
 import {
   clientRpcRequiredScopes,
   sessionGrantsScope,
-  authScopeRequiredResponse,
-  EnvironmentAuthorizationError,
   type EnvironmentId,
   type AuthSessionState,
   type AuthEnvironmentScope,
@@ -11,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
+import { scopeRequiredError, unverifiedPermissionsError } from "../rpc/client.ts";
 import { createEnvironmentSessionAtoms } from "./session.ts";
 
 function makeCommandPermissions<R, E>(
@@ -55,17 +54,9 @@ function makeCommandPermissions<R, E>(
                 Effect.timeoutOption(6_000),
                 Effect.orElseSucceed(() => Option.none<AuthSessionState>()),
               );
-          if (Option.isNone(session))
-            return yield* new EnvironmentAuthorizationError({
-              ...authScopeRequiredResponse(scopes[0]!),
-              message: "Could not verify this connection's permissions. Try again.",
-            });
+          if (Option.isNone(session)) return yield* unverifiedPermissionsError(scopes[0]!);
           const missing = scopes.find((scope) => !sessionGrantsScope(session.value, scope));
-          if (missing !== undefined)
-            return yield* new EnvironmentAuthorizationError({
-              ...authScopeRequiredResponse(missing),
-              message: `This connection requires ${missing}.`,
-            });
+          if (missing !== undefined) return yield* scopeRequiredError(missing);
         }),
       );
     });

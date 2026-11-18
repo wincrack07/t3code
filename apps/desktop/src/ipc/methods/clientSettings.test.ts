@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import type * as Electron from "electron";
 import { vi } from "vite-plus/test";
 
+import * as ElectronApp from "../../electron/ElectronApp.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
 import * as DesktopClientSettings from "../../settings/DesktopClientSettings.ts";
 import * as DesktopSnapShot from "../../snapShot/DesktopSnapShot.ts";
@@ -43,6 +44,12 @@ describe("client settings IPC", () => {
           Effect.provideService(DesktopSnapShot.DesktopSnapShot, {
             configure: () => Effect.void,
           } as unknown as DesktopSnapShot.DesktopSnapShot["Service"]),
+          Effect.provideService(
+            ElectronApp.ElectronApp,
+            ElectronApp.ElectronApp.of({
+              preferredSystemLanguages: Effect.succeed(["en-US"]),
+            } as unknown as ElectronApp.ElectronApp["Service"]),
+          ),
         );
         yield* Effect.promise(() =>
           Promise.resolve(listener!({ sender: { id: 7 } }, DEFAULT_CLIENT_SETTINGS)),

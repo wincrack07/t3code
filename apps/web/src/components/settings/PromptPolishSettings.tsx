@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import {
   DEFAULT_PROMPT_POLISH_BASE,
   type PromptPolishSettings as Settings,
@@ -23,7 +24,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import {
   useScopedSettings,
   useScopedSettingsWriteAllowed,
@@ -41,6 +42,7 @@ export function PromptPolishSettings() {
 }
 
 function PromptPolishEditor({ initial }: { initial: Settings }) {
+  const searchableSetting = useSearchableSetting();
   const [settings, setSettings] = useState(initial);
   const dirty = JSON.stringify(settings) !== JSON.stringify(initial);
   const update = useUpdateScopedSettings();
@@ -63,7 +65,7 @@ function PromptPolishEditor({ initial }: { initial: Settings }) {
         resetAction={
           settings.basePrompt !== DEFAULT_PROMPT_POLISH_BASE ? (
             <SettingResetButton
-              label="polish instruction"
+              ariaLabel="Reset polish instruction to default"
               onClick={() => setSettings({ ...settings, basePrompt: DEFAULT_PROMPT_POLISH_BASE })}
             />
           ) : null

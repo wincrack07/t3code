@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { HandoffTimelineRun } from "@t3tools/client-runtime/handoff";
 import { useComposerHandleContext } from "../../composerHandleContext";

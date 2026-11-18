@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
+import { msg } from "gt-react";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -268,7 +270,12 @@ export function ArtifactsPage() {
       viewer === null ? null : (url) => void view(url, (current) => visitInHistory(current, url)),
     openExternally,
     openInPanel: viewer === null ? null : (url) => void viewer.openInPanel(url),
-    copy: (url) => void writeTextToClipboard(url, "link").catch(() => undefined),
+    copy: (url) =>
+      void writeTextToClipboard(url, {
+        target: "link",
+        unavailableMessage: msg("Clipboard API is unavailable while copying link."),
+        failureMessage: msg("Failed to copy link to the clipboard."),
+      }).catch(() => undefined),
   };
   const current = history.urls[history.index];
   const currentId = current === undefined ? undefined : parseClaudeArtifactUrl(current)?.id;

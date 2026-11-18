@@ -1,3 +1,6 @@
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "../../i18n/messages";
 import type {
   BrowserImportFailureReason,
   BrowserImportSkippedGroup,
@@ -149,20 +152,38 @@ export function isRetryableReason(reason: BrowserImportFailureReason): boolean {
   }
 }
 
-const SKIP_REASON_COPY: Readonly<Record<BrowserImportSkippedGroup["reason"], string>> = {
-  partitioned:
+const SKIP_REASON_COPY = {
+  partitioned: msg(
     "Tied to the site it was embedded in. T3 Code's browser can't store that tie, and sites set these again on your next visit.",
-  undecryptable: "Could not be decrypted with the browser's key.",
-  rejected: "The built-in browser refused it, usually because it has expired or is malformed.",
-};
+  ),
+  undecryptable: msg("Could not be decrypted with the browser's key."),
+  rejected: msg("The built-in browser refused it, usually because it has expired or is malformed."),
+} satisfies Readonly<Record<BrowserImportSkippedGroup["reason"], string>>;
 
-export function skipReasonCopy(reason: BrowserImportSkippedGroup["reason"]): string {
-  return SKIP_REASON_COPY[reason];
+export function skipReasonCopy(
+  reason: BrowserImportSkippedGroup["reason"],
+  resolve: MessageResolver = m,
+): string {
+  return resolve(SKIP_REASON_COPY[reason]);
 }
 
-export function formatSkippedDomains(domains: ReadonlyArray<string>): string {
+export function formatSkippedDomains(
+  domains: ReadonlyArray<string>,
+  resolve: MessageResolver = m,
+): string {
   if (domains.length === 0) return "";
   if (domains.length === 1) return domains[0]!;
-  if (domains.length <= 3) return `${domains.slice(0, -1).join(", ")} and ${domains.at(-1)}`;
-  return `${domains.slice(0, 3).join(", ")} and ${domains.length - 3} more`;
+  if (domains.length <= 3)
+    return resolve(
+      msg("{domains} and {last}", {
+        domains: domains.slice(0, -1).join(", "),
+        last: domains.at(-1),
+      }),
+    );
+  return resolve(
+    msg("{count, plural, one {{domains} and {count} more} other {{domains} and {count} more}}", {
+      domains: domains.slice(0, 3).join(", "),
+      count: domains.length - 3,
+    }),
+  );
 }

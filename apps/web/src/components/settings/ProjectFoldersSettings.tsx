@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import { useState } from "react";
 import { useSidebarProjectGroups } from "../../hooks/useSidebarProjectGroups";
 import { useClientSettings } from "../../hooks/useSettings";

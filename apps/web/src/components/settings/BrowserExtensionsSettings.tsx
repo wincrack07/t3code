@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-untranslated-copy -- fork-only screen; its copy stays English until the fork translates it. */
 import type { BrowserExtension, BrowserExtensionInstallInput } from "@t3tools/contracts";
 import { FolderOpen, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -8,7 +9,7 @@ import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { toastManager } from "../ui/toast";
 import { SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 const previewBridge = () => window.desktopBridge?.preview;
 
@@ -16,6 +17,7 @@ const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Something went wrong.";
 
 export function BrowserExtensionsSetting({ disabled }: { readonly disabled: boolean }) {
+  const searchableSetting = useSearchableSetting();
   const [extensions, setExtensions] = useState<ReadonlyArray<BrowserExtension> | null>(null);
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
