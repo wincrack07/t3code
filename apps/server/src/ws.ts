@@ -3732,51 +3732,54 @@ export const layer = Layer.unwrap(
               serverBrowser,
               reportProfiles,
               readSettingsClient(url.value),
-            ).pipe(
-              Layer.provideMerge(RpcSerialization.layerJson),
-              // Handler-context reporters see only request defects, not server-wide defects.
-              Layer.provide(DefectReporter.layer),
-              Layer.provide(AcpRegistrySessions.layer),
-              Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
-              Layer.provide(ProviderMaintenanceRunner.layer),
-              Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
-              Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
-              // Share server-lifetime PR caches so WS mutations invalidate every client's HTTP diffs.
-              Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
-              // One listing cache for every client, so reopening the gallery does not refetch.
-              Layer.provide(Layer.succeed(ClaudeArtifacts.ClaudeArtifacts, claudeArtifacts)),
-              Layer.provide(Layer.succeed(IssueService.IssueService, issues)),
-              Layer.provide(Layer.succeed(ThreadIssueService.ThreadIssueService, threadIssues)),
-              Layer.provide(
-                Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
-              ),
-              Layer.provide(OtlpEndpointCheck.layer),
-              Layer.provide(PromptPolish.layer),
-              Layer.provide(ProjectGroupSuggestions.layer),
-              Layer.provide(PromptCompletion.layer),
-              Layer.provide(Decisions.layer),
-              Layer.provide(
-                Layer.succeed(
-                  PullRequestReviewGuideService.PullRequestReviewGuideService,
-                  reviewGuides,
+            )
+              .pipe(
+                Layer.provideMerge(RpcSerialization.layerJson),
+                // Handler-context reporters see only request defects, not server-wide defects.
+                Layer.provide(DefectReporter.layer),
+                Layer.provide(AcpRegistrySessions.layer),
+                Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
+                Layer.provide(ProviderMaintenanceRunner.layer),
+                Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
+                Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
+                // Share server-lifetime PR caches so WS mutations invalidate every client's HTTP diffs.
+                Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+                // One listing cache for every client, so reopening the gallery does not refetch.
+                Layer.provide(Layer.succeed(ClaudeArtifacts.ClaudeArtifacts, claudeArtifacts)),
+                Layer.provide(Layer.succeed(IssueService.IssueService, issues)),
+                Layer.provide(Layer.succeed(ThreadIssueService.ThreadIssueService, threadIssues)),
+                Layer.provide(
+                  Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
                 ),
-              ),
-              Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
-              Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
-              Layer.provide(
-                SourceControlDiscovery.layer.pipe(
-                  Layer.provide(
-                    SourceControlProviderRegistry.layer.pipe(
-                      Layer.provide(SourceControlBuiltInDrivers.layer),
-                      Layer.provideMerge(GitVcsDriver.layer),
-                      Layer.provide(
-                        VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),
+                Layer.provide(OtlpEndpointCheck.layer),
+                Layer.provide(PromptPolish.layer),
+                Layer.provide(ProjectGroupSuggestions.layer),
+                Layer.provide(PromptCompletion.layer),
+                Layer.provide(Decisions.layer),
+                Layer.provide(
+                  Layer.succeed(
+                    PullRequestReviewGuideService.PullRequestReviewGuideService,
+                    reviewGuides,
+                  ),
+                ),
+                Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
+                Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
+              )
+              .pipe(
+                Layer.provide(
+                  SourceControlDiscovery.layer.pipe(
+                    Layer.provide(
+                      SourceControlProviderRegistry.layer.pipe(
+                        Layer.provide(SourceControlBuiltInDrivers.layer),
+                        Layer.provideMerge(GitVcsDriver.layer),
+                        Layer.provide(
+                          VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ),
         );
         const framedRpcWebSocketHttpEffect = url.value.searchParams.has(
