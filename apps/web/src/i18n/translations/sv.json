@@ -9830,6 +9830,7 @@
   "d2ad2df4c015f417": "Grupperingsregeln avgör hur varje utcheckning ansluter till projektgrupper i sidofältet. Om du ändrar den kan en utcheckning flyttas till ett annat projekt.",
   "0bdf6ae2117b6c23": "Hittar du inte en inställning? Behåll projektet valt ovan och gå till valfri annan inställningssida.",
   "3310e10f1efdc9bd": "Välj ikon",
+  "65ccf4f8e049003e": "Choose a project to manage its name, icon, checkouts and actions.",
   "067beea7d8f6e2c9": "Visa alla miljöer",
   "369d6e9eb83c82f0": "Instruktion",
   "4a12ca82e512173a": "Hur modellen skriver om ditt utkast.",

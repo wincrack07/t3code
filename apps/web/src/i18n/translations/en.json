@@ -9831,6 +9831,7 @@
   "d2ad2df4c015f417": "Grouping rule decides how each checkout joins project groups in the sidebar. Changing it can move a checkout to a different project.",
   "0bdf6ae2117b6c23": "Can't find a setting? Keep this project picked above and hop to any other settings page.",
   "3310e10f1efdc9bd": "Choose icon",
+  "65ccf4f8e049003e": "Choose a project to manage its name, icon, checkouts and actions.",
   "067beea7d8f6e2c9": "Show all environments",
   "369d6e9eb83c82f0": "Instruction",
   "4a12ca82e512173a": "How the model rewrites your draft.",

@@ -272,9 +272,7 @@ describe("PreviewView", () => {
     setup();
     mocks.idleDesktopTab = true;
     await using _screen = await render(view());
-    await expect
-      .element(page.getByPlaceholder("Search or enter URL"))
-      .toHaveValue("http://example.com/");
+    await expect.element(page.getByPlaceholder("Search or enter URL")).toHaveValue("example.com");
     await expect.element(page.getByText("No preview yet")).not.toBeInTheDocument();
     await expect.element(page.getByRole("button", { name: "Annotate preview" })).toBeVisible();
   });
@@ -283,9 +281,7 @@ describe("PreviewView", () => {
     setup();
     mocks.idleDesktopOverlay = true;
     await using _screen = await render(view());
-    await expect
-      .element(page.getByPlaceholder("Search or enter URL"))
-      .toHaveValue("http://example.com/");
+    await expect.element(page.getByPlaceholder("Search or enter URL")).toHaveValue("example.com");
     await expect.element(page.getByText("No preview yet")).not.toBeInTheDocument();
   });
 
