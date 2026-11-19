@@ -30,7 +30,8 @@ it("replaces the app bundle on quit without changing adjacent user data", async 
     const staging = NodePath.join(root, ".t3-update-123", "extracted");
     const staged = NodePath.join(staging, "Sally's Version.app");
     await NodeFSP.mkdir(target);
-    await NodeFSP.mkdir(staged, { recursive: true });
+    await NodeFSP.mkdir(NodePath.join(staged, "Contents"), { recursive: true });
+    await NodeFSP.writeFile(NodePath.join(staged, "Contents/Info.plist"), "");
     await NodeFSP.writeFile(NodePath.join(target, "version"), "old");
     await NodeFSP.writeFile(NodePath.join(staged, "version"), "new");
     await NodeFSP.writeFile(NodePath.join(root, "userdata"), "keep");
@@ -52,25 +53,29 @@ it("replaces the app bundle on quit without changing adjacent user data", async 
   }
 });
 
-it("restores the old bundle if the replacement cannot be moved into place", async () => {
+it("keeps the old bundle when the staged one is missing or half removed", async () => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-mac-rollback-"));
   try {
     const target = NodePath.join(root, "T3.app");
     await NodeFSP.mkdir(target);
     await NodeFSP.writeFile(NodePath.join(target, "version"), "old");
-    await expect(
-      NodeUtil.promisify(NodeChildProcess.execFile)("/bin/sh", [
-        "-c",
-        macUpdateInstallScript(),
-        "test",
-        "2147483647",
-        NodePath.join(root, "missing.app"),
-        target,
-        `${target}.backup`,
-        "0",
-      ]),
-    ).rejects.toThrow();
-    expect(await NodeFSP.readFile(NodePath.join(target, "version"), "utf8")).toBe("old");
+    const halfRemoved = NodePath.join(root, "half.app");
+    await NodeFSP.mkdir(NodePath.join(halfRemoved, "Contents/Resources"), { recursive: true });
+    for (const staged of [NodePath.join(root, "missing.app"), halfRemoved]) {
+      await expect(
+        NodeUtil.promisify(NodeChildProcess.execFile)("/bin/sh", [
+          "-c",
+          macUpdateInstallScript(),
+          "test",
+          "2147483647",
+          staged,
+          target,
+          `${target}.backup`,
+          "0",
+        ]),
+      ).rejects.toThrow();
+      expect(await NodeFSP.readFile(NodePath.join(target, "version"), "utf8")).toBe("old");
+    }
   } finally {
     await NodeFSP.rm(root, { recursive: true, force: true });
   }

@@ -19,6 +19,9 @@ import { compareSemverVersions } from "@t3tools/shared/semver";
 
 const run = NodeUtil.promisify(NodeChildProcess.execFile);
 
+// Electron's fs reads app.asar as a directory, so fs.rm cannot delete an extracted app bundle.
+const removeTree = (path: string) => run("/bin/rm", ["-rf", path]);
+
 export function verifyMacUpdateChecksum(actual: Buffer, expected: string | undefined): void {
   if (
     expected === undefined ||
@@ -37,6 +40,7 @@ target="$3"
 backup="$4"
 relaunch="$5"
 while /bin/kill -0 "$pid" 2>/dev/null; do /bin/sleep 1; done
+[ -f "$staged/Contents/Info.plist" ] || exit 1
 /bin/mv "$target" "$backup"
 if /bin/mv "$staged" "$target"; then
   if [ "$relaunch" = 1 ]; then /usr/bin/open "$target"; fi
@@ -60,10 +64,7 @@ export class UnsignedMacUpdater extends NodeEvents.EventEmitter {
     this.targetVersion = undefined;
     const old = this.stagedBundle;
     this.stagedBundle = undefined;
-    if (old !== undefined)
-      void NodeFSP.rm(NodePath.resolve(old, "../.."), { recursive: true, force: true }).catch(
-        () => undefined,
-      );
+    if (old !== undefined) void removeTree(NodePath.resolve(old, "../..")).catch(() => undefined);
   }
   allowDowngrade = false;
   autoDownload = false;
@@ -218,16 +219,15 @@ export class UnsignedMacUpdater extends NodeEvents.EventEmitter {
         throw new Error("The update bundle identity or version does not match.");
       await run("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundle]);
       await NodeFSP.rm(archive);
-      if (this.stagedBundle !== undefined)
-        await NodeFSP.rm(NodePath.resolve(this.stagedBundle, "../.."), {
-          recursive: true,
-          force: true,
-        });
+      const previous = this.stagedBundle;
+      // Unstage first: a half-removed bundle must never be installed on quit.
+      this.stagedBundle = undefined;
+      if (previous !== undefined) await removeTree(NodePath.resolve(previous, "../.."));
       this.stagedBundle = bundle;
       this.emit("download-progress", { percent: 100 });
       this.emit("update-downloaded", { version });
     } catch (error) {
-      await NodeFSP.rm(staging, { recursive: true, force: true });
+      await removeTree(staging).catch(() => undefined);
       throw error;
     }
   }
