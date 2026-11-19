@@ -94,6 +94,7 @@ export function HtmlRenderFrame(props: {
             title={title}
             threadRef={props.threadRef}
             className="block size-full"
+            containScroll
             onContentHeight={(height) => {
               rememberContentHeight(attachmentId, height);
               setContentHeight(height);

@@ -94,7 +94,7 @@ export async function openUrlInPreview<E>(input: {
     useRightPanelStore.getState().openBrowser(threadRef, existingArtifactTab);
     return AsyncResult.success(undefined);
   }
-  const runtime = previewRuntimeFor(threadRef.environmentId, input.url);
+  const runtime = previewRuntimeFor(threadRef.environmentId);
   const previousActiveTabId = readThreadPreviewState(threadRef).activeTabId;
   // The server changes the active tab, not panel selection; selection changes come from the user.
   const selectedSurface = () =>

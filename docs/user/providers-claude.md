@@ -103,6 +103,15 @@ login in the Keychain, the list is not available yet. If the login has expired,
 run a Claude turn with that account to refresh it. New artifacts can take a
 minute to appear.
 
+## Steering
+
+A steer waits until Claude finishes the tool calls it is running, then Claude reads it
+in the same turn. The message shows as unread until then. If Claude drops it before
+reading it, the message is sent as the next turn, after any messages queued before it.
+If Claude exits or the server restarts first, the message waits in the queue in that
+same place until you resume it. If you press Stop, T3 Code shows a notice with the text
+of any steer Claude had not read.
+
 ## Skills
 
 Claude skills come from the config directory's `skills` folder and the project's
