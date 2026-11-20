@@ -2612,8 +2612,6 @@ export default function ChatView(props: ChatViewProps) {
   // While a question or approval owns the composer, its text answers that, not the agent.
   const freshSessionCommandAvailable =
     freshSessionAvailable && activePendingApproval === null && pendingUserInputs.length === 0;
-  const toggleKeepFullHistory = () => setKeepFullHistory(routeThreadKey, !keepFullHistory);
-  const toggleKeepFullHistoryStable = useStableCallback(toggleKeepFullHistory);
   const armFreshSessionStable = useStableCallback(() => armFreshSession(routeThreadKey));
   const handleRestoreThreadBranch = () => {
     if (!canWriteSourceControl) return;

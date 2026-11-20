@@ -64,7 +64,6 @@ import { Route as ChatSettingsForkPrReviewsRouteImport } from './routes/_chat.se
 import { Route as ChatSettingsForkMonitorRouteImport } from './routes/_chat.settings.fork.monitor'
 import { Route as ChatSettingsForkMcpRouteImport } from './routes/_chat.settings.fork.mcp'
 import { Route as ChatSettingsForkMachineRouteImport } from './routes/_chat.settings.fork.machine'
-import { Route as ChatSettingsForkConnectionsRouteImport } from './routes/_chat.settings.fork.connections'
 import { Route as ChatSettingsForkComposerRouteImport } from './routes/_chat.settings.fork.composer'
 import { Route as ChatSettingsForkChatsRouteImport } from './routes/_chat.settings.fork.chats'
 
@@ -349,12 +348,6 @@ const ChatSettingsForkMachineRoute = ChatSettingsForkMachineRouteImport.update({
   path: '/fork/machine',
   getParentRoute: () => ChatSettingsRoute,
 } as any)
-const ChatSettingsForkConnectionsRoute =
-  ChatSettingsForkConnectionsRouteImport.update({
-    id: '/fork/connections',
-    path: '/fork/connections',
-    getParentRoute: () => ChatSettingsRoute,
-  } as any)
 const ChatSettingsForkComposerRoute =
   ChatSettingsForkComposerRouteImport.update({
     id: '/fork/composer',
@@ -420,7 +413,6 @@ export interface FileRoutesByFullPath {
   '/tasks/': typeof ChatTasksIndexRoute
   '/settings/fork/chats': typeof ChatSettingsForkChatsRoute
   '/settings/fork/composer': typeof ChatSettingsForkComposerRoute
-  '/settings/fork/connections': typeof ChatSettingsForkConnectionsRoute
   '/settings/fork/machine': typeof ChatSettingsForkMachineRoute
   '/settings/fork/mcp': typeof ChatSettingsForkMcpRoute
   '/settings/fork/monitor': typeof ChatSettingsForkMonitorRoute
@@ -479,7 +471,6 @@ export interface FileRoutesByTo {
   '/tasks': typeof ChatTasksIndexRoute
   '/settings/fork/chats': typeof ChatSettingsForkChatsRoute
   '/settings/fork/composer': typeof ChatSettingsForkComposerRoute
-  '/settings/fork/connections': typeof ChatSettingsForkConnectionsRoute
   '/settings/fork/machine': typeof ChatSettingsForkMachineRoute
   '/settings/fork/mcp': typeof ChatSettingsForkMcpRoute
   '/settings/fork/monitor': typeof ChatSettingsForkMonitorRoute
@@ -540,7 +531,6 @@ export interface FileRoutesById {
   '/_chat/tasks/': typeof ChatTasksIndexRoute
   '/_chat/settings/fork/chats': typeof ChatSettingsForkChatsRoute
   '/_chat/settings/fork/composer': typeof ChatSettingsForkComposerRoute
-  '/_chat/settings/fork/connections': typeof ChatSettingsForkConnectionsRoute
   '/_chat/settings/fork/machine': typeof ChatSettingsForkMachineRoute
   '/_chat/settings/fork/mcp': typeof ChatSettingsForkMcpRoute
   '/_chat/settings/fork/monitor': typeof ChatSettingsForkMonitorRoute
@@ -601,7 +591,6 @@ export interface FileRouteTypes {
     | '/tasks/'
     | '/settings/fork/chats'
     | '/settings/fork/composer'
-    | '/settings/fork/connections'
     | '/settings/fork/machine'
     | '/settings/fork/mcp'
     | '/settings/fork/monitor'
@@ -660,7 +649,6 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/settings/fork/chats'
     | '/settings/fork/composer'
-    | '/settings/fork/connections'
     | '/settings/fork/machine'
     | '/settings/fork/mcp'
     | '/settings/fork/monitor'
@@ -720,7 +708,6 @@ export interface FileRouteTypes {
     | '/_chat/tasks/'
     | '/_chat/settings/fork/chats'
     | '/_chat/settings/fork/composer'
-    | '/_chat/settings/fork/connections'
     | '/_chat/settings/fork/machine'
     | '/_chat/settings/fork/mcp'
     | '/_chat/settings/fork/monitor'
@@ -1126,13 +1113,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatSettingsForkMachineRouteImport
       parentRoute: typeof ChatSettingsRoute
     }
-    '/_chat/settings/fork/connections': {
-      id: '/_chat/settings/fork/connections'
-      path: '/fork/connections'
-      fullPath: '/settings/fork/connections'
-      preLoaderRoute: typeof ChatSettingsForkConnectionsRouteImport
-      parentRoute: typeof ChatSettingsRoute
-    }
     '/_chat/settings/fork/composer': {
       id: '/_chat/settings/fork/composer'
       path: '/fork/composer'
@@ -1182,7 +1162,6 @@ interface ChatSettingsRouteChildren {
   ChatSettingsWorktreesRoute: typeof ChatSettingsWorktreesRoute
   ChatSettingsForkChatsRoute: typeof ChatSettingsForkChatsRoute
   ChatSettingsForkComposerRoute: typeof ChatSettingsForkComposerRoute
-  ChatSettingsForkConnectionsRoute: typeof ChatSettingsForkConnectionsRoute
   ChatSettingsForkMachineRoute: typeof ChatSettingsForkMachineRoute
   ChatSettingsForkMcpRoute: typeof ChatSettingsForkMcpRoute
   ChatSettingsForkMonitorRoute: typeof ChatSettingsForkMonitorRoute
@@ -1221,7 +1200,6 @@ const ChatSettingsRouteChildren: ChatSettingsRouteChildren = {
   ChatSettingsWorktreesRoute: ChatSettingsWorktreesRoute,
   ChatSettingsForkChatsRoute: ChatSettingsForkChatsRoute,
   ChatSettingsForkComposerRoute: ChatSettingsForkComposerRoute,
-  ChatSettingsForkConnectionsRoute: ChatSettingsForkConnectionsRoute,
   ChatSettingsForkMachineRoute: ChatSettingsForkMachineRoute,
   ChatSettingsForkMcpRoute: ChatSettingsForkMcpRoute,
   ChatSettingsForkMonitorRoute: ChatSettingsForkMonitorRoute,
