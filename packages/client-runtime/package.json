@@ -663,10 +663,6 @@
       "types": "./src/cliAccounts.ts",
       "default": "./src/cliAccounts.ts"
     },
-    "./peer-link-mesh": {
-      "types": "./src/peerLinkMesh.ts",
-      "default": "./src/peerLinkMesh.ts"
-    },
     "./state/tasks": {
       "types": "./src/state/tasks.ts",
       "default": "./src/state/tasks.ts"

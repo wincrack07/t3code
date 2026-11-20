@@ -104,7 +104,6 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} activé",
   "77cc5f738cb7d459": "{label} désactivé",
-  "43bd2db24925a831": "La requête vers l’environnement a échoué. Vérifiez que les deux machines sont connectées et que vos sessions peuvent gérer l’accès.",
   "2159a4897d4a4d73": "{runtime, select, codex {Mettez à jour la CLI Codex vers la version {version} ou ultérieure pour utiliser {names}.} other {Mettez à jour {providerName} vers la version {version} ou ultérieure pour utiliser {names}.}}",
   "d887bea446534de5": "Aucun projet de cet environnement ne peut lire {host}/{repository}.",
   "4e466d60e2f7736b": "Collez l’URL complète de la pull request ; ce fil n’a pas de dépôt auquel rattacher le numéro.",

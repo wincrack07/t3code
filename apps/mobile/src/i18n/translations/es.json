@@ -104,7 +104,6 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} activado",
   "77cc5f738cb7d459": "{label} desactivado",
-  "43bd2db24925a831": "La solicitud al entorno falló. Comprueba que ambas máquinas estén conectadas y que tus sesiones puedan gestionar el acceso.",
   "2159a4897d4a4d73": "{runtime, select, codex {Actualiza la CLI de Codex a {version} o posterior para usar {names}.} other {Actualiza {providerName} a {version} o posterior para usar {names}.}}",
   "d887bea446534de5": "Ningún proyecto de este entorno puede leer {host}/{repository}.",
   "4e466d60e2f7736b": "Pega la URL completa de la pull request; este hilo no tiene ningún repositorio con el que resolver el número.",

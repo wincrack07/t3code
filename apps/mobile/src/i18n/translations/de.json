@@ -104,7 +104,6 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} an",
   "77cc5f738cb7d459": "{label} aus",
-  "43bd2db24925a831": "Die Anfrage an die Umgebung ist fehlgeschlagen. Prüfe, ob beide Rechner verbunden sind und deine Sitzungen den Zugriff verwalten dürfen.",
   "2159a4897d4a4d73": "{runtime, select, codex {Aktualisiere die Codex CLI auf {version} oder neuer, um {names} zu verwenden.} other {Aktualisiere {providerName} auf {version} oder neuer, um {names} zu verwenden.}}",
   "d887bea446534de5": "Kein Projekt in dieser Umgebung kann {host}/{repository} lesen.",
   "4e466d60e2f7736b": "Füge die vollständige Pull-Request-URL ein. Dieser Thread hat kein Repository, in dem die Nummer aufgelöst werden kann.",

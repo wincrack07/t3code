@@ -182,7 +182,7 @@ it.effect("retries the link without sending a second turn after the home environ
     const commands = createSavedTaskCommands(runtime, projectAtom);
     const registry = AtomRegistry.make();
     try {
-      const started = yield* Effect.promise(() =>
+      const started = yield* Effect.exit(
         commands.launch.run(registry, {
           source: { home, taskId: "task" },
           target,
@@ -196,20 +196,18 @@ it.effect("retries the link without sending a second turn after the home environ
         environmentId: target.environmentId,
         threadId: "launched",
       });
-      const linked = yield* Effect.promise(() =>
-        commands.retryLink.run(registry, started.value.receipt),
-      );
+      const linked = yield* Effect.exit(commands.retryLink.run(registry, started.value.receipt));
       expect(linked._tag).toBe("Success");
       expect(launches).toBe(1);
       expect(links).toBe(2);
       taskAttachments = [{ kind: "reference", path: "/repo/My File.txt", temporary: false }];
-      const draft = yield* Effect.promise(() =>
+      const draft = yield* Effect.exit(
         commands.prepareDraft.run(registry, { source: { home, taskId: "task" }, target }),
       );
       expect(draft._tag).toBe("Success");
       if (draft._tag === "Success")
         expect(draft.value.text).toBe("Implement login\n\n[My File.txt](/repo/My%20File.txt)");
-      const inspection = yield* Effect.promise(() =>
+      const inspection = yield* Effect.exit(
         commands.attachments.run(registry, {
           source: { home, taskId: "task" },
           checkEnvironmentIds: [target.environmentId],
@@ -237,7 +235,7 @@ it.effect("retries the link without sending a second turn after the home environ
           },
         },
       ];
-      const refused = yield* Effect.promise(() =>
+      const refused = yield* Effect.exit(
         commands.prepareDraft.run(registry, { source: { home, taskId: "task" }, target }),
       );
       expect(refused._tag).toBe("Failure");
@@ -256,7 +254,7 @@ it.effect("retries the link without sending a second turn after the home environ
         },
         threadEnvMode: "worktree",
       };
-      const preferred = yield* Effect.promise(() =>
+      const preferred = yield* Effect.exit(
         commands.launch.run(registry, {
           source: { home, taskId: "task" },
           targets: [target],
@@ -308,9 +306,7 @@ it.effect("retries the link without sending a second turn after the home environ
         },
         defaultThreadEnvMode: "local",
       });
-      const distributed = yield* Effect.promise(() =>
-        commands.prepareBatch.run(registry, batchInput),
-      );
+      const distributed = yield* Effect.exit(commands.prepareBatch.run(registry, batchInput));
       expect(distributed._tag).toBe("Success");
       if (distributed._tag === "Success")
         expect(distributed.value.map((group) => group.environmentId)).toEqual([
@@ -329,14 +325,12 @@ it.effect("retries the link without sending a second turn after the home environ
           }
       }
       expect(batchStarts).toBe(0);
-      const prepared = yield* Effect.promise(() =>
+      const prepared = yield* Effect.exit(
         commands.prepareBatch.run(registry, { ...batchInput, target, distribute: false }),
       );
       expect(prepared._tag).toBe("Success");
       if (prepared._tag !== "Success") return;
-      const queued = yield* Effect.promise(() =>
-        commands.batchStart.run(registry, prepared.value[0]!),
-      );
+      const queued = yield* Effect.exit(commands.batchStart.run(registry, prepared.value[0]!));
       expect(queued._tag).toBe("Success");
       if (queued._tag !== "Success") return;
       registry.set(targetAtom, { ...registry.get(targetAtom), taskBatches: [queued.value] });
@@ -364,7 +358,7 @@ it.effect("retries the link without sending a second turn after the home environ
       };
       registry.set(targetAtom, { ...registry.get(targetAtom), taskBatches: [settled] });
       for (const _attempt of [0, 1]) {
-        const result = yield* Effect.promise(() =>
+        const result = yield* Effect.exit(
           commands.reconcileBatch.run(registry, { target, batchId: settled.id }),
         );
         expect(result._tag).toBe("Success");
@@ -389,7 +383,7 @@ it.effect("retries the link without sending a second turn after the home environ
           },
         },
       ];
-      const pinned = yield* Effect.promise(() =>
+      const pinned = yield* Effect.exit(
         commands.prepareBatch.run(registry, {
           ...batchInput,
           sources: [{ home, taskId: "task" }],
@@ -447,7 +441,7 @@ it.effect("retries the link without sending a second turn after the home environ
         },
       ]) {
         taskSettings = scenario.settings;
-        const result = yield* Effect.promise(() =>
+        const result = yield* Effect.exit(
           commands.prepareBatch.run(registry, {
             ...batchInput,
             sources: [{ home, taskId: "task" }],
@@ -468,7 +462,7 @@ it.effect("retries the link without sending a second turn after the home environ
       taskSettings = {
         defaultModelSelection: { ...batchInput.launch.modelSelection, routing: "auto" },
       };
-      const auto = yield* Effect.promise(() =>
+      const auto = yield* Effect.exit(
         commands.prepareBatch.run(registry, {
           ...batchInput,
           sources: [{ home, taskId: "task" }],

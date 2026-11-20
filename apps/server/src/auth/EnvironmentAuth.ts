@@ -635,13 +635,6 @@ export class EnvironmentAuth extends Context.Service<
     readonly authenticateMcpClient: (
       request: HttpServerRequest.HttpServerRequest,
     ) => Effect.Effect<McpClientSession, ServerAuthCredentialError | ServerAuthInternalError>;
-    readonly renewMcpClientSession: (
-      token: string,
-      access: AuthMcpClientAccess,
-    ) => Effect.Effect<
-      SessionStore.IssuedSession,
-      ServerAuthInternalError | ServerAuthCredentialError
-    >;
     readonly issueMcpClientSession: (input: {
       readonly label: string;
       readonly access: AuthMcpClientAccess;
@@ -1727,9 +1720,6 @@ export const make = Effect.gen(function* () {
     issueStartupPairingUrl,
     authenticateMcpClient,
     issueMcpClientSession,
-    renewMcpClientSession: Effect.fn("EnvironmentAuth.renewMcpClientSession")((token, access) =>
-      sessions.renewPeer(token, access).pipe(mapSessionVerificationErrors),
-    ),
     consumeMcpApprovalCode,
   });
 });

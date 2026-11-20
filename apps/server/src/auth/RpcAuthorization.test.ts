@@ -1,6 +1,4 @@
 import {
-  ORCHESTRATION_V2_WS_METHODS,
-  CommandId,
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,

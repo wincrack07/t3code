@@ -769,7 +769,7 @@ it.effect.each(["create", "update", "delete"] as const)(
       registry.set(sessions(env), AsyncResult.success(grant(true)));
       registry.set(sessions(other), AsyncResult.success(grant(false)));
       const run = (id: EnvironmentId) =>
-        Effect.promise(() => command.run(registry, { environmentId: id, input }));
+        Effect.exit(command.run(registry, { environmentId: id, input }));
       expect(registry.get(command.permissionAtom(env))).toBe(true);
       expect(registry.get(command.permissionAtom(other))).toBe(false);
       expect((yield* run(env))._tag).toBe("Success");

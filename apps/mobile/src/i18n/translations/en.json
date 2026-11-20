@@ -104,7 +104,6 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} On",
   "77cc5f738cb7d459": "{label} Off",
-  "43bd2db24925a831": "The environment request failed. Check that both machines are connected and your sessions can manage access.",
   "2159a4897d4a4d73": "{runtime, select, codex {Update the Codex CLI to {version} or newer to use {names}.} other {Update {providerName} to {version} or newer to use {names}.}}",
   "d887bea446534de5": "No project in this environment can read {host}/{repository}.",
   "4e466d60e2f7736b": "Paste the full pull request URL; this thread has no repository to resolve the number against.",

@@ -10,7 +10,6 @@ export const FORK_SETTINGS_PATHS = [
   "/settings/fork/pr-reviews",
   "/settings/fork/machine",
   "/settings/fork/monitor",
-  "/settings/fork/connections",
   "/settings/fork/mcp",
 ] as const;
 
@@ -22,7 +21,6 @@ export const FORK_SETTINGS_SECTION_LABELS: Readonly<Record<ForkSettingsPath, str
   "/settings/fork/pr-reviews": msg("PR reviews"),
   "/settings/fork/machine": msg("This machine"),
   "/settings/fork/monitor": msg("Machine monitor"),
-  "/settings/fork/connections": msg("Linked environments"),
   "/settings/fork/mcp": msg("MCP servers"),
 };
 
@@ -39,14 +37,12 @@ export const FORK_SETTINGS_CATEGORY_SCOPES: Readonly<
   "/settings/fork/pr-reviews": null,
   "/settings/fork/machine": null,
   "/settings/fork/monitor": "environment",
-  "/settings/fork/connections": null,
   "/settings/fork/mcp": null,
 };
 
 /** Pages that act on every connected environment at once, so they hide the scope picker. */
 export const FORK_SETTINGS_DEVICE_ONLY_PATHS: ReadonlyArray<ForkSettingsPath> = [
   "/settings/fork/chats",
-  "/settings/fork/connections",
 ];
 
 export const FORK_SETTINGS_SEARCH_ITEMS = [
@@ -158,12 +154,6 @@ export const FORK_SETTINGS_SEARCH_ITEMS = [
     targetId: "system-monitor",
     searchTerms: ["system monitor sidebar footer indicator"],
   },
-  {
-    id: "peer-link-mesh",
-    title: msg("Link my environments"),
-    to: "/settings/fork/connections",
-    searchTerms: ["peer mesh link all renew unlink"],
-  },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 // Pages these settings lived on before they moved here. Old deep links land on the new page.
@@ -173,7 +163,6 @@ const FORK_LEGACY_PATHS: ReadonlySet<string> = new Set([
   "/settings/threads",
   "/settings/labs",
   "/settings/maintenance",
-  "/settings/connections",
 ]);
 const FORK_RENAMED_PATHS: Readonly<Record<string, ForkSettingsPath>> = {
   "/settings/pr-reviews": "/settings/fork/pr-reviews",

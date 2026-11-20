@@ -21,9 +21,6 @@ describe("fork settings", () => {
     expect(movedSettingsPath("/settings/monitor", "system-monitor")).toBe("/settings/fork/monitor");
     expect(movedSettingsPath("/settings/labs", "decisions")).toBe("/settings/fork/composer");
     expect(movedSettingsPath("/settings/maintenance", "keep-awake")).toBe("/settings/fork/machine");
-    expect(movedSettingsPath("/settings/connections", "peer-link-mesh")).toBe(
-      "/settings/fork/connections",
-    );
     expect(movedSettingsPath("/settings/labs", "")).toBeNull();
     expect(movedSettingsPath("/settings/threads", "text-generation-model")).toBeNull();
   });

@@ -104,7 +104,6 @@
   "c4eb2b21c8c58a54": "Normal",
   "f42c2a36b3507308": "{label} på",
   "77cc5f738cb7d459": "{label} av",
-  "43bd2db24925a831": "Begäran till miljön misslyckades. Kontrollera att båda datorerna är anslutna och att dina sessioner får hantera åtkomst.",
   "2159a4897d4a4d73": "{runtime, select, codex {Uppdatera Codex CLI till {version} eller senare för att använda {names}.} other {Uppdatera {providerName} till {version} eller senare för att använda {names}.}}",
   "d887bea446534de5": "Inget projekt i den här miljön kan läsa {host}/{repository}.",
   "4e466d60e2f7736b": "Klistra in hela pull request-URL:en; den här tråden har inget repo att slå upp numret i.",

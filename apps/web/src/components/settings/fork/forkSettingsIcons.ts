@@ -3,7 +3,6 @@ import {
   DatabaseBackupIcon,
   GaugeIcon,
   LaptopIcon,
-  NetworkIcon,
   PlugIcon,
   TextCursorInputIcon,
 } from "lucide-react";
@@ -19,6 +18,5 @@ export const FORK_SETTINGS_SECTION_ICONS: Readonly<
   "/settings/fork/pr-reviews": PullRequestGlyph.pullRequest,
   "/settings/fork/machine": LaptopIcon,
   "/settings/fork/monitor": GaugeIcon,
-  "/settings/fork/connections": NetworkIcon,
   "/settings/fork/mcp": PlugIcon,
 };

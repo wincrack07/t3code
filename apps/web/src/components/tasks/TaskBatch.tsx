@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import type * as Effect from "effect/Effect";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -105,10 +106,9 @@ function useModelLabel() {
   };
 }
 
-type PreparedGroup = Extract<
-  Awaited<ReturnType<typeof projectEnvironment.tasks.prepareBatch.run>>,
-  { _tag: "Success" }
->["value"][number] &
+type PreparedGroup = Effect.Success<
+  ReturnType<typeof projectEnvironment.tasks.prepareBatch.run>
+>[number] &
   TaskBatchPlanGroup;
 
 interface TaskBatchPlan {
