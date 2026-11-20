@@ -24,7 +24,12 @@ export type FloatingWorkingStatus =
       readonly action: FloatingStatusAction | null;
     }
   | { readonly kind: "agent-status"; readonly label: string }
-  | { readonly kind: "goal"; readonly label: string; readonly accessibilityLabel: string }
+  | {
+      readonly kind: "goal";
+      readonly label: string;
+      readonly accessibilityLabel: string;
+      readonly actions: ReadonlyArray<FloatingStatusAction>;
+    }
   | { readonly kind: "extension"; readonly label: string; readonly onPress: () => void }
   | { readonly kind: "preparing"; readonly label: string }
   | {

@@ -35,7 +35,7 @@ import * as Layer from "effect/Layer";
 import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
-import { createEnvironmentRpcCommand } from "./runtime.ts";
+import { createEnvironmentRpcCommand, runAtomCommand } from "./runtime.ts";
 import { AVAILABLE_CONNECTION_STATE, BearerConnectionTarget } from "../connection/model.ts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import { createProjectEnvironmentAtoms } from "./projectCommands.ts";
@@ -412,9 +412,10 @@ describe("command permissions", () => {
     });
     const target = { environmentId: env, input: { id: ScheduledTaskId.make("task") } };
     try {
-      const first = command.run(registry, target);
+      const quiet = { reportFailure: false, reportDefect: false };
+      const first = runAtomCommand(registry, command, target, quiet);
       await entered;
-      const second = command.run(registry, target);
+      const second = runAtomCommand(registry, command, target, quiet);
       registry.set(sessions(env), AsyncResult.success(grant(false)));
       release();
       expect((await first)._tag).toBe("Success");
@@ -595,10 +596,10 @@ it.effect(
         access: peer.access,
         renewExisting: true,
       };
-      const link = Effect.promise(() =>
+      const link = Effect.exit(
         peerLinks.link.run(registry, { environmentId: env, input: linkInput }),
       );
-      const unlink = Effect.promise(() =>
+      const unlink = Effect.exit(
         peerLinks.unlink.run(registry, {
           environmentId: env,
           input: { environmentId: peer.environmentId },

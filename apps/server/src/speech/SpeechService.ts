@@ -1,6 +1,7 @@
 import {
   SPEECH_STREAM_MAX_CHUNK_BYTES,
   type EnvironmentSpeechModel,
+  type EnvironmentSpeechModelDownload,
   type EnvironmentSpeechStatus,
   type SpeechAcceleration,
   type SpeechModelUnloadTimeout,
@@ -145,7 +146,9 @@ export class SpeechService extends Context.Service<
   {
     readonly status: Effect.Effect<EnvironmentSpeechStatus, SpeechError>;
     readonly models: (includeBenchmarks: boolean) => Effect.Effect<SpeechModels, SpeechError>;
-    readonly downloadModel: (modelId: string) => Effect.Effect<SpeechModels, SpeechError>;
+    readonly downloadModel: (
+      modelId: string,
+    ) => Effect.Effect<Required<EnvironmentSpeechModelDownload>, SpeechError>;
     readonly selectModel: (modelId: string) => Effect.Effect<SpeechModels, SpeechError>;
     readonly cancelDownload: (modelId: string) => Effect.Effect<SpeechModels, SpeechError>;
     readonly removeModel: (modelId: string) => Effect.Effect<SpeechModels, SpeechError>;
@@ -984,25 +987,28 @@ const make = Effect.gen(function* () {
         Effect.onError((cause) => Scope.close(session, Exit.failCause(cause))),
       );
     }),
-    downloadModel: Effect.fn("SpeechService.downloadModel")((modelId) =>
-      requireSupported.pipe(
-        Effect.andThen(download(modelId)),
-        Effect.catchTags({ SpeechDownloadCancelledError: () => Effect.void }),
-        Effect.andThen(modelsEffect),
-      ),
-    ),
+    downloadModel: Effect.fn("SpeechService.downloadModel")(function* (modelId) {
+      yield* requireSupported;
+      const cancelled = yield* download(modelId).pipe(
+        Effect.as(false),
+        Effect.catchTags({ SpeechDownloadCancelledError: () => Effect.succeed(true) }),
+      );
+      return { ...(yield* modelsEffect), cancelled };
+    }),
     selectModel: Effect.fn("SpeechService.selectModel")((modelId) =>
       refreshApple.pipe(
         Effect.andThen(
           exclusive(
             "model selection",
-            attempt("model selection", async () => {
-              if (!modelById(modelId)) throw new SpeechModelNotFoundError({ modelId });
-              await disposeModel();
+            Effect.gen(function* () {
+              const definition = modelById(modelId);
+              if (!definition || !(yield* isReady(definition)))
+                return yield* new SpeechModelNotFoundError({ modelId });
+              yield* attempt("model selection", () => disposeModel());
+              yield* writeSettings("model selection", { speechModelId: modelId });
             }),
           ),
         ),
-        Effect.andThen(writeSettings("model selection", { speechModelId: modelId })),
         Effect.andThen(modelsEffect),
       ),
     ),
@@ -1014,42 +1020,31 @@ const make = Effect.gen(function* () {
       ).pipe(Effect.andThen(modelsEffect)),
     ),
     removeModel: Effect.fn("SpeechService.removeModel")((modelId) =>
-      readSettings("model removal").pipe(
-        Effect.flatMap((settings) =>
-          exclusive(
-            "model removal",
-            Effect.gen(function* () {
-              const definition = modelById(modelId);
-              if (!definition) return yield* new SpeechModelNotFoundError({ modelId });
-              yield* attempt("model removal", async () => {
-                await loading?.catch(() => undefined);
-                if (loadedModelId === modelId) await disposeModel();
-              });
-              // macOS owns its speech assets; removing Apple only stops using it.
-              if (definition.id !== APPLE_SPEECH_MODEL_ID)
-                yield* store
-                  .remove(definition)
-                  .pipe(Effect.mapError((cause) => speechError("model removal", cause)));
-              if (selectedModel(settings).id !== modelId) return undefined;
-              const candidates = yield* Effect.forEach(
-                catalogModels().filter((candidate) => candidate.id !== modelId),
-                (candidate) =>
-                  isReady(candidate).pipe(Effect.map((ready) => ({ candidate, ready }))),
-                { concurrency: "unbounded" },
-              );
-              return candidates.find(({ ready }) => ready)?.candidate.id;
-            }),
-          ).pipe(
-            Effect.flatMap((replacementId) =>
-              replacementId
-                ? writeSettings("model removal", { speechModelId: replacementId }).pipe(
-                    Effect.andThen(modelsEffect),
-                  )
-                : modelsEffect,
-            ),
-          ),
-        ),
-      ),
+      exclusive(
+        "model removal",
+        Effect.gen(function* () {
+          const settings = yield* readSettings("model removal");
+          const definition = modelById(modelId);
+          if (!definition) return yield* new SpeechModelNotFoundError({ modelId });
+          yield* attempt("model removal", async () => {
+            await loading?.catch(() => undefined);
+            if (loadedModelId === modelId) await disposeModel();
+          });
+          // macOS owns its speech assets; removing Apple only stops using it.
+          if (definition.id !== APPLE_SPEECH_MODEL_ID)
+            yield* store
+              .remove(definition)
+              .pipe(Effect.mapError((cause) => speechError("model removal", cause)));
+          if (selectedModel(settings).id !== modelId) return;
+          const candidates = yield* Effect.forEach(
+            catalogModels().filter((candidate) => candidate.id !== modelId),
+            (candidate) => isReady(candidate).pipe(Effect.map((ready) => ({ candidate, ready }))),
+            { concurrency: "unbounded" },
+          );
+          const replacement = candidates.find(({ ready }) => ready)?.candidate;
+          if (replacement) yield* writeSettings("model removal", { speechModelId: replacement.id });
+        }),
+      ).pipe(Effect.andThen(modelsEffect)),
     ),
     linkModels: Effect.fn("SpeechService.linkModels")(function* (source) {
       yield* requireSupported;
