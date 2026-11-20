@@ -1486,6 +1486,8 @@ const FORK_FEATURE_TOOLS: Readonly<Record<string, ForkFeatureId>> = {
   t3_open_questions: "openQuestions",
   mcp_tools: "mcpCatalog",
   mcp_call: "mcpCatalog",
+  t3_keep_awake_read: "keepAwake",
+  t3_keep_awake_change: "keepAwake",
 };
 
 /** A fork feature switched off in Settings takes its tools away from agents too. */

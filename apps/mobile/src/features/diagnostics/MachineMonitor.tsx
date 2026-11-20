@@ -20,6 +20,7 @@ import { serverEnvironment } from "../../state/server";
 import { useEnvironments } from "../../state/environments";
 import { useEnvironmentScope } from "../../state/session";
 import { SettingsSection } from "../settings/components/SettingsSection";
+import { useForkFeature } from "../../state/entities";
 
 // Color appears only when a metric needs attention.
 const BAR: Record<MachineHealthLevel, string> = {
@@ -44,9 +45,10 @@ export function MachineMonitor() {
   const environment = environments.find((e) => e.environmentId === selected) ?? environments[0];
   const id = environment?.environmentId ?? null;
   const allowed = useEnvironmentScope(id, AuthOrchestrationReadScope);
+  const monitorOn = useForkFeature("machineMonitor", id);
   // Samples only, and only while this screen is focused.
   const { data, error } = useEnvironmentQuery(
-    id && allowed && focused
+    id && allowed && focused && monitorOn
       ? serverEnvironment.machineMonitor({ environmentId: id, input: {} })
       : null,
   );
@@ -80,6 +82,7 @@ export function MachineMonitor() {
             time: new Date(sample.at).toLocaleTimeString(),
           });
 
+  if (!monitorOn) return null;
   return (
     <SettingsSection title={gt("Machine monitor")}>
       <View className="gap-4 p-4">

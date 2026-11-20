@@ -65,6 +65,7 @@ import { readProject } from "../state/entities";
 import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
 import { isChunkLoadError } from "../lib/chunkReloadGuard";
 import { shouldResumeSnapShotSetupOnStartup } from "../lib/snapShotSetupResume";
+import { ForkFeature } from "../components/ForkFeature";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -204,8 +205,10 @@ function RootRouteBranch() {
       <ReopenClosedViewShortcut />
       <ConfirmDialogHost />
       <CustomSnoozeDialogHost />
-      <MoveThreadToProjectDialogHost />
-      <ThreadProjectMoveToasts />
+      <ForkFeature id="moveThreads">
+        <MoveThreadToProjectDialogHost />
+        <ThreadProjectMoveToasts />
+      </ForkFeature>
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
       <ConnectDeviceApprovalCoordinator />

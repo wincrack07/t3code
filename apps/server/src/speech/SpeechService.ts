@@ -48,6 +48,7 @@ import { nativeSpeechLanguage } from "./nativeLanguage.ts";
 import { SILERO_VAD } from "./silero.ts";
 import { isSpeechPlatformSupported } from "./platform.ts";
 import * as SpeechModelStore from "./SpeechModelStore.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 const SAMPLE_RATE = 16_000;
 const MAX_SPEECH_DURATION_SECONDS = 5 * 60;
@@ -233,7 +234,11 @@ const make = Effect.gen(function* () {
     at: Number.NEGATIVE_INFINITY,
   };
   let appleDefinition: SpeechModel | undefined;
-  const refreshApple = Effect.suspend(() =>
+  const appleSwitchedOff = serverSettings.getSettings.pipe(
+    Effect.map((settings) => !isForkFeatureOn(settings.forkFeatures, "appleSpeech")),
+    Effect.orElseSucceed(() => false),
+  );
+  const refreshAppleCatalog = Effect.suspend(() =>
     !appleHelper || now() - apple.at < 60_000
       ? Effect.void
       : Effect.tryPromise({
@@ -251,6 +256,17 @@ const make = Effect.gen(function* () {
               : undefined;
           }),
         ),
+  );
+  // Switched off, the catalog loses Apple until it is switched back on.
+  const refreshApple = appleSwitchedOff.pipe(
+    Effect.flatMap((off) =>
+      off
+        ? Effect.sync(() => {
+            apple = { capabilities: undefined, at: Number.NEGATIVE_INFINITY };
+            appleDefinition = undefined;
+          })
+        : refreshAppleCatalog,
+    ),
   );
   const appleReady = () => (apple.capabilities?.installed.length ?? 0) > 0;
   const modelById = (modelId: string) =>

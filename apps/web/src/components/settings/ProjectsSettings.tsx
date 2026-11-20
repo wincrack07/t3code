@@ -9,6 +9,7 @@ import { useSettingsScope } from "./SettingsScopeContext";
 import { SettingsScopeNotice } from "./SettingsScopeNotice";
 import { SettingsPageContainer } from "./settingsLayout";
 import { ALL_ENVIRONMENTS_VALUE, selectEnvironmentAxis } from "./settingsScopeAxis";
+import { ForkFeature } from "../ForkFeature";
 
 export function ProjectsSettings() {
   const gt = useGT();
@@ -54,7 +55,9 @@ export function ProjectsSettings() {
             <SettingsScopeNotice target="project" inline>
               {gt("Choose a project to manage its name, icon, checkouts and actions.")}
             </SettingsScopeNotice>
-            <ProjectFoldersSettings />
+            <ForkFeature id="projectGroups">
+              <ProjectFoldersSettings />
+            </ForkFeature>
           </div>
         </SettingsPageContainer>
       )}

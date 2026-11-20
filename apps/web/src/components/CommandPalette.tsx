@@ -784,6 +784,13 @@ function OpenCommandPaletteDialog(props: {
     chatHub: useForkFeature("chatHub"),
     claudeArtifacts: useForkFeature("claudeArtifacts"),
     machineMonitor: useForkFeature("machineMonitor"),
+    multiWindow: useForkFeature("multiWindow"),
+    keepAwake: useForkFeature("keepAwake"),
+    sidebarLayout: useForkFeature("sidebarLayout"),
+    machineCleanup: useForkFeature("machineCleanup"),
+    chatBackup: useForkFeature("chatBackup"),
+    projectGroups: useForkFeature("projectGroups"),
+    paletteFilters: useForkFeature("paletteFilters"),
   };
   const canMoveActiveThread = useAtomValue(
     threadEnvironment.moveToProject.permissionAtom(activeThread?.environmentId ?? null),
@@ -921,7 +928,7 @@ function OpenCommandPaletteDialog(props: {
     buildProjectSearchItems(
       {
         folderNameByProjectKey: new Map(
-          clientSettings.sidebarProjectFolders.flatMap((folder) =>
+          (forkOn.projectGroups ? clientSettings.sidebarProjectFolders : []).flatMap((folder) =>
             folder.projectKeys.map((key) => [key, folder.name] as const),
           ),
         ),
@@ -1400,7 +1407,7 @@ function OpenCommandPaletteDialog(props: {
       },
     });
 
-  if (window.desktopBridge?.newWindow && activeThread) {
+  if (forkOn.multiWindow && window.desktopBridge?.newWindow && activeThread) {
     actionItems.push({
       kind: "action",
       value: "action:thread-new-window",
@@ -1415,7 +1422,7 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
-  if (window.desktopBridge?.newWindow) {
+  if (forkOn.multiWindow && window.desktopBridge?.newWindow) {
     actionItems.push({
       kind: "action",
       value: "action:new-window",
@@ -1828,7 +1835,7 @@ function OpenCommandPaletteDialog(props: {
       openAddProjectFlow();
     },
   };
-  if (primaryEnvironmentId && keepAwakeAllowed) {
+  if (forkOn.keepAwake && primaryEnvironmentId && keepAwakeAllowed) {
     for (const mode of ["agents", "indefinite", "off"] as const) {
       actionItems.push({
         kind: "action",
@@ -1968,7 +1975,7 @@ function OpenCommandPaletteDialog(props: {
       },
     });
 
-  for (const expanded of [false, true]) {
+  for (const expanded of forkOn.sidebarLayout ? [false, true] : []) {
     actionItems.push({
       kind: "action",
       value: expanded ? "action:expand-projects" : "action:collapse-projects",
@@ -2069,6 +2076,7 @@ function OpenCommandPaletteDialog(props: {
   }
 
   if (
+    forkOn.machineCleanup &&
     environments.some(
       (environment) => environment.serverConfig?.environment.capabilities.machineCleanup === true,
     )
@@ -2085,16 +2093,17 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  actionItems.push({
-    kind: "action",
-    value: "action:import-chats",
-    searchTerms: ["import", "chats", "backup", "restore"],
-    title: gt("Import chats…"),
-    icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({ to: "/settings/general", hash: "chat-backup" });
-    },
-  });
+  if (forkOn.chatBackup)
+    actionItems.push({
+      kind: "action",
+      value: "action:import-chats",
+      searchTerms: ["import", "chats", "backup", "restore"],
+      title: gt("Import chats…"),
+      icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/settings/general", hash: "chat-backup" });
+      },
+    });
 
   actionItems.push({
     kind: "action",
@@ -2882,7 +2891,10 @@ function OpenCommandPaletteDialog(props: {
         ];
 
   const showsPaletteFilters =
-    paletteMode === "root" && newProjectFlow === null && addProjectCloneFlow === null;
+    forkOn.paletteFilters &&
+    paletteMode === "root" &&
+    newProjectFlow === null &&
+    addProjectCloneFlow === null;
   let displayedGroups: CommandPaletteView["groups"] = showsPaletteFilters
     ? filterCommandPaletteGroupsByKind({
         groups: filteredGroups,

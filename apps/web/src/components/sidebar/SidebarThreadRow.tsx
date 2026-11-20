@@ -1,4 +1,3 @@
-import { useClientSettings } from "../../hooks/useSettings";
 import { useAtomMount } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
@@ -135,6 +134,7 @@ import { useThreadHasUnsentDraft } from "../../composerDraftStore";
 import { sidebarTreeIndent } from "./sidebarTreeDrag";
 import { ThreadDetailsIssueRows } from "../chat/ThreadDetailsIssueRows";
 import { IssueGlyph, issueStatePresentation } from "../issue/issuePresentation";
+import { useHideSidebarProjectIcons } from "../../hooks/useProjectFolders";
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
 // status and auth on every provider; leaving those out keeps each
@@ -1344,7 +1344,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     </span>
   ) : null;
 
-  const hideProjectIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
+  const hideProjectIcons = useHideSidebarProjectIcons();
 
   if (variant !== "card") {
     const multiline = variant === "folder-multiline";
@@ -1834,7 +1834,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
   ) => void;
   onFileDropThreads: (threadRef: ScopedThreadRef, files: File[]) => void;
 }) {
-  const hideProjectIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
+  const hideProjectIcons = useHideSidebarProjectIcons();
   const messages = useMessages();
   const thread =
     useThreadShell(scopeThreadRef(props.thread.environmentId, props.thread.id)) ?? props.thread;

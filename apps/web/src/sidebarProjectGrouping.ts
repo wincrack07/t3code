@@ -262,7 +262,9 @@ export function withSidebarProjectColors(
     { settings: Pick<import("@t3tools/contracts").ServerSettings, "projectSettingsOverrides"> }
   >,
   folders: readonly import("./projectFolders").ProjectFolder[],
+  colorsOn = true,
 ): SidebarProjectSnapshot[] {
+  if (!colorsOn) return groups.map((group) => ({ ...group, sidebarColor: null }));
   return groups.map((group) => ({
     ...group,
     sidebarColor:

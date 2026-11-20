@@ -153,6 +153,7 @@ import type { useQueuedRunEdit } from "./useQueuedRunEdit";
 import type { useTimelineFollow } from "./useTimelineFollow";
 import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 import type { useWorktreeSetup } from "./useWorktreeSetup";
+import { readForkFeature } from "../../state/forkFeatures";
 
 const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 
@@ -1016,6 +1017,7 @@ export function useComposerSend(input: ComposerSendInput) {
     // While the card above the composer shows an open question, a typed message answers it.
     const questionAnswer =
       isServerThread &&
+      readForkFeature("openQuestions", environmentId) &&
       phase !== "running" &&
       multipleModelSelections === null &&
       sendCtx.shownPendingApprovalIds.length === 0 &&

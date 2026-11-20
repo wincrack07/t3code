@@ -121,6 +121,7 @@ import { BrowserExtensionsSetting } from "./BrowserExtensionsSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { BrowserImportWizard, type WizardTarget } from "./BrowserImportWizard";
 import type { ImportOutcome } from "./browserImportWizard.logic";
+import { ForkFeature } from "../ForkFeature";
 
 const FILL_VALUE = "fill";
 const RESPONSIVE_VALUE = "responsive";
@@ -1720,11 +1721,13 @@ export function BrowserSettingsPanel() {
           </SettingsUnavailableGroup>
         </AdvancedSettings>
       </SettingsSection>
-      <SettingsSection id="browser-extensions" title={gt("Extensions")}>
-        <SettingsUnavailableGroup message={desktopOnlyMessage}>
-          <BrowserExtensionsSetting disabled={desktopOnly} />
-        </SettingsUnavailableGroup>
-      </SettingsSection>
+      <ForkFeature id="browserExtensions">
+        <SettingsSection id="browser-extensions" title={gt("Extensions")}>
+          <SettingsUnavailableGroup message={desktopOnlyMessage}>
+            <BrowserExtensionsSetting disabled={desktopOnly} />
+          </SettingsUnavailableGroup>
+        </SettingsSection>
+      </ForkFeature>
       <SettingsSection id="browser-recordings" title={gt("Recordings")}>
         <SettingsUnavailableGroup message={desktopOnlyMessage}>
           <BrowserRecordingFrameRateSetting disabled={desktopOnly} />

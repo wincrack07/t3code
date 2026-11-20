@@ -16,16 +16,13 @@ import {
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
 import { useForkFeature } from "../state/forkFeatures";
-import type { ProjectFolder } from "../projectFolders";
-
-const NO_FOLDERS: ReadonlyArray<ProjectFolder> = [];
+import { useProjectFolders } from "./useProjectFolders";
 
 export function useSidebarProjectGroups() {
   const projects = useProjects();
   const configs = useServerConfigs();
-  const groupsOn = useForkFeature("projectGroups");
-  const savedFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
-  const folders = groupsOn ? savedFolders : NO_FOLDERS;
+  const folders = useProjectFolders();
+  const colorsOn = useForkFeature("sidebarColors");
   // Activity order lags a running thread's streaming ticks until its next
   // real change; reading every tick re-rendered the whole sidebar with it.
   const threads = useQuietThreadShells();
@@ -59,7 +56,7 @@ export function useSidebarProjectGroups() {
     resolve,
   );
   return sortSidebarV2ProjectGroups(
-    withSidebarProjectColors(unsortedGroups, configs, folders),
+    withSidebarProjectColors(unsortedGroups, configs, folders, colorsOn),
     threads,
     sortOrder,
     delegatedUnderParent,

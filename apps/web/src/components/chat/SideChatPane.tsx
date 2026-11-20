@@ -32,6 +32,7 @@ import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BackgroundThreadContext } from "./backgroundThread";
+import { useForkFeature } from "../../state/forkFeatures";
 
 /** A side chat tab: its title, Add to chat, Delete and Close, over the side chat's own chat. */
 export default function SideChatPane(props: {
@@ -43,13 +44,15 @@ export default function SideChatPane(props: {
   const { parentRef, threadId } = props;
   const gt = useGT();
   const threadRef = scopeThreadRef(parentRef.environmentId, threadId);
-  const openInColumn = useThreadColumnsStore((state) =>
+  const splitOn = useForkFeature("splitColumns");
+  const openInColumnSaved = useThreadColumnsStore((state) =>
     state.columns.some(
       (column) =>
         column.threadRef.environmentId === threadRef.environmentId &&
         column.threadRef.threadId === threadId,
     ),
   );
+  const openInColumn = splitOn && openInColumnSaved;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the parent panel as host in the panel store
   useEffect(
     () =>

@@ -55,6 +55,7 @@ import { useOpenChangeRequestLink } from "~/lib/openPullRequestLink";
 import { readLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server";
+import { useForkFeature } from "../../state/forkFeatures";
 
 /**
  * The page reports the keys, and a page script can report any key it likes,
@@ -308,7 +309,10 @@ export function HtmlRenderDocument(props: {
   readonly onFullscreenChange?: ((fullscreen: boolean) => void) | undefined;
 }) {
   const theme = useHtmlRenderTheme();
-  const sendPrompt = useContext(HtmlRenderPromptContext);
+  const promptsOn = useForkFeature("pinnedCards");
+  const contextPrompt = useContext(HtmlRenderPromptContext);
+  // Pages sending prompts to the chat came with the fork's pinned cards.
+  const sendPrompt = promptsOn ? contextPrompt : null;
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [src] = useState(
     () =>

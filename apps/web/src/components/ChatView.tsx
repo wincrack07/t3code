@@ -417,6 +417,7 @@ const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
+import { useForkFeature } from "../state/forkFeatures";
 
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
@@ -2661,6 +2662,7 @@ export default function ChatView(props: ChatViewProps) {
           messages,
         )
       : null;
+  const moveThreadsOn = useForkFeature("moveThreads", activeThreadShell?.environmentId);
   const pendingProjectMove = activeThreadShell?.pendingProjectMove ?? null;
   const pendingMoveProject = useProject(
     activeThreadShell && pendingProjectMove
@@ -2729,7 +2731,7 @@ export default function ChatView(props: ChatViewProps) {
         ? [freshSessionBannerItem(() => disarmFreshSession(routeThreadKey), messages)]
         : [];
     const pendingMoveItems =
-      activeThreadRef && pendingProjectMove
+      moveThreadsOn && activeThreadRef && pendingProjectMove
         ? [
             pendingProjectMoveBannerItem(
               {

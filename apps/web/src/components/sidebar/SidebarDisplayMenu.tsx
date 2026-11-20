@@ -20,11 +20,14 @@ import {
 } from "../ui/menu";
 
 export function SidebarDisplayMenu({
+  layout = true,
   projects = [],
   activeProjectKey = null,
   onCreateGroup,
   onSuggestGroups,
 }: {
+  /** False when the fork's sidebar layout is switched off: only group actions remain. */
+  layout?: boolean;
   projects?: readonly SidebarProjectSnapshot[];
   activeProjectKey?: string | null;
   onCreateGroup?: (() => void) | undefined;
@@ -40,13 +43,10 @@ export function SidebarDisplayMenu({
     setAllProjectsExpanded(projects, open, activeProjectKey, folders);
   };
   const label = allCollapsed ? gt("Expand all projects") : gt("Collapse all projects");
-  const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
-  const density = useClientSettings((settings) => settings.sidebarDensity);
-  const grouping = useClientSettings((settings) => settings.sidebarThreadGrouping);
-  const update = useUpdatePrimarySettings();
+  if (!layout && !onCreateGroup && !onSuggestGroups) return null;
   return (
     <>
-      {projects.length > 0 ? (
+      {layout && projects.length > 0 ? (
         <Tooltip>
           <TooltipTrigger
             render={
@@ -74,7 +74,7 @@ export function SidebarDisplayMenu({
           <SlidersHorizontalIcon className="size-4" />
         </MenuTrigger>
         <MenuPopup align="end">
-          {projects.length > 0 ? (
+          {layout && projects.length > 0 ? (
             <>
               <MenuItem onClick={() => setAll(false)}>
                 <T>Collapse all projects</T>
@@ -94,56 +94,68 @@ export function SidebarDisplayMenu({
               <T>Suggest groups</T>
             </MenuItem>
           ) : null}
-          <MenuSeparator />
-          <MenuCheckboxItem
-            checked={hideIcons}
-            onCheckedChange={(checked) => update({ hideSidebarProjectIcons: checked })}
-          >
-            <T>Hide project icons</T>
-          </MenuCheckboxItem>
-          <MenuRadioGroup
-            value={density}
-            onValueChange={(value) => {
-              if (value === "theme" || value === "compact" || value === "comfortable")
-                update({ sidebarDensity: value });
-            }}
-          >
-            <MenuGroupLabel>
-              <T>Thread density</T>
-            </MenuGroupLabel>
-            <MenuRadioItem value="theme">
-              <T>Theme default</T>
-            </MenuRadioItem>
-            <MenuRadioItem value="compact">
-              <T $context="sidebar density">Compact</T>
-            </MenuRadioItem>
-            <MenuRadioItem value="comfortable">
-              <T $context="sidebar density">Comfortable</T>
-            </MenuRadioItem>
-          </MenuRadioGroup>
-          <MenuSeparator />
-          <MenuRadioGroup
-            value={grouping}
-            onValueChange={(value) => {
-              if (value === "theme" || value === "project" || value === "global")
-                update({ sidebarThreadGrouping: value });
-            }}
-          >
-            <MenuGroupLabel>
-              <T>Thread grouping</T>
-            </MenuGroupLabel>
-            <MenuRadioItem value="theme">
-              <T>Theme default</T>
-            </MenuRadioItem>
-            <MenuRadioItem value="project">
-              <T>All threads by project</T>
-            </MenuRadioItem>
-            <MenuRadioItem value="global">
-              <T>Global settled section</T>
-            </MenuRadioItem>
-          </MenuRadioGroup>
+          {layout ? <SidebarLayoutItems /> : null}
         </MenuPopup>
       </Menu>
+    </>
+  );
+}
+
+function SidebarLayoutItems() {
+  const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
+  const density = useClientSettings((settings) => settings.sidebarDensity);
+  const grouping = useClientSettings((settings) => settings.sidebarThreadGrouping);
+  const update = useUpdatePrimarySettings();
+  return (
+    <>
+      <MenuSeparator />
+      <MenuCheckboxItem
+        checked={hideIcons}
+        onCheckedChange={(checked) => update({ hideSidebarProjectIcons: checked })}
+      >
+        <T>Hide project icons</T>
+      </MenuCheckboxItem>
+      <MenuRadioGroup
+        value={density}
+        onValueChange={(value) => {
+          if (value === "theme" || value === "compact" || value === "comfortable")
+            update({ sidebarDensity: value });
+        }}
+      >
+        <MenuGroupLabel>
+          <T>Thread density</T>
+        </MenuGroupLabel>
+        <MenuRadioItem value="theme">
+          <T>Theme default</T>
+        </MenuRadioItem>
+        <MenuRadioItem value="compact">
+          <T $context="sidebar density">Compact</T>
+        </MenuRadioItem>
+        <MenuRadioItem value="comfortable">
+          <T $context="sidebar density">Comfortable</T>
+        </MenuRadioItem>
+      </MenuRadioGroup>
+      <MenuSeparator />
+      <MenuRadioGroup
+        value={grouping}
+        onValueChange={(value) => {
+          if (value === "theme" || value === "project" || value === "global")
+            update({ sidebarThreadGrouping: value });
+        }}
+      >
+        <MenuGroupLabel>
+          <T>Thread grouping</T>
+        </MenuGroupLabel>
+        <MenuRadioItem value="theme">
+          <T>Theme default</T>
+        </MenuRadioItem>
+        <MenuRadioItem value="project">
+          <T>All threads by project</T>
+        </MenuRadioItem>
+        <MenuRadioItem value="global">
+          <T>Global settled section</T>
+        </MenuRadioItem>
+      </MenuRadioGroup>
     </>
   );
 }

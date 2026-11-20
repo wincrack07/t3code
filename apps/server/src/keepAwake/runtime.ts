@@ -15,9 +15,11 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as ServerConfig from "../config.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as KeepAwake from "./KeepAwake.ts";
 import * as SleepInhibitor from "./SleepInhibitor.ts";
+import { forkFeatureOn } from "../forkFeatures.ts";
 
 const encodePreferences = Schema.encodeEffect(Schema.fromJsonString(KeepAwakeDefaults));
 const decodePreferences = Schema.decodeUnknownEffect(Schema.fromJsonString(KeepAwakeDefaults));
@@ -57,14 +59,22 @@ export const activityLayer = Layer.effectDiscard(
     const platform = yield* HostProcess.Platform;
     const monitor = yield* SystemMonitor.SystemMonitor;
     const health = yield* desktop.subscribeHealth;
+    const settings = yield* ServerSettings.ServerSettingsService;
+    const keepAwakeOn = forkFeatureOn("keepAwake").pipe(
+      Effect.provideService(ServerSettings.ServerSettingsService, settings),
+    );
     yield* Stream.merge(
       service.changes.pipe(Stream.map(() => undefined)),
       Stream.concat(Stream.make(health.latest), health.changes).pipe(Stream.map(() => undefined)),
     ).pipe(
-      Stream.mapEffect(() => Effect.all([service.status, desktop.health])),
-      Stream.tap(([status]) => desktop.reportKeepAwake(status).pipe(Effect.ignore)),
+      Stream.mapEffect(() => Effect.all([service.status, desktop.health, keepAwakeOn])),
+      // Switched off, the desktop app gets no tray status, so it shows no tray.
+      Stream.tap(([status, , on]) =>
+        on ? desktop.reportKeepAwake(status).pipe(Effect.ignore) : Effect.void,
+      ),
       Stream.map(
-        ([status, connection]) =>
+        ([status, connection, on]) =>
+          on &&
           platform === "darwin" &&
           connection.status === "healthy" &&
           (status.defaults.trayStats ?? DEFAULT_TRAY_STATS).enabled,
@@ -90,15 +100,18 @@ export const activityLayer = Layer.effectDiscard(
       thread_id: string;
     }>`SELECT run_id, thread_id FROM orchestration_v2_projection_runs WHERE status IN ('preparing', 'queued', 'starting', 'running', 'waiting')`;
     const runs = new Map(rows.map((row) => [row.run_id, row.thread_id]));
-    yield* service.agentsChanged(runs.size);
+    // Upstream's own keep-awake still covers running agents when this one is switched off.
+    const agentsChanged = (count: number) =>
+      keepAwakeOn.pipe(Effect.flatMap((on) => service.agentsChanged(on ? count : 0)));
+    yield* agentsChanged(runs.size);
     yield* sink.stream({ afterSequence: sequence }).pipe(
       Stream.runForEach(({ event }) => {
         if (event.type === "thread.deleted")
-          return service.agentsChanged(
+          return agentsChanged(
             updateRunActivity(runs, { type: "thread.deleted", threadId: event.threadId }),
           );
         if (event.type === "run.created" || event.type === "run.updated")
-          return service.agentsChanged(
+          return agentsChanged(
             updateRunActivity(runs, {
               type: event.type,
               threadId: event.threadId,

@@ -44,6 +44,7 @@ import {
   revealSettingsSearchTarget,
   useSearchableSetting,
 } from "./settingsSearch";
+import { ForkFeature } from "../ForkFeature";
 
 let fontDefaultFamilies: { readonly sans: string | null; readonly code: string | null } | undefined;
 
@@ -105,6 +106,14 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
 }
 
 function ReplyFontRow() {
+  return (
+    <ForkFeature id="appearance">
+      <ReplyFontSettingsRow />
+    </ForkFeature>
+  );
+}
+
+function ReplyFontSettingsRow() {
   const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const { theme, themeHalves, resolvedTheme } = useTheme();

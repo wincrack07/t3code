@@ -6,6 +6,7 @@ import sally from "../assets/sally.svg";
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
+import { useForkFeature } from "../state/forkFeatures";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
@@ -53,13 +54,14 @@ export function useSidebarStageBackdropVariant(
 }
 
 export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdropVariant }) {
+  const brandingOn = useForkFeature("branding");
   return (
     <div
       aria-hidden
       className="sidebar-stage-backdrop pointer-events-none absolute inset-x-0 top-0 z-0 h-20 select-none overflow-hidden"
     >
       <StageBackdropArt variant={variant} />
-      {variant === "nightly" && (
+      {brandingOn && variant === "nightly" && (
         <img src={sally} alt="" className="absolute right-2 bottom-[-8px] h-10 w-10 opacity-80" />
       )}
     </div>

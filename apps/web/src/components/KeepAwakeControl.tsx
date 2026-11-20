@@ -29,6 +29,7 @@ import { KEEP_AWAKE_MODES, keepAwakeTimeOptions } from "./settings/KeepAwakeSett
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./ui/collapsible";
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
+import { ForkFeature } from "./ForkFeature";
 
 function keepAwakeLabel(status: KeepAwakeStatus, resolve: MessageResolver) {
   if (!status.supported) return resolve(msg("Not supported"));
@@ -84,7 +85,15 @@ export function useKeepAwake(provided?: EnvironmentId) {
   };
 }
 
-export function KeepAwakeControl({ environmentId: provided }: { environmentId?: EnvironmentId }) {
+export function KeepAwakeControl(props: { environmentId?: EnvironmentId }) {
+  return (
+    <ForkFeature id="keepAwake" environmentId={props.environmentId ?? null}>
+      <KeepAwakeButton {...props} />
+    </ForkFeature>
+  );
+}
+
+function KeepAwakeButton({ environmentId: provided }: { environmentId?: EnvironmentId }) {
   const gt = useGT();
   const m = useMessages();
   const { environmentId, status, error, disabled, localDesktop, send, authorize } =

@@ -282,6 +282,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const chatHubOn = useForkFeature("chatHub");
   const artifactsOn = useForkFeature("claudeArtifacts");
   const monitorOn = useForkFeature("machineMonitor");
+  const keepAwakeOn = useForkFeature("keepAwake");
   const taskGroups = useTaskProjectGroups();
   const openTasks = taskGroups.reduce((total, group) => total + openTaskCount(group), 0);
   const reviewTasks = taskGroups.reduce((total, group) => total + reviewTaskCount(group), 0);
@@ -417,9 +418,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           {monitorOn ? <SidebarMachineMonitorItem onOpen={handleMonitorClick} /> : null}
         </>
       )}
-      <SidebarMenuItem>
-        <KeepAwakeControl />
-      </SidebarMenuItem>
+      {keepAwakeOn ? (
+        <SidebarMenuItem>
+          <KeepAwakeControl />
+        </SidebarMenuItem>
+      ) : null}
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
       {overflowActions.length > 0 ? (
@@ -451,8 +454,12 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           </Menu>
         </SidebarMenuItem>
       ) : null}
-      <TaskReviewReconcilers groups={taskGroups} />
-      <TaskBatchReconcilers groups={taskGroups} />
+      {tasksOn ? (
+        <>
+          <TaskReviewReconcilers groups={taskGroups} />
+          <TaskBatchReconcilers groups={taskGroups} />
+        </>
+      ) : null}
     </SidebarMenu>
   );
 });

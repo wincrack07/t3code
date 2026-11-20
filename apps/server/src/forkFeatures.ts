@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 import * as ServerSettings from "./serverSettings.ts";
 
 /** Whether a fork feature is on in this environment's settings. Unreadable settings count as on. */
-const forkFeatureOn = Effect.fn("ForkFeatures.isOn")(function* (feature: ForkFeatureId) {
+export const forkFeatureOn = Effect.fn("ForkFeatures.isOn")(function* (feature: ForkFeatureId) {
   const settings = yield* ServerSettings.ServerSettingsService;
   const current = yield* settings.getSettings.pipe(Effect.option);
   return isForkFeatureOn(Option.getOrUndefined(current)?.forkFeatures, feature);

@@ -21,6 +21,7 @@ import { LinkRequestCard } from "./LinkRequestCard";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { TimelineRowCtx, type TimelineRow } from "./timelineRowContext";
 import { subagentGroupTiming } from "./TimelineV2EventRow.logic";
+import { ForkFeature } from "../ForkFeature";
 
 export function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event" }> }) {
   const ctx = use(TimelineRowCtx);
@@ -30,11 +31,13 @@ export function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   }
   if (item.type === "notification" && item.projectMove) {
     return (
-      <ProjectMoveRow
-        summary={item.summary}
-        movedAt={item.projectMove.movedAt}
-        timestampFormat={ctx.timestampFormat}
-      />
+      <ForkFeature id="moveThreads" environmentId={ctx.activeThreadEnvironmentId}>
+        <ProjectMoveRow
+          summary={item.summary}
+          movedAt={item.projectMove.movedAt}
+          timestampFormat={ctx.timestampFormat}
+        />
+      </ForkFeature>
     );
   }
   if (item.type === "secret_request") {

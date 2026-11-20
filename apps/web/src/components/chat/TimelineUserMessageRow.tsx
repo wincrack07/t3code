@@ -99,6 +99,7 @@ import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,
 } from "./TimelineUserMessageRow.logic";
+import { ForkFeature } from "../ForkFeature";
 
 // Drawn inside the media so dark screenshots keep an edge on the dark background.
 const MEDIA_EDGE_CLASS_NAME =
@@ -278,10 +279,12 @@ export function UserMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mes
       {modelSwitch ? (
         <ModelSwitchRow environmentId={ctx.activeThreadEnvironmentId} modelSwitch={modelSwitch} />
       ) : null}
-      <AutoDecisionRow
-        run={ctx.runs.find((run) => run.userMessageId === row.message.id)}
-        threadRef={ctx.threadRef}
-      />
+      <ForkFeature id="decisions" environmentId={ctx.activeThreadEnvironmentId}>
+        <AutoDecisionRow
+          run={ctx.runs.find((run) => run.userMessageId === row.message.id)}
+          threadRef={ctx.threadRef}
+        />
+      </ForkFeature>
       <UserMessageContent row={row} />
     </>
   );

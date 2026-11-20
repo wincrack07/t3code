@@ -1,11 +1,7 @@
 import { T, useGT } from "gt-react";
 import { useState } from "react";
 import { SidebarColorSubmenu } from "./SidebarColorPicker";
-import {
-  updateClientSettings,
-  getClientSettings,
-  useClientSettings,
-} from "../../hooks/useSettings";
+import { updateClientSettings, getClientSettings } from "../../hooks/useSettings";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useDraggable } from "@dnd-kit/core";
 import { ChevronDownIcon, FolderIcon, MoreHorizontalIcon } from "lucide-react";
@@ -22,6 +18,7 @@ import {
   sidebarTreeIndent,
   sidebarTreeRow,
 } from "./sidebarTreeDrag";
+import { useHideSidebarProjectIcons } from "../../hooks/useProjectFolders";
 
 const GROUP_DOT_CLASS_NAME = {
   attention: "bg-warning",
@@ -63,7 +60,7 @@ export function ProjectGroupHeader({
   onDelete: () => void;
 }) {
   const gt = useGT();
-  const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
+  const hideIcons = useHideSidebarProjectIcons();
   const rowColor = projectFolderColor(folders, folder.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const summary = summarizeSidebarFolder([{ hiddenThreads: threads }]);

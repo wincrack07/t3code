@@ -1,5 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { type EnvironmentId, type ForkFeatureId, isForkFeatureOn } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  type ForkFeatureId,
+  type ForkFeatureSwitches,
+  isForkFeatureOn,
+} from "@t3tools/contracts";
 
 import { environmentPresentations } from "./presentation";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -25,4 +30,12 @@ export function readForkFeature(feature: ForkFeatureId, environmentId?: Environm
   const target = environmentId ?? appAtomRegistry.get(primaryEnvironmentIdAtom);
   const configs = appAtomRegistry.get(environmentPresentations.serverConfigsAtom);
   return isForkFeatureOn(target ? configs.get(target)?.settings.forkFeatures : undefined, feature);
+}
+
+/** The primary environment's switches, for lists that filter many entries with isForkFeatureOn. */
+export function usePrimaryForkFeatureSwitches(): ForkFeatureSwitches | undefined {
+  const primaryEnvironmentId = useAtomValue(primaryEnvironmentIdAtom);
+  return useAtomValue(environmentPresentations.serverConfigsAtom, (configs) =>
+    primaryEnvironmentId ? configs.get(primaryEnvironmentId)?.settings.forkFeatures : undefined,
+  );
 }

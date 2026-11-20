@@ -12,14 +12,17 @@ import {
   SettingsSection,
 } from "../settingsLayout";
 import { useSearchableSetting } from "../settingsSearch";
+import { useForkFeature } from "../../../state/forkFeatures";
 
 export function ForkMachineSettings() {
   const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const { environment } = useSettingsScope();
+  const keepAwakeOn = useForkFeature("keepAwake");
+  const cleanupOn = useForkFeature("machineCleanup");
   return (
     <SettingsPageContainer>
-      {environment ? (
+      {!keepAwakeOn ? null : environment ? (
         <KeepAwakeSections environmentId={environment.environmentId} />
       ) : (
         <SettingsSection {...searchableSetting("keep-awake")}>
@@ -29,12 +32,14 @@ export function ForkMachineSettings() {
           />
         </SettingsSection>
       )}
-      <SettingsSearchTarget
-        {...searchableSetting("machine-cleanup")}
-        className="flex flex-col gap-8"
-      >
-        <MachineCleanupSettings />
-      </SettingsSearchTarget>
+      {cleanupOn ? (
+        <SettingsSearchTarget
+          {...searchableSetting("machine-cleanup")}
+          className="flex flex-col gap-8"
+        >
+          <MachineCleanupSettings />
+        </SettingsSearchTarget>
+      ) : null}
     </SettingsPageContainer>
   );
 }

@@ -12,6 +12,9 @@ import { useClientSettings, useClientSettingsHydrated } from "./useSettings";
 import { getStandardPaintedThemeColors, themeColorToHex } from "../themePalette";
 import { computeSidebarTint, resolveSidebarColor } from "../sidebarColors";
 import { useForkFeature } from "../state/forkFeatures";
+import { useProjectFolders } from "./useProjectFolders";
+
+const NO_TINT: CSSProperties = {};
 
 const decodeCache = Schema.decodeUnknownOption(
   Schema.Struct({
@@ -143,9 +146,9 @@ export function useSidebarTint(): CSSProperties {
   const project = draft ?? thread;
   const configs = useServerConfigs();
   const groups = useSidebarProjectGroups();
-  const groupsOn = useForkFeature("projectGroups");
-  const enabled = useClientSettings((settings) => settings.tintSidebarWithProjectColor) && groupsOn;
-  const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const colorsOn = useForkFeature("sidebarColors");
+  const enabled = useClientSettings((settings) => settings.tintSidebarWithProjectColor) && colorsOn;
+  const folders = useProjectFolders();
   const hydrated = useClientSettingsHydrated();
   const [painted, setPainted] = useState<ReturnType<typeof readPaintedSidebar> | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- samples inherited theme tokens before paint and follows root theme/contrast previews without reading each sidebar row
@@ -186,6 +189,14 @@ export function useSidebarTint(): CSSProperties {
   useLayoutEffect(() => {
     if (pending) return;
     delete document.documentElement.dataset.sidebarTintStartup;
+    if (!colorsOn) {
+      try {
+        localStorage.removeItem(CACHE_KEY);
+      } catch {
+        /* Storage can be disabled. */
+      }
+      return;
+    }
     try {
       localStorage.setItem(
         CACHE_KEY,
@@ -194,6 +205,7 @@ export function useSidebarTint(): CSSProperties {
     } catch {
       /* Storage can be disabled. */
     }
-  }, [pending, path, tint]);
-  return variables as CSSProperties;
+  }, [pending, path, tint, colorsOn]);
+  // Switched off, the sidebar keeps the theme's own colours untouched.
+  return colorsOn ? (variables as CSSProperties) : NO_TINT;
 }

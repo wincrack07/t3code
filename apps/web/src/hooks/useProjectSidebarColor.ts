@@ -8,8 +8,10 @@ import { serverEnvironment } from "../state/server";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { toastManager } from "../components/ui/toast";
 import { m } from "../i18n/messages";
+import { useForkFeature } from "../state/forkFeatures";
 
 export function useProjectSidebarColor() {
+  const colorsOn = useForkFeature("sidebarColors");
   const configs = useServerConfigs();
   const allowed = useEnvironmentsWithScope(
     [...configs.keys()].map((environmentId) => ({ environmentId })),
@@ -56,7 +58,9 @@ export function useProjectSidebarColor() {
     canSet,
     setColor,
     colorFor: (member: Member) =>
-      configs.get(member.environmentId)?.settings.projectSettingsOverrides[member.id]
-        ?.sidebarColor ?? null,
+      !colorsOn
+        ? null
+        : (configs.get(member.environmentId)?.settings.projectSettingsOverrides[member.id]
+            ?.sidebarColor ?? null),
   };
 }

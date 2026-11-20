@@ -13,6 +13,8 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments"
 import { buildSidebarProjectSnapshots, withSidebarProjectColors } from "../sidebarProjectGrouping";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sidebar.logic";
+import { useProjectFolders } from "../hooks/useProjectFolders";
+import { useForkFeature } from "../state/forkFeatures";
 
 // Each helper reads its own source hook so the compiler caches the derived value on that
 // source. Taking the source as an argument instead leaves the helper hook-free, and the
@@ -66,6 +68,8 @@ export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<Environ
   const threads = useVisibleThreadShells();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const clientSettings = useClientSettings(selectCommandPaletteClientSettings);
+  const folders = useProjectFolders();
+  const colorsOn = useForkFeature("sidebarColors");
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = {
     sidebarProjectGroupingMode: clientSettings.sidebarProjectGroupingMode,
@@ -87,7 +91,7 @@ export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<Environ
     resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
   });
   return sortLogicalProjectsForSidebar(
-    withSidebarProjectColors(unsortedProjectGroups, configs, clientSettings.sidebarProjectFolders),
+    withSidebarProjectColors(unsortedProjectGroups, configs, folders, colorsOn),
     threads,
     clientSettings.sidebarProjectSortOrder,
   );

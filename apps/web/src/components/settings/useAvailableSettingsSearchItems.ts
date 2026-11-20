@@ -1,5 +1,9 @@
 import { useMessages } from "gt-react";
-import { AuthEnvironmentMaintainScope } from "@t3tools/contracts";
+import {
+  AuthEnvironmentMaintainScope,
+  type ForkFeatureId,
+  isForkFeatureOn,
+} from "@t3tools/contracts";
 
 import { usePrimaryCloudLinkState } from "~/cloud/cloudLinkState";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
@@ -16,6 +20,8 @@ import {
   filterAvailableSettingsSearchItems,
   getThreadAutoSettlementSearchAvailability,
 } from "./settingsSearch";
+import { usePrimaryForkFeatureSwitches } from "~/state/forkFeatures";
+import { FORK_SETTINGS_SEARCH_FEATURES, forkSettingsPathVisible } from "./fork/forkSettings";
 
 export function useAvailableSettingsSearchItems() {
   const { environments } = useEnvironments();
@@ -62,7 +68,8 @@ export function useAvailableSettingsSearchItems() {
   const wslSettingsRowVisible =
     isWslSettingsRowVisible({ state: desktopWsl.data, error: desktopWsl.error }) === true;
 
-  return filterAvailableSettingsSearchItems({
+  const forkSwitches = usePrimaryForkFeatureSwitches();
+  const available = filterAvailableSettingsSearchItems({
     localEnvironmentDisabled,
     hasCloudPublicConfig: cloudPublicConfig,
     hasEnvironment,
@@ -75,5 +82,10 @@ export function useAvailableSettingsSearchItems() {
     hasFastWorktreeCheckoutEnvironment,
     hasTextGeneratorsEnvironment,
     hasPrimaryEnvironment: primaryEnvironmentId !== null,
+  });
+  const forkOn = (feature: ForkFeatureId) => isForkFeatureOn(forkSwitches, feature);
+  return available.filter((item) => {
+    const feature = FORK_SETTINGS_SEARCH_FEATURES[item.id];
+    return (feature === undefined || forkOn(feature)) && forkSettingsPathVisible(item.to, forkOn);
   });
 }

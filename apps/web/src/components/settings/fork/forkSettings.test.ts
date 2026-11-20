@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { movedSettingsPath, searchSettings, SETTINGS_SEARCH_ITEMS } from "../settingsSearch";
-import { FORK_SETTINGS_PATHS, FORK_SETTINGS_SEARCH_ITEMS } from "./forkSettings";
+import {
+  FORK_SETTINGS_PATHS,
+  FORK_SETTINGS_SEARCH_FEATURES,
+  FORK_SETTINGS_SEARCH_ITEMS,
+  forkSettingsPathVisible,
+} from "./forkSettings";
 
 describe("fork settings", () => {
   it("lists every fork setting once, on a fork page", () => {
@@ -14,6 +19,21 @@ describe("fork settings", () => {
       to: "/settings/fork/machine",
       scope: "environment-defaults",
     });
+  });
+
+  it("ties every fork setting to a switch, and keeps Features reachable with all switched off", () => {
+    for (const item of FORK_SETTINGS_SEARCH_ITEMS) {
+      if (item.to !== "/settings/fork/features")
+        expect(FORK_SETTINGS_SEARCH_FEATURES[item.id], item.id).toBeDefined();
+    }
+    const allOff = () => false;
+    expect(FORK_SETTINGS_PATHS.filter((path) => forkSettingsPathVisible(path, allOff))).toEqual([
+      "/settings/fork/features",
+    ]);
+    expect(forkSettingsPathVisible("/settings/fork/machine", (f) => f === "machineCleanup")).toBe(
+      true,
+    );
+    expect(forkSettingsPathVisible("/settings/general", allOff)).toBe(true);
   });
 
   it("sends old links to the fork pages", () => {

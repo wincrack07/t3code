@@ -45,6 +45,7 @@ import {
 import { CodeThemePreview } from "./SettingsFontPreviews";
 import { CODE_THEME_OPTIONS, resolveCodeThemeName } from "../../lib/codeThemes";
 import { ThreadDetailsItemsRow } from "./ThreadDetailsItemsRow";
+import { ForkFeature } from "../ForkFeature";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: msg("Artwork"),
@@ -295,32 +296,36 @@ export function AppearanceSettingsPanel() {
           themeHalves={themeHalves}
           onImportOpenChange={setIsImportThemeOpen}
         />
-        <SettingsRow
-          {...searchableSetting("sidebar-project-icons")}
-          description={gt("Hide project and group icons to leave more room for sidebar names.")}
-          control={
-            <Switch
-              checked={settings.hideSidebarProjectIcons}
-              onCheckedChange={(checked) => updateSettings({ hideSidebarProjectIcons: checked })}
-              aria-label={gt("Hide project icons")}
-            />
-          }
-        />
-        <SettingsRow
-          {...searchableSetting("sidebar-project-tint")}
-          description={gt(
-            "Color the entire sidebar for the focused project. Turn off to keep only project and group row colors.",
-          )}
-          control={
-            <Switch
-              checked={settings.tintSidebarWithProjectColor}
-              onCheckedChange={(checked) =>
-                updateSettings({ tintSidebarWithProjectColor: checked })
-              }
-              aria-label={gt("Tint sidebar with project color")}
-            />
-          }
-        />
+        <ForkFeature id="sidebarLayout">
+          <SettingsRow
+            {...searchableSetting("sidebar-project-icons")}
+            description={gt("Hide project and group icons to leave more room for sidebar names.")}
+            control={
+              <Switch
+                checked={settings.hideSidebarProjectIcons}
+                onCheckedChange={(checked) => updateSettings({ hideSidebarProjectIcons: checked })}
+                aria-label={gt("Hide project icons")}
+              />
+            }
+          />
+        </ForkFeature>
+        <ForkFeature id="sidebarColors">
+          <SettingsRow
+            {...searchableSetting("sidebar-project-tint")}
+            description={gt(
+              "Color the entire sidebar for the focused project. Turn off to keep only project and group row colors.",
+            )}
+            control={
+              <Switch
+                checked={settings.tintSidebarWithProjectColor}
+                onCheckedChange={(checked) =>
+                  updateSettings({ tintSidebarWithProjectColor: checked })
+                }
+                aria-label={gt("Tint sidebar with project color")}
+              />
+            }
+          />
+        </ForkFeature>
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}
           description={gt("Adjust the contrast of colors and borders across the interface.")}
@@ -448,40 +453,42 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
-        <SettingsRow
-          {...searchableSetting("ui-density")}
-          description={gt("Tighten controls, rows, and text to fit more on screen.")}
-          resetAction={
-            settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset density to default")}
-                onClick={() => updateSettings({ uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity })}
-              />
-            ) : null
-          }
-          control={
-            <div className="w-full sm:w-40">
-              <Select
-                value={settings.uiDensity}
-                onValueChange={(value) => {
-                  if (value === "comfortable" || value === "compact")
-                    updateSettings({ uiDensity: value });
-                }}
-              >
-                <SelectTrigger size="sm" className="w-full min-w-0" aria-label={gt("Density")}>
-                  <SelectValue>{m(UI_DENSITY_LABELS[settings.uiDensity])}</SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem value="comfortable">
-                    <T>Comfortable (default)</T>
-                  </SelectItem>
-                  <SelectItem value="compact">{m(UI_DENSITY_LABELS.compact)}</SelectItem>
-                </SelectPopup>
-              </Select>
-            </div>
-          }
-        />
-        <MotionRow />
+        <ForkFeature id="appearance">
+          <SettingsRow
+            {...searchableSetting("ui-density")}
+            description={gt("Tighten controls, rows, and text to fit more on screen.")}
+            resetAction={
+              settings.uiDensity !== DEFAULT_UNIFIED_SETTINGS.uiDensity ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset density to default")}
+                  onClick={() => updateSettings({ uiDensity: DEFAULT_UNIFIED_SETTINGS.uiDensity })}
+                />
+              ) : null
+            }
+            control={
+              <div className="w-full sm:w-40">
+                <Select
+                  value={settings.uiDensity}
+                  onValueChange={(value) => {
+                    if (value === "comfortable" || value === "compact")
+                      updateSettings({ uiDensity: value });
+                  }}
+                >
+                  <SelectTrigger size="sm" className="w-full min-w-0" aria-label={gt("Density")}>
+                    <SelectValue>{m(UI_DENSITY_LABELS[settings.uiDensity])}</SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    <SelectItem value="comfortable">
+                      <T>Comfortable (default)</T>
+                    </SelectItem>
+                    <SelectItem value="compact">{m(UI_DENSITY_LABELS.compact)}</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+            }
+          />
+          <MotionRow />
+        </ForkFeature>
         <ThreadDetailsItemsRow />
         <SettingsRow
           {...searchableSetting("effort-display")}
@@ -660,8 +667,10 @@ export function AppearanceSettingsPanel() {
         id="appearance-code"
         title={gt("Code", { $context: "settings section, code display" })}
       >
-        <CodeThemeRow appearance="light" />
-        <CodeThemeRow appearance="dark" />
+        <ForkFeature id="appearance">
+          <CodeThemeRow appearance="light" />
+          <CodeThemeRow appearance="dark" />
+        </ForkFeature>
         <TypographyCodeRows />
       </SettingsSection>
     </SettingsPageContainer>

@@ -20,6 +20,7 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { HtmlRenderDialog } from "./HtmlRenderDialog";
 import { observeResize } from "~/lib/observeResize";
+import { useForkFeature } from "../../state/forkFeatures";
 
 const MIN_URL_LIFE_MS = 5 * 60_000;
 const MAX_MEASURED_CONTENT_HEIGHTS = 200;
@@ -43,6 +44,7 @@ export function HtmlRenderFrame(props: {
   readonly onFullscreenChange?: (fullscreen: boolean) => void;
 }) {
   const gt = useGT();
+  const cardsOn = useForkFeature("pinnedCards", props.environmentId);
   const { attachmentId, title } = props.htmlRender;
   const [width, setWidth] = useState(HTML_RENDER_COLUMN_WIDTH);
   const observeBox = (box: HTMLDivElement) => {
@@ -102,7 +104,7 @@ export function HtmlRenderFrame(props: {
             onFullscreenChange={onFullscreenChange}
           />
           <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
-            {props.htmlRender.pin && props.threadRef ? (
+            {cardsOn && props.htmlRender.pin && props.threadRef ? (
               <Button
                 variant="ghost"
                 size="xs"

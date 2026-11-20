@@ -145,7 +145,10 @@ export function useThreadActionMenu(input: {
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
-        canOpenNewWindow: typeof window !== "undefined" && Boolean(window.desktopBridge?.newWindow),
+        canOpenNewWindow:
+          typeof window !== "undefined" &&
+          Boolean(window.desktopBridge?.newWindow) &&
+          readForkFeature("multiWindow"),
         split: readForkFeature("splitColumns", threadRef.environmentId)
           ? threadSplitMenuState(threadRef)
           : undefined,

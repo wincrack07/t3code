@@ -65,6 +65,7 @@ import { AddManagedCodexAccountDialog } from "./CodexSetupSection";
 import { MultipleAccountsNote } from "./MultipleAccountsNote";
 import { ProviderEnvironmentSection } from "./ProviderInstanceCard";
 import { useSecretSources } from "./SecretSourceInput";
+import { useForkFeature } from "../../state/forkFeatures";
 
 const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
@@ -190,6 +191,7 @@ export function AddProviderInstanceDialog({
 }: AddProviderInstanceDialogProps) {
   const gt = useGT();
   const m = useMessages();
+  const cliAccountsOn = useForkFeature("cliAccounts", environmentId);
   const settings = useEnvironmentSettings(environmentId);
   const secretSources = useSecretSources(environmentId);
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
@@ -547,7 +549,8 @@ export function AddProviderInstanceDialog({
                   onValueChange={selectDriver}
                   aria-labelledby="add-instance-driver-label"
                 />
-                {isManagedDriverAllowed(managedPolicy, ProviderDriverKind.make("claudeAgent")) ? (
+                {cliAccountsOn &&
+                isManagedDriverAllowed(managedPolicy, ProviderDriverKind.make("claudeAgent")) ? (
                   <SettingsGroup aria-label={gt("Custom endpoint")} variant="plain">
                     <p>
                       <T>Custom endpoint</T>

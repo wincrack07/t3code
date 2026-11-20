@@ -1,6 +1,7 @@
 import { msg } from "gt-react";
 
 import type { SettingsPath, SettingsSearchItem, SettingsSearchScope } from "../settingsSearch";
+import type { ForkFeatureId } from "@t3tools/contracts";
 
 // Everything the fork adds to Settings lives under one nav group and route prefix, so upstream
 // panels stay untouched and merges stay clean.
@@ -15,6 +16,60 @@ export const FORK_SETTINGS_PATHS = [
 ] as const;
 
 export type ForkSettingsPath = (typeof FORK_SETTINGS_PATHS)[number];
+
+/** A page shows while any of its features is on; Features stays so the switches stay reachable. */
+const FORK_SETTINGS_PATH_FEATURES: Readonly<
+  Record<ForkSettingsPath, ReadonlyArray<ForkFeatureId> | null>
+> = {
+  "/settings/fork/features": null,
+  "/settings/fork/composer": ["savedPrompts", "promptSuggestions", "promptPolish", "decisions"],
+  "/settings/fork/chats": ["chatBackup", "chatHub", "claudeArtifacts"],
+  "/settings/fork/pr-reviews": ["prReviews"],
+  "/settings/fork/machine": ["keepAwake", "machineCleanup"],
+  "/settings/fork/monitor": ["machineMonitor"],
+  "/settings/fork/mcp": ["mcpCatalog"],
+};
+
+/** Search results for fork settings, including rows the fork added to upstream pages. */
+export const FORK_SETTINGS_SEARCH_FEATURES: Readonly<Record<string, ForkFeatureId>> = {
+  "saved-prompts": "savedPrompts",
+  "prompt-completion-next": "promptSuggestions",
+  "prompt-completion-inline": "promptSuggestions",
+  "prompt-completion-delay": "promptSuggestions",
+  "prompt-completion-model": "promptSuggestions",
+  "prompt-polish": "promptPolish",
+  decisions: "decisions",
+  "chat-backup": "chatBackup",
+  "chat-hub": "chatHub",
+  "pr-reviews": "prReviews",
+  "mcp-servers": "mcpCatalog",
+  "keep-awake": "keepAwake",
+  "menu-bar-stats": "keepAwake",
+  "machine-cleanup": "machineCleanup",
+  "machine-monitor": "machineMonitor",
+  "show-system-monitor": "machineMonitor",
+  "finder-integration": "finderIntegration",
+  "sidebar-project-icons": "sidebarLayout",
+  "sidebar-display": "sidebarLayout",
+  "sidebar-project-tint": "sidebarColors",
+  "ui-density": "appearance",
+  motion: "appearance",
+  "reply-font": "appearance",
+  "code-theme-light": "appearance",
+  "code-theme-dark": "appearance",
+  "browser-extension-list": "browserExtensions",
+  "browser-extension-web-store": "browserExtensions",
+};
+
+export function forkSettingsPathVisible(
+  path: string,
+  isOn: (feature: ForkFeatureId) => boolean,
+): boolean {
+  const features = (
+    FORK_SETTINGS_PATH_FEATURES as Record<string, ReadonlyArray<ForkFeatureId> | null>
+  )[path];
+  return features === undefined || features === null || features.some(isOn);
+}
 
 export const FORK_SETTINGS_SECTION_LABELS: Readonly<Record<ForkSettingsPath, string>> = {
   "/settings/fork/features": msg("Features"),

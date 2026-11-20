@@ -136,6 +136,7 @@ import {
   resolveRemoteOperateAccess,
   resolveSelectedProviderEnvironmentId,
 } from "./ProviderSettingsPanel.logic";
+import { useForkFeature } from "../../state/forkFeatures";
 
 function providerInstanceName(instance: ProviderInstanceConfig): string {
   return (
@@ -581,6 +582,7 @@ export function EnvironmentProviderSettings({
   const settings = useEnvironmentSettings(environmentId);
   const managedPolicy = useManagedPolicy(environmentId);
   // A policy that allows no provider leaves nothing to add.
+  const cliAccountsOn = useForkFeature("cliAccounts");
   const canAddProvider =
     !readOnly && managedPolicy?.limits?.providers?.allowedDrivers?.length !== 0;
   const canWriteSettings = useEnvironmentScope(environmentId, AuthSettingsWriteScope);
@@ -1123,7 +1125,7 @@ export function EnvironmentProviderSettings({
                     <T>Add provider</T>
                   </button>
                 ) : null}
-                {canAddProvider
+                {canAddProvider && cliAccountsOn
                   ? (["claudeAgent", "codex"] as const).map((driver) => (
                       <AddCliAccountButton
                         key={driver}

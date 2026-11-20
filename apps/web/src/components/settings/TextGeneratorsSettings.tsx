@@ -62,6 +62,7 @@ import { WizardFooter, WizardHeader, WizardPanel, WizardPopup, WizardSteps } fro
 import { SecretSourceInput, useSecretSources } from "./SecretSourceInput";
 import { useSearchableSetting } from "./settingsSearch";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME, SettingsRow, SettingsSection } from "./settingsLayout";
+import { useForkFeature } from "../../state/forkFeatures";
 
 const decodeTextGenerator = Schema.decodeUnknownOption(TextGeneratorConfig);
 
@@ -281,6 +282,7 @@ function TextGeneratorWizard({
 }) {
   const messages = useMessages();
   const gt = useGT();
+  const suggestionsOn = useForkFeature("promptSuggestions", environmentId);
   const existing = editing === "new" ? null : editing.config;
   const [step, setStep] = useState(0);
   const [preset, setPreset] = useState(TEXT_GENERATOR_PRESETS[0]!);
@@ -490,7 +492,9 @@ function TextGeneratorWizard({
               </p>
               {/* One grid for all rows, so pickers and Test buttons line up in columns. */}
               <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-4">
-                {TASKS.map((task) => (
+                {TASKS.filter(
+                  (task) => suggestionsOn || task.key !== "promptCompletionModelSelection",
+                ).map((task) => (
                   <TextGenerationTaskPicker
                     key={task.key}
                     environmentId={environmentId}

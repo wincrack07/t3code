@@ -34,6 +34,7 @@ import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationServic
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { continueRestartedRun } from "./RestartContinuation.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 const isProviderTurnControlError = Schema.is(ProviderTurnControlService.ProviderTurnControlError);
 
@@ -172,7 +173,12 @@ export const layerExecutor: Layer.Layer<
                   cause: "The task batch service is unavailable.",
                 }),
               );
-            return taskBatches.value.pump().pipe(
+            const batches = taskBatches.value;
+            // Switched off, queued batch entries wait instead of launching paid agent runs.
+            return settings.getSettings.pipe(
+              Effect.map((current) => isForkFeatureOn(current.forkFeatures, "tasks")),
+              Effect.orElseSucceed(() => true),
+              Effect.flatMap((on) => (on ? batches.pump() : Effect.void)),
               Effect.mapError(
                 (cause) =>
                   new OrchestrationEffectExecutionError({

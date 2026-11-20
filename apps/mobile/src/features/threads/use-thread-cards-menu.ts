@@ -6,7 +6,7 @@ import { htmlRenderFileName } from "@t3tools/shared/htmlRender";
 import { useGT } from "gt-react-native";
 
 import type { AppBarMenu } from "../../components/ui/AppBar.types";
-import { useThreadShell } from "../../state/entities";
+import { useForkFeature, useThreadShell } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 
@@ -18,7 +18,8 @@ export function useThreadCardsMenu(environment: string, thread: string): AppBarM
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
   const canRemove = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const gt = useGT();
-  if (!cards?.length) return null;
+  const cardsOn = useForkFeature("pinnedCards", environmentId);
+  if (!cardsOn || !cards?.length) return null;
   return {
     title: gt("Agent cards"),
     icon: "doc.on.doc",

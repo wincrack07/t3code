@@ -1,4 +1,3 @@
-import { useClientSettings } from "../../hooks/useSettings";
 import { sidebarRowColorStyle } from "../../sidebarColors";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -21,6 +20,7 @@ import {
   sidebarTreeIndent,
   sidebarTreeRow,
 } from "./sidebarTreeDrag";
+import { useHideSidebarProjectIcons } from "../../hooks/useProjectFolders";
 
 const FOLDER_DOT_CLASS_NAME = {
   attention: "bg-warning",
@@ -65,7 +65,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
 }) {
   const gt = useGT();
   const m = useMessages();
-  const hideIcons = useClientSettings((settings) => settings.hideSidebarProjectIcons);
+  const hideIcons = useHideSidebarProjectIcons();
   const { group, collapsed, hiddenThreads, localLastVisitedAtById } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const dot = collapsed

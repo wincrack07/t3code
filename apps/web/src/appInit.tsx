@@ -10,7 +10,8 @@ import {
   applyMotionPreference,
   MOTION_PREFERENCE_STORAGE_KEY,
 } from "@t3tools/client-runtime/reduced-motion";
-import type { ClientSettings } from "@t3tools/contracts/settings";
+import { type ClientSettings, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { environmentPresentations } from "./state/presentation";
 import { createBrowserHistory, createHashHistory } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 
@@ -75,6 +76,7 @@ import { installCommandPaletteCommands } from "./shortcuts/commandPaletteCommand
 import { registerOpenFavoriteEditorCommand } from "./components/chat/OpenInPickerShortcut";
 import { environmentThreadShells, threadEnvironment } from "./state/threads";
 import { resolveActiveThreadRouteRef, resolveThreadRouteTarget } from "./threadRoutes";
+import { readForkFeature } from "./state/forkFeatures";
 
 /** Writes appearance settings onto the document, touching only the groups that changed. */
 function startClientAppearance(): void {
@@ -83,7 +85,19 @@ function startClientAppearance(): void {
   let appliedSeparateFonts: boolean | null = null;
   let appliedMotion: ClientSettings["motionPreference"] | null = null;
   const apply = () => {
-    const settings = getClientSettings();
+    const saved = getClientSettings();
+    // Switched off, the fork's appearance choices give way to upstream's look; they stay saved.
+    const settings = readForkFeature("appearance")
+      ? saved
+      : {
+          ...saved,
+          uiDensity: DEFAULT_CLIENT_SETTINGS.uiDensity,
+          motionPreference: DEFAULT_CLIENT_SETTINGS.motionPreference,
+          codeThemeLight: DEFAULT_CLIENT_SETTINGS.codeThemeLight,
+          codeThemeDark: DEFAULT_CLIENT_SETTINGS.codeThemeDark,
+          fontFamilyReply: DEFAULT_CLIENT_SETTINGS.fontFamilyReply,
+          fontSizeReply: DEFAULT_CLIENT_SETTINGS.fontSizeReply,
+        };
     const previous = applied;
     applied = settings;
     const separateFonts = readLocalStorageValue(
@@ -151,6 +165,7 @@ function startClientAppearance(): void {
   };
   subscribeClientSettings(apply);
   subscribeClientSettingsHydration(apply);
+  appAtomRegistry.subscribe(environmentPresentations.serverConfigsAtom, apply);
   subscribeLocalStorageKey(TYPOGRAPHY_ADVANCED_STORAGE_KEY, apply);
   apply();
 }

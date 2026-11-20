@@ -43,6 +43,7 @@ import {
   supportsEnvironmentUpdate,
 } from "./environment-maintenance";
 import { environmentReleaseCheckAtom, releaseCheckValue } from "./environmentUpdateCheck";
+import { useForkFeature } from "../../state/entities";
 
 export function SettingsEnvironmentDetailRouteScreen({
   route,
@@ -66,6 +67,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
   const environment = connections.connectedEnvironments.find(
     (entry) => entry.environmentId === environmentId,
   );
+  const keepAwakeOn = useForkFeature("keepAwake", environmentId);
   const awakeResult = useAtomValue(serverEnvironment.keepAwake({ environmentId, input: {} }));
   const awake = AsyncResult.getOrElse(awakeResult, () => null);
   const canChangeAwake = useAtomValue(
@@ -346,41 +348,45 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                     />
                   ) : null}
                 </SettingsSection>
-                <SettingsSection title={gt("Keep awake")}>
-                  <Text>
-                    {awake
-                      ? !awake.supported
-                        ? gt("Not supported")
-                        : awake.active
-                          ? awake.mode === "agents"
-                            ? gt(
-                                "{count, plural, one {Awake · {count} agent} other {Awake · {count} agents}}",
-                                { count: awake.agents },
-                              )
-                            : awake.endsAt
-                              ? gt("Awake until {time}", {
-                                  time: new Date(awake.endsAt).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }),
-                                })
-                              : gt("Awake indefinitely")
-                          : awake.mode === "agents"
-                            ? gt("Waiting for agents")
-                            : gt("Off", { $context: "keep awake state" })
-                      : gt("Unavailable")}
-                  </Text>
-                  <SettingsActionRow
-                    label={awake?.mode !== "off" ? gt("End session now") : gt("While agents work")}
-                    disabled={!canChangeAwake || !awake?.supported}
-                    onPress={() => {
-                      void changeAwake({
-                        environmentId,
-                        input: { session: { mode: awake?.mode !== "off" ? "off" : "agents" } },
-                      });
-                    }}
-                  />
-                </SettingsSection>
+                {keepAwakeOn ? (
+                  <SettingsSection title={gt("Keep awake")}>
+                    <Text>
+                      {awake
+                        ? !awake.supported
+                          ? gt("Not supported")
+                          : awake.active
+                            ? awake.mode === "agents"
+                              ? gt(
+                                  "{count, plural, one {Awake · {count} agent} other {Awake · {count} agents}}",
+                                  { count: awake.agents },
+                                )
+                              : awake.endsAt
+                                ? gt("Awake until {time}", {
+                                    time: new Date(awake.endsAt).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }),
+                                  })
+                                : gt("Awake indefinitely")
+                            : awake.mode === "agents"
+                              ? gt("Waiting for agents")
+                              : gt("Off", { $context: "keep awake state" })
+                        : gt("Unavailable")}
+                    </Text>
+                    <SettingsActionRow
+                      label={
+                        awake?.mode !== "off" ? gt("End session now") : gt("While agents work")
+                      }
+                      disabled={!canChangeAwake || !awake?.supported}
+                      onPress={() => {
+                        void changeAwake({
+                          environmentId,
+                          input: { session: { mode: awake?.mode !== "off" ? "off" : "agents" } },
+                        });
+                      }}
+                    />
+                  </SettingsSection>
+                ) : null}
                 <SettingsSection title={gt("Providers")}>
                   <SettingsActionRow
                     icon="arrow.clockwise"

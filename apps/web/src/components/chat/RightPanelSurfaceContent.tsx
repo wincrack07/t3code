@@ -29,6 +29,7 @@ import { PullRequestDetailGhost } from "../pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
 import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel";
 import { TasksPanel } from "../tasks/TasksPanel";
+import { useForkFeature } from "../../state/forkFeatures";
 
 const PreviewPanel = lazy(() =>
   import("../preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
@@ -88,10 +89,12 @@ export function RightPanelSurfaceContent(props: {
 }) {
   const { surface, threadRef, visible, onCloseSurface } = props;
   const gt = useGT();
+  const tasksOn = useForkFeature("tasks", props.environmentId);
+  const cardsOn = useForkFeature("pinnedCards", props.environmentId);
   if (surface === null) return null;
   switch (surface.kind) {
     case "html-card":
-      return (
+      return !cardsOn ? null : (
         <div className="h-full overflow-auto">
           <HtmlRenderFrame
             key={surface.card.attachmentId}
@@ -226,7 +229,7 @@ export function RightPanelSurfaceContent(props: {
     case "pull-requests":
       return <ThreadPullRequestsPanel threadRef={threadRef} />;
     case "tasks":
-      return props.files.projectId ? (
+      return props.files.projectId && tasksOn ? (
         <TasksPanel environmentId={props.environmentId} projectId={props.files.projectId} />
       ) : null;
     case "side-chat":

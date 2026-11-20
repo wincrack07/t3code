@@ -28,6 +28,7 @@ import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { useAssetUrlState, useRefreshAssetUrl } from "../../state/assets";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { webViewDecelerationRate } from "../../lib/webViewDecelerationRate";
+import { useForkFeature } from "../../state/entities";
 
 const ROW_BOTTOM_MARGIN = 8;
 const ACTION_ROW_HEIGHT = 32;
@@ -91,6 +92,7 @@ export function HtmlRenderWebView(props: {
   readonly onLoadError?: () => void;
 }) {
   const theme = useHtmlRenderTheme();
+  const promptsOn = useForkFeature("pinnedCards", props.thread?.environmentId ?? null);
   const [initialTheme] = useState(theme);
   const [generation, setGeneration] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -175,7 +177,7 @@ export function HtmlRenderWebView(props: {
             return;
           }
           const text = readHtmlRenderPrompt(data);
-          const thread = props.thread;
+          const thread = promptsOn ? props.thread : undefined;
           if (!text || !thread || confirming.current) return;
           confirming.current = true;
           Dialog.alert(

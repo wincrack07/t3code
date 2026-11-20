@@ -333,8 +333,7 @@ import {
 import { sidebarProviderEntriesAtom } from "./sidebar/sidebarProviderEntries";
 import { readForkFeature } from "../state/forkFeatures";
 import { useForkFeature } from "../state/forkFeatures";
-
-const NO_FOLDERS: ReadonlyArray<ProjectFolder> = [];
+import { useProjectFolders } from "../hooks/useProjectFolders";
 
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
@@ -1191,8 +1190,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const projectSidebarColors = useProjectSidebarColor();
   const projectGroupsOn = useForkFeature("projectGroups");
   const activityBoardOn = useForkFeature("activityBoard");
-  const savedProjectFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
-  const namedProjectFolders = projectGroupsOn ? savedProjectFolders : NO_FOLDERS;
+  const sidebarColorsOn = useForkFeature("sidebarColors");
+  const sidebarLayoutOn = useForkFeature("sidebarLayout");
+  const namedProjectFolders = useProjectFolders();
   const [folderEditor, setFolderEditor] = useState<{
     folder?: ProjectFolder;
     parentId?: string;
@@ -1204,16 +1204,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const setFolderExpanded = useUiStateStore((state) => state.setProjectExpanded);
   const sidebarDensity = useClientSettings((settings) => settings.sidebarDensity);
   const sidebarThreadGrouping = useClientSettings((settings) => settings.sidebarThreadGrouping);
+  // Switched off, rows and grouping follow upstream's sidebar whatever was chosen.
   const compactRows =
-    sidebarDensity === "compact" || (sidebarDensity === "theme" && theme === "claude");
+    sidebarLayoutOn &&
+    (sidebarDensity === "compact" || (sidebarDensity === "theme" && theme === "claude"));
   const projectSettledGrouping =
-    sidebarThreadGrouping === "project" ||
-    (sidebarThreadGrouping === "theme" &&
-      (theme === "claude" || import.meta.env.VITE_RELEASE_CHANNEL === "nightly"));
+    sidebarLayoutOn &&
+    (sidebarThreadGrouping === "project" ||
+      (sidebarThreadGrouping === "theme" &&
+        (theme === "claude" || import.meta.env.VITE_RELEASE_CHANNEL === "nightly")));
   const legacyFolders = useClientSettings((settings) => settings.boringSidebarEnabled);
   const legacyMultiline = useClientSettings((settings) => settings.boringSidebarMultilineRows);
   const boringSidebarEnabled = projectSettledGrouping || legacyFolders;
-  const folderRowsMultiline = sidebarDensity === "comfortable" || (!compactRows && legacyMultiline);
+  const folderRowsMultiline =
+    (sidebarLayoutOn && sidebarDensity === "comfortable") || (!compactRows && legacyMultiline);
   const [expandedNested, setExpandedNested] = useLocalStorage(
     "t3code:sidebar:nested-expanded",
     {},
@@ -1547,22 +1551,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             [
               { id: "new-thread", label: gt("New thread") },
               { id: "copy-path", label: gt("Copy path") },
-              {
-                id: "sidebar-color",
-                label: gt("Sidebar color"),
-                disabled: !projectSidebarColors.canSet(group.memberProjects),
-                children: [
-                  {
-                    id: "sidebar-color:default",
-                    label: gt("Default", { $context: "sidebar color" }),
-                  },
-                  ...SIDEBAR_COLORS.map((color) => ({
-                    id: `sidebar-color:${color.value}`,
-                    label: color.name,
-                  })),
-                  { id: "sidebar-color:custom", label: gt("Custom color…") },
-                ],
-              },
+              ...(sidebarColorsOn
+                ? [
+                    {
+                      id: "sidebar-color",
+                      label: gt("Sidebar color"),
+                      disabled: !projectSidebarColors.canSet(group.memberProjects),
+                      children: [
+                        {
+                          id: "sidebar-color:default",
+                          label: gt("Default", { $context: "sidebar color" }),
+                        },
+                        ...SIDEBAR_COLORS.map((color) => ({
+                          id: `sidebar-color:${color.value}`,
+                          label: color.name,
+                        })),
+                        { id: "sidebar-color:custom", label: gt("Custom color…") },
+                      ],
+                    },
+                  ]
+                : []),
               ...(canPinProject(group)
                 ? [
                     group.pinned
@@ -1570,20 +1578,24 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       : { id: "pin", label: gt("Pin project"), icon: "pin" },
                   ]
                 : []),
-              {
-                id: "move-group",
-                label: gt("Move to group"),
-                children: [
-                  ...projectFolderTree(namedProjectFolders)
-                    .filter(({ folder }) => folder.id !== currentFolderId)
-                    .map(({ folder }) => ({
-                      id: `move-group:${folder.id}`,
-                      label:
-                        `${folder.emoji} ${projectFolderPath(namedProjectFolders, folder.id)}`.trim(),
-                    })),
-                  { id: "new-group", label: gt("New group…") },
-                ],
-              },
+              ...(projectGroupsOn
+                ? [
+                    {
+                      id: "move-group",
+                      label: gt("Move to group"),
+                      children: [
+                        ...projectFolderTree(namedProjectFolders)
+                          .filter(({ folder }) => folder.id !== currentFolderId)
+                          .map(({ folder }) => ({
+                            id: `move-group:${folder.id}`,
+                            label:
+                              `${folder.emoji} ${projectFolderPath(namedProjectFolders, folder.id)}`.trim(),
+                          })),
+                        { id: "new-group", label: gt("New group…") },
+                      ],
+                    },
+                  ]
+                : []),
               ...(currentFolderId !== null
                 ? [{ id: "remove-group", label: gt("Move to top level") }]
                 : []),
@@ -3180,7 +3192,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
-              canOpenNewWindow: Boolean(window.desktopBridge?.newWindow),
+              canOpenNewWindow:
+                Boolean(window.desktopBridge?.newWindow) && readForkFeature("multiWindow"),
               split: readForkFeature("splitColumns", threadRef.environmentId)
                 ? threadSplitMenuState(threadRef)
                 : undefined,
@@ -3781,6 +3794,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       </ComboboxPopup>
                     </Combobox>
                     <SidebarDisplayMenu
+                      layout={sidebarLayoutOn}
                       projects={projectGroups}
                       activeProjectKey={activeFolderProjectKey}
                       onCreateGroup={projectGroupsOn ? () => setFolderEditor({}) : undefined}

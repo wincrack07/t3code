@@ -51,6 +51,7 @@ import {
 } from "./updateEverythingRun";
 import { type ReportLocalUpdateError, useUpdateEverything } from "./useUpdateEverything";
 import { useReducedMotion } from "~/hooks/useReducedMotion";
+import { useForkFeature } from "../../state/forkFeatures";
 
 type SidebarUpdatePopoverChangeDetails = Parameters<
   NonNullable<ComponentProps<typeof Popover>["onOpenChange"]>
@@ -60,9 +61,11 @@ type SidebarUpdatePopoverHandle = ReturnType<typeof PopoverCreateHandle>;
 function shouldUseSidebarUpdateReleaseNotesPopover(
   showUpdateDetails: boolean,
   state: DesktopUpdateState | null,
+  updateCenterOn: boolean,
 ): boolean {
   return (
-    (showUpdateDetails || state?.status === "up-to-date") && (state?.releaseNotes.length ?? 0) > 0
+    (showUpdateDetails || (updateCenterOn && state?.status === "up-to-date")) &&
+    (state?.releaseNotes.length ?? 0) > 0
   );
 }
 
@@ -211,6 +214,7 @@ export function SidebarUpdatePill() {
 }
 
 function SidebarUpdateControl() {
+  const updateCenterOn = useForkFeature("updateCenter");
   const state = useDesktopUpdateState();
   const gt = useGT();
   const messages = useMessages();
@@ -288,7 +292,8 @@ function SidebarUpdateControl() {
         : !canCheckForUpdate(state);
   const isInteractionDisabled = disabled || isActionPending || isRunningEverything;
   const showReleaseNotesPopover =
-    !isRunningEverything && shouldUseSidebarUpdateReleaseNotesPopover(showUpdateDetails, state);
+    !isRunningEverything &&
+    shouldUseSidebarUpdateReleaseNotesPopover(showUpdateDetails, state, updateCenterOn);
 
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
   const [releaseNotesTriggerFocusVisible, setReleaseNotesTriggerFocusVisible] = useState(false);
@@ -626,10 +631,12 @@ function SidebarUpdateControl() {
                   }
                 : {})}
               providers={
-                <SidebarUpdateProviders
-                  updates={providerUpdates}
-                  checking={providerCheck !== null}
-                />
+                updateCenterOn ? (
+                  <SidebarUpdateProviders
+                    updates={providerUpdates}
+                    checking={providerCheck !== null}
+                  />
+                ) : null
               }
               tooltip={
                 state.status === "up-to-date"

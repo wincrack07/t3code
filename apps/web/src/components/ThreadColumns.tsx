@@ -252,7 +252,7 @@ export function ThreadColumns({
   const narrowScreen = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
   // Switched off, saved columns stay saved and only the focused one shows, as on a narrow screen.
   const splitOn = useForkFeature("splitColumns");
-  const narrow = narrowScreen || !splitOn;
+  const narrow = narrowScreen;
   const navigate = useNavigate();
   const draftId = target.kind === "draft" ? target.draftId : null;
   const draftRef = useComposerDraftStore((state) =>
@@ -287,7 +287,8 @@ export function ThreadColumns({
     }
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- column changes trigger reverse sync, but effect replay must read the current store rather than the render snapshot
   }, [background, layout.activeId, layout.columns, navigate, routeKey, routeRef]);
-  if (target.kind === "draft" && routeRef === null) {
+  // Switched off, the thread renders as upstream does; the store still follows the route.
+  if (!splitOn || (target.kind === "draft" && routeRef === null)) {
     return <ThreadRouteView target={target} background={background} />;
   }
   const columns = narrow

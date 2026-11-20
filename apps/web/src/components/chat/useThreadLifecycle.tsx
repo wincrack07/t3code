@@ -519,6 +519,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   const firstChildInputKey = firstChildInput
     ? scopedThreadKey(scopeThreadRef(firstChildInput.environmentId, firstChildInput.id))
     : null;
+  const subagentAnswersOn = useForkFeature("subagentAnswers", environmentId);
   const canAnswerChild = useEnvironmentScope(
     firstChildInput?.environmentId ?? environmentId,
     AuthOrchestrationOperateScope,
@@ -533,7 +534,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       ),
       onOpenThread: onOpenRelatedThreadStable,
       answerHere:
-        firstChildInputKey === null || !canAnswerChild
+        firstChildInputKey === null || !canAnswerChild || !subagentAnswersOn
           ? null
           : {
               open: answeringChildKey === firstChildInputKey,

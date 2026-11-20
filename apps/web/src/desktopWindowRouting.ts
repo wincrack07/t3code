@@ -1,6 +1,7 @@
 import { parseScopedThreadKey, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { AppRouter } from "./router";
 import { useThreadColumnsStore } from "./threadColumnsStore";
+import { readForkFeature } from "./state/forkFeatures";
 
 const leasePrefix = "t3code:preview-owner:";
 const leaseChanged = "t3code:preview-owner-changed";
@@ -50,6 +51,7 @@ export function startDesktopWindowRouting(router: AppRouter): void {
   router.history.block({
     enableBeforeUnload: false,
     blockerFn: async ({ nextLocation }) => {
+      if (!readForkFeature("multiWindow")) return false;
       const ref = routeRef(nextLocation.pathname);
       return ref ? ((await bridge.focusThread?.(scopedThreadKey(ref))) ?? false) : false;
     },

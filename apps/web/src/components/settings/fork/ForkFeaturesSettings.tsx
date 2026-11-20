@@ -1,4 +1,8 @@
-import { DEFAULT_FORK_FEATURE_SWITCHES, type ForkFeatureId } from "@t3tools/contracts";
+import {
+  DEFAULT_FORK_FEATURE_SWITCHES,
+  type ForkFeatureId,
+  type ForkFeatureSwitches,
+} from "@t3tools/contracts";
 import { msg, useGT, useMessages } from "gt-react";
 
 import { Switch } from "../../ui/switch";
@@ -106,12 +110,96 @@ const FEATURES: ReadonlyArray<{
     title: msg("MCP servers"),
     description: msg("The shared MCP catalog that agents reach through T3 Code."),
   },
+  {
+    id: "keepAwake",
+    title: msg("Keep awake"),
+    description: msg(
+      "The keep-awake button, its modes, the menu bar stats and the agent tools. Official keep-awake while agents work stays.",
+    ),
+  },
+  {
+    id: "subagentAnswers",
+    title: msg("Answer subagents here"),
+    description: msg("Answer a subagent's question from its parent thread."),
+  },
+  {
+    id: "appleSpeech",
+    title: msg("Apple speech"),
+    description: msg("macOS on-device speech as a voice engine."),
+  },
+  {
+    id: "cliAccounts",
+    title: msg("Provider accounts"),
+    description: msg(
+      "Add Claude and Codex accounts from their own CLI login, and the Refuseless preset.",
+    ),
+  },
+  {
+    id: "moveProjectFolder",
+    title: msg("Move project folder"),
+    description: msg("Move a project's folder on disk from its settings."),
+  },
+];
+
+const LOOK: ReadonlyArray<{
+  readonly id: ForkFeatureId;
+  readonly title: string;
+  readonly description: string;
+}> = [
+  {
+    id: "sidebarColors",
+    title: msg("Sidebar colors"),
+    description: msg("Project and group colors, and the tinted sidebar."),
+  },
+  {
+    id: "sidebarLayout",
+    title: msg("Sidebar layout"),
+    description: msg(
+      "Compact rows, settled threads per project, hidden icons and the sidebar display menu.",
+    ),
+  },
+  {
+    id: "appearance",
+    title: msg("Appearance extras"),
+    description: msg("Density, motion, code themes and the reply font."),
+  },
+  {
+    id: "updateCenter",
+    title: msg("Update center"),
+    description: msg(
+      "Release notes, Check for Updates and provider updates when the app is up to date.",
+    ),
+  },
+  {
+    id: "paletteFilters",
+    title: msg("Command palette filters"),
+    description: msg("The All, Threads, Projects, Actions and Settings tabs in the palette."),
+  },
+  {
+    id: "branding",
+    title: msg("Sally"),
+    description: msg("Sally in the nightly sidebar sky."),
+  },
+  {
+    id: "multiWindow",
+    title: msg("Multiple windows"),
+    description: msg("Open threads in new windows, and focus the window that already shows one."),
+  },
+  {
+    id: "finderIntegration",
+    title: msg("Finder integration"),
+    description: msg("The Send to T3 Code quick action settings."),
+  },
+  {
+    id: "browserExtensions",
+    title: msg("Browser extensions"),
+    description: msg("Chrome extensions settings for the built-in browser."),
+  },
 ];
 
 /** On/off for everything only this fork has, saved in each environment's settings. */
 export function ForkFeaturesSettings() {
   const gt = useGT();
-  const m = useMessages();
   const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -146,25 +234,49 @@ export function ForkFeaturesSettings() {
           }
         />
       </SettingsSection>
-      <SettingsSection title={gt("Features")}>
-        {FEATURES.map((feature) => (
-          <SettingsRow
-            key={feature.id}
-            serverScoped
-            settingKeys={["forkFeatures"]}
-            title={m(feature.title)}
-            description={m(feature.description)}
-            control={
-              <Switch
-                checked={!switches.officialMode && !switches.off.includes(feature.id)}
-                disabled={switches.officialMode}
-                onCheckedChange={(checked) => setFeature(feature.id, Boolean(checked))}
-                aria-label={m(feature.title)}
-              />
-            }
-          />
-        ))}
-      </SettingsSection>
+      <FeatureSection
+        title={gt("Features")}
+        features={FEATURES}
+        switches={switches}
+        onSet={setFeature}
+      />
+      <FeatureSection
+        title={gt("Look and desktop")}
+        features={LOOK}
+        switches={switches}
+        onSet={setFeature}
+      />
     </SettingsPageContainer>
+  );
+}
+
+function FeatureSection(props: {
+  title: string;
+  features: typeof FEATURES;
+  switches: ForkFeatureSwitches;
+  onSet: (feature: ForkFeatureId, on: boolean) => void;
+}) {
+  const m = useMessages();
+  const { switches } = props;
+  return (
+    <SettingsSection title={props.title}>
+      {props.features.map((feature) => (
+        <SettingsRow
+          key={feature.id}
+          serverScoped
+          settingKeys={["forkFeatures"]}
+          title={m(feature.title)}
+          description={m(feature.description)}
+          control={
+            <Switch
+              checked={!switches.officialMode && !switches.off.includes(feature.id)}
+              disabled={switches.officialMode}
+              onCheckedChange={(checked) => props.onSet(feature.id, Boolean(checked))}
+              aria-label={m(feature.title)}
+            />
+          }
+        />
+      ))}
+    </SettingsSection>
   );
 }

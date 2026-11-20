@@ -22,6 +22,20 @@ const FORK_FEATURE_IDS = [
   "projectGroups",
   "claudeArtifacts",
   "mcpCatalog",
+  "keepAwake",
+  "sidebarColors",
+  "sidebarLayout",
+  "appearance",
+  "multiWindow",
+  "finderIntegration",
+  "browserExtensions",
+  "appleSpeech",
+  "cliAccounts",
+  "subagentAnswers",
+  "updateCenter",
+  "paletteFilters",
+  "moveProjectFolder",
+  "branding",
 ] as const;
 export type ForkFeatureId = (typeof FORK_FEATURE_IDS)[number];
 

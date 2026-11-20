@@ -70,6 +70,7 @@ import { moveSidebarProjectToFolder } from "../sidebar/projectFolderActions";
 import { sidebarTreeIndent } from "../sidebar/sidebarTreeDrag";
 import { readUnloadedThreadCount } from "../../state/olderSettledShelf";
 import { settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
+import { ForkFeature } from "../ForkFeature";
 
 const ProjectIconPickerDialog = lazy(() =>
   import("./ProjectIconPickerDialog").then((module) => ({
@@ -499,7 +500,9 @@ function ProjectDetail({
       <div className="min-w-0 flex-1 @min-[32rem]/settings-row:w-72 @min-[32rem]/settings-row:flex-none">
         <CheckoutGroupingSelect member={member} />
       </div>
-      <MoveProjectFolderButton project={member} />
+      <ForkFeature id="moveProjectFolder" environmentId={member.environmentId}>
+        <MoveProjectFolderButton project={member} />
+      </ForkFeature>
       {hasMultipleCheckouts ? (
         <Button
           size="sm"
@@ -652,19 +655,21 @@ function ProjectDetail({
               />
             }
           />
-          <SettingsRow
-            title={gt("Sidebar color")}
-            description={gt(
-              "Tint the sidebar while this project is focused. Default follows its group color.",
-            )}
-            control={
-              <SidebarColorPicker
-                value={sidebarColor.colorFor(group)}
-                disabled={!sidebarColor.canSet(group.memberProjects)}
-                onChange={(color) => void sidebarColor.setColor(group.memberProjects, color)}
-              />
-            }
-          />
+          <ForkFeature id="sidebarColors">
+            <SettingsRow
+              title={gt("Sidebar color")}
+              description={gt(
+                "Tint the sidebar while this project is focused. Default follows its group color.",
+              )}
+              control={
+                <SidebarColorPicker
+                  value={sidebarColor.colorFor(group)}
+                  disabled={!sidebarColor.canSet(group.memberProjects)}
+                  onChange={(color) => void sidebarColor.setColor(group.memberProjects, color)}
+                />
+              }
+            />
+          </ForkFeature>
           <SettingsRow
             title={gt("Project icon")}
             description={
@@ -711,7 +716,9 @@ function ProjectDetail({
               </div>
             }
           />
-          <SidebarGroupRow projectKey={group.projectKey} />
+          <ForkFeature id="projectGroups">
+            <SidebarGroupRow projectKey={group.projectKey} />
+          </ForkFeature>
           {canOrganize ? (
             <>
               <SettingsRow

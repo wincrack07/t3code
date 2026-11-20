@@ -63,6 +63,9 @@ import {
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { handleSettingsSectionKeyDown } from "./settingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
+import { isForkFeatureOn } from "@t3tools/contracts";
+import { usePrimaryForkFeatureSwitches } from "~/state/forkFeatures";
+import { forkSettingsPathVisible } from "./fork/forkSettings";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
   [
@@ -145,6 +148,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems();
+  const forkSwitches = usePrimaryForkFeatureSwitches();
+  const forkPathVisible = (path: string) =>
+    forkSettingsPathVisible(path, (feature) => isForkFeatureOn(forkSwitches, feature));
   const results = searchSettings(query, searchableItems, m);
   const isSearching = query.trim().length > 0;
   const hasResults = results.length > 0;
@@ -398,7 +404,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       {/* The heading stays outside the group it names so NVDA does not read the name twice. */}
                       <div role="group" aria-labelledby={`settings-nav-group-${index}`}>
                         <SidebarMenu>
-                          {group.paths.map((to) => {
+                          {group.paths.filter(forkPathVisible).map((to) => {
                             const Icon = SETTINGS_SECTION_ICONS[to];
                             const isActive = activePath === to || activePath.startsWith(`${to}/`);
                             return (

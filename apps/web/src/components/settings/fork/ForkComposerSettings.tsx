@@ -5,9 +5,14 @@ import { PromptSuggestionsSettings } from "../PromptSuggestionsSettings";
 import { SavedPromptsRow } from "../SavedPromptsSettings";
 import { useSettingsScope } from "../SettingsScopeContext";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settingsLayout";
+import { useForkFeature } from "../../../state/forkFeatures";
 
 export function ForkComposerSettings() {
   const { scope } = useSettingsScope();
+  const savedPromptsOn = useForkFeature("savedPrompts");
+  const suggestionsOn = useForkFeature("promptSuggestions");
+  const polishOn = useForkFeature("promptPolish");
+  const decisionsOn = useForkFeature("decisions");
   const gt = useGT();
   if (scope.kind === "project" || scope.kind === "checkout") {
     return (
@@ -25,12 +30,14 @@ export function ForkComposerSettings() {
   }
   return (
     <SettingsPageContainer>
-      <SettingsSection id="saved-prompts-section" title={gt("Saved prompts")} hideTitle>
-        <SavedPromptsRow />
-      </SettingsSection>
-      <PromptSuggestionsSettings />
-      <PromptPolishSettings />
-      <DecisionsSettingsSection />
+      {savedPromptsOn ? (
+        <SettingsSection id="saved-prompts-section" title={gt("Saved prompts")} hideTitle>
+          <SavedPromptsRow />
+        </SettingsSection>
+      ) : null}
+      {suggestionsOn ? <PromptSuggestionsSettings /> : null}
+      {polishOn ? <PromptPolishSettings /> : null}
+      {decisionsOn ? <DecisionsSettingsSection /> : null}
     </SettingsPageContainer>
   );
 }

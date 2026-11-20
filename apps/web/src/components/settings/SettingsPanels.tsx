@@ -135,6 +135,7 @@ import { downloadLocalUpdate } from "../sidebar/SidebarUpdatePill";
 import { useUpdateEverythingRun } from "../sidebar/updateEverythingRun";
 import { awaitsTrackSwitch, channelSwitchLabel } from "../sidebar/updateEverything.logic";
 import { isHostedByThisApp } from "../sidebar/useUpdateEverything";
+import { ForkFeature } from "../ForkFeature";
 
 const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
   turn: msg("Wait for the full response"),
@@ -462,7 +463,9 @@ function AboutVersionSection() {
         />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
-      <FinderIntegrationSettingsRow />
+      <ForkFeature id="finderIntegration">
+        <FinderIntegrationSettingsRow />
+      </ForkFeature>
       {switchChannel === null ? null : (
         <UpdateTrackSwitchDialog channel={switchChannel} onClose={() => setSwitchChannel(null)} />
       )}
@@ -874,13 +877,15 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="sidebar" title={gt("Sidebar")}>
-        <SettingsRow
-          {...setting("sidebar-display")}
-          description={
-            <T>Choose compact or comfortable rows and how settled threads are grouped.</T>
-          }
-          control={<SidebarDisplayMenu />}
-        />
+        <ForkFeature id="sidebarLayout">
+          <SettingsRow
+            {...setting("sidebar-display")}
+            description={
+              <T>Choose compact or comfortable rows and how settled threads are grouped.</T>
+            }
+            control={<SidebarDisplayMenu />}
+          />
+        </ForkFeature>
         <SettingsRow
           {...setting("project-grouping")}
           description={<T>Combine matching repositories across environments.</T>}
