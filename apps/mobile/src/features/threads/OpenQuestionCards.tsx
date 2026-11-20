@@ -26,7 +26,7 @@ import { Button } from "../../components/ui/Button";
 import { Chip } from "../../components/ui/Chip";
 import { cn } from "../../lib/cn";
 import { uuidv4 } from "../../lib/uuid";
-import { useThreadShell } from "../../state/entities";
+import { useForkFeature, useThreadShell } from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
 import { enqueueThreadOutboxMessage } from "../../state/thread-outbox";
 import { threadEnvironment } from "../../state/threads";
@@ -38,9 +38,10 @@ export function OpenQuestionCards(props: {
   readonly threadId: ThreadId;
   readonly runId: RunId;
 }) {
+  const on = useForkFeature("openQuestions", props.environmentId);
   const shell = useThreadShell(scopeThreadRef(props.environmentId, props.threadId));
   const questions = runOpenQuestions(shell?.openQuestions, props.runId);
-  if (questions.length === 0) return null;
+  if (!on || questions.length === 0) return null;
   return <OpenQuestionCardList {...props} questions={questions} />;
 }
 

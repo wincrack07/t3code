@@ -20,6 +20,8 @@ import { AiError, McpProtocol, McpSchema, McpServer, Tool, Toolkit } from "effec
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
   DeviceToolError,
+  type ForkFeatureId,
+  isForkFeatureOn,
   OrchestratorMcpFailure,
   PreviewAutomationError,
   ProviderInteractionMode,
@@ -1478,10 +1480,35 @@ const layerDeferredListing = McpServer.visibility(
   { global: true },
 );
 
+const FORK_FEATURE_TOOLS: Readonly<Record<string, ForkFeatureId>> = {
+  machine_cleanup: "machineCleanup",
+  request_pr_review: "prReviews",
+  t3_open_questions: "openQuestions",
+  mcp_tools: "mcpCatalog",
+  mcp_call: "mcpCatalog",
+};
+
+/** A fork feature switched off in Settings takes its tools away from agents too. */
+const layerForkFeatureTools = McpServer.visibility(
+  Effect.gen(function* () {
+    const settings = yield* ServerSettings.ServerSettingsService;
+    // Untraced: it runs once per tool on every list request.
+    return Effect.fnUntraced(function* ({ target }: McpServer.MiddlewareOptions) {
+      const feature = FORK_FEATURE_TOOLS[target];
+      if (feature === undefined) return true;
+      const current = yield* settings.getSettings.pipe(Effect.option);
+      return isForkFeatureOn(Option.getOrUndefined(current)?.forkFeatures, feature);
+    });
+  }),
+  { global: true },
+);
+
 /** Outside layerTools: the clients its budget measures never list `tool_search`. */
 export const layerToolSearch = Layer.mergeAll(
   toolkitRegistration(ToolSearchToolkit, ToolSearchHandlers.layer),
   layerDeferredListing,
 ).pipe(Layer.provide(layerToolExposure));
 
-export const layer = layerMcpTransport(Layer.mergeAll(layerTools, layerToolSearch));
+export const layer = layerMcpTransport(
+  Layer.mergeAll(layerTools, layerToolSearch, layerForkFeatureTools),
+);

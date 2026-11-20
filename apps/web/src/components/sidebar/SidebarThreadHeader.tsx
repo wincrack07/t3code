@@ -16,7 +16,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 export interface SidebarThreadHeaderProps {
   hasProjects: boolean;
   projectScope: ReactNode;
-  onOpenActivity: () => void;
+  /** Absent when the activity board is switched off. */
+  onOpenActivity: (() => void) | undefined;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
   newThreadDisabled: boolean;
@@ -116,9 +117,11 @@ export function SidebarThreadHeader({
         ) : null}
       </label>
       <div className="ml-auto flex shrink-0 items-center @max-[16rem]/sidebar-header:group-has-[input[type=search]:focus]/sidebar-header:hidden @max-[16rem]/sidebar-header:group-has-[input[type=search]:not(:placeholder-shown)]/sidebar-header:hidden">
-        <SidebarHeaderIconButton label={gt("Activity board")} onClick={onOpenActivity}>
-          <SquareKanbanIcon />
-        </SidebarHeaderIconButton>
+        {onOpenActivity ? (
+          <SidebarHeaderIconButton label={gt("Activity board")} onClick={onOpenActivity}>
+            <SquareKanbanIcon />
+          </SidebarHeaderIconButton>
+        ) : null}
         {hasProjects ? (
           <>
             {projectScope}

@@ -331,6 +331,10 @@ import {
   SidebarSectionPlaceholder,
 } from "./sidebar/SidebarListMarkers";
 import { sidebarProviderEntriesAtom } from "./sidebar/sidebarProviderEntries";
+import { readForkFeature } from "../state/forkFeatures";
+import { useForkFeature } from "../state/forkFeatures";
+
+const NO_FOLDERS: ReadonlyArray<ProjectFolder> = [];
 
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
@@ -1185,7 +1189,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   });
   const { theme } = useTheme();
   const projectSidebarColors = useProjectSidebarColor();
-  const namedProjectFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const projectGroupsOn = useForkFeature("projectGroups");
+  const activityBoardOn = useForkFeature("activityBoard");
+  const savedProjectFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const namedProjectFolders = projectGroupsOn ? savedProjectFolders : NO_FOLDERS;
   const [folderEditor, setFolderEditor] = useState<{
     folder?: ProjectFolder;
     parentId?: string;
@@ -3174,7 +3181,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           api.contextMenu.show(
             buildThreadActionMenuItems({
               canOpenNewWindow: Boolean(window.desktopBridge?.newWindow),
-              split: threadSplitMenuState(threadRef),
+              split: readForkFeature("splitColumns", threadRef.environmentId)
+                ? threadSplitMenuState(threadRef)
+                : undefined,
               canOperate: readEnvironmentScope(
                 threadRef.environmentId,
                 AuthOrchestrationOperateScope,
@@ -3199,7 +3208,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
-              projectMove: threadProjectMoveMenuState(threadRef),
+              projectMove: readForkFeature("moveThreads", threadRef.environmentId)
+                ? threadProjectMoveMenuState(threadRef)
+                : undefined,
+              chatExport: readForkFeature("chatBackup", threadRef.environmentId),
               canRename: !fromSearch,
               supports: {
                 settlement: configLoaded,
@@ -3771,12 +3783,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     <SidebarDisplayMenu
                       projects={projectGroups}
                       activeProjectKey={activeFolderProjectKey}
-                      onCreateGroup={() => setFolderEditor({})}
-                      onSuggestGroups={() => setSuggestFolders(true)}
+                      onCreateGroup={projectGroupsOn ? () => setFolderEditor({}) : undefined}
+                      onSuggestGroups={projectGroupsOn ? () => setSuggestFolders(true) : undefined}
                     />
                   </>
                 }
-                onOpenActivity={handleOpenActivityClick}
+                onOpenActivity={activityBoardOn ? handleOpenActivityClick : undefined}
                 onNewProject={openAddProjectCommandPalette}
                 onNewThread={handleNewThreadClick}
                 newThreadDisabled={projects.length === 0}

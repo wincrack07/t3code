@@ -309,6 +309,7 @@ import { readIssueListPreferences } from "~/components/issue/issueListPreference
 import { IssueGlyph } from "~/components/issue/issuePresentation";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { threadRecentUse } from "@t3tools/shared/paletteSearch";
+import { useForkFeature } from "../state/forkFeatures";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
 const ADD_PROJECT_ENTRY_GROUP = "add-project";
@@ -774,6 +775,16 @@ function OpenCommandPaletteDialog(props: {
       .map((environment) => environment.environmentId),
     supportsTriage,
   });
+  const forkOn = {
+    tasks: useForkFeature("tasks"),
+    splitColumns: useForkFeature("splitColumns"),
+    prReviews: useForkFeature("prReviews"),
+    moveThreads: useForkFeature("moveThreads"),
+    activityBoard: useForkFeature("activityBoard"),
+    chatHub: useForkFeature("chatHub"),
+    claudeArtifacts: useForkFeature("claudeArtifacts"),
+    machineMonitor: useForkFeature("machineMonitor"),
+  };
   const canMoveActiveThread = useAtomValue(
     threadEnvironment.moveToProject.permissionAtom(activeThread?.environmentId ?? null),
   );
@@ -1376,7 +1387,7 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
-  if (activeThread || activeDraftThread)
+  if (forkOn.tasks && (activeThread || activeDraftThread))
     actionItems.push({
       kind: "action",
       value: "action:save-prompt",
@@ -1499,7 +1510,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (paletteRouteTarget?.kind === "server") {
+  if (forkOn.splitColumns && paletteRouteTarget?.kind === "server") {
     actionItems.push({
       kind: "submenu",
       value: "action:open-thread-in-split",
@@ -1642,7 +1653,7 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
       },
     });
-    if (canRequestPrReview) {
+    if (forkOn.prReviews && canRequestPrReview) {
       const environmentId = activeThread.environmentId;
       const threadId = activeThread.id;
       actionItems.push({
@@ -1731,7 +1742,12 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (activeThread !== null && canMoveActiveThread && canMoveThreadToProject(activeThread)) {
+  if (
+    forkOn.moveThreads &&
+    activeThread !== null &&
+    canMoveActiveThread &&
+    canMoveThreadToProject(activeThread)
+  ) {
     const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     actionItems.push({
       kind: "action",
@@ -1929,27 +1945,28 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:activity-board",
-    searchTerms: [
-      "activity",
-      "board",
-      "kanban",
-      "running",
-      "nodes",
-      "machines",
-      "environments",
-      "capacity",
-      "cpu",
-      "memory",
-    ],
-    title: gt("Open activity board"),
-    icon: <SquareKanbanIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({ to: "/activity" });
-    },
-  });
+  if (forkOn.activityBoard)
+    actionItems.push({
+      kind: "action",
+      value: "action:activity-board",
+      searchTerms: [
+        "activity",
+        "board",
+        "kanban",
+        "running",
+        "nodes",
+        "machines",
+        "environments",
+        "capacity",
+        "cpu",
+        "memory",
+      ],
+      title: gt("Open activity board"),
+      icon: <SquareKanbanIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/activity" });
+      },
+    });
 
   for (const expanded of [false, true]) {
     actionItems.push({
@@ -1987,49 +2004,53 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:all-chats",
-    searchTerms: ["all chats", "hub", "machines", "search"],
-    title: gt("Search all chats"),
-    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({ to: "/all-chats" });
-    },
-  });
+  if (forkOn.chatHub)
+    actionItems.push({
+      kind: "action",
+      value: "action:all-chats",
+      searchTerms: ["all chats", "hub", "machines", "search"],
+      title: gt("Search all chats"),
+      icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/all-chats" });
+      },
+    });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:tasks",
-    searchTerms: ["tasks", "saved", "prompts", "todo"],
-    title: gt("Open tasks"),
-    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({ to: "/tasks", search: {} });
-    },
-  });
+  if (forkOn.tasks)
+    actionItems.push({
+      kind: "action",
+      value: "action:tasks",
+      searchTerms: ["tasks", "saved", "prompts", "todo"],
+      title: gt("Open tasks"),
+      icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/tasks", search: {} });
+      },
+    });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:artifacts",
-    searchTerms: ["artifacts", "claude", "gallery", "pages", "published", "claude.ai"],
-    title: gt("Open Claude artifacts"),
-    icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({ to: "/artifacts" });
-    },
-  });
+  if (forkOn.claudeArtifacts)
+    actionItems.push({
+      kind: "action",
+      value: "action:artifacts",
+      searchTerms: ["artifacts", "claude", "gallery", "pages", "published", "claude.ai"],
+      title: gt("Open Claude artifacts"),
+      icon: <LayoutGridIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/artifacts" });
+      },
+    });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:system-monitor",
-    title: gt("Open machine monitor"),
-    searchTerms: ["cpu", "ram", "memory", "network", "storage", "processes", "monitor"],
-    icon: <GaugeIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({ to: "/settings/fork/monitor" });
-    },
-  });
+  if (forkOn.machineMonitor)
+    actionItems.push({
+      kind: "action",
+      value: "action:system-monitor",
+      title: gt("Open machine monitor"),
+      searchTerms: ["cpu", "ram", "memory", "network", "storage", "processes", "monitor"],
+      icon: <GaugeIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({ to: "/settings/fork/monitor" });
+      },
+    });
 
   for (const direction of [1, -1] as const) {
     const title =

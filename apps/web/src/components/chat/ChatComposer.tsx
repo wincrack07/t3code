@@ -37,6 +37,7 @@ import type {
   ResolvedKeybindingsConfig,
   RuntimeMode,
   RuntimeRequestId,
+  SavedPrompt,
   ScopedThreadRef,
   ServerProvider,
   ThreadId,
@@ -299,6 +300,9 @@ import { PromptSuggestionHint } from "./PromptSuggestionHint";
 import { usePromptCompletion } from "./usePromptCompletion";
 import { usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
+import { useForkFeature } from "../../state/forkFeatures";
+
+const EMPTY_SAVED_PROMPTS: ReadonlyArray<SavedPrompt> = [];
 
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
   const armed = Date.now() <= deadline.current;
@@ -1151,6 +1155,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerPreviewAnnotations.length === 0 &&
     composerReviewComments.length === 0;
   const linkedEnvironments = useLinkedEnvironments(environmentId);
+  const polishOn = useForkFeature("promptPolish", environmentId);
+  const tasksOn = useForkFeature("tasks", environmentId);
+  const savedPromptsOn = useForkFeature("savedPrompts", environmentId);
+  const openQuestionsOn = useForkFeature("openQuestions", environmentId);
   const promptPolish = usePromptPolish({
     environmentId,
     projectId: activeProjectId,
@@ -1172,13 +1180,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     sideChatAvailable: props.sideChatAvailable === true,
     sideChatDisabledReason: props.sideChatDisabledReason ?? null,
     freshSessionAvailable: props.onFreshSession !== undefined,
-    promptPolishAvailable: promptPolish.available,
+    promptPolishAvailable: polishOn && promptPolish.available,
     compactSlashCommandAvailable,
     selectedProvider,
     selectedProviderSkills,
     selectedProviderSlashCommands,
     showSkillsInSlashMenu: settings.showSkillsInSlashMenu,
-    savedPrompts: settings.savedPrompts,
+    savedPrompts: savedPromptsOn ? settings.savedPrompts : EMPTY_SAVED_PROMPTS,
     workspaceSkillsScanning,
     questionAttachmentTarget,
     modelMentions: { instanceEntries: providerInstanceEntries, modelOptionsByInstance },
@@ -3495,7 +3503,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     ) : null;
   // A question or approval owns the editor, so there is no draft to polish.
   const composerPolishButton =
-    isComposerApprovalState || activePendingProgress ? null : (
+    !polishOn || isComposerApprovalState || activePendingProgress ? null : (
       <ComposerPolishButton
         disabled={!promptPolish.available || prompt.trim().length === 0 || voiceInputActive}
         running={promptPolish.running}
@@ -3574,7 +3582,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack items={shelfItems} />
-          {routeKind === "server" &&
+          {openQuestionsOn &&
+          routeKind === "server" &&
           canOperateThread &&
           phase !== "running" &&
           !showComposerTopDrawer &&
@@ -3996,7 +4005,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     hideCompactToggle={dictationTakesFooter}
                     keepFullHistory={props.keepFullHistory}
                   >
-                    {activeProjectId && !isComposerApprovalState && !activePendingProgress ? (
+                    {tasksOn &&
+                    activeProjectId &&
+                    !isComposerApprovalState &&
+                    !activePendingProgress ? (
                       <SavePromptButton
                         environmentId={environmentId}
                         projectId={activeProjectId}

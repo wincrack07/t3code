@@ -14,11 +14,14 @@ import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { threadNotFound } from "./threadAccess.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
+import * as ServerSettings from "../serverSettings.ts";
 
 export class ThreadMetadataMcpService extends Context.Service<
   ThreadMetadataMcpService,
@@ -147,6 +150,7 @@ function resultFromThread(input: {
 const make = Effect.gen(function* () {
   const random = yield* SecureRandom.SecureRandom;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+  const settings = yield* ServerSettings.ServerSettingsService;
 
   const update = Effect.fn("ThreadMetadataMcpService.update")(function* (
     scope: McpInvocationScope,
@@ -157,6 +161,21 @@ const make = Effect.gen(function* () {
         "capability_denied",
         "This MCP credential does not grant orchestration capabilities.",
       );
+    }
+    const feature =
+      input.action === "set_status"
+        ? ("agentStatusLine" as const)
+        : input.action === "move"
+          ? ("moveThreads" as const)
+          : null;
+    if (feature !== null) {
+      const current = yield* settings.getSettings.pipe(Effect.option);
+      if (!isForkFeatureOn(Option.getOrUndefined(current)?.forkFeatures, feature)) {
+        return yield* failure(
+          "capability_denied",
+          `${input.action} is turned off in this environment's settings.`,
+        );
+      }
     }
 
     if (
@@ -334,5 +353,7 @@ const make = Effect.gen(function* () {
 export const layer: Layer.Layer<
   ThreadMetadataMcpService,
   never,
-  SecureRandom.SecureRandom | ThreadManagementService.ThreadManagementService
+  | SecureRandom.SecureRandom
+  | ThreadManagementService.ThreadManagementService
+  | ServerSettings.ServerSettingsService
 > = Layer.effect(ThreadMetadataMcpService, make);

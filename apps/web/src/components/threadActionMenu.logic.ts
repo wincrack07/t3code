@@ -103,7 +103,7 @@ export interface ThreadActionMenuState {
   readonly canOpenNewWindow?: boolean;
   readonly canOperate: boolean;
   readonly canFind?: boolean;
-  readonly split?: { readonly narrow: boolean; readonly onlyColumn: boolean };
+  readonly split?: { readonly narrow: boolean; readonly onlyColumn: boolean } | undefined;
   /** False where no inline title editor is rendered, such as sidebar search results. */
   readonly canRename?: boolean;
   readonly branch: string | null;
@@ -133,6 +133,8 @@ export interface ThreadActionMenuState {
   readonly canTurnIntoProject?: boolean;
   /** Absent for threads that cannot move, such as subagents. */
   readonly projectMove?: { readonly pendingTargetTitle: string | null } | undefined;
+  /** False hides Export chat when the fork's chat backup is switched off. */
+  readonly chatExport?: boolean;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -336,8 +338,12 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: resolve(msg("Project settings")), icon: "settings" },
-    { id: "export-md", label: resolve(msg("Export chat… (Markdown)")) },
-    { id: "export-json", label: resolve(msg("Export chat… (JSON)")) },
+    ...(state.chatExport === false
+      ? []
+      : [
+          { id: "export-md" as const, label: resolve(msg("Export chat… (Markdown)")) },
+          { id: "export-json" as const, label: resolve(msg("Export chat… (JSON)")) },
+        ]),
     {
       id: "archive",
       label: resolve(msg("Archive thread")),

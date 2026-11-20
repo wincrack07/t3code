@@ -27,8 +27,8 @@ export function SidebarDisplayMenu({
 }: {
   projects?: readonly SidebarProjectSnapshot[];
   activeProjectKey?: string | null;
-  onCreateGroup?: () => void;
-  onSuggestGroups?: () => void;
+  onCreateGroup?: (() => void) | undefined;
+  onSuggestGroups?: (() => void) | undefined;
 }) {
   const gt = useGT();
   const expanded = useUiStateStore((state) => state.projectExpandedById);

@@ -74,6 +74,7 @@ import {
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 import { hasRuntimeModelCatalog } from "../../providerModels";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 type ModelPickerItem = {
   slug: string;
@@ -834,6 +835,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     props.allowAuto === true &&
     props.environmentId !== null &&
     configs.get(props.environmentId)?.settings.decisions.enabled === true &&
+    isForkFeatureOn(configs.get(props.environmentId)?.settings.forkFeatures, "decisions") &&
     props.selectedModels === undefined;
   const autoKey = modelPickerModelKey(props.activeInstanceId, AUTO_MODEL);
   const showAuto =

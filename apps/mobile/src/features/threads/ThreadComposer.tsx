@@ -129,6 +129,7 @@ import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
 } from "./use-thread-settings-sheet-presentation";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 export const COMPOSER_COLLAPSED_CHROME = 60;
 export const THREAD_COMPOSER_BOTTOM_GUTTER = COMPOSER_BOTTOM_GUTTER;
@@ -422,6 +423,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     undefined,
     props.selectedThread.projectId,
   );
+  const polishOn = isForkFeatureOn(props.serverConfig?.settings.forkFeatures, "promptPolish");
   const promptPolish = usePromptPolish({
     environmentId: props.environmentId,
     projectId: props.selectedThread.projectId,
@@ -452,8 +454,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     onOpenModelPicker: settingsSheetPresentation.open,
     modelOptions: mentionModelOptions,
     modelProviders: props.serverConfig?.providers,
-    savedPrompts: props.serverConfig?.settings.savedPrompts,
-    ...(promptPolish.available ? { onPolish: (draft) => void promptPolish.polish(draft) } : {}),
+    savedPrompts: isForkFeatureOn(props.serverConfig?.settings.forkFeatures, "savedPrompts")
+      ? props.serverConfig?.settings.savedPrompts
+      : undefined,
+    ...(polishOn && promptPolish.available
+      ? { onPolish: (draft) => void promptPolish.polish(draft) }
+      : {}),
     ...(props.onFreshSession === undefined ? {} : { onFreshSession: props.onFreshSession }),
     offersSideChat: props.offersSideChat === true,
   });
@@ -1038,7 +1044,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 >
                   {compactControl}
                   {modelControl}
-                  {isExpanded ? (
+                  {isExpanded && polishOn ? (
                     <ComposerPolishAction
                       size={usesLargeControls ? "large" : "regular"}
                       disabled={

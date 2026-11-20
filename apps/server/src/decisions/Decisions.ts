@@ -32,6 +32,7 @@ import { decisionCandidates } from "./candidates.ts";
 import { decisionPrompt, parseDecisionAnswer } from "./prompt.ts";
 import { requestJevDecision } from "./jev.ts";
 import { requestOpenAiDecision } from "./openai.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 // Same fallback order as shared/serverSettings, which keeps it private.
 const defaultTextGenerationModel = (driver: ProviderDriverKind): string =>
@@ -98,7 +99,8 @@ const make = Effect.gen(function* () {
       previousApiKey = config.apiKey;
       previousCustomApiKey = config.customApiKey;
     }
-    if (!config.enabled) return fallback("Decisions is disabled; using normal defaults.");
+    if (!config.enabled || !isForkFeatureOn(settings.forkFeatures, "decisions"))
+      return fallback("Decisions is disabled; using normal defaults.");
     const project = yield* projects.get(input.projectId);
     if (Option.isNone(project)) return fallback("Project is unavailable; using normal defaults.");
     const environmentId = yield* environment.getEnvironmentId;

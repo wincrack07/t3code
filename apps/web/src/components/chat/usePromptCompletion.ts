@@ -19,6 +19,7 @@ import type { Thread } from "../../types";
 import { useServerConfigs } from "../../state/entities";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useForkFeature } from "../../state/forkFeatures";
 
 const NO_SUGGESTIONS: ReadonlyArray<string> = [];
 
@@ -45,9 +46,11 @@ export function usePromptCompletion(input: {
   readonly providerSuggestion: string | null;
 }) {
   const settings = useServerConfigs().get(input.environmentId)?.settings;
-  const available = useAtomValue(
+  const featureOn = useForkFeature("promptSuggestions", input.environmentId);
+  const permitted = useAtomValue(
     serverEnvironment.completePrompt.permissionAtom(input.environmentId),
   );
+  const available = featureOn && permitted;
   const complete = useAtomCommand(serverEnvironment.completePrompt, { reportFailure: false });
   const [shown, setShown] = useState<{ key: string; suggestions: ReadonlyArray<string> } | null>(
     null,

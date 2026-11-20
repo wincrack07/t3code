@@ -70,6 +70,7 @@ vi.mock("../state/entities", () => ({
   useProjects: () => [{ id: "project", environmentId: "secondary" }],
 }));
 vi.mock("../state/environments", () => ({ usePrimaryEnvironmentId: () => "primary" }));
+vi.mock("../state/forkFeatures", () => ({ readForkFeature: () => true }));
 vi.mock("../state/threads", () => ({ threadEnvironment: { updateMetadata: "metadata" } }));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: () => async () => {

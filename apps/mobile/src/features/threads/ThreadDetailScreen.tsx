@@ -76,7 +76,7 @@ import {
   type ProviderSubagentStatus,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { formatModelSlugName, resolveSelectableModel } from "@t3tools/shared/model";
-import { isProviderNativeSubagentThread } from "@t3tools/contracts";
+import { isForkFeatureOn, isProviderNativeSubagentThread } from "@t3tools/contracts";
 import type { QueuedRunEdit } from "../../state/queued-run-edit";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";
 import type { ActiveTurnComposerAction } from "@t3tools/client-runtime/state/composer-dispatch";
@@ -741,7 +741,12 @@ function ThreadDetailBody(
     props.selectedThread.pendingBackgroundTasks,
     messages,
   );
-  const agentStatusText = props.selectedThread.statusText;
+  const agentStatusText = isForkFeatureOn(
+    props.serverConfig?.settings.forkFeatures,
+    "agentStatusLine",
+  )
+    ? props.selectedThread.statusText
+    : undefined;
   const extensionStatus = props.extensionStatuses?.length
     ? {
         label: `Pi · ${props.extensionStatuses.map((status) => status.text).join(" · ")}`,

@@ -1,5 +1,6 @@
 import { MachineCleanupSettings, MachineCleanupSettingsWithDefault } from "./machineCleanup.ts";
 import { DecisionSettings, DEFAULT_DECISION_SETTINGS } from "./decisions.ts";
+import { DEFAULT_FORK_FEATURE_SWITCHES, ForkFeatureSwitches } from "./forkFeatures.ts";
 import { DEFAULT_PROMPT_POLISH_SETTINGS, PromptPolishSettings } from "./promptPolish.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
@@ -1622,6 +1623,9 @@ export const ServerSettings = Schema.Struct({
   decisions: DecisionSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DECISION_SETTINGS)),
   ),
+  forkFeatures: ForkFeatureSwitches.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_FORK_FEATURE_SWITCHES)),
+  ),
   textGenerationModelSelection: ModelSelection.pipe(
     Schema.withDecodingDefault(
       Effect.succeed({
@@ -2045,6 +2049,7 @@ export const ServerSettingsPatch = Schema.Struct({
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   ghqCloneLayout: Schema.optionalKey(Schema.Boolean),
   decisions: Schema.optionalKey(DecisionSettings),
+  forkFeatures: Schema.optionalKey(ForkFeatureSwitches),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   promptPolish: Schema.optionalKey(PromptPolishSettings),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),

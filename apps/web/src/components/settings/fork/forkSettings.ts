@@ -5,6 +5,7 @@ import type { SettingsPath, SettingsSearchItem, SettingsSearchScope } from "../s
 // Everything the fork adds to Settings lives under one nav group and route prefix, so upstream
 // panels stay untouched and merges stay clean.
 export const FORK_SETTINGS_PATHS = [
+  "/settings/fork/features",
   "/settings/fork/composer",
   "/settings/fork/chats",
   "/settings/fork/pr-reviews",
@@ -16,6 +17,7 @@ export const FORK_SETTINGS_PATHS = [
 export type ForkSettingsPath = (typeof FORK_SETTINGS_PATHS)[number];
 
 export const FORK_SETTINGS_SECTION_LABELS: Readonly<Record<ForkSettingsPath, string>> = {
+  "/settings/fork/features": msg("Features"),
   "/settings/fork/composer": msg("Composer"),
   "/settings/fork/chats": msg("Chats"),
   "/settings/fork/pr-reviews": msg("PR reviews"),
@@ -32,6 +34,7 @@ export const FORK_SETTINGS_NAV_GROUP = {
 export const FORK_SETTINGS_CATEGORY_SCOPES: Readonly<
   Record<ForkSettingsPath, SettingsSearchScope | null>
 > = {
+  "/settings/fork/features": "environment",
   "/settings/fork/composer": null,
   "/settings/fork/chats": null,
   "/settings/fork/pr-reviews": null,
@@ -46,6 +49,13 @@ export const FORK_SETTINGS_DEVICE_ONLY_PATHS: ReadonlyArray<ForkSettingsPath> = 
 ];
 
 export const FORK_SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "fork-official-mode",
+    title: msg("Official mode"),
+    to: "/settings/fork/features",
+    scope: "environment",
+    searchTerms: ["fork features switch turn off disable official upstream sally"],
+  },
   {
     id: "saved-prompts",
     title: msg("Saved prompts"),

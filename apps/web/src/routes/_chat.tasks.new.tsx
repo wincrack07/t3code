@@ -1,5 +1,6 @@
 import { findPromptLinkProjects } from "@t3tools/client-runtime/prompt-links";
 import { parseNewTaskLink } from "@t3tools/shared/promptLinks";
+import { ForkFeatureRoute } from "../components/ForkFeatureRoute";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
 import { T } from "gt-react";
 
@@ -54,5 +55,9 @@ function NewTaskLinkRoute() {
 }
 
 export const Route = createFileRoute("/_chat/tasks/new")({
-  component: NewTaskLinkRoute,
+  component: () => (
+    <ForkFeatureRoute feature="tasks">
+      <NewTaskLinkRoute />
+    </ForkFeatureRoute>
+  ),
 });

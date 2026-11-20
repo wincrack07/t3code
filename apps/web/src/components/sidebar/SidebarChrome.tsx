@@ -59,6 +59,7 @@ import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
+import { useForkFeature } from "../../state/forkFeatures";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -277,6 +278,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const tasksOn = useForkFeature("tasks");
+  const chatHubOn = useForkFeature("chatHub");
+  const artifactsOn = useForkFeature("claudeArtifacts");
+  const monitorOn = useForkFeature("machineMonitor");
   const taskGroups = useTaskProjectGroups();
   const openTasks = taskGroups.reduce((total, group) => total + openTaskCount(group), 0);
   const reviewTasks = taskGroups.reduce((total, group) => total + reviewTaskCount(group), 0);
@@ -335,21 +340,29 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   };
 
   const secondaryActions = [
-    {
-      label: gt("All chats"),
-      icon: <LayoutGridIcon />,
-      onClick: () => {
-        closeMobileSidebar();
-        void navigate({ to: "/all-chats" });
-      },
-    },
-    {
-      label: gt("Tasks"),
-      icon: <ListTodoIcon />,
-      count: openTasks,
-      attention: reviewTasks,
-      onClick: handleTasksClick,
-    },
+    ...(chatHubOn
+      ? [
+          {
+            label: gt("All chats"),
+            icon: <LayoutGridIcon />,
+            onClick: () => {
+              closeMobileSidebar();
+              void navigate({ to: "/all-chats" });
+            },
+          },
+        ]
+      : []),
+    ...(tasksOn
+      ? [
+          {
+            label: gt("Tasks"),
+            icon: <ListTodoIcon />,
+            count: openTasks,
+            attention: reviewTasks,
+            onClick: handleTasksClick,
+          },
+        ]
+      : []),
     ...(pullRequestsSupported
       ? [
           {
@@ -369,7 +382,9 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
         ]
       : []),
     { label: gt("Usage"), icon: <ChartNoAxesColumnIcon />, onClick: handleUsageClick },
-    { label: gt("Artifacts"), icon: <LayoutGridIcon />, onClick: handleArtifactsClick },
+    ...(artifactsOn
+      ? [{ label: gt("Artifacts"), icon: <LayoutGridIcon />, onClick: handleArtifactsClick }]
+      : []),
   ];
   // Reserve the status controls and update button before budgeting 32px links and 4px gaps.
   const visibleCount =
@@ -399,7 +414,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           {secondaryActions.slice(0, visibleCount).map((action) => (
             <SidebarUtilityItem key={action.label} {...action} />
           ))}
-          <SidebarMachineMonitorItem onOpen={handleMonitorClick} />
+          {monitorOn ? <SidebarMachineMonitorItem onOpen={handleMonitorClick} /> : null}
         </>
       )}
       <SidebarMenuItem>

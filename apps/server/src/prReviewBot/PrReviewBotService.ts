@@ -68,6 +68,7 @@ import {
   type StoredPrReviewState as Stored,
 } from "./state.ts";
 import { BOT_MARKER } from "./triggers.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 const PRIVATE_KEY_SECRET = "pr-review-github-app-private-key";
 const STATE_FILE = "pr-reviews.json";
@@ -739,6 +740,9 @@ export const make = Effect.gen(function* () {
   const pollOnce = Effect.fn("PrReviewBot.pollOnce")(function* () {
     const current = yield* Ref.get(state);
     if (!current.config.enabled) return { polled: false };
+    const switches = (yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null)))
+      ?.forkFeatures;
+    if (!isForkFeatureOn(switches, "prReviews")) return { polled: false };
     const api = yield* currentApi;
     const botLogin = yield* api.identity.login;
     const now = yield* nowMs;

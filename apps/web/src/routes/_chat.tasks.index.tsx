@@ -1,9 +1,14 @@
+import { ForkFeatureRoute } from "../components/ForkFeatureRoute";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { TasksPage, type TasksSearch } from "../components/tasks/TasksPage";
 
 function TasksRoute() {
-  return <TasksPage search={Route.useSearch()} />;
+  return (
+    <ForkFeatureRoute feature="tasks">
+      <TasksPage search={Route.useSearch()} />
+    </ForkFeatureRoute>
+  );
 }
 
 export const Route = createFileRoute("/_chat/tasks/")({

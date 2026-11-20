@@ -15,11 +15,17 @@ import {
 } from "../state/entities";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
+import { useForkFeature } from "../state/forkFeatures";
+import type { ProjectFolder } from "../projectFolders";
+
+const NO_FOLDERS: ReadonlyArray<ProjectFolder> = [];
 
 export function useSidebarProjectGroups() {
   const projects = useProjects();
   const configs = useServerConfigs();
-  const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const groupsOn = useForkFeature("projectGroups");
+  const savedFolders = useClientSettings((settings) => settings.sidebarProjectFolders);
+  const folders = groupsOn ? savedFolders : NO_FOLDERS;
   // Activity order lags a running thread's streaming ticks until its next
   // real change; reading every tick re-rendered the whole sidebar with it.
   const threads = useQuietThreadShells();

@@ -56,6 +56,7 @@ import { useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
 import { openMoveThreadToProject } from "../components/MoveThreadToProjectDialog";
 import { cancelThreadProjectMove, threadProjectMoveMenuState } from "../threadProjectMove";
+import { readForkFeature } from "../state/forkFeatures";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -145,7 +146,9 @@ export function useThreadActionMenu(input: {
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
         canOpenNewWindow: typeof window !== "undefined" && Boolean(window.desktopBridge?.newWindow),
-        split: threadSplitMenuState(threadRef),
+        split: readForkFeature("splitColumns", threadRef.environmentId)
+          ? threadSplitMenuState(threadRef)
+          : undefined,
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         canFind: onFind !== undefined,
         branch: thread.branch ?? null,
@@ -161,7 +164,10 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
-        projectMove: threadProjectMoveMenuState(threadRef),
+        projectMove: readForkFeature("moveThreads", threadRef.environmentId)
+          ? threadProjectMoveMenuState(threadRef)
+          : undefined,
+        chatExport: readForkFeature("chatBackup", threadRef.environmentId),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;

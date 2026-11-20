@@ -40,6 +40,7 @@ import {
 import { ThreadRouteView } from "./ThreadRouteView";
 import { Button } from "./ui/button";
 import { SidebarInset } from "./ui/sidebar";
+import { useForkFeature } from "../state/forkFeatures";
 
 function ColumnDivider({ column, next }: { column: ThreadColumn; next: ThreadColumn }) {
   const gt = useGT();
@@ -248,7 +249,10 @@ export function ThreadColumns({
   background: boolean;
 }) {
   const layout = useThreadColumnsStore();
-  const narrow = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
+  const narrowScreen = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
+  // Switched off, saved columns stay saved and only the focused one shows, as on a narrow screen.
+  const splitOn = useForkFeature("splitColumns");
+  const narrow = narrowScreen || !splitOn;
   const navigate = useNavigate();
   const draftId = target.kind === "draft" ? target.draftId : null;
   const draftRef = useComposerDraftStore((state) =>

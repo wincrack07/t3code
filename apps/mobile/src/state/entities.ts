@@ -10,6 +10,8 @@ import type {
 import {
   allowsPreviewTunnel,
   EnvironmentId,
+  type ForkFeatureId,
+  isForkFeatureOn,
   ThreadId,
   type ComposerContextRecord,
   type ScopedProjectRef,
@@ -323,4 +325,9 @@ export function useThreadReportedModelSelection(ref: ScopedThreadRef | null) {
     ref === null ? EMPTY_THREAD_ATOM : environmentThreadDetails.threadAtom(ref),
     selectReportedModelSelection,
   );
+}
+
+/** Whether a fork feature is on in the environment's settings; on until its config loads. */
+export function useForkFeature(feature: ForkFeatureId, environmentId: EnvironmentId | null) {
+  return isForkFeatureOn(useEnvironmentServerConfig(environmentId)?.settings.forkFeatures, feature);
 }

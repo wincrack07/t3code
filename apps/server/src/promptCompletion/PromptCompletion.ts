@@ -20,6 +20,7 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 export class PromptCompletion extends Context.Service<
   PromptCompletion,
@@ -113,6 +114,7 @@ const make = Effect.gen(function* () {
           ? settings.promptCompletionInlineEnabled
           : settings.promptCompletionNextEnabled;
       if (!enabled || (input.mode === "continue" && input.draft.trim().length === 0)) return NONE;
+      if (!isForkFeatureOn(settings.forkFeatures, "promptSuggestions")) return NONE;
       const records = yield* threads.getThreadRecords(input.threadId, ["messages"], {
         messageRoles: ["user", "assistant"],
       });

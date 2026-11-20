@@ -20,6 +20,7 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import { useForkFeature } from "../../state/forkFeatures";
 
 /** All placements, including legacy panel pins, live in this list. */
 export function ThreadPinnedCardsPanel(props: {
@@ -27,8 +28,10 @@ export function ThreadPinnedCardsPanel(props: {
   readonly threadId: ThreadId;
 }) {
   const gt = useGT();
+  const on = useForkFeature("pinnedCards", props.environmentId);
   const threadRef = scopeThreadRef(props.environmentId, props.threadId);
-  const cards = useThreadShell(threadRef)?.pinnedHtmlCards;
+  const shellCards = useThreadShell(threadRef)?.pinnedHtmlCards;
+  const cards = on ? shellCards : undefined;
   const canOperate = useEnvironmentScope(props.environmentId, AuthOrchestrationOperateScope);
   const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,

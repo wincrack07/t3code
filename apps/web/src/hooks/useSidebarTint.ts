@@ -11,6 +11,7 @@ import { useSidebarProjectGroups } from "./useSidebarProjectGroups";
 import { useClientSettings, useClientSettingsHydrated } from "./useSettings";
 import { getStandardPaintedThemeColors, themeColorToHex } from "../themePalette";
 import { computeSidebarTint, resolveSidebarColor } from "../sidebarColors";
+import { useForkFeature } from "../state/forkFeatures";
 
 const decodeCache = Schema.decodeUnknownOption(
   Schema.Struct({
@@ -142,7 +143,8 @@ export function useSidebarTint(): CSSProperties {
   const project = draft ?? thread;
   const configs = useServerConfigs();
   const groups = useSidebarProjectGroups();
-  const enabled = useClientSettings((settings) => settings.tintSidebarWithProjectColor);
+  const groupsOn = useForkFeature("projectGroups");
+  const enabled = useClientSettings((settings) => settings.tintSidebarWithProjectColor) && groupsOn;
   const folders = useClientSettings((settings) => settings.sidebarProjectFolders);
   const hydrated = useClientSettingsHydrated();
   const [painted, setPainted] = useState<ReturnType<typeof readPaintedSidebar> | null>(null);

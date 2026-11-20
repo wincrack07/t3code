@@ -15,6 +15,7 @@ import { useEnvironmentScope } from "../../state/session";
 import { Button } from "../ui/button";
 import { TimelineRowCtx } from "./timelineRowContext";
 import { useSetOpenQuestionStatus } from "./useSetOpenQuestionStatus";
+import { useForkFeature } from "../../state/forkFeatures";
 
 /**
  * The questions this run left for the user, as a quiet record under its final reply.
@@ -22,8 +23,9 @@ import { useSetOpenQuestionStatus } from "./useSetOpenQuestionStatus";
  */
 export function OpenQuestionCards({ runId }: { readonly runId: RunId }) {
   const ctx = use(TimelineRowCtx);
+  const on = useForkFeature("openQuestions", ctx.threadRef?.environmentId);
   const questions = runOpenQuestions(useThreadShell(ctx.threadRef)?.openQuestions, runId);
-  if (questions.length === 0 || ctx.threadRef === null) return null;
+  if (!on || questions.length === 0 || ctx.threadRef === null) return null;
   return <OpenQuestionList threadRef={ctx.threadRef} questions={questions} />;
 }
 

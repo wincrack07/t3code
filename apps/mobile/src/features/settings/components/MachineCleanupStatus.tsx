@@ -6,8 +6,14 @@ import type { SettingsTarget } from "../settings-environment-filter";
 import { ListActionRow } from "../../../components/ui/ListActionRow";
 import { SettingsSection } from "./SettingsSection";
 import { SettingsRow } from "./SettingsRow";
+import { useForkFeature } from "../../../state/entities";
 
 export function MachineCleanupStatus({ target }: { readonly target: SettingsTarget }) {
+  const on = useForkFeature("machineCleanup", target.environmentId);
+  return on ? <MachineCleanupStatusPanel target={target} /> : null;
+}
+
+function MachineCleanupStatusPanel({ target }: { readonly target: SettingsTarget }) {
   const environmentId = target.environmentId;
   const query = useAtomValue(serverEnvironment.machineCleanupState({ environmentId, input: {} }));
   const allowed = useAtomValue(

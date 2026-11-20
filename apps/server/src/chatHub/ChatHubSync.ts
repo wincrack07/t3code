@@ -29,6 +29,7 @@ import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
+import { whileForkFeatureOn } from "../forkFeatures.ts";
 
 type Status = typeof ChatHubStatus.Type;
 type Config = {
@@ -220,6 +221,7 @@ export const worker = Layer.effectDiscard(
   Effect.gen(function* () {
     const sync = yield* ChatHubSync;
     yield* sync.sweep.pipe(
+      whileForkFeatureOn("chatHub"),
       Effect.catch(() => Effect.logWarning("Chat hub sweep failed")),
       Effect.repeat(Schedule.spaced("10 seconds")),
       Effect.forkScoped,

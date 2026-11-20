@@ -3,6 +3,7 @@ import { BookmarkIcon } from "lucide-react";
 import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
 
 import { useRightPanelStore } from "../rightPanelStore";
+import { useForkFeature } from "../state/forkFeatures";
 
 import { findTaskGroupForProject, openTaskCount, reviewTaskCount } from "./tasks/tasks.logic";
 import { useTaskProjectGroups } from "./tasks/useTaskProjects";
@@ -20,8 +21,10 @@ export function SavedPrompts({
   /** Opens the quick panel beside this chat; without one the count opens the Tasks page. */
   threadRef: ScopedThreadRef | null;
 }) {
+  const tasksOn = useForkFeature("tasks", environmentId);
   const group = findTaskGroupForProject(useTaskProjectGroups(), environmentId, projectId);
   const navigate = useNavigate();
+  if (!tasksOn) return null;
   if (!group?.members.some((member) => member.project.savedPrompts !== undefined)) return null;
   const count = openTaskCount(group);
   const review = reviewTaskCount(group);

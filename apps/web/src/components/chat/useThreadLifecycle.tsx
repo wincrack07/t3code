@@ -82,6 +82,7 @@ import { Atom } from "effect/reactivity";
 import { environmentThreadDetails } from "../../state/threads";
 import { resolveThreadOpenRoute } from "../../lib/sideChatPane";
 import type { useLocalDispatchState } from "./useLocalDispatchState";
+import { useForkFeature } from "../../state/forkFeatures";
 const RELATED_THREAD_SHELL_WAIT_MS = 1_000;
 
 function actionErrorMessage(error: unknown): string {
@@ -636,7 +637,8 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
           onForceStop: () => void forceStop.forceStopThread(activeThread.id, runStop.runId),
         })
       : null;
-  const agentStatusText = activeThreadShell?.statusText;
+  const statusLineOn = useForkFeature("agentStatusLine", environmentId);
+  const agentStatusText = statusLineOn ? activeThreadShell?.statusText : undefined;
   const backgroundWorkNow = activeThread
     ? backgroundWorkNowItem(
         {

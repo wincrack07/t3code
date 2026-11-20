@@ -84,6 +84,7 @@ export * from "./clientRpcPermissions.ts";
 
 export * from "./systemMonitor.ts";
 export * from "./decisions.ts";
+export * from "./forkFeatures.ts";
 
 export * from "./keepAwake.ts";
 export * from "./mcpCatalog.ts";

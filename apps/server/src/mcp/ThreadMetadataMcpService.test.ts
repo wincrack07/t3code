@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as McpToolAccessTestkit from "./McpToolAccess.testkit.ts";
 import * as ThreadMetadataMcpService from "./ThreadMetadataMcpService.ts";
@@ -30,6 +31,43 @@ const scope: McpInvocationScope = {
   capabilities: new Set(["orchestration"]),
   issuedAt: 0,
 };
+
+it.effect("refuses status lines and moves while their fork features are off", () => {
+  const dispatched: Array<OrchestrationV2ServerCommand> = [];
+  const shell = McpToolAccessTestkit.liveThreadShell(threadId);
+  return Effect.gen(function* () {
+    const service = yield* ThreadMetadataMcpService.ThreadMetadataMcpService;
+    const status = yield* service
+      .update(scope, { action: "set_status", status: "Working" })
+      .pipe(Effect.flip);
+    assert.equal(status.code, "capability_denied");
+    const move = yield* service
+      .update(scope, { action: "move", moveToProjectId: ProjectId.make("project:other") })
+      .pipe(Effect.flip);
+    assert.equal(move.code, "capability_denied");
+    assert.deepEqual(dispatched, []);
+  }).pipe(
+    Effect.provide(
+      ThreadMetadataMcpService.layer.pipe(
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(
+          ServerSettings.layerTest({
+            forkFeatures: { officialMode: false, off: ["agentStatusLine", "moveThreads"] },
+          }),
+        ),
+        Layer.provide(
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadShell: () => Effect.succeed(shell),
+            dispatch: (command) => {
+              dispatched.push(command);
+              return Effect.succeed({ sequence: dispatched.length, storedEvents: [] });
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+});
 
 it.effect("sets the caller's own status as one plain line and clears it when empty", () => {
   const dispatched: Array<OrchestrationV2ServerCommand> = [];
@@ -56,6 +94,7 @@ it.effect("sets the caller's own status as one plain line and clears it when emp
     Effect.provide(
       ThreadMetadataMcpService.layer.pipe(
         Layer.provide(NodeCrypto.layer),
+        Layer.provide(ServerSettings.layerTest()),
         Layer.provide(
           Layer.mock(ThreadManagementService.ThreadManagementService)({
             getThreadShell: () => Effect.succeed(shell),
@@ -115,6 +154,7 @@ it.effect("attaches declared questions to the running turn and resolves only kno
     Effect.provide(
       ThreadMetadataMcpService.layer.pipe(
         Layer.provide(NodeCrypto.layer),
+        Layer.provide(ServerSettings.layerTest()),
         Layer.provide(
           Layer.mock(ThreadManagementService.ThreadManagementService)({
             getThreadShell: () => Effect.succeed(shell),
@@ -148,6 +188,7 @@ it.effect("records a self move and says the current cwd remains until the turn e
     Effect.provide(
       ThreadMetadataMcpService.layer.pipe(
         Layer.provide(NodeCrypto.layer),
+        Layer.provide(ServerSettings.layerTest()),
         Layer.provide(
           Layer.mock(ThreadManagementService.ThreadManagementService)({
             getThreadShell: () => Effect.succeed(shell),
@@ -176,6 +217,7 @@ it.effect("explains why a child thread cannot move", () => {
     Effect.provide(
       ThreadMetadataMcpService.layer.pipe(
         Layer.provide(NodeCrypto.layer),
+        Layer.provide(ServerSettings.layerTest()),
         Layer.provide(
           Layer.mock(ThreadManagementService.ThreadManagementService)({
             getThreadShell: () => Effect.succeed(McpToolAccessTestkit.liveThreadShell(threadId)),

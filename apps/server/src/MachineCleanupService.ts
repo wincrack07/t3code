@@ -35,6 +35,7 @@ import {
   cleanupNodeCommand,
   cleanupNodeFreeSpace,
 } from "./machineCleanupNode.ts";
+import { isForkFeatureOn } from "@t3tools/contracts";
 
 export class MachineCleanup extends Context.Service<
   MachineCleanup,
@@ -363,7 +364,9 @@ const make = Effect.gen(function* () {
     function* () {
       const state = yield* SubscriptionRef.get(ref);
       if (state.running) return;
-      const current = (yield* settings.getSettings).machineCleanup;
+      const allSettings = yield* settings.getSettings;
+      if (!isForkFeatureOn(allSettings.forkFeatures, "machineCleanup")) return;
+      const current = allSettings.machineCleanup;
       const local = yield* DateTime.withCurrentZoneLocal(DateTime.nowInCurrentZone);
       const day = cleanupScheduleDay(current, DateTime.toParts(local), lastScheduledDay);
       if (day === null) return;
