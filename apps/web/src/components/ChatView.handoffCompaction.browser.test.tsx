@@ -147,9 +147,8 @@ it("drops the compact offer on a cold Claude thread while /clear is armed", asyn
     router: false,
   });
   await expect.element(page.getByText(`Answer 2 for ${thread.id}.`)).toBeVisible();
-  const chip = page.getByRole("button", { name: "Compact 250k tokens of history before sending" });
+  // The fork has no Compact chip in the input; the offer is the Compact and send button.
   const compactAndSend = page.getByRole("button", { name: "Compact and send" });
-  await expect.element(chip).toBeVisible();
   await expect.element(compactAndSend).toBeVisible();
 
   const editor = page.getByTestId("composer-editor");
@@ -157,11 +156,9 @@ it("drops the compact offer on a cold Claude thread while /clear is armed", asyn
   await userEvent.type(editor, "/clear");
   await userEvent.keyboard("{Enter}");
   await expect.element(page.getByText("Your next message starts a fresh session")).toBeVisible();
-  await expect.element(chip).not.toBeInTheDocument();
   await expect.element(compactAndSend).not.toBeInTheDocument();
   await expect.element(page.getByRole("button", { name: "Submit message" })).toBeVisible();
 
   await page.getByRole("button", { name: "Keep the current session" }).click();
-  await expect.element(chip).toBeVisible();
   await expect.element(compactAndSend).toBeVisible();
 });
