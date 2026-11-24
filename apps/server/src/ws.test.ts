@@ -2063,6 +2063,7 @@ it.effect(
           Layer.fresh(layerConfigSources),
           Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
           Layer.mock(ServerBrowser.ServerBrowser)({}),
+          Layer.mock(ChatHubSync.ChatHubSync)({}),
         ),
       ),
     ),
@@ -2948,6 +2949,7 @@ const layerWorkflowRpcTest = Layer.mergeAll(
   Layer.fresh(layerConfigSources),
   Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
   Layer.mock(ServerBrowser.ServerBrowser)({}),
+  Layer.mock(ChatHubSync.ChatHubSync)({}),
 );
 
 /** A client for the ACP Registry RPCs; `calls` records what reached the agent or the catalog. */
