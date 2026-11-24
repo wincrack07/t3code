@@ -127,6 +127,9 @@ function startClientAppearance(): void {
       } catch {}
     }
     setCodeThemePreferences({ light: settings.codeThemeLight, dark: settings.codeThemeDark });
+    if (previous?.htmlPreviewWidth !== settings.htmlPreviewWidth) {
+      root.dataset.htmlPreviewWidth = settings.htmlPreviewWidth;
+    }
     if (previous?.appearanceContrast !== settings.appearanceContrast) {
       applyAppearanceContrast(root, settings.appearanceContrast);
     }

@@ -139,6 +139,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --chat-lane-padding: 0.75rem;
   --conversation-font-scale: 0.875;
   --font-size-conversation: calc(1rem * var(--conversation-font-scale));
+  --html-preview-max-width: var(--chat-content-max-width);
   --thread-details-panel-width: 17.5rem;
   --motion-ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
   --motion-ease-snap: cubic-bezier(0.32, 0.72, 0, 1);
@@ -1024,6 +1025,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     min-width: 0;
     max-width: var(--chat-content-max-width);
     padding-inline: var(--chat-content-padding);
+  }
+
+  /* ChatCanvas sets these only while HTML previews run wider than the chat column. */
+  .html-preview-lane {
+    width: var(--html-preview-lane-width, auto);
+    margin-inline-start: var(--html-preview-lane-offset, 0px);
   }
 
   .messages-timeline-row-frame {
@@ -2810,6 +2817,16 @@ code {
 
 :root[data-chat-width="full"] {
   --chat-content-max-width: 100%;
+}
+
+/* HTML preview width setting. ChatCanvas measures this and never lays a
+   preview out narrower than the chat column. */
+:root[data-html-preview-width="wide"] {
+  --html-preview-max-width: 72rem;
+}
+
+:root[data-html-preview-width="full"] {
+  --html-preview-max-width: 100%;
 }
 
 :root[data-diff-color-scheme="blue-orange"] {

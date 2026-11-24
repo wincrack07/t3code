@@ -377,6 +377,10 @@ export type MotionPreference = typeof MotionPreference.Type;
 /** A syntax theme id. Unknown ids fall back to the default on the client, so removing one is safe. */
 export const CodeThemePreference = Schema.String.check(Schema.isMaxLength(64));
 
+/** How wide inline HTML previews grow: "chat" keeps them in the chat column. */
+export const HtmlPreviewWidth = Schema.Literals(["chat", "wide", "full"]);
+export type HtmlPreviewWidth = typeof HtmlPreviewWidth.Type;
+
 /** How the composer shows reasoning effort: the level's name, or rising bars. */
 export const EffortDisplay = Schema.Literals(["label", "bars"]);
 export type EffortDisplay = typeof EffortDisplay.Type;
@@ -465,6 +469,9 @@ export const ClientSettingsSchema = Schema.Struct({
   // Empty means the built-in default for that appearance.
   codeThemeLight: CodeThemePreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   codeThemeDark: CodeThemePreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  htmlPreviewWidth: HtmlPreviewWidth.pipe(
+    Schema.withDecodingDefault(Effect.succeed("chat" as const)),
+  ),
   effortDisplay: EffortDisplay.pipe(Schema.withDecodingDefault(Effect.succeed("label" as const))),
   loadBalancingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   loadBalancingWeights: LoadBalancingWeights.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -2131,6 +2138,17 @@ export const ClientServerSettingsPatch = ServerSettingsPatch.mapFields(
   Struct.omit(["defaultTheme", "defaultThemeSetAt", "defaultAppearance", "defaultAppearanceSetAt"]),
 );
 
+/** The host runs saved project scripts, some without anyone asking: on worktree creation and on settle. */
+function carriesProjectScripts(patch: ServerSettingsPatch): boolean {
+  return (
+    patch.defaultProjectScripts !== undefined ||
+    Object.values(patch.projectScriptOverrides ?? {}).some((scripts) => scripts !== null) ||
+    Object.values(patch.projectSettingsOverrides ?? {}).some(
+      (overrides) => overrides?.defaultProjectScripts !== undefined,
+    )
+  );
+}
+
 export function requiredScopesForServerSettingsPatch(
   patch: ServerSettingsPatch,
 ): ReadonlyArray<AuthEnvironmentScope> {
@@ -2164,6 +2182,8 @@ export function requiredScopesForServerSettingsPatch(
     ...(changesProviders ? [AuthProvidersManageScope] : []),
     ...(changesAccess ? [AuthAccessWriteScope] : []),
     ...(patch.machineCleanup === undefined ? [] : [AuthEnvironmentMaintainScope]),
+    // Saving a script is choosing a command for the host to run, wherever the patch carries it.
+    ...(carriesProjectScripts(patch) ? [AuthOrchestrationOperateScope] : []),
   ];
 }
 
@@ -2177,11 +2197,13 @@ export function requiredScopesForProjectMutation(
     (action.kind === "attach" || action.kind === "add") &&
     action.attachments?.some((item) => item.kind === "path");
   return [
-    AuthOrchestrationOperateScope,
-    ...(readsPath ? [AuthFilesystemReadScope] : []),
-    ...(mutation.type !== "project.delete" && mutation.scripts !== undefined
-      ? requiredScopesForServerSettingsPatch({ defaultProjectScripts: mutation.scripts })
-      : []),
+    ...new Set([
+      AuthOrchestrationOperateScope,
+      ...(readsPath ? [AuthFilesystemReadScope] : []),
+      ...(mutation.type !== "project.delete" && mutation.scripts !== undefined
+        ? requiredScopesForServerSettingsPatch({ defaultProjectScripts: mutation.scripts })
+        : []),
+    ]),
   ];
 }
 
@@ -2195,6 +2217,7 @@ export const ClientSettingsPatch = Schema.Struct({
   motionPreference: Schema.optionalKey(MotionPreference),
   codeThemeLight: Schema.optionalKey(CodeThemePreference),
   codeThemeDark: Schema.optionalKey(CodeThemePreference),
+  htmlPreviewWidth: Schema.optionalKey(HtmlPreviewWidth),
   effortDisplay: Schema.optionalKey(EffortDisplay),
   loadBalancingEnabled: Schema.optionalKey(Schema.Boolean),
   loadBalancingWeights: Schema.optionalKey(LoadBalancingWeights),

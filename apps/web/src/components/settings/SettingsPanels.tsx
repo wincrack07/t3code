@@ -528,6 +528,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     settings.codeThemeDark !== DEFAULT_UNIFIED_SETTINGS.codeThemeDark
       ? [gt("Code themes")]
       : []),
+    ...(settings.htmlPreviewWidth !== DEFAULT_UNIFIED_SETTINGS.htmlPreviewWidth
+      ? [gt("HTML preview width")]
+      : []),
     ...(settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay
       ? [gt("Effort display")]
       : []),
@@ -725,6 +728,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       motionPreference: DEFAULT_UNIFIED_SETTINGS.motionPreference,
       codeThemeLight: DEFAULT_UNIFIED_SETTINGS.codeThemeLight,
       codeThemeDark: DEFAULT_UNIFIED_SETTINGS.codeThemeDark,
+      htmlPreviewWidth: DEFAULT_UNIFIED_SETTINGS.htmlPreviewWidth,
       effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay,
       mathRenderingEnabled: DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled,
       language: DEFAULT_UNIFIED_SETTINGS.language,
