@@ -5696,5 +5696,8 @@
   "7536386e3b4646bb": "Noch kein Bericht",
   "6302ff3e5b219c07": "{count} warten auf Prüfung",
   "3c317190b3a07157": "Rechnerbereinigung scannen",
-  "3d9126f63992a347": "Neu erzeugbare Dateien jetzt bereinigen"
+  "3d9126f63992a347": "Neu erzeugbare Dateien jetzt bereinigen",
+  "89bf40eb2503b6c5": "Neues Gerät bei {environment} angemeldet",
+  "c94b5fe9ef372bc0": "{device} hat sich über {product} verbunden. Warst du das nicht, entferne es in T3 Code auf diesem Computer unter Einstellungen → Zugriff.",
+  "bec67d0ed485f885": "{count, plural, one {{count} Gerät hat} other {{count} Geräte haben}} sich über {product} verbunden. Warst du das nicht, entferne sie in T3 Code auf diesem Computer unter Einstellungen → Zugriff."
 }

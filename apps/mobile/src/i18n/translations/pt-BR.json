@@ -5690,5 +5690,8 @@
   "7536386e3b4646bb": "Nenhum relatório ainda",
   "6302ff3e5b219c07": "{count} aguardam revisão",
   "3c317190b3a07157": "Escanear a limpeza da máquina",
-  "3d9126f63992a347": "Limpar arquivos regeneráveis agora"
+  "3d9126f63992a347": "Limpar arquivos regeneráveis agora",
+  "89bf40eb2503b6c5": "Novo dispositivo conectado a {environment}",
+  "c94b5fe9ef372bc0": "{device} se conectou pelo {product}. Se não foi você, remova-o em Configurações → Acesso no T3 Code desse computador.",
+  "bec67d0ed485f885": "{count, plural, one {{count} dispositivo se conectou} other {{count} dispositivos se conectaram}} pelo {product}. Se não foi você, remova-os em Configurações → Acesso no T3 Code desse computador."
 }

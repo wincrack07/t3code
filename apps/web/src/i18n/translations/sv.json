@@ -3890,8 +3890,6 @@
   "478e3b4551be4db3": "Visa extraherad text",
   "e7205ebfead1aafc": "Expanderad videoförhandsvisning",
   "1bda77e861bb472f": "Expanderad bildförhandsvisning",
-  "eebe5b17e3c19a1c": "Tillbaka, stäng videoförhandsvisningen",
-  "58fd0009a6eb7258": "Tillbaka, stäng bildförhandsvisningen",
   "47bae54b5f532ff3": "Föregående media",
   "fb9434aad2b5c0bb": "Bilden kunde inte läsas in.",
   "26aee5d4e97bfb28": "Bilden är inte tillgänglig. Filen kan ha flyttats eller tagits bort.",
@@ -14343,5 +14341,12 @@
   "175257f0e58a0e31": "Chattar",
   "e2553150860d505b": "Sally's Version",
   "f80c88488abdd5ef": "Förslagsmodell",
-  "aece00babe9ae4be": "Statistik i menyraden"
+  "aece00babe9ae4be": "Statistik i menyraden",
+  "70bdebaa3d291d3b": "Tråden är inte tillgänglig",
+  "a351ebbdcf1a3f7a": "Den här tråden finns i en miljö som den här appen inte är ansluten till.",
+  "fb633d54edaeb4b1": "Stäng videoförhandsvisningen",
+  "62d0c453f5803180": "Stäng bildförhandsvisningen",
+  "4a18481bea4b4ad5": "Ny enhet inloggad på {environmentLabel}",
+  "4144ab6aa487528a": "{device} anslöt via {product}. Inte du? Granska den.",
+  "a10cfdb27152c757": "{count, plural, one {{count} enhet} other {{count} enheter}} anslöt via {product}. Inte du? Granska dem."
 }

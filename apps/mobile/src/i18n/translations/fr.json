@@ -5690,5 +5690,8 @@
   "7536386e3b4646bb": "Aucun rapport pour l’instant",
   "6302ff3e5b219c07": "{count} en attente d’examen",
   "3c317190b3a07157": "Analyser le nettoyage de la machine",
-  "3d9126f63992a347": "Nettoyer les fichiers régénérables maintenant"
+  "3d9126f63992a347": "Nettoyer les fichiers régénérables maintenant",
+  "89bf40eb2503b6c5": "Nouvel appareil connecté à {environment}",
+  "c94b5fe9ef372bc0": "{device} s’est connecté via {product}. Si ce n’était pas vous, supprimez-le dans Paramètres → Accès de T3 Code sur cet ordinateur.",
+  "bec67d0ed485f885": "{count, plural, one {{count} appareil s’est connecté} other {{count} appareils se sont connectés}} via {product}. Si ce n’était pas vous, supprimez-les dans Paramètres → Accès de T3 Code sur cet ordinateur."
 }

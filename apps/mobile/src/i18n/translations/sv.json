@@ -5696,5 +5696,8 @@
   "7536386e3b4646bb": "Ingen rapport än",
   "6302ff3e5b219c07": "{count} väntar på granskning",
   "3c317190b3a07157": "Skanna för datorrensning",
-  "3d9126f63992a347": "Rensa återskapningsbara filer nu"
+  "3d9126f63992a347": "Rensa återskapningsbara filer nu",
+  "89bf40eb2503b6c5": "Ny enhet inloggad på {environment}",
+  "c94b5fe9ef372bc0": "{device} anslöt via {product}. Om det inte var du, ta bort den under Inställningar → Åtkomst i T3 Code på den datorn.",
+  "bec67d0ed485f885": "{count, plural, one {{count} enhet} other {{count} enheter}} anslöt via {product}. Om det inte var du, ta bort dem under Inställningar → Åtkomst i T3 Code på den datorn."
 }

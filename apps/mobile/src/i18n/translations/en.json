@@ -5698,5 +5698,8 @@
   "7536386e3b4646bb": "No report yet",
   "6302ff3e5b219c07": "{count} await review",
   "3c317190b3a07157": "Scan machine cleanup",
-  "3d9126f63992a347": "Clean regenerable files now"
+  "3d9126f63992a347": "Clean regenerable files now",
+  "89bf40eb2503b6c5": "New device signed in to {environment}",
+  "c94b5fe9ef372bc0": "{device} connected through {product}. If this was not you, remove it in Settings → Access in T3 Code on that computer.",
+  "bec67d0ed485f885": "{count, plural, one {{count} device} other {{count} devices}} connected through {product}. If this was not you, remove them in Settings → Access in T3 Code on that computer."
 }

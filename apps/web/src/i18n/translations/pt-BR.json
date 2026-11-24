@@ -3890,8 +3890,6 @@
   "478e3b4551be4db3": "Mostrar texto extraído",
   "e7205ebfead1aafc": "Pré-visualização de vídeo expandida",
   "1bda77e861bb472f": "Pré-visualização de imagem expandida",
-  "eebe5b17e3c19a1c": "Voltar, fechar a pré-visualização do vídeo",
-  "58fd0009a6eb7258": "Voltar, fechar a pré-visualização da imagem",
   "47bae54b5f532ff3": "Mídia anterior",
   "fb9434aad2b5c0bb": "Não foi possível carregar esta imagem.",
   "26aee5d4e97bfb28": "Imagem indisponível. O arquivo pode ter sido movido ou excluído.",
@@ -14335,5 +14333,12 @@
   "175257f0e58a0e31": "Chats",
   "e2553150860d505b": "Sally's Version",
   "f80c88488abdd5ef": "Modelo de sugestões",
-  "aece00babe9ae4be": "Estatísticas na barra de menus"
+  "aece00babe9ae4be": "Estatísticas na barra de menus",
+  "70bdebaa3d291d3b": "Thread indisponível",
+  "a351ebbdcf1a3f7a": "Esta thread está em um ambiente ao qual este app não está conectado.",
+  "fb633d54edaeb4b1": "Fechar a pré-visualização do vídeo",
+  "62d0c453f5803180": "Fechar a pré-visualização da imagem",
+  "4a18481bea4b4ad5": "Novo dispositivo conectado a {environmentLabel}",
+  "4144ab6aa487528a": "{device} se conectou pelo {product}. Não foi você? Revise.",
+  "a10cfdb27152c757": "{count, plural, one {{count} dispositivo se conectou} other {{count} dispositivos se conectaram}} pelo {product}. Não foi você? Revise."
 }

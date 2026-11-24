@@ -3890,8 +3890,6 @@
   "478e3b4551be4db3": "Afficher le texte extrait",
   "e7205ebfead1aafc": "Aperçu vidéo agrandi",
   "1bda77e861bb472f": "Aperçu d’image agrandi",
-  "eebe5b17e3c19a1c": "Retour, fermer l’aperçu vidéo",
-  "58fd0009a6eb7258": "Retour, fermer l’aperçu d’image",
   "47bae54b5f532ff3": "Média précédent",
   "fb9434aad2b5c0bb": "Impossible de charger cette image.",
   "26aee5d4e97bfb28": "Image indisponible. Le fichier a peut-être été déplacé ou supprimé.",
@@ -14334,5 +14332,12 @@
   "175257f0e58a0e31": "Chats",
   "e2553150860d505b": "Sally's Version",
   "f80c88488abdd5ef": "Modèle de suggestion",
-  "aece00babe9ae4be": "Statistiques dans la barre des menus"
+  "aece00babe9ae4be": "Statistiques dans la barre des menus",
+  "70bdebaa3d291d3b": "Fil indisponible",
+  "a351ebbdcf1a3f7a": "Ce fil se trouve dans un environnement auquel cette app n’est pas connectée.",
+  "fb633d54edaeb4b1": "Fermer l’aperçu vidéo",
+  "62d0c453f5803180": "Fermer l’aperçu d’image",
+  "4a18481bea4b4ad5": "Nouvel appareil connecté à {environmentLabel}",
+  "4144ab6aa487528a": "{device} s’est connecté via {product}. Ce n’était pas vous ? Vérifiez-le.",
+  "a10cfdb27152c757": "{count, plural, one {{count} appareil s’est connecté} other {{count} appareils se sont connectés}} via {product}. Ce n’était pas vous ? Vérifiez-les."
 }
