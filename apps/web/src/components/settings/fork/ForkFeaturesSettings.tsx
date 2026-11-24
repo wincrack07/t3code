@@ -123,11 +123,6 @@ const FEATURES: ReadonlyArray<{
     description: msg("Answer a subagent's question from its parent thread."),
   },
   {
-    id: "appleSpeech",
-    title: msg("Apple speech"),
-    description: msg("macOS on-device speech as a voice engine."),
-  },
-  {
     id: "cliAccounts",
     title: msg("Provider accounts"),
     description: msg(

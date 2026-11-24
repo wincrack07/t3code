@@ -93,19 +93,6 @@ vi.mock("./model.ts", () => ({
   effectiveSpeechLanguage: (model: { languages: string[] }, intent: string) =>
     intent !== "auto" && model.languages.includes(intent) ? intent : "en",
 }));
-const appleHelper = vi.hoisted(() => ({ path: undefined as string | undefined }));
-vi.mock("./apple.ts", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./apple.ts")>()),
-  findAppleSpeechHelper: (candidates: readonly string[]) =>
-    candidates.length > 0 ? appleHelper.path : undefined,
-  readAppleSpeechCapabilities: async () => ({
-    os: "26.1.0",
-    engine: "SpeechAnalyzer",
-    available: true,
-    supported: ["en-US", "es-ES", "es-MX"],
-    installed: ["es-MX"],
-  }),
-}));
 const download = vi.fn<SpeechModelStore.SpeechModelStore["Service"]["download"]>(() =>
   Effect.succeed("test.gguf"),
 );
@@ -116,7 +103,7 @@ const store = Layer.succeed(
     installedPath: (model) =>
       Effect.sync(() => (readyModels.has(model.id) ? "test.gguf" : undefined)),
     download,
-    link: () => Effect.succeed(["test-model"]),
+    link: () => Effect.succeed([]),
     linkedFrom: () => Effect.undefined,
     remove: (model) =>
       Effect.sync(() => {
@@ -142,7 +129,6 @@ beforeEach(() => {
   readyModels.clear();
   readyModels.add("test-model");
   readyModels.add("fallback-model");
-  appleHelper.path = undefined;
 });
 
 it("decodes a pooled Node Buffer without reading adjacent bytes", () => {
@@ -548,12 +534,13 @@ it.effect("uses vocabulary only for supported transcription and always applies a
               { term: "Bob", aliases: ["Robert"] },
               { term: "T3 Code", aliases: [] },
             ],
+            speechHints: ["Server"],
           };
           const vocabulary =
-            supportsVocabulary && !translate ? ["GitHub", "Bob", "T3 Code"] : undefined;
-          native.transcribe.mockResolvedValueOnce({ text: "git hub and Robert" });
+            supportsVocabulary && !translate ? ["Server", "GitHub", "Bob", "T3 Code"] : undefined;
+          native.transcribe.mockResolvedValueOnce({ text: "git hub and Robert on the server" });
           expect(yield* speech.transcribe(pcm(), options)).toBe(
-            vocabulary ? "git hub and Bob" : "GitHub and Bob",
+            vocabulary ? "git hub and Bob on the server" : "GitHub and Bob on the server",
           );
           const delivered = native.transcribe.mock.lastCall?.[1];
           expect(delivered).toEqual({
@@ -567,13 +554,15 @@ it.effect("uses vocabulary only for supported transcription and always applies a
             revision: 1,
             text: { committed: "git hub", tentative: "Robert" },
           });
-          native.finish.mockResolvedValueOnce("git hub and Robert");
+          native.finish.mockResolvedValueOnce("git hub and Robert on the server");
           const stream = yield* speech.startStream(options);
           expect(yield* stream.feed(pcm())).toEqual({
             revision: 1,
             text: { committed: vocabulary ? "git hub" : "GitHub", tentative: "Bob" },
           });
-          expect(yield* stream.finish).toBe(vocabulary ? "git hub and Bob" : "GitHub and Bob");
+          expect(yield* stream.finish).toBe(
+            vocabulary ? "git hub and Bob on the server" : "GitHub and Bob on the server",
+          );
           expect(native.begin.mock.lastCall).toEqual([
             { timestamps: "none", language: "fr", ...(vocabulary ? { vocabulary } : {}) },
             true,
@@ -1006,44 +995,4 @@ it.effect("does not restart a stream cancelled while native finalization is pend
     expect(loadNative).toHaveBeenCalledOnce();
     expect(native.reset).toHaveBeenCalledOnce();
   }).pipe(Effect.provide(layer)),
-);
-
-it.effect.each([
-  { platform: "darwin", helper: "/Resources/apple-speech/t3-apple-speech", offered: true },
-  { platform: "darwin", helper: undefined, offered: false },
-  { platform: "linux", helper: "/Resources/apple-speech/t3-apple-speech", offered: false },
-] as const)(
-  "offers Apple speech only on macOS with its helper: $platform $helper",
-  ({ platform, helper, offered }) => {
-    appleHelper.path = helper;
-    return Effect.gen(function* () {
-      const speech = yield* SpeechService.SpeechService;
-      const apple = (yield* speech.models(false)).models.find(({ id }) => id === "apple/speech");
-      expect(apple).toEqual(
-        offered
-          ? expect.objectContaining({
-              name: "Apple (built in)",
-              size: 0,
-              languages: ["en", "es"],
-              supportsStreaming: true,
-              state: "installed",
-              active: false,
-            })
-          : undefined,
-      );
-      if (!offered) return;
-      yield* speech.selectModel("apple/speech");
-      expect(yield* speech.status).toMatchObject({ modelId: "apple/speech", state: "ready" });
-      yield* speech.linkModels("/models/test.gguf");
-      expect(yield* speech.status).toMatchObject({ modelId: "apple/speech", state: "ready" });
-      // macOS owns the language assets; removing Apple only falls back to another model.
-      yield* speech.removeModel("apple/speech");
-      expect(yield* speech.status).toMatchObject({ modelId: "test-model" });
-    }).pipe(
-      Effect.provide(layer),
-      Effect.provideService(HostProcess.Platform, platform),
-      Effect.provideService(HostProcess.Architecture, "arm64"),
-      Effect.provideService(HostProcess.LinuxLibc, "gnu"),
-    );
-  },
 );

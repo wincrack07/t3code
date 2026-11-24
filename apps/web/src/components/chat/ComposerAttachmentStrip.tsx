@@ -8,7 +8,7 @@ import type {
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { T, useGT, useMessages } from "gt-react";
 import { CircleAlertIcon, ImageIcon, PlusIcon, PaperclipIcon, PlayIcon, XIcon } from "lucide-react";
-import { type ComponentProps, useLayoutEffect, useRef } from "react";
+import { type ComponentProps, type Ref, useLayoutEffect, useRef } from "react";
 
 import {
   type ComposerFileAttachment,
@@ -744,88 +744,98 @@ export function ComposerQueuedAttachmentRow({
   );
 }
 
-export function ComposerAttachButton({
+// Kept outside the composer footer: on mobile the picker blurs the editor and the
+// footer unmounts, and a detached input never delivers its change event.
+export function ComposerAttachInput({
+  ref,
   addComposerAttachments,
   focusComposer,
-  onAddReference,
-  useAddMenu,
 }: {
+  readonly ref: Ref<HTMLInputElement>;
   readonly addComposerAttachments: (files: File[]) => Promise<boolean>;
   readonly focusComposer: () => void;
+}) {
+  return (
+    <input
+      ref={ref}
+      type="file"
+      multiple
+      className="hidden"
+      onChange={(event) => {
+        const files = Array.from(event.currentTarget.files ?? []);
+        event.currentTarget.value = "";
+        // Inserting a chip refocuses the editor after the draft renders;
+        // focusing synchronously here would report the editor's stale text
+        // over the prompt that was just written.
+        void addComposerAttachments(files).then((inserted) => {
+          if (!inserted) focusComposer();
+        });
+      }}
+    />
+  );
+}
+
+export function ComposerAttachButton({
+  onOpenPicker,
+  useAddMenu,
+  onAddReference,
+}: {
+  readonly onOpenPicker: () => void;
   readonly useAddMenu: boolean;
   readonly onAddReference: (trigger: string) => void;
 }) {
   const gt = useGT();
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(event) => {
-          const files = Array.from(event.currentTarget.files ?? []);
-          event.currentTarget.value = "";
-          // Inserting a chip refocuses the editor after the draft renders;
-          // focusing synchronously here would report the editor's stale text
-          // over the prompt that was just written.
-          void addComposerAttachments(files).then((inserted) => {
-            if (!inserted) focusComposer();
-          });
-        }}
-      />
-      {useAddMenu ? (
-        <Menu>
-          <MenuTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={gt("Add to message")}
-              />
-            }
-          >
-            <PlusIcon />
-          </MenuTrigger>
-          <MenuPopup align="start" {...composerFloatingLayerProps}>
-            <MenuItem onClick={() => inputRef.current?.click()}>
-              <T>Attach files</T>
-            </MenuItem>
-            <MenuItem onClick={() => onAddReference("@")}>
-              <T>Mention files or context</T>
-            </MenuItem>
-            <MenuItem onClick={() => onAddReference("$")}>
-              <T>Add skill</T>
-            </MenuItem>
-            <MenuItem onClick={() => onAddReference("/")}>
-              <T>Commands</T>
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => inputRef.current?.click()}
-                aria-label={gt("Attach files")}
-              />
-            }
-          >
-            {/* The clip's weight sits in its upper loop; 1px down reads as centered on the row. */}
-            <PaperclipIcon className="translate-y-px" />
-          </TooltipTrigger>
-          <TooltipPopup>
+  if (useAddMenu)
+    return (
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={gt("Add to message")}
+            />
+          }
+        >
+          <PlusIcon />
+        </MenuTrigger>
+        <MenuPopup align="start" {...composerFloatingLayerProps}>
+          <MenuItem onClick={() => onOpenPicker()}>
             <T>Attach files</T>
-          </TooltipPopup>
-        </Tooltip>
-      )}
-    </>
+          </MenuItem>
+          <MenuItem onClick={() => onAddReference("@")}>
+            <T>Mention files or context</T>
+          </MenuItem>
+          <MenuItem onClick={() => onAddReference("$")}>
+            <T>Add skill</T>
+          </MenuItem>
+          <MenuItem onClick={() => onAddReference("/")}>
+            <T>Commands</T>
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    );
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onOpenPicker}
+            aria-label={gt("Attach files")}
+          />
+        }
+      >
+        {/* The clip's weight sits in its upper loop; 1px down reads as centered on the row. */}
+        <PaperclipIcon className="translate-y-px" />
+      </TooltipTrigger>
+      <TooltipPopup>
+        <T>Attach files</T>
+      </TooltipPopup>
+    </Tooltip>
   );
 }

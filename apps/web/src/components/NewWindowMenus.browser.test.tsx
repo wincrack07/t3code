@@ -48,6 +48,7 @@ it("opens the sidebar and header thread menus and offers a new window", async ()
     newWindow,
     showContextMenu: showContextMenuFallback,
     getLocalEnvironmentEnabled: () => true,
+    getWindowZoomFactor: () => 1,
     getLocalEnvironmentBootstraps: () => [],
     onQuitShortcut: () => () => {},
     onMenuAction: () => () => {},

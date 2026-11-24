@@ -29,7 +29,6 @@ const FORK_FEATURE_IDS = [
   "multiWindow",
   "finderIntegration",
   "browserExtensions",
-  "appleSpeech",
   "cliAccounts",
   "subagentAnswers",
   "updateCenter",

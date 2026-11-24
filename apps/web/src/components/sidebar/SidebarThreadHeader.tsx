@@ -65,7 +65,7 @@ export function SidebarThreadHeader({
     // Narrow headers collapse an idle, empty search to an icon button; while focused or holding a query it
     // takes the whole row. Narrower still, every icon button tightens instead of overlapping.
     <div className="group/sidebar-header @container/sidebar-header flex min-h-8 items-center gap-1">
-      <label
+      <div
         className={cn(
           "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-within:bg-sidebar-row-hover focus-within:text-sidebar-foreground focus-within:ring-1 focus-within:ring-inset focus-within:ring-ring/70",
           "@max-[16rem]/sidebar-header:not-focus-within:has-placeholder-shown:size-7 @max-[16rem]/sidebar-header:not-focus-within:has-placeholder-shown:flex-none @max-[16rem]/sidebar-header:not-focus-within:has-placeholder-shown:gap-0 @max-[16rem]/sidebar-header:not-focus-within:has-placeholder-shown:overflow-hidden @max-[16rem]/sidebar-header:not-focus-within:has-placeholder-shown:px-1.5",
@@ -115,7 +115,7 @@ export function SidebarThreadHeader({
             <XIcon className="size-3" />
           </Button>
         ) : null}
-      </label>
+      </div>
       <div className="ml-auto flex shrink-0 items-center @max-[16rem]/sidebar-header:group-has-[input[type=search]:focus]/sidebar-header:hidden @max-[16rem]/sidebar-header:group-has-[input[type=search]:not(:placeholder-shown)]/sidebar-header:hidden">
         {onOpenActivity ? (
           <SidebarHeaderIconButton label={gt("Activity board")} onClick={onOpenActivity}>

@@ -6,6 +6,7 @@
     "mcp-tool-use": "node --env-file-if-exists=../.env mcp-tool-use/run.ts",
     "mcp-tool-use:trim-capture": "node mcp-tool-use/trim-capture.ts",
     "mcp-tool-use:regrade": "node mcp-tool-use/regrade.ts",
+    "mcp-tool-use:compare": "node mcp-tool-use/compare-arms.ts",
     "thread-titles": "node --env-file-if-exists=../.env thread-titles/run.ts",
     "pr-content": "node --env-file-if-exists=../.env pr-content/run.ts",
     "voice-cleanup": "node --env-file-if-exists=../.env voice-cleanup/run.ts",
@@ -13,6 +14,7 @@
     "prompt-completion": "node --env-file-if-exists=../.env prompt-completion/run.ts",
     "project-groups": "node --env-file-if-exists=../.env project-groups/run.ts",
     "test-signal": "node --env-file-if-exists=../.env test-signal/run.ts",
+    "workflow-authoring": "node --env-file-if-exists=../.env workflow-authoring/run.ts",
     "typecheck": "effect-tsgo tsrs --noEmit",
     "test": "vp test run --config ../vite.config.ts --dir .",
     "decisions": "node --env-file-if-exists=../.env decisions/run.ts"

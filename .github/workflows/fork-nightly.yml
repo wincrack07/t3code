@@ -252,14 +252,15 @@ jobs:
       - name: Install dependencies
         run: vp install
 
-      # SpeechAnalyzer needs the macOS 26 SDK; older Xcode builds only the SFSpeechRecognizer path.
+      # The upstream Apple Speech helper requires the macOS 26 SDK.
       - name: Select Xcode 26 for the Apple speech helper
         shell: bash
         run: |
           set -euo pipefail
           xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$xcode" ]; then
-            echo "::warning::Xcode 26 not found; the Apple speech helper builds without SpeechAnalyzer."
+            echo "::error::Xcode 26 is required for the Apple Speech helper."
+            exit 1
           else
             export DEVELOPER_DIR="$xcode/Contents/Developer"
             echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
@@ -290,7 +291,6 @@ jobs:
           test "${#images[@]}" -eq 1
           ditto -x -k "${archives[0]}" "$scratch/zip"
           hdiutil attach "${images[0]}" -readonly -nobrowse -mountpoint "$scratch/mount"
-          xcode_major=$(xcodebuild -version | awk '/^Xcode / { split($2, version, "."); print version[1] }')
           helper_hash=""
           for payload in zip mount; do
             applications=("$scratch/$payload"/*.app)
@@ -310,12 +310,7 @@ jobs:
             cat "$scratch/helper-identity"
             lipo -archs "$helper"
             nm -u "$helper" | xcrun swift-demangle > "$scratch/helper-symbols"
-            if grep -q 'Speech[.]SpeechAnalyzer' "$scratch/helper-symbols"; then
-              echo "$payload: Apple speech helper includes SpeechAnalyzer and the legacy fallback."
-            else
-              test "$xcode_major" -lt 26
-              echo "::warning::$payload: Apple speech helper includes only the legacy fallback."
-            fi
+            grep -q 'Speech[.]SpeechAnalyzer' "$scratch/helper-symbols"
             current_hash=$(shasum -a 256 "$helper" | awk '{ print $1 }')
             if [ -n "$helper_hash" ]; then
               test "$current_hash" = "$helper_hash"

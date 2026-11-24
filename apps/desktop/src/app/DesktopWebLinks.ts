@@ -29,6 +29,7 @@ const make = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const pending: Array<string> = [];
   const listeners = new Map<Electron.WebContents, () => void>();
+  let rendererHasListened = false;
 
   const flush = Effect.gen(function* () {
     if (pending.length === 0) return;
@@ -71,19 +72,18 @@ const make = Effect.gen(function* () {
     };
     window.value.on("focus", focus);
     listeners.set(contents, stop);
+    rendererHasListened = true;
     contents.on("did-start-navigation", navigation);
     contents.on("render-process-gone", stop);
     contents.once("destroyed", stop);
   });
 
   return DesktopWebLinks.of({
-    receive: Effect.fn("DesktopWebLinks.receive")(function (url) {
-      return Effect.suspend(() => {
-        pending.push(url);
-        return listeners.size === 0
-          ? desktopWindow.activate.pipe(Effect.ignore, Effect.andThen(flush))
-          : flush;
-      });
+    receive: Effect.fn("DesktopWebLinks.receive")(function* (url) {
+      pending.push(url);
+      yield* flush;
+      if (!rendererHasListened || Option.isSome(yield* electronWindow.currentMainOrFirst)) return;
+      yield* desktopWindow.activate.pipe(Effect.ignore);
     }),
     setRendererReady: Effect.fn("DesktopWebLinks.setRendererReady")(function (ready, senderId) {
       return setReady(ready, senderId);
