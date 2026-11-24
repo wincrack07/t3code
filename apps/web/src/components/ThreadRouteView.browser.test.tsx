@@ -29,6 +29,9 @@ vi.mock("../state/entities", async () => {
   };
 });
 vi.mock("../state/shell", () => ({ useEnvironmentShellStatus: () => "live" }));
+vi.mock("../state/presentation", () => ({
+  environmentUnreachableAtom: () => Atom.make(false),
+}));
 vi.mock("../state/environments", () => ({ useEnvironment: () => ({ label: "Remote" }) }));
 vi.mock("../state/threads", () => ({
   threadFamilies: { mount: () => () => {} },
