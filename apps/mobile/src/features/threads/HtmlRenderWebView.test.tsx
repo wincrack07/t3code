@@ -43,6 +43,10 @@ vi.mock("../../native/useOpenPullRequest", () => ({
   },
 }));
 vi.mock("@react-navigation/native", () => ({ useNavigation: () => ({}) }));
+vi.mock("../../state/entities", () => ({ useForkFeature: () => false }));
+vi.mock("../../state/thread-outbox", () => ({ enqueueThreadOutboxMessage: vi.fn() }));
+vi.mock("../../components/ui/Dialog", () => ({}));
+vi.mock("../../lib/uuid", () => ({ uuidv4: () => "uuid" }));
 
 import { HtmlRenderWebView } from "./HtmlRenderWebView";
 
